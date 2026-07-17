@@ -30,19 +30,21 @@ function personInputHTML(label, key) {
       </select>
       <div class="inline-form">
         <input type="text" class="person-name" data-person="${key}" placeholder="Name (optional)">
-        <input type="date" class="person-date" data-person="${key}">
+        <input type="text" class="person-date" data-person="${key}" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
       </div>
     </div>
   `;
 }
 
 function wirePersonInputs() {
+  document.querySelectorAll('.person-date').forEach((input) => attachDateMask(input));
+
   document.querySelectorAll('.db-picker').forEach((sel) => {
     sel.addEventListener('change', () => {
       const key = sel.dataset.person;
       const opt = sel.options[sel.selectedIndex];
       if (!opt.value) return;
-      document.querySelector(`.person-date[data-person="${key}"]`).value = opt.value;
+      document.querySelector(`.person-date[data-person="${key}"]`).value = isoToDisplay(opt.value);
       document.querySelector(`.person-name[data-person="${key}"]`).value = opt.dataset.name || '';
     });
   });
@@ -85,11 +87,12 @@ function parseDateInput(value) {
 
 document.getElementById('calculateBtn').addEventListener('click', () => {
   const dateAInput = document.querySelector('.person-date[data-person="A"]');
-  if (!dateAInput.value) {
-    alert(`Please enter a date for ${mode === 'today' ? 'the birthday' : 'Person A'}.`);
+  const dateAISO = displayToISO(dateAInput.value);
+  if (!dateAISO) {
+    alert(`Please enter a valid date (MM/DD/YYYY) for ${mode === 'today' ? 'the birthday' : 'Person A'}.`);
     return;
   }
-  const dateA = parseDateInput(dateAInput.value);
+  const dateA = parseDateInput(dateAISO);
   const nameA = document.querySelector('.person-name[data-person="A"]').value.trim()
     || (mode === 'today' ? 'This birthday' : 'Person A');
 
@@ -101,11 +104,12 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     nameB = 'Today';
   } else {
     const dateBInput = document.querySelector('.person-date[data-person="B"]');
-    if (!dateBInput.value) {
-      alert('Please enter a date for Person B.');
+    const dateBISO = displayToISO(dateBInput.value);
+    if (!dateBISO) {
+      alert('Please enter a valid date (MM/DD/YYYY) for Person B.');
       return;
     }
-    dateB = parseDateInput(dateBInput.value);
+    dateB = parseDateInput(dateBISO);
     nameB = document.querySelector('.person-name[data-person="B"]').value.trim() || 'Person B';
   }
 
