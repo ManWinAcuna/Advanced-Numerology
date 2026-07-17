@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Birthday Database</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link active">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <h1>Birthday Database</h1>
+  </div>
+
+  <div class="db-page">
+
+    <div class="box add-category-box">
+      <div class="box-label">New Category</div>
+      <div class="inline-form">
+        <input type="text" id="newCategoryName" placeholder="e.g. Family, Friends, Clients">
+        <button id="addCategoryBtn" class="btn">Add Category</button>
+      </div>
+    </div>
+
+    <div id="categoriesContainer"></div>
+
+  </div>
+</div>
+
+<script src="db-core.js"></script>
+<script src="database.js"></script>
+</body>
+</html>

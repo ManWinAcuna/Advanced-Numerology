@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link active">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <h1>Calendar</h1>
+  </div>
+
+  <div class="calendar-layout">
+    <div class="calendar-main">
+
+      <div class="calendar-summary">
+        <div class="calendar-stat">
+          <div class="calendar-stat-label">Universal Year</div>
+          <div class="calendar-stat-value" id="calUniversalYear">-</div>
+        </div>
+        <div class="calendar-stat">
+          <div class="calendar-stat-label">Universal Month</div>
+          <div class="calendar-stat-value" id="calUniversalMonth">-</div>
+        </div>
+        <div class="calendar-stat">
+          <div class="calendar-stat-label">Year Sign</div>
+          <div class="calendar-stat-value sign" id="calChineseYear">-</div>
+        </div>
+        <div class="calendar-stat">
+          <div class="calendar-stat-label">Month Sign</div>
+          <div class="calendar-stat-value sign" id="calChineseMonth">-</div>
+        </div>
+        <div class="calendar-stat">
+          <div class="calendar-stat-label">Western Zodiac Season</div>
+          <div class="calendar-stat-value sign" id="calZodiacSeason">-</div>
+        </div>
+      </div>
+
+      <div class="calendar-nav">
+        <button class="icon-btn" id="calPrevBtn" title="Previous month">&lsaquo;</button>
+        <div class="calendar-month-label" id="calMonthLabel">-</div>
+        <button class="icon-btn" id="calNextBtn" title="Next month">&rsaquo;</button>
+        <button class="btn" id="calTodayBtn">Today</button>
+      </div>
+
+      <div class="calendar-planet-filter-row">
+        <span class="calendar-planet-filter-label">Track transits:</span>
+        <div class="astro-filter-bar" id="calPlanetFilter"></div>
+        <button type="button" class="filter-bulk-btn" id="calFilterAllBtn">All</button>
+        <button type="button" class="filter-bulk-btn" id="calFilterNoneBtn">None</button>
+      </div>
+
+      <div class="calendar-card">
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+
+    </div>
+
+    <div class="calendar-side">
+      <div class="box-label">Compatibility With Me</div>
+      <div class="hours-toggle calendar-rank-toggle">
+        <button type="button" class="hours-toggle-btn active" data-mode="best">Top 5 Best</button>
+        <button type="button" class="hours-toggle-btn" data-mode="worst">Top 5 Worst</button>
+      </div>
+      <div class="calendar-rank-list" id="calendarRankList"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="dayModalOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="dayModalClose" title="Close">&times;</button>
+      <div id="dayModalBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="compat-render.js"></script>
+<script src="calendar.js"></script>
+</body>
+</html>

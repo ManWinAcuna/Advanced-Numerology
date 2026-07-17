@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tennis - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <a href="sports-betting.html" class="back-link">&larr; Sports Betting</a>
+  </div>
+
+  <h1 class="page-title">🎾 Tennis</h1>
+
+  <div class="compat-form active tennis-form">
+
+    <div class="box match-date-box">
+      <div class="box-label">Match Date</div>
+      <div class="inline-form">
+        <input type="date" id="matchDate">
+        <button class="btn" id="todayBtn">Today</button>
+      </div>
+    </div>
+
+    <div class="player-inputs">
+      <div class="player-input box" data-player="A">
+        <div class="box-label">Player A</div>
+        <div class="player-search-wrap" data-player="A">
+          <input type="text" class="player-search" data-player="A" placeholder="Search player name..." autocomplete="off">
+          <div class="player-suggestions" data-player="A"></div>
+        </div>
+        <div class="player-selected" data-player="A">
+          <div class="player-selected-info">
+            <span class="player-selected-name"></span>
+            <span class="player-selected-meta"></span>
+            <span class="player-selected-dob"></span>
+          </div>
+          <button class="icon-btn player-clear" data-player="A" title="Clear">&times;</button>
+        </div>
+      </div>
+
+      <div class="player-input box" data-player="B">
+        <div class="box-label">Player B</div>
+        <div class="player-search-wrap" data-player="B">
+          <input type="text" class="player-search" data-player="B" placeholder="Search player name..." autocomplete="off">
+          <div class="player-suggestions" data-player="B"></div>
+        </div>
+        <div class="player-selected" data-player="B">
+          <div class="player-selected-info">
+            <span class="player-selected-name"></span>
+            <span class="player-selected-meta"></span>
+            <span class="player-selected-dob"></span>
+          </div>
+          <button class="icon-btn player-clear" data-player="B" title="Clear">&times;</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-large" id="calculateBtn">Calculate Matchup</button>
+  </div>
+
+  <div class="compat-results tennis-results" id="tennisResults">
+    <div class="edge-banner" id="edgeBanner"></div>
+    <div class="matchup-grid">
+      <div class="matchup-side">
+        <h3 id="matchupTitleA"></h3>
+        <div id="resultA"></div>
+      </div>
+      <div class="matchup-side">
+        <h3 id="matchupTitleB"></h3>
+        <div id="resultB"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="compat-render.js"></script>
+<script src="tennis-data.js"></script>
+<script src="tennis.js"></script>
+</body>
+</html>

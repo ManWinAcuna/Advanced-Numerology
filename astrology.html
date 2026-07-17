@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astrology Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page astro-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link active">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <h1>Astrology Tracker</h1>
+  </div>
+
+  <div class="astro-nav">
+    <button class="icon-btn" id="astroPrevBtn" title="Previous day">&lsaquo;</button>
+    <div class="astro-date-picker">
+      <input type="date" id="astroDateInput">
+    </div>
+    <button class="icon-btn" id="astroNextBtn" title="Next day">&rsaquo;</button>
+    <button class="btn astro-today-btn" id="astroTodayBtn">Today</button>
+  </div>
+
+  <div class="astro-filter-row">
+    <div class="astro-filter-bar" id="astroFilterBar"></div>
+    <button type="button" class="filter-bulk-btn" id="astroFilterAllBtn">All</button>
+    <button type="button" class="filter-bulk-btn" id="astroFilterNoneBtn">None</button>
+  </div>
+
+  <div class="astro-tooltip" id="astroTooltip"></div>
+
+  <div class="astro-layout">
+    <div class="astro-main">
+      <div class="astro-aspect-panel">
+        <details class="astro-aspect-dropdown" id="astroAspectDropdown">
+          <summary>Aspects ▾</summary>
+          <div class="astro-aspect-menu">
+            <div class="astro-aspect-bulk">
+              <button type="button" class="filter-bulk-btn" id="astroAspectAllBtn">All</button>
+              <button type="button" class="filter-bulk-btn" id="astroAspectNoneBtn">None</button>
+            </div>
+            <label class="astro-aspect-option"><input type="checkbox" data-aspect="conjunction" checked><span class="astro-aspect-swatch conjunction"></span>Conjunction (0&deg;)</label>
+            <label class="astro-aspect-option"><input type="checkbox" data-aspect="sextile" checked><span class="astro-aspect-swatch sextile"></span>Sextile (60&deg;)</label>
+            <label class="astro-aspect-option"><input type="checkbox" data-aspect="square" checked><span class="astro-aspect-swatch square"></span>Square (90&deg;)</label>
+            <label class="astro-aspect-option"><input type="checkbox" data-aspect="trine" checked><span class="astro-aspect-swatch trine"></span>Trine (120&deg;)</label>
+            <label class="astro-aspect-option"><input type="checkbox" data-aspect="opposition" checked><span class="astro-aspect-swatch opposition"></span>Opposition (180&deg;)</label>
+          </div>
+        </details>
+      </div>
+
+      <div class="astro-wheel-wrap">
+        <svg id="astroWheel" viewBox="0 0 500 500"></svg>
+      </div>
+    </div>
+
+    <div class="astro-side">
+      <div class="astro-panel-title"><span>Planetary Positions</span></div>
+      <div class="astro-panel">
+        <table class="astro-table">
+          <thead>
+            <tr>
+              <th>Planet</th>
+              <th>Sign</th>
+            </tr>
+          </thead>
+          <tbody id="astroTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="astrology.js"></script>
+</body>
+</html>

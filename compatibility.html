@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compatibility Calculator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link active">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <h1>Compatibility Calculator</h1>
+  </div>
+
+  <div class="compat-mode-select" id="modeSelect">
+    <button class="mode-card" data-mode="today">
+      <div class="mode-icon">📅</div>
+      <div class="mode-title">Compatibility with Today</div>
+      <div class="mode-desc">See how a birthday lines up with today's date.</div>
+    </button>
+    <button class="mode-card" data-mode="date">
+      <div class="mode-icon">🔗</div>
+      <div class="mode-title">Compatibility with Another Date</div>
+      <div class="mode-desc">Compare two birthdays against each other.</div>
+    </button>
+  </div>
+
+  <div class="compat-form" id="compatForm">
+    <a href="#" class="back-link" id="backToModes">&larr; Change mode</a>
+
+    <div class="person-inputs" id="personInputs"></div>
+
+    <button class="btn btn-large" id="calculateBtn">Calculate Compatibility</button>
+  </div>
+
+  <div class="compat-results" id="compatResults"></div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="compat-render.js"></script>
+<script src="compatibility.js"></script>
+</body>
+</html>

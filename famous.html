@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Famous Lookup</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link active">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <div class="box famous-search-box">
+      <label for="famousSearch">Famous Person / Entity</label>
+      <div class="player-search-wrap" data-player="famous">
+        <input type="text" id="famousSearch" class="player-search" placeholder="Search a name, company, country..." autocomplete="off">
+        <div class="player-suggestions" data-player="famous" id="famousSuggestions"></div>
+      </div>
+      <div class="famous-status" id="famousStatus"></div>
+    </div>
+    <div class="box bday-box">
+      <label for="bday">BDay</label>
+      <input type="date" id="bday">
+    </div>
+    <h1>Famous Lookup</h1>
+  </div>
+
+  <div class="layout">
+
+    <!-- Left sidebar -->
+    <div class="sidebar">
+      <div class="box stat-box">
+        <div class="box-label">🍀 Lucky Number</div>
+        <div class="box-value" id="luckyNumber">-</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">🔢 Missing</div>
+        <div class="box-value" id="missing">-</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">✨ 28 Day</div>
+        <div class="box-value" id="twentyEightDay">-</div>
+      </div>
+    </div>
+
+    <!-- Center -->
+    <div class="center">
+
+      <div class="grid4 headerrow">
+        <div class="cell head">Lifepath</div>
+        <div class="cell head">Day Born</div>
+        <div class="cell head">Day#</div>
+        <div class="cell head">Combo</div>
+      </div>
+      <div class="grid4">
+        <div class="cell highlight" id="lifePath">-</div>
+        <div class="cell highlight" id="dayBornReduced">-</div>
+        <div class="cell highlight" id="dayNumReduced">-</div>
+        <div class="cell highlight" id="combo">-</div>
+      </div>
+      <div class="grid4 subrow">
+        <div class="cell small" id="lifePathRaw" title="Compound (unreduced) Life Path">-</div>
+        <div class="cell small" id="dayBornRaw">-</div>
+        <div class="cell small" id="dayNumRaw">-</div>
+        <div class="cell small"></div>
+      </div>
+
+      <div class="section-label">Vietnamese Zodiac</div>
+      <div class="grid3 headerrow">
+        <div class="cell head">Year</div>
+        <div class="cell head">Month</div>
+        <div class="cell head">Day</div>
+      </div>
+      <div class="grid3">
+        <div class="cell sign" id="chineseYear" title="">-</div>
+        <div class="cell sign" id="chineseMonth" title="">-</div>
+        <div class="cell sign" id="chineseDay" title="">-</div>
+      </div>
+
+      <div class="section-label">Western Signs</div>
+      <div class="grid4 headerrow">
+        <div class="cell head">Sun Sign</div>
+        <div class="cell head">Saturn</div>
+        <div class="cell head">Jupiter</div>
+        <div class="cell head">Venus</div>
+      </div>
+      <div class="grid4">
+        <div class="cell sign" id="sunSign" title="">-</div>
+        <div class="cell sign" id="saturnSign" title="">-</div>
+        <div class="cell sign" id="jupiterSign" title="">-</div>
+        <div class="cell sign" id="venusSign" title="">-</div>
+      </div>
+
+      <details class="collapsible pinnacles-collapsible">
+        <summary>Pinnacles</summary>
+        <div class="pinnacles-grid">
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 1</div>
+            <div class="pinnacle-card-value" id="pinnacle1">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle1Compound" title="Compound (unreduced) Pinnacle 1">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge1">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 2</div>
+            <div class="pinnacle-card-value" id="pinnacle2">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle2Compound" title="Compound (unreduced) Pinnacle 2">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge2">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 3</div>
+            <div class="pinnacle-card-value" id="pinnacle3">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle3Compound" title="Compound (unreduced) Pinnacle 3">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge3">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 4</div>
+            <div class="pinnacle-card-value" id="pinnacle4">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle4Compound" title="Compound (unreduced) Pinnacle 4">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge4">-</div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible">
+        <summary>First Imprints</summary>
+        <div class="imprints" id="firstImprints"></div>
+      </details>
+
+    </div>
+
+    <!-- Right column -->
+    <div class="right">
+
+      <div class="box stat-box compat-today-box" id="compatMeBox">
+        <div class="box-label">❤️ Compatibility with Me</div>
+        <div class="box-value" id="compatMeScore">-</div>
+      </div>
+
+      <div class="box stat-box compat-today-box" id="compatTodayBox">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value" id="compatTodayScore">-</div>
+      </div>
+
+      <div class="box stat-box compat-today-box" id="energyFlowBox">
+        <div class="box-label">⚡ Energy Flow</div>
+        <div class="box-value" id="energyFlowScore">-</div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label underline">📆 Days Left</div>
+        <div class="dayleft-row">
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">🎂</div>
+            <div class="dayleft-value" id="daysUntilBirthday">-</div>
+            <div class="dayleft-caption">until Birthday</div>
+          </div>
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">📅</div>
+            <div class="dayleft-value" id="daysUntilMonthlyDay">-</div>
+            <div class="dayleft-caption">until Monthly Day</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid3 headerrow">
+        <div class="cell head">PY</div>
+        <div class="cell head">PM</div>
+        <div class="cell head">PD</div>
+      </div>
+      <div class="grid3">
+        <div class="cell highlight" id="pyReduced">-</div>
+        <div class="cell highlight" id="pmReduced">-</div>
+        <div class="cell highlight" id="pdReduced">-</div>
+      </div>
+      <div class="grid3 subrow">
+        <div class="cell small" id="pyRaw">-</div>
+        <div class="cell small" id="pmRaw">-</div>
+        <div class="cell small" id="pdRaw">-</div>
+      </div>
+
+      <details class="collapsible months-collapsible">
+        <summary>Months</summary>
+        <div class="months-box">
+          <table class="months-table" id="monthsTable">
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+
+    </div>
+
+  </div>
+
+  <div class="modal-overlay" id="compatModalOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="compatModalClose" title="Close">&times;</button>
+      <div id="compatModalBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="compat-render.js"></script>
+<script src="render.js"></script>
+<script src="famous.js"></script>
+</body>
+</html>

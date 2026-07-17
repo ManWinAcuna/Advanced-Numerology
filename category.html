@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Category - Birthday Database</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="index.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link active">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+  </nav>
+
+  <div class="topbar">
+    <a href="database.html" class="back-link">&larr; All Categories</a>
+  </div>
+
+  <h1 class="page-title" id="categoryTitle">Category</h1>
+
+  <div class="db-page">
+
+    <div class="box add-category-box" id="addEntryBox">
+      <div class="box-label" id="entryFormLabel">Add Birthday</div>
+      <div class="inline-form">
+        <input type="text" id="newEntryName" placeholder="Name">
+        <input type="date" id="newEntryDate">
+        <input type="time" id="newEntryTime" title="Birth time (optional)">
+        <button id="addEntryBtn" class="btn">Add</button>
+        <button id="cancelEditBtn" class="btn-link" style="display:none;">Cancel</button>
+      </div>
+    </div>
+
+    <div id="entriesContainer" class="entries-list"></div>
+
+  </div>
+
+  <div class="modal-overlay" id="compatModalOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="compatModalClose" title="Close">&times;</button>
+      <div id="compatModalBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="compat-render.js"></script>
+<script src="category.js"></script>
+</body>
+</html>
