@@ -5,8 +5,22 @@ let stadiums = loadStadiums();
 let editingStadiumId = null;
 
 let customFighters = loadCustomFighters();
-let allFighters = UFC_FIGHTERS.concat(customFighters);
+let fighterOverrides = loadFighterOverrides();
 let editingFighterId = null;
+
+// The built-in roster is static seed data, so edits to it are kept
+// separately as overrides (keyed by a synthetic "seed-<index>" id) and
+// applied on top here - custom (user-added) fighters follow after.
+function buildAllFighters() {
+  const seedFighters = UFC_FIGHTERS.map((f, idx) => {
+    const id = `seed-${idx}`;
+    const override = fighterOverrides[id];
+    return override ? { id, name: override.name, dob: override.dob } : { id, name: f.name, dob: f.dob };
+  });
+  return seedFighters.concat(customFighters);
+}
+
+let allFighters = buildAllFighters();
 
 attachDateMask(document.getElementById('newFighterDob'));
 
@@ -65,7 +79,7 @@ function selectFighter(key, fighter) {
   selectedEl.querySelector('.player-selected-dob').textContent = formatDate(fighter.dob);
 
   const editBtn = document.querySelector(`.player-edit[data-player="${key}"]`);
-  if (editBtn) editBtn.style.display = fighter.id ? '' : 'none';
+  if (editBtn) editBtn.style.display = '';
 }
 
 function clearFighter(key) {
@@ -105,7 +119,7 @@ document.getElementById('clearFightersBtn').addEventListener('click', () => {
 document.querySelectorAll('.player-edit').forEach((btn) => {
   btn.addEventListener('click', () => {
     const fighter = selectedFighters[btn.dataset.player];
-    if (fighter && fighter.id) openFighterForm(fighter);
+    if (fighter) openFighterForm(fighter);
   });
 });
 
@@ -117,8 +131,6 @@ document.getElementById('todayBtn').addEventListener('click', () => {
 
 /* ===================== Add / Edit Fighter ===================== */
 
-// Only fighters added through this form (which carry an id) can be edited -
-// the built-in UFC_FIGHTERS roster is static seed data.
 function openFighterForm(fighter) {
   document.getElementById('addFighterForm').classList.add('active');
   if (fighter) {
@@ -162,24 +174,30 @@ document.getElementById('saveFighterBtn').addEventListener('click', () => {
   }
 
   if (editingFighterId) {
-    const idx = customFighters.findIndex((f) => f.id === editingFighterId);
-    if (idx !== -1) {
-      customFighters[idx] = { id: editingFighterId, name, dob };
-      ['A', 'B'].forEach((key) => {
-        if (selectedFighters[key] && selectedFighters[key].id === editingFighterId) {
-          selectedFighters[key] = customFighters[idx];
-          const selectedEl = document.querySelector(`.player-selected[data-player="${key}"]`);
-          selectedEl.querySelector('.player-selected-name').textContent = name;
-          selectedEl.querySelector('.player-selected-dob').textContent = formatDate(dob);
-        }
-      });
+    if (editingFighterId.startsWith('seed-')) {
+      fighterOverrides[editingFighterId] = { name, dob };
+      saveFighterOverrides(fighterOverrides);
+    } else {
+      const idx = customFighters.findIndex((f) => f.id === editingFighterId);
+      if (idx !== -1) customFighters[idx] = { id: editingFighterId, name, dob };
+      saveCustomFighters(customFighters);
     }
+    allFighters = buildAllFighters();
+    const updated = allFighters.find((f) => f.id === editingFighterId);
+    ['A', 'B'].forEach((key) => {
+      if (selectedFighters[key] && selectedFighters[key].id === editingFighterId) {
+        selectedFighters[key] = updated;
+        const selectedEl = document.querySelector(`.player-selected[data-player="${key}"]`);
+        selectedEl.querySelector('.player-selected-name').textContent = name;
+        selectedEl.querySelector('.player-selected-dob').textContent = formatDate(dob);
+      }
+    });
   } else {
     customFighters.push({ id: uid(), name, dob });
+    saveCustomFighters(customFighters);
+    allFighters = buildAllFighters();
   }
 
-  saveCustomFighters(customFighters);
-  allFighters = UFC_FIGHTERS.concat(customFighters);
   closeFighterForm();
 });
 
@@ -313,13 +331,21 @@ document.getElementById('saveStadiumBtn').addEventListener('click', () => {
 
 /* ===================== Matchup scoring ===================== */
 
-// Blends the three location/date factors for one fighter: Fight Day (60%),
-// Stadium founding (15%), State founding (25%) - each scored the same way
-// the rest of the app scores compatibility, just against a different date.
+// Blends the location/date factors for one fighter: Fight Day, Stadium
+// founding, and State founding - each scored the same way the rest of the
+// app scores compatibility, just against a different date. When the
+// stadium isn't known yet, it's dropped entirely (not just zeroed) and the
+// remaining two factors are reweighted so the score still adds up cleanly.
 function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
-  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
   const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
+
+  if (!stadiumDate) {
+    const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
+    return { day, stadium: null, state, combined };
+  }
+
+  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
   const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
   return { day, stadium, state, combined };
 }
@@ -327,6 +353,8 @@ function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
 // Renders one fighter's combined score plus the three clickable sub-score
 // tabs, each swapping in the full breakdown for that factor below.
 function renderFighterBreakdown(containerEl, fighter, score, stadiumName, stateName) {
+  const hasStadium = !!score.stadium;
+
   containerEl.innerHTML = `
     <div class="score-hero ufc-combined-hero">
       <div class="score-names">Combined Score</div>
@@ -337,10 +365,11 @@ function renderFighterBreakdown(containerEl, fighter, score, stadiumName, stateN
         <span class="ufc-subscore-name">🗓️ Fight Day</span>
         <span class="ufc-subscore-val ${scoreClass(score.day.finalScore)}">${score.day.finalScore}</span>
       </button>
+      ${hasStadium ? `
       <button type="button" class="ufc-subscore-tab" data-factor="stadium">
         <span class="ufc-subscore-name">🏟️ Stadium</span>
         <span class="ufc-subscore-val ${scoreClass(score.stadium.finalScore)}">${score.stadium.finalScore}</span>
-      </button>
+      </button>` : ''}
       <button type="button" class="ufc-subscore-tab" data-factor="state">
         <span class="ufc-subscore-name">🗺️ State</span>
         <span class="ufc-subscore-val ${scoreClass(score.state.finalScore)}">${score.state.finalScore}</span>
@@ -352,9 +381,9 @@ function renderFighterBreakdown(containerEl, fighter, score, stadiumName, stateN
   const detailEl = containerEl.querySelector('.ufc-subscore-detail');
   const factors = {
     day: { result: score.day, label: 'Fight Day' },
-    stadium: { result: score.stadium, label: stadiumName },
     state: { result: score.state, label: stateName },
   };
+  if (hasStadium) factors.stadium = { result: score.stadium, label: stadiumName };
 
   function showFactor(factor) {
     containerEl.querySelectorAll('.ufc-subscore-tab').forEach((t) => t.classList.toggle('active', t.dataset.factor === factor));
@@ -384,15 +413,11 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     return;
   }
   const stadiumId = document.getElementById('stadiumSelect').value;
-  if (!stadiumId || stadiumId === '__add__') {
-    alert('Please select (or add) the stadium the fight is taking place in.');
-    return;
-  }
-  const stadium = stadiums.find((s) => s.id === stadiumId);
+  const stadium = (stadiumId && stadiumId !== '__add__') ? stadiums.find((s) => s.id === stadiumId) : null;
   const state = US_STATES[Number(stateIdx)];
 
   const matchDate = parseDateInput(matchDateInput.value);
-  const stadiumDate = parseDateInput(stadium.founded);
+  const stadiumDate = stadium ? parseDateInput(stadium.founded) : null;
   const stateDate = parseDateInput(state.founded);
   const fighterA = selectedFighters.A;
   const fighterB = selectedFighters.B;
@@ -418,6 +443,7 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   document.getElementById('matchupTitleA').innerHTML = `${aWins === true ? '<span class="crown">👑</span> ' : ''}${escapeHtml(fighterA.name)}`;
   document.getElementById('matchupTitleB').innerHTML = `${aWins === false ? '<span class="crown">👑</span> ' : ''}${escapeHtml(fighterB.name)}`;
 
-  renderFighterBreakdown(document.getElementById('resultA'), fighterA, scoreA, stadium.name, state.name);
-  renderFighterBreakdown(document.getElementById('resultB'), fighterB, scoreB, stadium.name, state.name);
+  const stadiumName = stadium ? stadium.name : null;
+  renderFighterBreakdown(document.getElementById('resultA'), fighterA, scoreA, stadiumName, state.name);
+  renderFighterBreakdown(document.getElementById('resultB'), fighterB, scoreB, stadiumName, state.name);
 });

@@ -176,3 +176,21 @@ function loadCustomFighters() {
 function saveCustomFighters(fighters) {
   localStorage.setItem(CUSTOM_FIGHTERS_KEY, JSON.stringify(fighters));
 }
+
+// Edits made to the built-in UFC_FIGHTERS roster (which is static seed data,
+// not stored) - keyed by a synthetic "seed-<index>" id, {name, dob} only.
+const FIGHTER_OVERRIDES_KEY = 'numerology_ufc_fighter_overrides';
+
+function loadFighterOverrides() {
+  try {
+    const raw = localStorage.getItem(FIGHTER_OVERRIDES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveFighterOverrides(overrides) {
+  localStorage.setItem(FIGHTER_OVERRIDES_KEY, JSON.stringify(overrides));
+}
