@@ -123,7 +123,7 @@ function selectFamousPerson(title) {
         }
         return;
       }
-      document.getElementById('bday').value = info.date;
+      document.getElementById('bday').value = isoToDisplay(info.date);
       render();
       const verb = info.kind === 'founded' ? 'founded' : 'born';
       setFamousStatus(`✓ ${title} — ${verb} ${info.date}`, false);

@@ -34,6 +34,54 @@ function formatDate(dateStr) {
   return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/* ===================== Typeable date fields ===================== */
+// Native <input type="date"> forces mobile users through a calendar/wheel
+// picker to reach a date - painfully slow for birth years decades back.
+// These helpers back a plain typed "MM/DD/YYYY" text field instead, while
+// every date is still stored/passed around the app as "YYYY-MM-DD" as before.
+
+// "MM/DD/YYYY" -> "YYYY-MM-DD", or '' if not yet a complete, valid date.
+function displayToISO(display) {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((display || '').trim());
+  if (!match) return '';
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12) return '';
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day < 1 || day > daysInMonth) return '';
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// "YYYY-MM-DD" -> "MM/DD/YYYY", or '' if empty/malformed.
+function isoToDisplay(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const [y, m, d] = iso.split('-');
+  return `${m}/${d}/${y}`;
+}
+
+// Converts a date input to a typed field that auto-inserts slashes as
+// digits are entered ("MM/DD/YYYY"), instead of the native picker UI.
+function attachDateMask(inputEl) {
+  if (!inputEl) return;
+  inputEl.type = 'text';
+  inputEl.inputMode = 'numeric';
+  inputEl.autocomplete = 'off';
+  if (!inputEl.placeholder) inputEl.placeholder = 'MM/DD/YYYY';
+  inputEl.maxLength = 10;
+
+  inputEl.addEventListener('input', () => {
+    const digits = inputEl.value.replace(/\D/g, '').slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    inputEl.value = formatted;
+  });
+}
+
 const ZODIAC_SYMBOLS = {
   Aries: '♈', Taurus: '♉', Gemini: '♊', Cancer: '♋', Leo: '♌', Virgo: '♍',
   Libra: '♎', Scorpio: '♏', Sagittarius: '♐', Capricorn: '♑', Aquarius: '♒', Pisces: '♓',

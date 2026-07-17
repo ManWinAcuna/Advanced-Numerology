@@ -42,6 +42,10 @@ body {
   color: var(--text);
   font-family: 'Segoe UI', Arial, sans-serif;
   position: relative;
+  /* A safety net: no single element (nav, a wide table, a squeezed flex
+     row, etc.) should ever be able to drag the whole page into horizontal
+     scroll - it should scroll within itself instead. */
+  overflow-x: hidden;
 }
 
 body::before {
@@ -87,6 +91,11 @@ body::after {
   border-bottom: 1px solid var(--border);
   margin-bottom: 20px;
   padding-bottom: 0;
+  /* Scroll within its own box on narrow screens instead of overflowing
+     and dragging the whole page into horizontal scroll with it. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .topnav .nav-link {
@@ -100,6 +109,8 @@ body::after {
   border-bottom: none;
   border-radius: 4px 4px 0 0;
   transition: color 0.15s ease, text-shadow 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .topnav .nav-link:hover {
@@ -397,6 +408,12 @@ body::after {
 }
 
 .sidebar, .right {
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsibles-group {
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
 }
@@ -1950,6 +1967,16 @@ body::after {
   margin-bottom: 24px;
 }
 
+/* On phone widths the summary wraps to 2 columns, leaving the 5th (last,
+   odd-one-out) stat box stuck under the left column instead of centered. */
+@media (max-width: 480px) {
+  .calendar-stat:last-child {
+    grid-column: 1 / -1;
+    max-width: 260px;
+    margin: 0 auto;
+  }
+}
+
 .calendar-stat {
   position: relative;
   overflow: hidden;
@@ -2883,4 +2910,13 @@ body::after {
 
 @media (max-width: 900px) {
   .astro-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  /* Stack the aspects dropdown above the wheel instead of squeezing them
+     side by side - the wheel can then use the full available width. */
+  .astro-main {
+    flex-direction: column;
+    align-items: center;
+  }
 }

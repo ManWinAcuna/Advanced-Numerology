@@ -120,7 +120,7 @@ function closeCompatModal() {
 function startEdit(entry) {
   editingEntryId = entry.id;
   document.getElementById('newEntryName').value = entry.name;
-  document.getElementById('newEntryDate').value = entry.date;
+  document.getElementById('newEntryDate').value = isoToDisplay(entry.date);
   document.getElementById('newEntryTime').value = entry.time || '';
   document.getElementById('entryFormLabel').textContent = `Edit Birthday - ${entry.name}`;
   document.getElementById('addEntryBtn').textContent = 'Save Changes';
@@ -140,14 +140,21 @@ function exitEditMode() {
 }
 
 function init() {
+  attachDateMask(document.getElementById('newEntryDate'));
+
   document.getElementById('addEntryBtn').addEventListener('click', () => {
     const nameInput = document.getElementById('newEntryName');
     const dateInput = document.getElementById('newEntryDate');
     const timeInput = document.getElementById('newEntryTime');
+    const iso = displayToISO(dateInput.value);
+    if (!iso) {
+      alert('Please enter a valid date (MM/DD/YYYY).');
+      return;
+    }
     if (editingEntryId) {
-      updateEntry(editingEntryId, nameInput.value, dateInput.value, timeInput.value);
+      updateEntry(editingEntryId, nameInput.value, iso, timeInput.value);
     } else {
-      addEntry(nameInput.value, dateInput.value, timeInput.value);
+      addEntry(nameInput.value, iso, timeInput.value);
     }
     exitEditMode();
   });

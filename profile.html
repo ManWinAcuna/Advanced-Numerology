@@ -23,7 +23,7 @@
   <div class="topbar">
     <div class="box bday-box">
       <label for="bday">BDay</label>
-      <input type="date" id="bday">
+      <input type="text" id="bday" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
     </div>
     <div class="box bday-box">
       <label for="btime">Birth Time <span class="optional-tag">optional</span></label>
@@ -129,6 +129,67 @@
         <div class="cell sign" id="venusSign" title="">-</div>
       </div>
 
+    </div>
+
+    <!-- Right column -->
+    <div class="right">
+
+      <div class="box stat-box compat-today-box" id="compatTodayBox">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value" id="compatTodayScore">-</div>
+      </div>
+
+      <div class="box stat-box compat-today-box" id="energyFlowBox">
+        <div class="box-label">⚡ Energy Flow</div>
+        <div class="box-value" id="energyFlowScore">-</div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label underline">📆 Days Left</div>
+        <div class="dayleft-row">
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">🎂</div>
+            <div class="dayleft-value" id="daysUntilBirthday">-</div>
+            <div class="dayleft-caption">until Birthday</div>
+          </div>
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">📅</div>
+            <div class="dayleft-value" id="daysUntilMonthlyDay">-</div>
+            <div class="dayleft-caption">until Monthly Day</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid3 headerrow">
+        <div class="cell head">PY</div>
+        <div class="cell head">PM</div>
+        <div class="cell head">PD</div>
+      </div>
+      <div class="grid3">
+        <div class="cell highlight" id="pyReduced">-</div>
+        <div class="cell highlight" id="pmReduced">-</div>
+        <div class="cell highlight" id="pdReduced">-</div>
+      </div>
+      <div class="grid3 subrow">
+        <div class="cell small" id="pyRaw">-</div>
+        <div class="cell small" id="pmRaw">-</div>
+        <div class="cell small" id="pdRaw">-</div>
+      </div>
+
+    </div>
+
+    <!-- Collapsibles, grouped at the bottom -->
+    <div class="collapsibles-group">
+
+      <details class="collapsible months-collapsible">
+        <summary>Months</summary>
+        <div class="months-box">
+          <table class="months-table" id="monthsTable">
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+
       <details class="collapsible hours-collapsible">
         <summary>Personal Hours</summary>
         <div class="hours-toggle">
@@ -184,62 +245,6 @@
       <details class="collapsible">
         <summary>First Imprints</summary>
         <div class="imprints" id="firstImprints"></div>
-      </details>
-
-    </div>
-
-    <!-- Right column -->
-    <div class="right">
-
-      <div class="box stat-box compat-today-box" id="compatTodayBox">
-        <div class="box-label">🤝 Compatibility with Today</div>
-        <div class="box-value" id="compatTodayScore">-</div>
-      </div>
-
-      <div class="box stat-box compat-today-box" id="energyFlowBox">
-        <div class="box-label">⚡ Energy Flow</div>
-        <div class="box-value" id="energyFlowScore">-</div>
-      </div>
-
-      <div class="box stat-box">
-        <div class="box-label underline">📆 Days Left</div>
-        <div class="dayleft-row">
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">🎂</div>
-            <div class="dayleft-value" id="daysUntilBirthday">-</div>
-            <div class="dayleft-caption">until Birthday</div>
-          </div>
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">📅</div>
-            <div class="dayleft-value" id="daysUntilMonthlyDay">-</div>
-            <div class="dayleft-caption">until Monthly Day</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid3 headerrow">
-        <div class="cell head">PY</div>
-        <div class="cell head">PM</div>
-        <div class="cell head">PD</div>
-      </div>
-      <div class="grid3">
-        <div class="cell highlight" id="pyReduced">-</div>
-        <div class="cell highlight" id="pmReduced">-</div>
-        <div class="cell highlight" id="pdReduced">-</div>
-      </div>
-      <div class="grid3 subrow">
-        <div class="cell small" id="pyRaw">-</div>
-        <div class="cell small" id="pmRaw">-</div>
-        <div class="cell small" id="pdRaw">-</div>
-      </div>
-
-      <details class="collapsible months-collapsible">
-        <summary>Months</summary>
-        <div class="months-box">
-          <table class="months-table" id="monthsTable">
-            <tbody></tbody>
-          </table>
-        </div>
       </details>
 
     </div>

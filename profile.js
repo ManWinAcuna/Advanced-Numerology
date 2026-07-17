@@ -5,7 +5,7 @@
 
   const profile = loadProfile();
   if (profile && profile.date) {
-    bdayInput.value = profile.date;
+    bdayInput.value = isoToDisplay(profile.date);
     if (profile.time) timeInput.value = profile.time;
     render();
     renderPersonalHours();
@@ -14,8 +14,9 @@
 
   let saveTimer = null;
   function persist() {
-    if (!bdayInput.value) return;
-    saveProfile({ date: bdayInput.value, time: timeInput.value || '' });
+    const iso = displayToISO(bdayInput.value);
+    if (!iso) return;
+    saveProfile({ date: iso, time: timeInput.value || '' });
     noteEl.textContent = '✓ Saved to your profile';
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => { noteEl.textContent = ''; }, 2000);

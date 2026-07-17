@@ -37,9 +37,10 @@ let lastMonthsTable = null;
 
 function render() {
   const input = document.getElementById('bday');
-  if (!input.value) { lastBirthDate = null; lastMonthsTable = null; return; }
+  const iso = displayToISO(input.value);
+  if (!iso) { lastBirthDate = null; lastMonthsTable = null; return; }
 
-  const birthDate = parseDateInput(input.value);
+  const birthDate = parseDateInput(iso);
   lastBirthDate = birthDate;
   const today = getToday();
 
@@ -148,6 +149,7 @@ function render() {
   });
 }
 
+attachDateMask(document.getElementById('bday'));
 document.getElementById('bday').addEventListener('input', render);
 
 /* ===================== Personal Hours ===================== */
@@ -305,7 +307,7 @@ renderPersonalHours();
   const params = new URLSearchParams(window.location.search);
   const bday = params.get('bday');
   if (bday && /^\d{4}-\d{2}-\d{2}$/.test(bday)) {
-    document.getElementById('bday').value = bday;
+    document.getElementById('bday').value = isoToDisplay(bday);
   }
   const btime = params.get('btime');
   const btimeField = document.getElementById('btime');

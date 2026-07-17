@@ -8,6 +8,8 @@ let customFighters = loadCustomFighters();
 let allFighters = UFC_FIGHTERS.concat(customFighters);
 let editingFighterId = null;
 
+attachDateMask(document.getElementById('newFighterDob'));
+
 function parseDateInput(value) {
   // setFullYear (not the multi-arg constructor) sidesteps JS's legacy
   // two-digit-year quirk, where `new Date(y, ...)` silently remaps any y in
@@ -122,7 +124,7 @@ function openFighterForm(fighter) {
   if (fighter) {
     editingFighterId = fighter.id;
     document.getElementById('newFighterName').value = fighter.name;
-    document.getElementById('newFighterDob').value = fighter.dob;
+    document.getElementById('newFighterDob').value = isoToDisplay(fighter.dob);
     document.getElementById('fighterFormLabel').textContent = `Edit Fighter - ${fighter.name}`;
     document.getElementById('saveFighterBtn').textContent = 'Update Fighter';
   } else {
@@ -149,13 +151,13 @@ document.getElementById('cancelFighterBtn').addEventListener('click', closeFight
 
 document.getElementById('saveFighterBtn').addEventListener('click', () => {
   const name = document.getElementById('newFighterName').value.trim();
-  const dob = document.getElementById('newFighterDob').value;
+  const dob = displayToISO(document.getElementById('newFighterDob').value);
   if (!name) {
     alert('Please enter a fighter name.');
     return;
   }
   if (!dob) {
-    alert('Please pick a date of birth.');
+    alert('Please enter a valid date of birth (MM/DD/YYYY).');
     return;
   }
 

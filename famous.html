@@ -31,7 +31,7 @@
     </div>
     <div class="box bday-box">
       <label for="bday">BDay</label>
-      <input type="date" id="bday">
+      <input type="text" id="bday" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
     </div>
     <h1>Famous Lookup</h1>
   </div>
@@ -102,41 +102,6 @@
         <div class="cell sign" id="venusSign" title="">-</div>
       </div>
 
-      <details class="collapsible pinnacles-collapsible">
-        <summary>Pinnacles</summary>
-        <div class="pinnacles-grid">
-          <div class="pinnacle-card">
-            <div class="pinnacle-card-label">Pinnacle 1</div>
-            <div class="pinnacle-card-value" id="pinnacle1">-</div>
-            <div class="pinnacle-card-compound" id="pinnacle1Compound" title="Compound (unreduced) Pinnacle 1">-</div>
-            <div class="pinnacle-card-age" id="pinnacleAge1">-</div>
-          </div>
-          <div class="pinnacle-card">
-            <div class="pinnacle-card-label">Pinnacle 2</div>
-            <div class="pinnacle-card-value" id="pinnacle2">-</div>
-            <div class="pinnacle-card-compound" id="pinnacle2Compound" title="Compound (unreduced) Pinnacle 2">-</div>
-            <div class="pinnacle-card-age" id="pinnacleAge2">-</div>
-          </div>
-          <div class="pinnacle-card">
-            <div class="pinnacle-card-label">Pinnacle 3</div>
-            <div class="pinnacle-card-value" id="pinnacle3">-</div>
-            <div class="pinnacle-card-compound" id="pinnacle3Compound" title="Compound (unreduced) Pinnacle 3">-</div>
-            <div class="pinnacle-card-age" id="pinnacleAge3">-</div>
-          </div>
-          <div class="pinnacle-card">
-            <div class="pinnacle-card-label">Pinnacle 4</div>
-            <div class="pinnacle-card-value" id="pinnacle4">-</div>
-            <div class="pinnacle-card-compound" id="pinnacle4Compound" title="Compound (unreduced) Pinnacle 4">-</div>
-            <div class="pinnacle-card-age" id="pinnacleAge4">-</div>
-          </div>
-        </div>
-      </details>
-
-      <details class="collapsible">
-        <summary>First Imprints</summary>
-        <div class="imprints" id="firstImprints"></div>
-      </details>
-
     </div>
 
     <!-- Right column -->
@@ -189,6 +154,11 @@
         <div class="cell small" id="pdRaw">-</div>
       </div>
 
+    </div>
+
+    <!-- Collapsibles, grouped at the bottom -->
+    <div class="collapsibles-group">
+
       <details class="collapsible months-collapsible">
         <summary>Months</summary>
         <div class="months-box">
@@ -196,6 +166,41 @@
             <tbody></tbody>
           </table>
         </div>
+      </details>
+
+      <details class="collapsible pinnacles-collapsible">
+        <summary>Pinnacles</summary>
+        <div class="pinnacles-grid">
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 1</div>
+            <div class="pinnacle-card-value" id="pinnacle1">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle1Compound" title="Compound (unreduced) Pinnacle 1">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge1">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 2</div>
+            <div class="pinnacle-card-value" id="pinnacle2">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle2Compound" title="Compound (unreduced) Pinnacle 2">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge2">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 3</div>
+            <div class="pinnacle-card-value" id="pinnacle3">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle3Compound" title="Compound (unreduced) Pinnacle 3">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge3">-</div>
+          </div>
+          <div class="pinnacle-card">
+            <div class="pinnacle-card-label">Pinnacle 4</div>
+            <div class="pinnacle-card-value" id="pinnacle4">-</div>
+            <div class="pinnacle-card-compound" id="pinnacle4Compound" title="Compound (unreduced) Pinnacle 4">-</div>
+            <div class="pinnacle-card-age" id="pinnacleAge4">-</div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible">
+        <summary>First Imprints</summary>
+        <div class="imprints" id="firstImprints"></div>
       </details>
 
     </div>
