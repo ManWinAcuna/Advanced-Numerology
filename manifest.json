@@ -1,0 +1,9 @@
+{
+  "name": "Advanced Numerology",
+  "short_name": "Numerology",
+  "start_url": "./profile.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050403",
+  "theme_color": "#050403"
+}
