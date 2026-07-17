@@ -24,6 +24,10 @@
    content back over the threshold, and so on. */
 html {
   scrollbar-gutter: stable;
+  overflow-x: hidden;
+  /* Stops the browser's own edge-swipe gesture (back/forward navigation,
+     or the elastic bounce on iOS) from nudging the page sideways. */
+  overscroll-behavior-x: none;
 }
 
 @keyframes glow-pulse {
@@ -46,6 +50,7 @@ body {
      row, etc.) should ever be able to drag the whole page into horizontal
      scroll - it should scroll within itself instead. */
   overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 body::before {
@@ -402,12 +407,12 @@ body::after {
 
 .layout {
   display: grid;
-  grid-template-columns: 200px 1fr 280px;
+  grid-template-columns: 1fr 280px;
   gap: 24px;
   align-items: start;
 }
 
-.sidebar, .right {
+.right {
   display: flex;
   flex-direction: column;
 }
@@ -2488,16 +2493,17 @@ body::after {
 .astro-date-picker::before { content: '['; }
 .astro-date-picker::after { content: ']'; }
 
-.astro-date-picker input[type="date"] {
+.astro-date-picker input {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 3px;
   padding: 6px 10px;
   font-size: 14px;
+  width: 110px;
 }
 
-.astro-date-picker input[type="date"]:focus {
+.astro-date-picker input:focus {
   outline: none;
   border-color: var(--orange);
   box-shadow: var(--glow-magenta);

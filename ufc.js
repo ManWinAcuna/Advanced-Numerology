@@ -23,6 +23,8 @@ function buildAllFighters() {
 let allFighters = buildAllFighters();
 
 attachDateMask(document.getElementById('newFighterDob'));
+attachDateMask(document.getElementById('matchDate'));
+attachDateMask(document.getElementById('newStadiumFounded'));
 
 function parseDateInput(value) {
   // setFullYear (not the multi-arg constructor) sidesteps JS's legacy
@@ -126,7 +128,7 @@ document.querySelectorAll('.player-edit').forEach((btn) => {
 document.getElementById('todayBtn').addEventListener('click', () => {
   const now = new Date();
   const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  document.getElementById('matchDate').value = iso;
+  document.getElementById('matchDate').value = isoToDisplay(iso);
 });
 
 /* ===================== Add / Edit Fighter ===================== */
@@ -265,7 +267,7 @@ function openStadiumForm(stadium) {
   if (stadium) {
     editingStadiumId = stadium.id;
     document.getElementById('newStadiumName').value = stadium.name;
-    document.getElementById('newStadiumFounded').value = stadium.founded;
+    document.getElementById('newStadiumFounded').value = isoToDisplay(stadium.founded);
     const idx = stadium.state ? stateIndexByName(stadium.state) : -1;
     stateSel.value = idx !== -1 ? String(idx) : '';
     document.getElementById('stadiumFormLabel').textContent = `Edit Stadium - ${stadium.name}`;
@@ -295,14 +297,14 @@ document.getElementById('cancelStadiumBtn').addEventListener('click', closeStadi
 
 document.getElementById('saveStadiumBtn').addEventListener('click', () => {
   const name = document.getElementById('newStadiumName').value.trim();
-  const founded = document.getElementById('newStadiumFounded').value;
+  const founded = displayToISO(document.getElementById('newStadiumFounded').value);
   const stateIdx = document.getElementById('newStadiumState').value;
   if (!name) {
     alert('Please enter a stadium name.');
     return;
   }
   if (!founded) {
-    alert('Please pick a founding date for the stadium.');
+    alert('Please enter a valid founding date for the stadium (MM/DD/YYYY).');
     return;
   }
   if (stateIdx === '') {
@@ -403,8 +405,9 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     return;
   }
   const matchDateInput = document.getElementById('matchDate');
-  if (!matchDateInput.value) {
-    alert('Please pick a fight date (or click Today).');
+  const matchDateISO = displayToISO(matchDateInput.value);
+  if (!matchDateISO) {
+    alert('Please enter a valid fight date (MM/DD/YYYY), or click Today.');
     return;
   }
   const stateIdx = document.getElementById('stateSelect').value;
@@ -416,7 +419,7 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   const stadium = (stadiumId && stadiumId !== '__add__') ? stadiums.find((s) => s.id === stadiumId) : null;
   const state = US_STATES[Number(stateIdx)];
 
-  const matchDate = parseDateInput(matchDateInput.value);
+  const matchDate = parseDateInput(matchDateISO);
   const stadiumDate = stadium ? parseDateInput(stadium.founded) : null;
   const stateDate = parseDateInput(state.founded);
   const fighterA = selectedFighters.A;

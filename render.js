@@ -246,8 +246,16 @@ function renderPersonalHours() {
   const worst2El = document.getElementById('worstHourTime2');
   const finEl = document.getElementById('finHourTime');
   const finNoteEl = document.getElementById('finHourNote');
+  // These only make sense once a birth time is known, so they're hidden
+  // outright (not just shown with placeholder "-") until one is entered.
+  const finBoxEl = document.getElementById('finHourBox');
+  const bwBoxEl = document.getElementById('bestWorstHourBox');
+  const hoursSectionEl = document.getElementById('personalHoursSection');
 
   if (!timeInput.value) {
+    if (finBoxEl) finBoxEl.style.display = 'none';
+    if (bwBoxEl) bwBoxEl.style.display = 'none';
+    if (hoursSectionEl) hoursSectionEl.style.display = 'none';
     emptyEl.style.display = 'block';
     boxEl.style.display = 'none';
     bestEl.textContent = '-';
@@ -258,6 +266,10 @@ function renderPersonalHours() {
     finNoteEl.textContent = '';
     return;
   }
+
+  if (finBoxEl) finBoxEl.style.display = '';
+  if (bwBoxEl) bwBoxEl.style.display = '';
+  if (hoursSectionEl) hoursSectionEl.style.display = '';
 
   const [hh, mm] = timeInput.value.split(':').map(Number);
   const table = getPersonalHoursTable(hh, mm);

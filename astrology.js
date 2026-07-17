@@ -170,7 +170,7 @@ function astroFormatInputDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return `${m}/${d}/${y}`;
 }
 
 function astroParseInputDate(value) {
@@ -401,13 +401,16 @@ document.getElementById('astroTodayBtn').addEventListener('click', () => {
   renderAstro();
 });
 
-// 'change' (not 'input') - only fires once a full date is committed, instead
-// of on every keystroke/spinner-tick while the native date picker is mid-edit.
-// Deliberately does NOT call renderAstro() - that would reassign this same
-// input's .value while it may still hold focus, which is what broke typing.
-document.getElementById('astroDateInput').addEventListener('change', (e) => {
-  if (!e.target.value) return;
-  astroCurrentDate = astroParseInputDate(e.target.value);
+// attachDateMask's own 'input' listener (registered first, below) reformats
+// the typed digits into "MM/DD/YYYY" - this listener only reads the result
+// and never writes back to .value itself, so it can safely fire on every
+// keystroke without fighting the mask or resetting mid-edit like the old
+// native date picker did.
+attachDateMask(document.getElementById('astroDateInput'));
+document.getElementById('astroDateInput').addEventListener('input', (e) => {
+  const iso = displayToISO(e.target.value);
+  if (!iso) return;
+  astroCurrentDate = astroParseInputDate(iso);
   renderAstroContent(astroCurrentDate);
 });
 

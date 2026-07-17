@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Tennis - Sports Betting</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -19,6 +22,7 @@
     <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
     <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
   </nav>
+  <script src="nav-scroll.js"></script>
 
   <div class="topbar">
     <a href="sports-betting.html" class="back-link">&larr; Sports Betting</a>
@@ -31,7 +35,7 @@
     <div class="box match-date-box">
       <div class="box-label">Match Date</div>
       <div class="inline-form">
-        <input type="date" id="matchDate">
+        <input type="text" id="matchDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
         <button class="btn" id="todayBtn">Today</button>
       </div>
     </div>

@@ -85,10 +85,12 @@ document.querySelectorAll('.player-clear').forEach((btn) => {
   btn.addEventListener('click', () => clearPlayer(btn.dataset.player));
 });
 
+attachDateMask(document.getElementById('matchDate'));
+
 document.getElementById('todayBtn').addEventListener('click', () => {
   const now = new Date();
   const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  document.getElementById('matchDate').value = iso;
+  document.getElementById('matchDate').value = isoToDisplay(iso);
 });
 
 document.getElementById('calculateBtn').addEventListener('click', () => {
@@ -97,12 +99,13 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     return;
   }
   const matchDateInput = document.getElementById('matchDate');
-  if (!matchDateInput.value) {
-    alert('Please pick a match date (or click Today).');
+  const matchDateISO = displayToISO(matchDateInput.value);
+  if (!matchDateISO) {
+    alert('Please enter a valid match date (MM/DD/YYYY), or click Today.');
     return;
   }
 
-  const matchDate = parseDateInput(matchDateInput.value);
+  const matchDate = parseDateInput(matchDateISO);
   const playerA = selectedPlayers.A;
   const playerB = selectedPlayers.B;
 

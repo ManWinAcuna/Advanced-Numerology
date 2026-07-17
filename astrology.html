@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Astrology Tracker</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -19,6 +22,7 @@
     <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
     <a href="sports-betting.html" class="nav-link">Sports Betting</a>
   </nav>
+  <script src="nav-scroll.js"></script>
 
   <div class="topbar">
     <h1>Astrology Tracker</h1>
@@ -27,7 +31,7 @@
   <div class="astro-nav">
     <button class="icon-btn" id="astroPrevBtn" title="Previous day">&lsaquo;</button>
     <div class="astro-date-picker">
-      <input type="date" id="astroDateInput">
+      <input type="text" id="astroDateInput" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
     </div>
     <button class="icon-btn" id="astroNextBtn" title="Next day">&rsaquo;</button>
     <button class="btn astro-today-btn" id="astroTodayBtn">Today</button>
@@ -85,6 +89,7 @@
 
 <script src="astronomy.browser.min.js"></script>
 <script src="astro-engine.js"></script>
+<script src="db-core.js"></script>
 <script src="astrology.js"></script>
 </body>
 </html>

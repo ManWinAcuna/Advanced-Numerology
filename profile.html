@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>My Profile</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -19,6 +22,7 @@
     <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
     <a href="sports-betting.html" class="nav-link">Sports Betting</a>
   </nav>
+  <script src="nav-scroll.js"></script>
 
   <div class="topbar">
     <div class="box bday-box">
@@ -36,50 +40,6 @@
   </div>
 
   <div class="layout">
-
-    <!-- Left sidebar -->
-    <div class="sidebar">
-      <div class="box stat-box">
-        <div class="box-label">🍀 Lucky Number</div>
-        <div class="box-value" id="luckyNumber">-</div>
-      </div>
-      <div class="box stat-box">
-        <div class="box-label">🔢 Missing</div>
-        <div class="box-value" id="missing">-</div>
-      </div>
-      <div class="box stat-box">
-        <div class="box-label">✨ 28 Day</div>
-        <div class="box-value" id="twentyEightDay">-</div>
-      </div>
-      <div class="box stat-box">
-        <div class="box-label">💰 Best Financial Hour</div>
-        <div class="box-value" id="finHourTime">-</div>
-        <div class="dayleft-caption" id="finHourNote"></div>
-      </div>
-      <div class="box stat-box">
-        <div class="box-label">⏰ Best / Worst Hour</div>
-        <div class="bw-hour-row">
-          <div class="bw-hour good">
-            <div class="bw-hour-tag">Best</div>
-            <div class="bw-hour-time" id="bestHourTime">-</div>
-          </div>
-          <div class="bw-hour bad">
-            <div class="bw-hour-tag">Worst</div>
-            <div class="bw-hour-time" id="worstHourTime">-</div>
-          </div>
-        </div>
-        <div class="bw-hour-row">
-          <div class="bw-hour good subtle">
-            <div class="bw-hour-tag">2nd Best</div>
-            <div class="bw-hour-time" id="bestHourTime2">-</div>
-          </div>
-          <div class="bw-hour bad subtle">
-            <div class="bw-hour-tag">2nd Worst</div>
-            <div class="bw-hour-time" id="worstHourTime2">-</div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Center -->
     <div class="center">
@@ -176,6 +136,51 @@
         <div class="cell small" id="pdRaw">-</div>
       </div>
 
+      <div class="box stat-box" id="bestWorstHourBox">
+        <div class="box-label">⏰ Best / Worst Hour</div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good">
+            <div class="bw-hour-tag">Best</div>
+            <div class="bw-hour-time" id="bestHourTime">-</div>
+          </div>
+          <div class="bw-hour bad">
+            <div class="bw-hour-tag">Worst</div>
+            <div class="bw-hour-time" id="worstHourTime">-</div>
+          </div>
+        </div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good subtle">
+            <div class="bw-hour-tag">2nd Best</div>
+            <div class="bw-hour-time" id="bestHourTime2">-</div>
+          </div>
+          <div class="bw-hour bad subtle">
+            <div class="bw-hour-tag">2nd Worst</div>
+            <div class="bw-hour-time" id="worstHourTime2">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="box stat-box" id="finHourBox">
+        <div class="box-label">💰 Best Financial Hour</div>
+        <div class="box-value" id="finHourTime">-</div>
+        <div class="dayleft-caption" id="finHourNote"></div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label">🍀 Lucky Number</div>
+        <div class="box-value" id="luckyNumber">-</div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label">✨ 28 Day</div>
+        <div class="box-value" id="twentyEightDay">-</div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label">🔢 Missing</div>
+        <div class="box-value" id="missing">-</div>
+      </div>
+
     </div>
 
     <!-- Collapsibles, grouped at the bottom -->
@@ -190,7 +195,7 @@
         </div>
       </details>
 
-      <details class="collapsible hours-collapsible">
+      <details class="collapsible hours-collapsible" id="personalHoursSection">
         <summary>Personal Hours</summary>
         <div class="hours-toggle">
           <button type="button" class="hours-toggle-btn active" data-mode="reduced">Reduced</button>
