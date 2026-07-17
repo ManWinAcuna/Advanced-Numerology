@@ -72,7 +72,7 @@ function renderEntries() {
     const zodiacSign = getSunSign(dateObj);
 
     const timeLabel = entry.time ? ` · 🕐 ${formatHourLabel(...entry.time.split(':').map(Number))}` : '';
-    const calcHref = `index.html?bday=${entry.date}${entry.time ? `&btime=${entry.time}` : ''}`;
+    const calcHref = `calculator.html?bday=${entry.date}${entry.time ? `&btime=${entry.time}` : ''}`;
 
     const div = document.createElement('div');
     div.className = 'entry-item';

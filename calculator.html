@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Famous Lookup</title>
+<title>Numerology Calculator</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
 
   <nav class="topnav">
     <a href="profile.html" class="nav-link">My Profile</a>
-    <a href="calculator.html" class="nav-link">Calculator</a>
-    <a href="famous.html" class="nav-link active">Famous Lookup</a>
+    <a href="calculator.html" class="nav-link active">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
     <a href="calendar.html" class="nav-link">Calendar</a>
     <a href="astrology.html" class="nav-link">Astrology</a>
     <a href="database.html" class="nav-link">Database</a>
@@ -21,19 +21,15 @@
   </nav>
 
   <div class="topbar">
-    <div class="box famous-search-box">
-      <label for="famousSearch">Famous Person / Entity</label>
-      <div class="player-search-wrap" data-player="famous">
-        <input type="text" id="famousSearch" class="player-search" placeholder="Search a name, company, country..." autocomplete="off">
-        <div class="player-suggestions" data-player="famous" id="famousSuggestions"></div>
-      </div>
-      <div class="famous-status" id="famousStatus"></div>
-    </div>
     <div class="box bday-box">
       <label for="bday">BDay</label>
       <input type="text" id="bday" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
     </div>
-    <h1>Famous Lookup</h1>
+    <div class="box bday-box">
+      <label for="btime">Birth Time <span class="optional-tag">optional</span></label>
+      <input type="time" id="btime">
+    </div>
+    <h1>Numerology Calculator</h1>
   </div>
 
   <div class="layout">
@@ -51,6 +47,34 @@
       <div class="box stat-box">
         <div class="box-label">✨ 28 Day</div>
         <div class="box-value" id="twentyEightDay">-</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">💰 Best Financial Hour</div>
+        <div class="box-value" id="finHourTime">-</div>
+        <div class="dayleft-caption" id="finHourNote"></div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">⏰ Best / Worst Hour</div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good">
+            <div class="bw-hour-tag">Best</div>
+            <div class="bw-hour-time" id="bestHourTime">-</div>
+          </div>
+          <div class="bw-hour bad">
+            <div class="bw-hour-tag">Worst</div>
+            <div class="bw-hour-time" id="worstHourTime">-</div>
+          </div>
+        </div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good subtle">
+            <div class="bw-hour-tag">2nd Best</div>
+            <div class="bw-hour-time" id="bestHourTime2">-</div>
+          </div>
+          <div class="bw-hour bad subtle">
+            <div class="bw-hour-tag">2nd Worst</div>
+            <div class="bw-hour-time" id="worstHourTime2">-</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -168,6 +192,28 @@
         </div>
       </details>
 
+      <details class="collapsible hours-collapsible">
+        <summary>Personal Hours</summary>
+        <div class="hours-toggle">
+          <button type="button" class="hours-toggle-btn active" data-mode="reduced">Reduced</button>
+          <button type="button" class="hours-toggle-btn" data-mode="raw">Unreduced</button>
+        </div>
+        <div class="hours-empty" id="hoursEmpty">Enter a birth time above to see Personal Hours.</div>
+        <div class="hours-box" id="hoursBox" style="display:none;">
+          <div class="hours-own-note" id="hoursOwnNote"></div>
+          <div class="hours-columns">
+            <table class="hours-table" id="hoursTableA">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+            <table class="hours-table" id="hoursTableB">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
       <details class="collapsible pinnacles-collapsible">
         <summary>Pinnacles</summary>
         <div class="pinnacles-grid">
@@ -224,6 +270,5 @@
 <script src="db-core.js"></script>
 <script src="compat-render.js"></script>
 <script src="render.js"></script>
-<script src="famous.js"></script>
 </body>
 </html>
