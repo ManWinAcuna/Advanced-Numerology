@@ -210,11 +210,7 @@ function matchupModalHtml(p) {
       </div>
     </div>
     <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${signalHtml}</div>
-    <div class="breakdown-rows">
-      <div class="breakdown-row"><span>Numerology Favored</span><span>${escapeHtml(p.numerologyFavorite)}</span></div>
-      <div class="breakdown-row"><span>Market Favored</span><span>${escapeHtml(p.marketFavorite)}</span></div>
-      ${resultRow}
-    </div>
+    ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
 }
 
