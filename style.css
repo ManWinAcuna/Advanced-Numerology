@@ -3551,6 +3551,14 @@ body::after {
   z-index: 1;
 }
 
+/* The breakdown popup is a direct child of .ufc-page too, and needs to
+   stay pinned to the viewport - the blanket rule above was overriding its
+   position: fixed to relative, dropping it into normal document flow
+   (after the fight cards) instead of centering over the screen. */
+.ufc-page > .modal-overlay {
+  position: fixed;
+}
+
 .ufc-page .page-title {
   letter-spacing: 0.04em;
   text-shadow: 0 0 10px rgba(245, 197, 66, 0.4), 0 0 26px rgba(167, 107, 214, 0.3);
