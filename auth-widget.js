@@ -1,10 +1,15 @@
 // Small floating sign-in widget + modal, injected on every page. Signing in
 // is entirely optional - the app works purely on localStorage either way.
-// When signed in, db-core.js's saveX() functions also push to Firestore, and
-// this file pulls the cloud copy down once per app session on sign-in (or on
-// launch if already signed in), so a fresh install/device/reinstalled
-// home-screen icon isn't stuck starting from empty local storage.
+// When signed in, db-core.js's saveX() functions also push to Firestore.
+// Right after an explicit sign-in/sign-up, this pulls the cloud copy down
+// and reloads so the page reflects it immediately (the moment a fresh
+// install/device/reinstalled home-screen icon needs it most). On a plain
+// app relaunch where Firebase just restores an already-signed-in session,
+// it instead pulls quietly in the background with no reload - forcing a
+// reload there just flashed/glitched a page that was already showing
+// perfectly good local data.
 (function () {
+  let explicitAuthAction = false;
   const widget = document.createElement('div');
   widget.className = 'auth-widget';
   widget.id = 'authWidget';
@@ -90,14 +95,16 @@
       return;
     }
 
+    explicitAuthAction = true;
+
     if (authMode === 'signup') {
       firebase.auth().createUserWithEmailAndPassword(email, password)
         .then(() => { cloudPushAll(); closeAuthModal(); })
-        .catch(showAuthError);
+        .catch((err) => { explicitAuthAction = false; showAuthError(err); });
     } else {
       firebase.auth().signInWithEmailAndPassword(email, password)
         .then(() => closeAuthModal())
-        .catch(showAuthError);
+        .catch((err) => { explicitAuthAction = false; showAuthError(err); });
     }
   });
 
@@ -108,15 +115,12 @@
   firebase.auth().onAuthStateChanged((user) => {
     updateWidgetUI(user);
     if (user) {
-      const alreadySynced = sessionStorage.getItem('cloudSyncedUid') === user.uid;
-      if (!alreadySynced) {
-        cloudPullAll().then(() => {
-          sessionStorage.setItem('cloudSyncedUid', user.uid);
-          location.reload();
-        });
+      if (explicitAuthAction) {
+        explicitAuthAction = false;
+        cloudPullAll().then(() => location.reload());
+      } else {
+        cloudPullAll();
       }
-    } else {
-      sessionStorage.removeItem('cloudSyncedUid');
     }
   });
 })();
