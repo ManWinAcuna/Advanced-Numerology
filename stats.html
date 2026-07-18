@@ -31,29 +31,122 @@
 
   <h1 class="page-title">📈 Stats &mdash; Numerology Track Record</h1>
 
-  <div class="compat-mode-select">
-    <a class="mode-card" href="stats-ufc.html">
-      <div class="mode-icon">🥊</div>
-      <div class="mode-title">UFC</div>
-      <div class="mode-desc">Track record of numerology picks vs. actual fight results.</div>
-    </a>
-    <div class="mode-card disabled">
-      <div class="mode-icon">🏀</div>
-      <div class="mode-title">NBA</div>
-      <div class="mode-desc">Track record for NBA games.</div>
-      <span class="coming-soon-tag">Coming Soon</span>
+  <div class="box stats-sport-box">
+    <div class="box-label">Sport</div>
+    <select id="statsSportSelect">
+      <option value="ufc">🥊 UFC</option>
+      <option value="tennis">🎾 Tennis</option>
+      <option value="nba" disabled>🏀 NBA (Coming Soon)</option>
+      <option value="nfl" disabled>🏈 NFL (Coming Soon)</option>
+      <option value="mlb" disabled>⚾ MLB (Coming Soon)</option>
+    </select>
+  </div>
+
+  <div id="statsUfcSection">
+    <div class="pm-last-updated-row">
+      <span id="statsLastUpdated"></span>
+      <button class="btn-link" id="statsRefreshBtn" type="button">🔄 Check Results</button>
     </div>
-    <div class="mode-card disabled">
-      <div class="mode-icon">🏈</div>
-      <div class="mode-title">NFL</div>
-      <div class="mode-desc">Track record for NFL games.</div>
-      <span class="coming-soon-tag">Coming Soon</span>
+
+    <div class="score-hero" id="statsHero"></div>
+
+    <div class="breakdown-section" id="statsBreakdown"></div>
+
+    <div class="box" id="statsPriceBucketsBox">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsPriceBucketsTable">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="statsPriceBuckets"></tbody>
+        </table>
+      </div>
     </div>
-    <div class="mode-card disabled">
-      <div class="mode-icon">⚾</div>
-      <div class="mode-title">MLB</div>
-      <div class="mode-desc">Track record for MLB games.</div>
-      <span class="coming-soon-tag">Coming Soon</span>
+
+    <div class="box" id="statsTableBox">
+      <div class="box-label">Tracked Fights</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="statsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="statsMatchupOverlay">
+      <div class="modal-box">
+        <button class="modal-close" id="statsMatchupClose" title="Close">&times;</button>
+        <div id="statsMatchupBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="statsTennisSection" style="display:none;">
+    <div class="pm-last-updated-row">
+      <span id="tennisStatsLastUpdated"></span>
+      <button class="btn-link" id="tennisStatsRefreshBtn" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="tennisStatsHero"></div>
+
+    <div class="breakdown-section" id="tennisStatsBreakdown"></div>
+
+    <div class="box" id="tennisStatsPriceBucketsBox">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsPriceBucketsTable">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsPriceBuckets"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="tennisStatsTableBox">
+      <div class="box-label">Tracked Matches</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="tennisStatsMatchupOverlay">
+      <div class="modal-box">
+        <button class="modal-close" id="tennisStatsMatchupClose" title="Close">&times;</button>
+        <div id="tennisStatsMatchupBody"></div>
+      </div>
     </div>
   </div>
 
@@ -61,5 +154,15 @@
 
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="stats-ufc.js"></script>
+<script src="stats-tennis.js"></script>
+<script>
+document.getElementById('statsSportSelect').addEventListener('change', (e) => {
+  const sport = e.target.value;
+  document.getElementById('statsUfcSection').style.display = sport === 'ufc' ? '' : 'none';
+  document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
+});
+</script>
 </body>
 </html>

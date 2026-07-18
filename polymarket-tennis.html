@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Tennis Polymarket Tracker - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page ufc-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+
+  <div class="topbar">
+    <a href="polymarket.html" class="back-link" id="pmBackLink">&larr; Polymarket</a>
+  </div>
+
+  <h1 class="page-title">🎾 Tennis &mdash; Live Polymarket Tracker</h1>
+
+  <div class="pm-last-updated" id="pmLegend">
+    🐋 Whale = single bet ≥ $500 &nbsp;&middot;&nbsp; 💎 Smart = top 50 all-time on Polymarket's Sports PNL leaderboard, and still profitable this month
+  </div>
+  <div class="pm-last-updated-row">
+    <span id="pmLastUpdated"></span>
+    <button class="btn-link" id="pmRefreshBtn" type="button">🔄 Refresh</button>
+  </div>
+
+  <div class="box pm-stake-box">
+    <div class="box-label">🧮 Risk Manager</div>
+    <div class="mode-desc">Enter what you'd actually stake per bet - each match below shows the payout at current odds and whether the track record backs it.</div>
+    <div class="inline-form">
+      <label for="pmStakeInput" class="pm-stake-label">Stake per bet ($)</label>
+      <input type="number" id="pmStakeInput" min="1" step="1" value="10">
+    </div>
+  </div>
+
+  <div class="mode-desc pm-tournament-hint">Matches are grouped by tournament since each one is played in a different city &mdash; set the location once per tournament below and it's remembered next time you visit.</div>
+
+  <div id="matchesContainer">
+    <div class="empty-state">Loading upcoming matches&hellip;</div>
+  </div>
+
+  <div class="modal-overlay" id="pmBreakdownOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="pmBreakdownClose" title="Close">&times;</button>
+      <div id="pmBreakdownBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmRegionModal">
+    <div class="modal-box modal-box-narrow">
+      <button class="modal-close" id="pmRegionModalClose" title="Close">&times;</button>
+      <div class="ufc-form-sublabel" id="pmRegionModalLabel">Add New City / Region</div>
+      <input type="text" id="pmModalRegionName" placeholder="City / region name (e.g., Melbourne)">
+      <input type="text" id="pmModalRegionFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+      <button class="btn" id="pmModalSaveRegionBtn" type="button">Save Region</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmVenueModal">
+    <div class="modal-box modal-box-narrow">
+      <button class="modal-close" id="pmVenueModalClose" title="Close">&times;</button>
+      <div class="ufc-form-sublabel" id="pmVenueModalLabel">Add New Venue</div>
+      <input type="text" id="pmModalVenueName" placeholder="Venue name">
+      <input type="text" id="pmModalVenueFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+      <select id="pmModalVenueRegionSelect">
+        <option value="">Select state...</option>
+      </select>
+      <button class="btn" id="pmModalSaveVenueBtn" type="button">Save Venue</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="tennis-data.js"></script>
+<script src="us-states-data.js"></script>
+<script src="polymarket-tennis.js"></script>
+</body>
+</html>

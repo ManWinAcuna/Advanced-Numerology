@@ -381,6 +381,27 @@ function normalizeName(name) {
     .trim();
 }
 
+/* ===================== Tennis Numerology Predictions (Stats tracker) ===================== */
+// Tennis counterpart of UFC_PREDICTIONS_KEY above - same shape, recorded by
+// polymarket-tennis.js the first time a match's numerology edge is shown.
+
+const TENNIS_PREDICTIONS_KEY = 'numerology_tennis_predictions';
+
+function loadTennisPredictions() {
+  try {
+    const raw = localStorage.getItem(TENNIS_PREDICTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveTennisPredictions(predictions) {
+  localStorage.setItem(TENNIS_PREDICTIONS_KEY, JSON.stringify(predictions));
+  cloudPushKey(TENNIS_PREDICTIONS_KEY);
+}
+
 /* ===================== UFC pick-price buckets (risk manager) ===================== */
 // Shared by the Stats page (which displays the win rate per bucket) and the
 // Polymarket tracker (which looks up the bucket for a live fight's price to
@@ -408,12 +429,14 @@ function bucketForPrice(price) {
   return PRICE_BUCKETS.find((b) => price >= b.min && price < b.max) || PRICE_BUCKETS[PRICE_BUCKETS.length - 1];
 }
 
-// The price of whichever fighter numerology favored on a stored prediction -
+// The price of whichever side numerology favored on a stored prediction -
 // what following the pick would actually have bought - derived from the two
 // stored prices by matching numerologyFavorite's name, rather than stored
-// as its own field.
+// as its own field. Works for both UFC (fighterAName) and Tennis
+// (playerAName) prediction records, whichever the object carries.
 function numerologyPickPrice(p) {
-  const favA = normalizeName(p.numerologyFavorite) === normalizeName(p.fighterAName);
+  const nameA = p.fighterAName || p.playerAName;
+  const favA = normalizeName(p.numerologyFavorite) === normalizeName(nameA);
   const price = favA ? p.marketPriceA : p.marketPriceB;
   return Number.isFinite(price) ? price : null;
 }
@@ -463,6 +486,7 @@ const CLOUD_SYNC_FIELDS = {
   [TENNIS_VENUES_KEY]: 'tennisVenues',
   [TENNIS_CUSTOM_PLAYERS_KEY]: 'customTennisPlayers',
   [TENNIS_PLAYER_OVERRIDES_KEY]: 'tennisPlayerOverrides',
+  [TENNIS_PREDICTIONS_KEY]: 'tennisPredictions',
 };
 
 function cloudPushKey(storageKey) {

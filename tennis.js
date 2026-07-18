@@ -693,3 +693,32 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   renderPlayerBreakdown(document.getElementById('resultA'), playerA, scoreA, venueName, region.name);
   renderPlayerBreakdown(document.getElementById('resultB'), playerB, scoreB, venueName, region.name);
 });
+
+/* ===================== Deep links from the Polymarket tracker ===================== */
+// polymarket-tennis.js links here with ?a=&b=&date= (both players already in
+// the roster) or ?addPlayer= (a player Polymarket knows about that isn't in
+// the roster yet), so a whale bet can be followed straight into a full
+// matchup without retyping anything.
+
+(function handlePolymarketDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const nameA = params.get('a');
+  const nameB = params.get('b');
+  const date = params.get('date');
+  const addPlayerName = params.get('addPlayer');
+
+  if (nameA && nameB) {
+    const playerA = allPlayers.find((p) => p.name.toLowerCase() === nameA.toLowerCase());
+    const playerB = allPlayers.find((p) => p.name.toLowerCase() === nameB.toLowerCase());
+    if (playerA) selectPlayer('A', playerA);
+    if (playerB) selectPlayer('B', playerB);
+  }
+  if (date) {
+    document.getElementById('matchDate').value = date;
+  }
+  if (addPlayerName) {
+    openPlayerForm(null);
+    document.getElementById('newPlayerName').value = addPlayerName;
+    lookupPlayerBirthday(addPlayerName);
+  }
+})();

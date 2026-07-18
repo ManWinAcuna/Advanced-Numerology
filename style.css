@@ -1678,6 +1678,21 @@ body::after {
   margin-bottom: 18px;
 }
 
+.stats-sport-box {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.stats-sport-box select {
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 10px;
+  font-size: 14px;
+  min-width: 200px;
+}
+
 .ufc-location-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1813,6 +1828,45 @@ body::after {
   .ufc-location-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ===================== Tennis Polymarket tracker (per-tournament groups) ===================== */
+/* Tennis runs several tournaments at once in different cities, unlike one
+   UFC card a night at one venue - so instead of a single location bar,
+   polymarket-tennis.js renders one of these per tournament, each with its
+   own region/venue controls, wrapping that tournament's match cards. */
+
+.pm-tournament-hint {
+  margin-bottom: 14px;
+}
+
+.pm-tournament-group {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.pm-tournament-header {
+  margin-bottom: 10px;
+}
+
+.pm-tournament-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.pm-tournament-region-toggle {
+  margin-bottom: 12px;
+}
+
+.pm-tournament-location-grid {
+  margin-bottom: 14px;
+}
+
+.pm-tournament-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ===================== Calculator: Personal Hours ===================== */
@@ -3601,11 +3655,13 @@ body::after {
   overflow-x: auto;
 }
 
-/* ===================== UFC pages (cyberpunk HUD) ===================== */
-/* Scoped via .ufc-page on ufc.html + polymarket-ufc.html, same approach as
-   .astro-page - the rest of the app keeps the plain warm theme. Structure
-   (brackets, borders, glows) is purple, labels and active states stay
-   yellow for readability. */
+/* ===================== UFC/Tennis pages (cyberpunk HUD) ===================== */
+/* Scoped via .ufc-page - originally ufc.html + polymarket-ufc.html, now also
+   tennis.html + polymarket-tennis.html for a consistent look across both
+   sports (name kept as-is rather than renamed, to avoid touching every page
+   that already references it). Same approach as .astro-page - the rest of
+   the app keeps the plain warm theme. Structure (brackets, borders, glows)
+   is purple, labels and active states stay yellow for readability. */
 
 .ufc-page {
   position: relative;
