@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
-<title>Sports Betting</title>
+<title>UFC Polymarket Tracker - Sports Betting</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,32 +25,36 @@
   </nav>
   <script src="nav-scroll.js"></script>
 
+  <div class="topbar">
+    <a href="polymarket.html" class="back-link">&larr; Polymarket</a>
+  </div>
 
-  <div class="compat-mode-select">
-    <a class="mode-card" href="tennis.html">
-      <div class="mode-icon">🎾</div>
-      <div class="mode-title">Tennis</div>
-      <div class="mode-desc">Compare two players' numerology and zodiac compatibility for a given match date.</div>
-    </a>
-    <a class="mode-card" href="ufc.html">
-      <div class="mode-icon">🥊</div>
-      <div class="mode-title">UFC</div>
-      <div class="mode-desc">Compare two fighters' numerology and zodiac compatibility for a given fight date.</div>
-    </a>
-    <a class="mode-card" href="polymarket.html">
-      <div class="mode-icon">📊</div>
-      <div class="mode-title">Polymarket</div>
-      <div class="mode-desc">Track live whale &amp; smart-money bets and compare them against your numerology edge.</div>
-    </a>
+  <h1 class="page-title">🥊 UFC &mdash; Live Polymarket Tracker</h1>
+
+  <div class="pm-last-updated" id="pmLegend">
+    🐋 Whale = single bet ≥ $500 &nbsp;&middot;&nbsp; 💎 Smart = wallet ranked on Polymarket's profitable sports traders leaderboard
+  </div>
+  <div class="pm-last-updated" id="pmLastUpdated"></div>
+
+  <div id="fightsContainer">
+    <div class="empty-state">Loading upcoming fights&hellip;</div>
   </div>
 
 </div>
 
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script src="firebase-init.js"></script>
 <script src="db-core.js"></script>
 <script src="auth-widget.js"></script>
+<script src="compat-render.js"></script>
+<script src="ufc-data.js"></script>
+<script src="polymarket-ufc.js"></script>
 </body>
 </html>

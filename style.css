@@ -3040,3 +3040,221 @@ body::after {
     align-items: center;
   }
 }
+
+/* ===================== Polymarket Tracker ===================== */
+
+.mode-card.disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mode-card.disabled:hover {
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
+.coming-soon-tag {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(168, 152, 128, 0.15);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pm-last-updated {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.pm-fight-card {
+  max-width: 700px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.pm-fight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pm-fight-names {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pm-live-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(229, 57, 63, 0.15);
+  color: var(--bad);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pm-countdown-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(168, 152, 128, 0.15);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pm-odds-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pm-odds-pill {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: #1c1c1c;
+  border: 1px solid var(--border);
+}
+
+.pm-odds-pill.favorite {
+  border-color: var(--yellow);
+}
+
+.pm-odds-name {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.pm-odds-pct {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.pm-edge-line {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.pm-edge-line .score-inline {
+  font-weight: 700;
+}
+
+.pm-edge-line .score-inline.good { color: var(--good); }
+.pm-edge-line .score-inline.mid { color: var(--yellow); }
+.pm-edge-line .score-inline.bad { color: var(--bad); }
+
+.pm-unmatched {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+
+.pm-signal {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.pm-signal.agree {
+  background: rgba(139, 195, 74, 0.12);
+  color: var(--good);
+}
+
+.pm-signal.disagree {
+  background: rgba(245, 197, 66, 0.12);
+  color: var(--yellow);
+}
+
+.pm-trade-feed {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.pm-trade-feed-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.pm-trade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(61, 50, 38, 0.5);
+}
+
+.pm-trade-row:last-child {
+  border-bottom: none;
+}
+
+.pm-trade-who {
+  color: var(--text);
+  font-weight: 600;
+  flex: 1;
+}
+
+.pm-trade-side {
+  color: var(--muted);
+}
+
+.pm-trade-usd {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pm-trade-time {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 44px;
+  text-align: right;
+}
+
+.pm-badge-whale, .pm-badge-smart {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pm-badge-whale {
+  background: rgba(255, 138, 61, 0.15);
+  color: var(--orange);
+}
+
+.pm-badge-smart {
+  background: rgba(167, 107, 214, 0.15);
+  color: var(--purple);
+}
+
+.pm-fight-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}

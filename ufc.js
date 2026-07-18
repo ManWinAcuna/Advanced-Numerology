@@ -450,3 +450,31 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   renderFighterBreakdown(document.getElementById('resultA'), fighterA, scoreA, stadiumName, state.name);
   renderFighterBreakdown(document.getElementById('resultB'), fighterB, scoreB, stadiumName, state.name);
 });
+
+/* ===================== Deep links from the Polymarket tracker ===================== */
+// polymarket-ufc.js links here with ?a=&b=&date= (both fighters already in
+// the roster) or ?addFighter= (a fighter Polymarket knows about that isn't
+// in the roster yet), so a whale bet can be followed straight into a full
+// matchup without retyping anything.
+
+(function handlePolymarketDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const nameA = params.get('a');
+  const nameB = params.get('b');
+  const date = params.get('date');
+  const addFighterName = params.get('addFighter');
+
+  if (nameA && nameB) {
+    const fighterA = allFighters.find((f) => f.name.toLowerCase() === nameA.toLowerCase());
+    const fighterB = allFighters.find((f) => f.name.toLowerCase() === nameB.toLowerCase());
+    if (fighterA) selectFighter('A', fighterA);
+    if (fighterB) selectFighter('B', fighterB);
+  }
+  if (date) {
+    document.getElementById('matchDate').value = date;
+  }
+  if (addFighterName) {
+    openFighterForm(null);
+    document.getElementById('newFighterName').value = addFighterName;
+  }
+})();
