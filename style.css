@@ -176,6 +176,11 @@ body::after {
   flex-wrap: wrap;
   gap: 16px 24px;
   margin-bottom: 24px;
+  /* Hug its content instead of stretching full-width - without the old
+     page-title heading to balance it out, a full-width flex row just left
+     its boxes stranded next to a big empty strip. */
+  width: fit-content;
+  max-width: 100%;
 }
 
 .topbar h1 {
