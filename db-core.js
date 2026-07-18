@@ -341,7 +341,13 @@ const CLOUD_SYNC_FIELDS = {
 };
 
 function cloudPushKey(storageKey) {
-  if (typeof firebase === 'undefined') return;
+  if (typeof firebase === 'undefined') {
+    // The SDK loads lazily after the page is up (firebase-loader.js) -
+    // remember anything saved before it arrives so auth-widget can push
+    // it once sign-in state is known.
+    (window.__pendingCloudPushKeys = window.__pendingCloudPushKeys || new Set()).add(storageKey);
+    return;
+  }
   const user = firebase.auth().currentUser;
   if (!user) return;
   const field = CLOUD_SYNC_FIELDS[storageKey];

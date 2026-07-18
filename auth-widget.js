@@ -146,6 +146,14 @@
   firebase.auth().onAuthStateChanged((user) => {
     updateWidgetUI(user);
     if (user) {
+      // Push anything saved while the lazily-loaded SDK was still on its
+      // way, before any pull can overwrite those local edits. Firestore
+      // reads reflect this client's queued writes, so the pull below
+      // can't resurrect stale cloud data over them.
+      if (window.__pendingCloudPushKeys && window.__pendingCloudPushKeys.size) {
+        window.__pendingCloudPushKeys.forEach((k) => cloudPushKey(k));
+        window.__pendingCloudPushKeys.clear();
+      }
       if (explicitAuthAction) {
         explicitAuthAction = false;
         document.getElementById('authSyncOverlay').classList.add('active');
