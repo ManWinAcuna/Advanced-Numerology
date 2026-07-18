@@ -9,6 +9,13 @@
 // reload there just flashed/glitched a page that was already showing
 // perfectly good local data.
 (function () {
+  // A never-signed-in browser shows a static placeholder pill instead of
+  // loading this file at all (see firebase-loader.js) - clicking it loads
+  // Firebase on demand and lands here. Swap that placeholder out for the
+  // real widget rather than appending a second one.
+  const placeholder = document.getElementById('authWidgetPlaceholder');
+  if (placeholder) placeholder.remove();
+
   let explicitAuthAction = false;
   const widget = document.createElement('div');
   widget.className = 'auth-widget';
@@ -143,9 +150,16 @@
     }
   }
 
+  // Marks this browser as having signed in at least once, so
+  // firebase-loader.js auto-loads Firebase on future page loads instead of
+  // waiting for another explicit click - a returning signed-in user
+  // shouldn't have to re-click "Sign In" on every single page.
+  const EVER_SIGNED_IN_KEY = 'numerology_ever_signed_in';
+
   firebase.auth().onAuthStateChanged((user) => {
     updateWidgetUI(user);
     if (user) {
+      try { localStorage.setItem(EVER_SIGNED_IN_KEY, '1'); } catch (e) { /* ignore */ }
       // Push anything saved while the lazily-loaded SDK was still on its
       // way, before any pull can overwrite those local edits. Firestore
       // reads reflect this client's queued writes, so the pull below
@@ -172,4 +186,11 @@
       }
     }
   });
+
+  // The click that triggered loading Firebase in the first place happened
+  // on the now-removed placeholder, before this modal existed - honor it.
+  if (window.__pendingAuthWidgetClick) {
+    window.__pendingAuthWidgetClick = false;
+    openAuthModal();
+  }
 })();
