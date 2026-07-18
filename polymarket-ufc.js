@@ -39,6 +39,82 @@ function saveDismissedFights(set) {
 
 let dismissedFights = loadDismissedFights();
 
+/* ===================== Risk manager (stake + track record) ===================== */
+// One shared stake applies to every fight card rather than a separate box
+// per fight - the question is "if I bet my usual amount on picks like
+// this," not a different amount each time. PRICE_BUCKETS, bucketForPrice,
+// and computeBucketStats live in db-core.js, shared with the Stats page so
+// the two can never disagree about what a bucket contains.
+const STAKE_KEY = 'numerology_pm_stake';
+
+function loadStake() {
+  const n = Number(localStorage.getItem(STAKE_KEY));
+  return Number.isFinite(n) && n > 0 ? n : 10;
+}
+
+function saveStake(n) {
+  localStorage.setItem(STAKE_KEY, String(n));
+}
+
+let currentStake = loadStake();
+
+// EV threshold below which a pick is called "roughly matches the market"
+// rather than a clear favor/avoid - 10% of stake, so small noise in a
+// still-growing sample doesn't get over-read as a strong signal either way.
+const RISK_FLAG_THRESHOLD_FRACTION = 0.10;
+
+function riskManagerHtml(pickName, pickPrice) {
+  if (pickPrice == null) return '';
+
+  const bucket = bucketForPrice(pickPrice);
+  const stat = computeBucketStats(loadUfcPredictions()).find((b) => b.label === bucket.label);
+
+  const payout = currentStake / pickPrice;
+  const profit = payout - currentStake;
+
+  let flagHtml;
+  if (!stat || stat.count < MIN_BUCKET_SAMPLE) {
+    const count = stat ? stat.count : 0;
+    flagHtml = `<div class="pm-risk-flag unknown">📊 Not enough track record yet in the ${bucket.label} range (${count} pick${count === 1 ? '' : 's'}) to judge this one.</div>`;
+  } else {
+    const winProb = stat.winPct / 100;
+    const expectedProfit = winProb * payout - currentStake;
+    const threshold = currentStake * RISK_FLAG_THRESHOLD_FRACTION;
+
+    let tier = 'mid';
+    let icon = '➖';
+    let verdict = 'roughly matches the market here';
+    if (expectedProfit > threshold) {
+      tier = 'good'; icon = '✅'; verdict = 'favors this bet';
+    } else if (expectedProfit < -threshold) {
+      tier = 'bad'; icon = '⚠️'; verdict = 'says be cautious here';
+    }
+
+    const sign = expectedProfit >= 0 ? '+' : '-';
+    flagHtml = `<div class="pm-risk-flag ${tier}">${icon} Track record ${verdict} &mdash; picks in the ${bucket.label} range have hit ${stat.winPct}% (${stat.wins}/${stat.count}), for an expected ${sign}$${Math.abs(expectedProfit).toFixed(2)} per $${currentStake} bet.</div>`;
+  }
+
+  return `
+    <div class="pm-risk-manager">
+      <div class="pm-risk-row"><span>$${currentStake} on ${escapeHtml(pickName)} at ${Math.round(pickPrice * 100)}%</span><span>pays $${payout.toFixed(2)} (${profit >= 0 ? '+' : '-'}$${Math.abs(profit).toFixed(2)})</span></div>
+      ${flagHtml}
+    </div>
+  `;
+}
+
+function initStakeInput() {
+  const input = document.getElementById('pmStakeInput');
+  input.value = currentStake;
+  input.addEventListener('input', () => {
+    const n = Number(input.value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    currentStake = n;
+    saveStake(n);
+    renderFightCards();
+    renderTradeFeeds();
+  });
+}
+
 /* ===================== Fight location (region + stadium) ===================== */
 // Polymarket gives no venue data, and the numerology score depends on it
 // (Day/Stadium/Region, same formula as ufc.js) - so no score shows at all
@@ -560,6 +636,8 @@ function numerologyBlockHtml(f) {
 
   recordPredictionIfNew(f, scoreA, scoreB, marketFavName, numFavMatched.name, agree ? 'favorite' : 'underdog');
 
+  const pickPrice = scoreA.combined >= scoreB.combined ? f.priceA : f.priceB;
+
   return `
     <div class="pm-numerology-clickable" data-condition-id="${f.conditionId}">
       <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(f.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(f.matchedB.name)} ${scoreB.combined}</span></div>
@@ -568,6 +646,7 @@ function numerologyBlockHtml(f) {
         : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
       <div class="pm-breakdown-hint">Tap for the full Day / State / Stadium breakdown &rarr;</div>
     </div>
+    ${riskManagerHtml(numFavMatched.name, pickPrice)}
   `;
 }
 
@@ -829,6 +908,7 @@ function startPolling() {
   initRefreshButton();
   initBreakdownModal();
   initDismissButtons();
+  initStakeInput();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
   startPolling();

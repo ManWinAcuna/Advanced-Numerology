@@ -381,6 +381,70 @@ function normalizeName(name) {
     .trim();
 }
 
+/* ===================== UFC pick-price buckets (risk manager) ===================== */
+// Shared by the Stats page (which displays the win rate per bucket) and the
+// Polymarket tracker (which looks up the bucket for a live fight's price to
+// judge it) - keeping this in one place means the two can never disagree
+// about what a bucket contains or what counts as a win.
+
+// A 45% underdog and a 10% longshot are very different bets even though
+// both count as "underdog" - bucketing by the actual price numerology's
+// pick was at gives a much more apples-to-apples track record to check a
+// new fight against than one blanket favorite/underdog split.
+const PRICE_BUCKETS = [
+  { label: '80-100%', min: 0.80, max: 1.01 },
+  { label: '65-80%', min: 0.65, max: 0.80 },
+  { label: '50-65%', min: 0.50, max: 0.65 },
+  { label: '35-50%', min: 0.35, max: 0.50 },
+  { label: '20-35%', min: 0.20, max: 0.35 },
+  { label: '0-20%', min: 0, max: 0.20 },
+];
+
+// Below this many resolved picks in a bucket, its win rate isn't shown as
+// a confident number - a 2-for-4 record isn't a track record yet.
+const MIN_BUCKET_SAMPLE = 5;
+
+function bucketForPrice(price) {
+  return PRICE_BUCKETS.find((b) => price >= b.min && price < b.max) || PRICE_BUCKETS[PRICE_BUCKETS.length - 1];
+}
+
+// The price of whichever fighter numerology favored on a stored prediction -
+// what following the pick would actually have bought - derived from the two
+// stored prices by matching numerologyFavorite's name, rather than stored
+// as its own field.
+function numerologyPickPrice(p) {
+  const favA = normalizeName(p.numerologyFavorite) === normalizeName(p.fighterAName);
+  const price = favA ? p.marketPriceA : p.marketPriceB;
+  return Number.isFinite(price) ? price : null;
+}
+
+function isCorrectPick(p) {
+  return !!(p.result && !p.result.draw && normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite));
+}
+
+// Buckets every resolved (non-draw) prediction by the numerology pick's
+// market price at the time, so "how has a pick like THIS actually done"
+// can be checked against a specific odds range.
+function computeBucketStats(predictions) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && numerologyPickPrice(p) != null);
+
+  return PRICE_BUCKETS.map((bucket) => {
+    const inBucket = resolved.filter((p) => {
+      const price = numerologyPickPrice(p);
+      return price >= bucket.min && price < bucket.max;
+    });
+    const wins = inBucket.filter(isCorrectPick);
+    return {
+      label: bucket.label,
+      min: bucket.min,
+      max: bucket.max,
+      count: inBucket.length,
+      wins: wins.length,
+      winPct: inBucket.length ? Math.round((wins.length / inBucket.length) * 100) : null,
+    };
+  });
+}
+
 /* ===================== Cloud sync (Firebase) ===================== */
 // Signing in is optional - the app works purely on localStorage either way.
 // When signed in, every save also pushes to Firestore under the user's own

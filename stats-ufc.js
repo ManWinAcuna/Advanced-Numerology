@@ -71,9 +71,9 @@ async function checkResults() {
   return predictions;
 }
 
-function isCorrectPick(p) {
-  return normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite);
-}
+// isCorrectPick, PRICE_BUCKETS, and computeBucketStats live in db-core.js -
+// shared with the Polymarket tracker's risk manager so the two can never
+// disagree about what a bucket contains or what counts as a win.
 
 function computeStats(predictions) {
   const resolved = predictions.filter((p) => p.result && !p.result.draw);
@@ -142,6 +142,23 @@ function renderBreakdown(stats) {
     ${meterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
     ${meterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
   `;
+}
+
+// Finer-grained companion to the favorite/underdog meters above - the same
+// idea, bucketed by the actual market price of the pick instead of just
+// which side of the line it fell on. Feeds the Polymarket tracker's risk
+// manager, which looks up the bucket for a live fight's price here.
+function renderPriceBuckets(predictions) {
+  const buckets = computeBucketStats(predictions);
+  document.getElementById('statsPriceBuckets').innerHTML = buckets.map((b) => `
+    <tr>
+      <td>${b.label}</td>
+      <td>${b.count}</td>
+      <td>${b.winPct != null && b.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${scoreClass(b.winPct)}">${b.winPct}%</span>`
+        : `<span class="empty-state">${b.count ? 'Not enough data yet' : 'No data yet'}</span>`}</td>
+    </tr>
+  `).join('');
 }
 
 function resultBadge(p) {
@@ -238,6 +255,7 @@ async function refreshAndRender() {
   const stats = computeStats(predictions);
   renderHero(stats);
   renderBreakdown(stats);
+  renderPriceBuckets(predictions);
   renderTable(predictions);
   document.getElementById('statsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }

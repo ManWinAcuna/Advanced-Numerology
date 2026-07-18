@@ -846,13 +846,18 @@ body::after {
 
 .inline-form input[type="text"],
 .inline-form input[type="date"],
-.inline-form input[type="time"] {
+.inline-form input[type="time"],
+.inline-form input[type="number"] {
   background: #fff;
   color: #111;
   border: none;
   border-radius: 3px;
   padding: 7px 10px;
   font-size: 14px;
+}
+
+.inline-form input[type="number"] {
+  width: 90px;
 }
 
 .inline-form input[type="text"] {
@@ -3529,6 +3534,67 @@ body::after {
   justify-content: space-between;
   gap: 12px;
   margin-top: 10px;
+}
+
+.pm-stake-box .inline-form {
+  align-items: center;
+}
+
+.pm-stake-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pm-risk-manager {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(245, 197, 66, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.pm-risk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  color: var(--muted);
+}
+
+.pm-risk-flag {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 12.5px;
+  border-left: 3px solid transparent;
+}
+
+.pm-risk-flag.good {
+  background: rgba(139, 195, 74, 0.12);
+  border-left-color: var(--good);
+  color: var(--good);
+}
+
+.pm-risk-flag.bad {
+  background: rgba(229, 57, 63, 0.12);
+  border-left-color: var(--bad);
+  color: var(--bad);
+}
+
+.pm-risk-flag.mid {
+  background: rgba(245, 197, 66, 0.12);
+  border-left-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.pm-risk-flag.unknown {
+  background: rgba(168, 152, 128, 0.1);
+  border-left-color: var(--border);
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .pm-table-scroll {
