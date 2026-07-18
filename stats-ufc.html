@@ -42,6 +42,7 @@
 
   <div class="box" id="statsTableBox">
     <div class="box-label">Tracked Fights</div>
+    <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
     <div class="pm-table-scroll">
       <table class="astro-table" id="statsTable">
         <thead>
@@ -55,6 +56,13 @@
         </thead>
         <tbody id="statsTableBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="statsMatchupOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="statsMatchupClose" title="Close">&times;</button>
+      <div id="statsMatchupBody"></div>
     </div>
   </div>
 

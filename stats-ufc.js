@@ -1,5 +1,9 @@
 const MARKETS_URL = 'https://gamma-api.polymarket.com/markets';
 
+// Kept around so the matchup popup can look a clicked row's full prediction
+// back up by conditionId without re-reading localStorage on every click.
+let currentPredictions = [];
+
 // The /markets endpoint defaults to closed=false (still-open markets only)
 // and silently omits anything that doesn't match - condition_ids alone isn't
 // enough, closed=true has to be passed explicitly or every already-resolved
@@ -160,7 +164,7 @@ function renderTable(predictions) {
 
   const sorted = [...predictions].sort((a, b) => new Date(b.fightTime) - new Date(a.fightTime));
   tbody.innerHTML = sorted.map((p) => `
-    <tr>
+    <tr data-condition-id="${p.conditionId}">
       <td>${formatFightDate(p.fightTime)}</td>
       <td>${escapeHtml(p.fighterAName)} vs ${escapeHtml(p.fighterBName)}</td>
       <td>${escapeHtml(p.numerologyFavorite)}</td>
@@ -170,8 +174,71 @@ function renderTable(predictions) {
   `).join('');
 }
 
+function formatOdds(price) {
+  return price != null ? `${Math.round(price * 100)}%` : '—';
+}
+
+// Everything shown here was already captured on the Polymarket tracker the
+// moment the fight's edge was first displayed (recordPredictionIfNew in
+// polymarket-ufc.js) - this just replays it, it's not fetched fresh.
+function matchupModalHtml(p) {
+  const agree = p.pickType === 'favorite';
+
+  const signalHtml = agree
+    ? `✅ Numerology agreed with the market favorite (${escapeHtml(p.marketFavorite)})`
+    : `⚡ Numerology favored ${escapeHtml(p.numerologyFavorite)} while the market favored ${escapeHtml(p.marketFavorite)} &mdash; possible value on ${escapeHtml(p.numerologyFavorite)}`;
+
+  const resultRow = p.result
+    ? `<div class="breakdown-row"><span>Result</span><span>${resultBadge(p)}</span></div>`
+    : '';
+
+  return `
+    <div class="score-hero">
+      <div class="score-names">${escapeHtml(p.fighterAName)} <span class="score-vs">&times;</span> ${escapeHtml(p.fighterBName)}</div>
+    </div>
+    <div class="pm-breakdown-hint" style="text-align:center;">${escapeHtml(p.eventTitle)} &middot; ${formatFightDate(p.fightTime)}</div>
+    <div class="pm-breakdown-grid">
+      <div class="pm-breakdown-col">
+        <div class="pm-breakdown-name">${escapeHtml(p.fighterAName)}</div>
+        <div class="pm-breakdown-row"><span>🔢 Numerology</span><span class="score-inline ${scoreClass(p.numerologyScoreA)}">${p.numerologyScoreA}</span></div>
+        <div class="pm-breakdown-row"><span>📊 Market Odds</span><span>${formatOdds(p.marketPriceA)}</span></div>
+      </div>
+      <div class="pm-breakdown-col">
+        <div class="pm-breakdown-name">${escapeHtml(p.fighterBName)}</div>
+        <div class="pm-breakdown-row"><span>🔢 Numerology</span><span class="score-inline ${scoreClass(p.numerologyScoreB)}">${p.numerologyScoreB}</span></div>
+        <div class="pm-breakdown-row"><span>📊 Market Odds</span><span>${formatOdds(p.marketPriceB)}</span></div>
+      </div>
+    </div>
+    <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${signalHtml}</div>
+    <div class="breakdown-rows">
+      <div class="breakdown-row"><span>Numerology Favored</span><span>${escapeHtml(p.numerologyFavorite)}</span></div>
+      <div class="breakdown-row"><span>Market Favored</span><span>${escapeHtml(p.marketFavorite)}</span></div>
+      ${resultRow}
+    </div>
+  `;
+}
+
+function initMatchupModal() {
+  document.getElementById('statsTableBody').addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-condition-id]');
+    if (!row) return;
+    const p = currentPredictions.find((x) => x.conditionId === row.dataset.conditionId);
+    if (!p) return;
+    document.getElementById('statsMatchupBody').innerHTML = matchupModalHtml(p);
+    document.getElementById('statsMatchupOverlay').classList.add('active');
+  });
+
+  document.getElementById('statsMatchupClose').addEventListener('click', () => {
+    document.getElementById('statsMatchupOverlay').classList.remove('active');
+  });
+  document.getElementById('statsMatchupOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'statsMatchupOverlay') document.getElementById('statsMatchupOverlay').classList.remove('active');
+  });
+}
+
 async function refreshAndRender() {
   const predictions = await checkResults();
+  currentPredictions = predictions;
   const stats = computeStats(predictions);
   renderHero(stats);
   renderBreakdown(stats);
@@ -189,4 +256,5 @@ document.getElementById('statsRefreshBtn').addEventListener('click', async () =>
   btn.disabled = false;
 });
 
+initMatchupModal();
 refreshAndRender();
