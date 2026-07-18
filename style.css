@@ -2164,7 +2164,10 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  /* Wraps on narrow screens: the arrows+month+year group holds one line,
+     Today / Highlight drop below instead of shoving past the edges. */
+  flex-wrap: wrap;
+  gap: 10px 12px;
   margin-bottom: 20px;
 }
 
@@ -2434,6 +2437,9 @@ body::after {
   .calendar-day { padding: 6px 2px; }
   .calendar-day-num { font-size: 12px; }
   .calendar-day-universal { font-size: 10px; padding: 1px 5px; }
+  .calendar-nav-select { font-size: 14px; padding: 5px 6px; }
+  .calendar-nav .btn,
+  .calendar-highlight-btn { font-size: 12px; padding: 6px 10px; }
 }
 
 /* ===================== Astrology Tracker (HUD / cyberpunk, warm palette) ===================== */
@@ -3504,12 +3510,15 @@ body::after {
   overflow-x: auto;
 }
 
-/* ===================== UFC pages (cyberpunk HUD, warm palette) ===================== */
+/* ===================== UFC pages (cyberpunk HUD) ===================== */
 /* Scoped via .ufc-page on ufc.html + polymarket-ufc.html, same approach as
-   .astro-page - the rest of the app keeps the plain warm theme. */
+   .astro-page - the rest of the app keeps the plain warm theme. Structure
+   (brackets, borders, glows) is purple, labels and active states stay
+   yellow for readability. */
 
 .ufc-page {
   position: relative;
+  --pglow: 0 0 6px rgba(167, 107, 214, 0.45), 0 0 14px rgba(167, 107, 214, 0.2);
 }
 
 .ufc-page::before {
@@ -3519,8 +3528,8 @@ body::after {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(255, 138, 61, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 138, 61, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(167, 107, 214, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167, 107, 214, 0.05) 1px, transparent 1px);
   background-size: 42px 42px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 85%);
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 85%);
@@ -3532,15 +3541,14 @@ body::after {
 }
 
 .ufc-page .page-title {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  text-shadow: 0 0 10px rgba(245, 197, 66, 0.45), 0 0 28px rgba(255, 138, 61, 0.22);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 10px rgba(245, 197, 66, 0.4), 0 0 26px rgba(167, 107, 214, 0.3);
 }
 
-/* HUD plates: every .box gets orange corner brackets over a dark gradient. */
+/* HUD plates: every .box gets purple corner brackets over a dark plate. */
 .ufc-page .box {
-  background: linear-gradient(165deg, #191309, #0e0a06 65%);
-  border: 1px solid rgba(255, 138, 61, 0.26);
+  background: linear-gradient(165deg, #171221, #0e0a12 65%);
+  border: 1px solid rgba(167, 107, 214, 0.3);
   border-radius: 2px;
   position: relative;
 }
@@ -3558,41 +3566,39 @@ body::after {
 .ufc-page .box::before {
   top: -1px;
   left: -1px;
-  border-top: 2px solid var(--orange);
-  border-left: 2px solid var(--orange);
+  border-top: 2px solid var(--purple);
+  border-left: 2px solid var(--purple);
 }
 
 .ufc-page .box::after {
   bottom: -1px;
   right: -1px;
-  border-bottom: 2px solid var(--orange);
-  border-right: 2px solid var(--orange);
+  border-bottom: 2px solid var(--purple);
+  border-right: 2px solid var(--purple);
 }
 
 .ufc-page .box-label {
   font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
-  color: var(--orange);
+  color: var(--yellow);
   opacity: 1;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
 }
 
 .ufc-page .box-label::before {
   content: '// ';
-  color: var(--yellow);
+  color: var(--purple);
 }
 
 .ufc-page .btn {
   border-radius: 0;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-size: 13px;
+  letter-spacing: 0.04em;
 }
 
 .ufc-page select,
 .ufc-page input[type="text"] {
-  background: #120d07;
-  border: 1px solid rgba(255, 138, 61, 0.3);
+  background: #120e18;
+  border: 1px solid rgba(167, 107, 214, 0.35);
   color: var(--text);
   border-radius: 0;
 }
@@ -3600,52 +3606,37 @@ body::after {
 .ufc-page select:focus,
 .ufc-page input[type="text"]:focus {
   outline: none;
-  border-color: var(--orange);
-  box-shadow: var(--glow-magenta);
+  border-color: var(--purple);
+  box-shadow: var(--pglow);
 }
 
 .ufc-page .hours-toggle {
   border-radius: 0;
-  background: #120d07;
-  border-color: rgba(255, 138, 61, 0.3);
+  background: #120e18;
+  border-color: rgba(167, 107, 214, 0.35);
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
 }
 
 .ufc-page .hours-toggle-btn {
   border-radius: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 12px;
-}
-
-.ufc-page .hours-toggle-btn.active {
-  background: var(--orange);
-  color: #130b04;
-  box-shadow: var(--glow-magenta);
 }
 
 /* Tracker fight cards */
 .ufc-page .pm-fight-card:hover {
-  border-color: var(--orange);
-  box-shadow: var(--glow-magenta);
-}
-
-.ufc-page .pm-fight-names {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  border-color: var(--purple);
+  box-shadow: var(--pglow);
 }
 
 .ufc-page .pm-odds-pill {
   border-radius: 0;
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-  background: #14100a;
+  background: #16111e;
 }
 
 .ufc-page .pm-trade-feed-label {
   font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--orange);
+  letter-spacing: 0.08em;
+  color: var(--yellow);
 }
 
 /* Matchup results (ufc.html) */
@@ -3653,42 +3644,29 @@ body::after {
 .ufc-page .edge-banner .edge-tie {
   border-radius: 0;
   clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .ufc-page .ufc-subscore-tab {
   border-radius: 0;
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-  background: #14100a;
+  background: #16111e;
 }
 
 .ufc-page .ufc-subscore-tab.active {
-  border-color: var(--orange);
-  box-shadow: var(--glow-magenta);
-}
-
-.ufc-page .ufc-subscore-name {
-  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
-  letter-spacing: 0.04em;
+  border-color: var(--purple);
+  box-shadow: var(--pglow);
 }
 
 /* Breakdown popup */
 .ufc-page .modal-box {
-  border: 1px solid rgba(255, 138, 61, 0.45);
+  border: 1px solid rgba(167, 107, 214, 0.5);
   border-radius: 2px;
-  background: linear-gradient(165deg, #191309, #0e0a06 65%);
-  box-shadow: var(--glow-magenta), 0 10px 40px rgba(0, 0, 0, 0.7);
+  background: linear-gradient(165deg, #171221, #0e0a12 65%);
+  box-shadow: var(--pglow), 0 10px 40px rgba(0, 0, 0, 0.7);
 }
 
 .ufc-page .pm-breakdown-col {
   border-radius: 0;
-  background: #14100a;
-  border-color: rgba(255, 138, 61, 0.25);
-}
-
-.ufc-page .pm-breakdown-name {
-  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  background: #16111e;
+  border-color: rgba(167, 107, 214, 0.3);
 }

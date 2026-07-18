@@ -72,7 +72,7 @@
             <select id="stateSelect">
               <option value="">Select state...</option>
             </select>
-            <button class="btn-link" id="editCountryBtn" type="button" style="display:none;">Edit</button>
+            <button class="btn-link" id="editRegionBtn" type="button" style="display:none;">Edit</button>
           </div>
         </div>
         <div class="ufc-location-field">
@@ -85,12 +85,12 @@
           </div>
         </div>
       </div>
-      <div class="ufc-add-stadium-form" id="addCountryForm">
-        <div class="ufc-form-sublabel" id="countryFormLabel">Add New Country</div>
-        <input type="text" id="newCountryName" placeholder="Country name">
-        <input type="text" id="newCountryFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding / independence date">
-        <button class="btn" id="saveCountryBtn" type="button">Save Country</button>
-        <button class="btn-link" id="cancelCountryBtn" type="button">Cancel</button>
+      <div class="ufc-add-stadium-form" id="addRegionForm">
+        <div class="ufc-form-sublabel" id="regionFormLabel">Add New City / Region</div>
+        <input type="text" id="newRegionName" placeholder="City / region name (e.g., Abu Dhabi)">
+        <input type="text" id="newRegionFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+        <button class="btn" id="saveRegionBtn" type="button">Save Region</button>
+        <button class="btn-link" id="cancelRegionBtn" type="button">Cancel</button>
       </div>
       <div class="ufc-add-stadium-form" id="addStadiumForm">
         <div class="ufc-form-sublabel" id="stadiumFormLabel">Add New Stadium</div>
@@ -178,7 +178,6 @@
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
 <script src="us-states-data.js"></script>
-<script src="countries-data.js"></script>
 <script src="ufc.js"></script>
 </body>
 </html>
