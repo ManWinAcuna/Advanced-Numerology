@@ -30,6 +30,9 @@
         </div>
       </div>
     </div>
+    <div class="auth-sync-overlay" id="authSyncOverlay">
+      <div class="auth-sync-box">☁️ Syncing your data&hellip;</div>
+    </div>
   `);
 
   let authMode = 'signin';
@@ -112,12 +115,22 @@
     document.getElementById('authWidgetStatus').textContent = user ? `☁️ ${user.email}` : 'Sign In';
   }
 
+  // Caps how long the post-sign-in sync can block the reload - a Firestore
+  // fetch over a weak connection can take much longer than expected, and
+  // silently waiting on it left the user staring at an already-rendered
+  // page for up to a minute before an unexplained reload. Now they see a
+  // visible "Syncing" overlay the whole time, capped at 8s either way.
+  function withTimeout(promise, ms) {
+    return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+  }
+
   firebase.auth().onAuthStateChanged((user) => {
     updateWidgetUI(user);
     if (user) {
       if (explicitAuthAction) {
         explicitAuthAction = false;
-        cloudPullAll().then(() => location.reload());
+        document.getElementById('authSyncOverlay').classList.add('active');
+        withTimeout(cloudPullAll(), 8000).then(() => location.reload());
       } else {
         cloudPullAll();
       }

@@ -1104,6 +1104,31 @@ body::after {
   transform: translateY(-1px);
 }
 
+.auth-sync-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(0, 0, 0, 0.65);
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-sync-overlay.active {
+  display: flex;
+}
+
+.auth-sync-box {
+  background: var(--bg);
+  border: 1px solid var(--yellow);
+  border-radius: 8px;
+  padding: 18px 28px;
+  color: var(--yellow);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 0 30px rgba(245, 197, 66, 0.25), 0 0 80px rgba(0, 0, 0, 0.6);
+}
+
 .auth-modal-form {
   display: flex;
   flex-direction: column;
