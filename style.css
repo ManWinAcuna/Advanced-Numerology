@@ -3525,7 +3525,9 @@ body::after {
 
 .pm-fight-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 10px;
 }
 

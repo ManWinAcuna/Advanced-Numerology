@@ -13,6 +13,32 @@ let leaderboardMap = new Map();
 let cardFights = [];
 const tradesCache = new Map();
 
+/* ===================== Manually-dismissed fights ===================== */
+// Polymarket's own "closed" flag is the authoritative signal a fight is
+// over, but it lags real life - sometimes by a lot for lower-profile
+// undercard bouts, since resolution isn't instant and the trading price
+// doesn't reliably jump to near-certain either. This lets the user hide a
+// fight they've personally watched finish, without waiting on Polymarket -
+// it's purely a local "I've seen this" note, layered on top of the same
+// automatic closed/active filtering below, which keeps running regardless.
+const DISMISSED_FIGHTS_KEY = 'numerology_pm_dismissed_fights';
+
+function loadDismissedFights() {
+  try {
+    const raw = localStorage.getItem(DISMISSED_FIGHTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveDismissedFights(set) {
+  localStorage.setItem(DISMISSED_FIGHTS_KEY, JSON.stringify([...set]));
+}
+
+let dismissedFights = loadDismissedFights();
+
 /* ===================== Fight location (region + stadium) ===================== */
 // Polymarket gives no venue data, and the numerology score depends on it
 // (Day/Stadium/Region, same formula as ufc.js) - so no score shows at all
@@ -575,6 +601,23 @@ function breakdownModalHtml(f, scores) {
   `;
 }
 
+// Removes the card from view immediately and remembers it - independent of
+// Polymarket's own closed/active flags, which keep being checked as normal
+// on every subsequent load (see loadEventsAndRender's dismissedFights
+// filter) so this only ever hides a fight sooner, never un-hides one.
+function initDismissButtons() {
+  document.getElementById('fightsContainer').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-dismiss]');
+    if (!btn) return;
+    const conditionId = btn.dataset.dismiss;
+    dismissedFights.add(conditionId);
+    saveDismissedFights(dismissedFights);
+    cardFights = cardFights.filter((f) => f.conditionId !== conditionId);
+    renderFightCards();
+    renderTradeFeeds();
+  });
+}
+
 function initBreakdownModal() {
   document.getElementById('fightsContainer').addEventListener('click', (e) => {
     const trigger = e.target.closest('.pm-numerology-clickable');
@@ -638,7 +681,10 @@ function renderFightCards() {
           <div class="pm-trade-feed-label">🐋 Big Money Activity</div>
           <div class="empty-state">Loading activity&hellip;</div>
         </div>
-        <div class="pm-fight-actions">${fullMatchupHtml(f)}</div>
+        <div class="pm-fight-actions">
+          <button class="btn-link" data-dismiss="${f.conditionId}" type="button">✓ Mark as Over</button>
+          ${fullMatchupHtml(f)}
+        </div>
       </div>
     `;
   }).join('');
@@ -714,9 +760,18 @@ async function loadEventsAndRender() {
     });
   });
 
-  rawFights.sort((a, b) => a.gameStartTime - b.gameStartTime);
+  // Forget dismissals for fights Polymarket no longer lists here at all
+  // (already resolved-and-gone upstream, or aged out) so the stored set
+  // doesn't grow forever.
+  const stillPresent = new Set(rawFights.map((f) => f.conditionId));
+  dismissedFights = new Set([...dismissedFights].filter((id) => stillPresent.has(id)));
+  saveDismissedFights(dismissedFights);
+
+  const visibleFights = rawFights.filter((f) => !dismissedFights.has(f.conditionId));
+
+  visibleFights.sort((a, b) => a.gameStartTime - b.gameStartTime);
   const cutoff = Date.now() - LOOKBACK_MS;
-  const upcoming = rawFights.filter((f) => f.gameStartTime.getTime() > cutoff);
+  const upcoming = visibleFights.filter((f) => f.gameStartTime.getTime() > cutoff);
 
   if (!upcoming.length) {
     cardFights = [];
@@ -773,6 +828,7 @@ function startPolling() {
   initLocationControls();
   initRefreshButton();
   initBreakdownModal();
+  initDismissButtons();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
   startPolling();
