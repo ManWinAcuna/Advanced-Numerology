@@ -387,14 +387,15 @@ function setRegionFoundedStatus(message, isError) {
 // the expected common case, not a bug.
 function lookupRegionFoundedDate(name) {
   setRegionFoundedStatus('🔍 Looking up founding date...', false);
-  lookupKeyDateByName(name)
+  lookupPlaceFoundingDate(name)
     .then((info) => {
       if (!info) {
         setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
         return;
       }
       document.getElementById('newRegionFounded').value = isoToDisplay(info.date);
-      setRegionFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+      const source = info.via === 'country' ? "its country's founding" : 'Wikipedia/Wikidata';
+      setRegionFoundedStatus(`✓ Found via ${source} (${info.date}) - please double-check before saving.`, false);
     })
     .catch(() => setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
 }

@@ -191,7 +191,42 @@ function parseWikitextDateValue(rawValue) {
   return null;
 }
 
+// Wikipedia's Infobox country template often lists a multi-stage formation
+// history as paired established_eventN / established_dateN fields - e.g. for
+// the UAE: event1 "British protectorate" / 1892, event2 "Foundation of the
+// United Arab Emirates / Independence" / 2 December 1971, event3 "Admission
+// of Ras Al Khaimah" / 10 February 1972. The highest N is NOT reliably "the
+// founding" - it's just the last one listed, which is often a later, more
+// minor amendment (like Ras Al Khaimah joining after the fact) rather than
+// the actual founding act. So the event LABEL is checked for founding-type
+// wording first, and only the highest N is used as a tiebreaker/last resort.
+const FOUNDING_EVENT_KEYWORDS = [
+  'independence', 'founded', 'foundation', 'formation', 'established',
+  'union', 'unification', 'republic', 'constitution', 'sovereignty',
+];
+
 function extractInfoboxDayDate(wikitext) {
+  const eventRe = /\|\s*established_event(\d+)\s*=\s*([^\n]+)/gi;
+  const dateRe = /\|\s*established_date(\d+)\s*=\s*([^\n]+)/gi;
+
+  const eventLabels = new Map();
+  let eventMatch;
+  while ((eventMatch = eventRe.exec(wikitext))) eventLabels.set(eventMatch[1], eventMatch[2]);
+
+  let best = null; // { n, date, hasKeyword }
+  let dateMatch;
+  while ((dateMatch = dateRe.exec(wikitext))) {
+    const n = Number(dateMatch[1]);
+    const date = parseWikitextDateValue(dateMatch[2]);
+    if (!date) continue;
+    const label = (eventLabels.get(dateMatch[1]) || '').toLowerCase();
+    const hasKeyword = FOUNDING_EVENT_KEYWORDS.some((k) => label.includes(k));
+    if (!best || (hasKeyword && !best.hasKeyword) || (hasKeyword === best.hasKeyword && n > best.n)) {
+      best = { n, date, hasKeyword };
+    }
+  }
+  if (best) return best.date;
+
   for (const field of INFOBOX_DATE_FIELDS) {
     // Capture to end of line, not to the next "|" - infobox param values are
     // almost always one per line, and a value that's itself a template (the
@@ -220,6 +255,68 @@ function lookupKeyDateFromWikipediaInfobox(title) {
     if (!wikitext) return null;
     const date = extractInfoboxDayDate(wikitext);
     return date ? { date, kind: 'founded' } : null;
+  });
+}
+
+/* ===================== Place lookup: country fallback ===================== */
+// A US state's founding date used elsewhere in this app is its statehood
+// (joined-the-union) date, not "when this land was first settled" - the
+// international-region equivalent of that is usually the date the country
+// itself was formed, not the city's own (often ancient, often undocumented-
+// to-the-day) history. Abu Dhabi doesn't have its own separately-recorded
+// "founding as an administrative unit" - the UAE's 1971 union IS that event
+// for it. So for places specifically (never for people - see
+// lookupKeyDateByName below, which people/birthday lookups keep using
+// unchanged), the most "concrete" record - a signing, a union, a
+// constitution - is tried first via this place's country (Wikidata P17),
+// and only falls back to the place's own recorded date if that's
+// unavailable (no country link, or the country itself has nothing usable).
+
+function fetchCountryQid(qid) {
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const entity = data.entities && data.entities[qid];
+      const claims = entity && entity.claims && entity.claims.P17;
+      if (!claims || !claims.length) return null;
+      const snak = claims[0].mainsnak;
+      return (snak && snak.datavalue && snak.datavalue.value && snak.datavalue.value.id) || null;
+    })
+    .catch(() => null);
+}
+
+function fetchWikipediaTitleFromQid(qid) {
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=sitelinks&sitefilter=enwiki&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const entity = data.entities && data.entities[qid];
+      const sitelink = entity && entity.sitelinks && entity.sitelinks.enwiki;
+      return sitelink ? sitelink.title : null;
+    })
+    .catch(() => null);
+}
+
+// Resolves to { date, kind, via: 'country' | 'place' } or null. `via` lets
+// the status message be honest about which record the date actually came
+// from, since "Abu Dhabi's founding date" and "the UAE's founding date" are
+// not the same claim even when this app uses the latter for the former.
+function lookupPlaceFoundingDate(name) {
+  const ownDateChain = (qid) => (qid ? fetchKeyDate(qid) : Promise.resolve(null))
+    .then((result) => result || lookupKeyDateFromWikipediaInfobox(name))
+    .then((result) => (result ? { ...result, via: 'place' } : null));
+
+  return fetchWikidataId(name).then((qid) => {
+    if (!qid) return ownDateChain(null);
+
+    return fetchCountryQid(qid).then((countryQid) => {
+      if (!countryQid || countryQid === qid) return ownDateChain(qid);
+
+      return fetchKeyDate(countryQid)
+        .then((result) => result || fetchWikipediaTitleFromQid(countryQid).then((title) => (title ? lookupKeyDateFromWikipediaInfobox(title) : null)))
+        .then((countryResult) => (countryResult ? { ...countryResult, via: 'country' } : ownDateChain(qid)));
+    });
   });
 }
 

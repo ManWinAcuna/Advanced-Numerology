@@ -789,14 +789,15 @@ function setRegionModalFoundedStatus(message, isError) {
 // quietly and leaving manual entry as the fallback is the expected case.
 function lookupRegionModalFoundedDate(name) {
   setRegionModalFoundedStatus('🔍 Looking up founding date...', false);
-  lookupKeyDateByName(name)
+  lookupPlaceFoundingDate(name)
     .then((info) => {
       if (!info) {
         setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
         return;
       }
       document.getElementById('pmModalRegionFounded').value = isoToDisplay(info.date);
-      setRegionModalFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+      const source = info.via === 'country' ? "its country's founding" : 'Wikipedia/Wikidata';
+      setRegionModalFoundedStatus(`✓ Found via ${source} (${info.date}) - please double-check before saving.`, false);
     })
     .catch(() => setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
 }
