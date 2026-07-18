@@ -878,6 +878,10 @@ body::after {
   text-decoration: underline;
 }
 
+.btn-link-danger {
+  color: var(--bad);
+}
+
 .icon-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -3300,15 +3304,16 @@ body::after {
 }
 
 .pm-unmatched a {
-  color: var(--orange);
+  color: var(--purple);
   font-style: normal;
   font-weight: 700;
   text-decoration: none;
+  text-shadow: 0 0 6px rgba(167, 107, 214, 0.45);
 }
 
 .pm-unmatched a:hover {
   text-decoration: underline;
-  text-shadow: 0 0 6px rgba(255, 138, 61, 0.5);
+  text-shadow: 0 0 10px rgba(167, 107, 214, 0.75);
 }
 
 .pm-signal {

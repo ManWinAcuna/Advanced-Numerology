@@ -10,13 +10,16 @@ let editingFighterId = null;
 
 // The built-in roster is static seed data, so edits to it are kept
 // separately as overrides (keyed by a synthetic "seed-<index>" id) and
-// applied on top here - custom (user-added) fighters follow after.
+// applied on top here - custom (user-added) fighters follow after. A seed
+// fighter can't be spliced out of that static array, so "deleting" one just
+// marks its override deleted and this filters it out.
 function buildAllFighters() {
   const seedFighters = UFC_FIGHTERS.map((f, idx) => {
     const id = `seed-${idx}`;
     const override = fighterOverrides[id];
+    if (override && override.deleted) return null;
     return override ? { id, name: override.name, dob: override.dob } : { id, name: f.name, dob: f.dob };
-  });
+  }).filter(Boolean);
   return seedFighters.concat(customFighters);
 }
 
@@ -166,12 +169,14 @@ function openFighterForm(fighter) {
     document.getElementById('newFighterDob').value = isoToDisplay(fighter.dob);
     document.getElementById('fighterFormLabel').textContent = `Edit Fighter - ${fighter.name}`;
     document.getElementById('saveFighterBtn').textContent = 'Update Fighter';
+    document.getElementById('deleteFighterBtn').style.display = '';
   } else {
     editingFighterId = null;
     document.getElementById('newFighterName').value = '';
     document.getElementById('newFighterDob').value = '';
     document.getElementById('fighterFormLabel').textContent = 'Add Fighter';
     document.getElementById('saveFighterBtn').textContent = 'Save Fighter';
+    document.getElementById('deleteFighterBtn').style.display = 'none';
   }
   document.getElementById('addFighterForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -183,11 +188,34 @@ function closeFighterForm() {
   document.getElementById('newFighterDob').value = '';
   document.getElementById('fighterFormLabel').textContent = 'Add Fighter';
   document.getElementById('saveFighterBtn').textContent = 'Save Fighter';
+  document.getElementById('deleteFighterBtn').style.display = 'none';
   setFighterDobStatus('', false);
 }
 
 document.getElementById('showAddFighterBtn').addEventListener('click', () => openFighterForm(null));
 document.getElementById('cancelFighterBtn').addEventListener('click', closeFighterForm);
+
+document.getElementById('deleteFighterBtn').addEventListener('click', () => {
+  if (!editingFighterId) return;
+  const fighter = allFighters.find((f) => f.id === editingFighterId);
+  const name = fighter ? fighter.name : 'this fighter';
+  if (!confirm(`Delete ${name} from the fighter database? This can't be undone.`)) return;
+
+  if (editingFighterId.startsWith('seed-')) {
+    fighterOverrides[editingFighterId] = { ...(fighterOverrides[editingFighterId] || {}), deleted: true };
+    saveFighterOverrides(fighterOverrides);
+  } else {
+    customFighters = customFighters.filter((f) => f.id !== editingFighterId);
+    saveCustomFighters(customFighters);
+  }
+
+  allFighters = buildAllFighters();
+  ['A', 'B'].forEach((key) => {
+    if (selectedFighters[key] && selectedFighters[key].id === editingFighterId) clearFighter(key);
+  });
+
+  closeFighterForm();
+});
 
 document.getElementById('saveFighterBtn').addEventListener('click', () => {
   const name = document.getElementById('newFighterName').value.trim();
