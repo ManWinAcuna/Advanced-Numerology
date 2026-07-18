@@ -1160,6 +1160,42 @@ body::after {
   }
 }
 
+@media (max-width: 480px) {
+  /* Keep the functional boxes (search/BDay/Birth Time) together on their
+     own row like the desktop layout, and only drop the heading (which
+     doesn't need to sit inline with them) to its own line below - rather
+     than stacking everything, which lost the original compact look. */
+  .topbar {
+    gap: 10px 12px;
+  }
+
+  .topbar > *:last-child {
+    flex-basis: 100%;
+  }
+
+  .topbar h1 {
+    font-size: 18px;
+  }
+
+  .famous-search-box {
+    min-width: 0;
+    flex: 1 1 160px;
+  }
+
+  .famous-search-box .player-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .bday-box {
+    flex: 0 1 auto;
+  }
+
+  .bday-box input {
+    width: 120px;
+  }
+}
+
 /* ===================== Compatibility Calculator ===================== */
 
 .compat-mode-select {
