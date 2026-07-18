@@ -155,15 +155,18 @@ function initLocationControls() {
 }
 
 // Same Day 60/Stadium 15/State 25 (or Day 75/State 25 without a stadium)
-// blend as computeFighterScore() in ufc.js.
+// blend as computeFighterScore() in ufc.js - returns the three factors plus
+// the combined number so the breakdown popup can show all of them.
 function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
   const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
   if (!stadiumDate) {
-    return Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
+    const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
+    return { day, stadium: null, state, combined };
   }
   const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
-  return Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
+  const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
+  return { day, stadium, state, combined };
 }
 
 function scoresForFight(f) {
@@ -353,15 +356,67 @@ function numerologyBlockHtml(f) {
   const { scoreA, scoreB } = scoresForFight(f);
   const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
   const marketFavName = favA ? f.fighterAName : f.fighterBName;
-  const numFavMatched = scoreA >= scoreB ? f.matchedA : f.matchedB;
+  const numFavMatched = scoreA.combined >= scoreB.combined ? f.matchedA : f.matchedB;
   const agree = normalizeName(marketFavName) === normalizeName(numFavMatched.name);
 
   return `
-    <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA)}">${escapeHtml(f.matchedA.name)} ${scoreA}</span> vs <span class="score-inline ${scoreClass(scoreB)}">${escapeHtml(f.matchedB.name)} ${scoreB}</span></div>
-    <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
-      ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
-      : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
+    <div class="pm-numerology-clickable" data-condition-id="${f.conditionId}">
+      <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(f.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(f.matchedB.name)} ${scoreB.combined}</span></div>
+      <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
+        ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
+        : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
+      <div class="pm-breakdown-hint">Tap for the full Day / State / Stadium breakdown &rarr;</div>
+    </div>
   `;
+}
+
+// One fighter's column in the breakdown popup - drops the Stadium row
+// entirely (not zeroed) when no stadium is set, same as ufc.js.
+function breakdownColumnHtml(name, score) {
+  const stadiumRow = score.stadium
+    ? `<div class="pm-breakdown-row"><span>🏟️ Stadium</span><span class="score-inline ${scoreClass(score.stadium.finalScore)}">${score.stadium.finalScore}</span></div>`
+    : '';
+  return `
+    <div class="pm-breakdown-col">
+      <div class="pm-breakdown-name">${escapeHtml(name)}</div>
+      <div class="pm-breakdown-row"><span>🗓️ Fight Day</span><span class="score-inline ${scoreClass(score.day.finalScore)}">${score.day.finalScore}</span></div>
+      <div class="pm-breakdown-row"><span>🗺️ State</span><span class="score-inline ${scoreClass(score.state.finalScore)}">${score.state.finalScore}</span></div>
+      ${stadiumRow}
+      <div class="pm-breakdown-row pm-breakdown-total"><span>Combined</span><span class="score-inline ${scoreClass(score.combined)}">${score.combined}</span></div>
+    </div>
+  `;
+}
+
+function breakdownModalHtml(f, scores) {
+  return `
+    <div class="score-hero">
+      <div class="score-names">${escapeHtml(f.matchedA.name)} <span class="score-vs">&times;</span> ${escapeHtml(f.matchedB.name)}</div>
+    </div>
+    <div class="pm-breakdown-grid">
+      ${breakdownColumnHtml(f.matchedA.name, scores.scoreA)}
+      ${breakdownColumnHtml(f.matchedB.name, scores.scoreB)}
+    </div>
+  `;
+}
+
+function initBreakdownModal() {
+  document.getElementById('fightsContainer').addEventListener('click', (e) => {
+    const trigger = e.target.closest('.pm-numerology-clickable');
+    if (!trigger) return;
+    const f = cardFights.find((x) => x.conditionId === trigger.dataset.conditionId);
+    if (!f) return;
+    const scores = scoresForFight(f);
+    if (!scores) return;
+    document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(f, scores);
+    document.getElementById('pmBreakdownOverlay').classList.add('active');
+  });
+
+  document.getElementById('pmBreakdownClose').addEventListener('click', () => {
+    document.getElementById('pmBreakdownOverlay').classList.remove('active');
+  });
+  document.getElementById('pmBreakdownOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'pmBreakdownOverlay') document.getElementById('pmBreakdownOverlay').classList.remove('active');
+  });
 }
 
 function fullMatchupHtml(f) {
@@ -501,6 +556,19 @@ async function loadEventsAndRender() {
   pollTrades();
 }
 
+function initRefreshButton() {
+  const btn = document.getElementById('pmRefreshBtn');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = '🔄 Refreshing…';
+    leaderboardMap = await fetchLeaderboard();
+    await loadEventsAndRender();
+    btn.textContent = originalText;
+    btn.disabled = false;
+  });
+}
+
 function startPolling() {
   setInterval(() => {
     if (document.visibilityState === 'visible') pollTrades();
@@ -517,6 +585,8 @@ function startPolling() {
 
 (async function init() {
   initLocationControls();
+  initRefreshButton();
+  initBreakdownModal();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
   startPolling();

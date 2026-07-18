@@ -3093,6 +3093,21 @@ body::after {
   margin-bottom: 14px;
 }
 
+.pm-last-updated-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.pm-last-updated-row .btn-link {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .pm-fight-card {
   max-width: 700px;
   margin-bottom: 18px;
@@ -3173,13 +3188,80 @@ body::after {
   margin-bottom: 6px;
 }
 
-.pm-edge-line .score-inline {
+.score-inline {
   font-weight: 700;
 }
 
-.pm-edge-line .score-inline.good { color: var(--good); }
-.pm-edge-line .score-inline.mid { color: var(--yellow); }
-.pm-edge-line .score-inline.bad { color: var(--bad); }
+.score-inline.good { color: var(--good); }
+.score-inline.mid { color: var(--yellow); }
+.score-inline.bad { color: var(--bad); }
+
+.pm-numerology-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 6px;
+  margin: -6px -6px 0;
+  transition: background 0.15s ease;
+}
+
+.pm-numerology-clickable:hover {
+  background: rgba(245, 197, 66, 0.08);
+}
+
+.pm-breakdown-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.pm-breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.pm-breakdown-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.pm-breakdown-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.pm-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(61, 50, 38, 0.5);
+}
+
+.pm-breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.pm-breakdown-row.pm-breakdown-total {
+  color: var(--text);
+  font-weight: 700;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .pm-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 .pm-unmatched {
   font-size: 12px;

@@ -34,7 +34,10 @@
   <div class="pm-last-updated" id="pmLegend">
     🐋 Whale = single bet ≥ $500 &nbsp;&middot;&nbsp; 💎 Smart = wallet ranked on Polymarket's profitable sports traders leaderboard
   </div>
-  <div class="pm-last-updated" id="pmLastUpdated"></div>
+  <div class="pm-last-updated-row">
+    <span id="pmLastUpdated"></span>
+    <button class="btn-link" id="pmRefreshBtn" type="button">🔄 Refresh</button>
+  </div>
 
   <div class="box ufc-location-box">
     <div class="box-label">Fight Location</div>
@@ -70,6 +73,13 @@
 
   <div id="fightsContainer">
     <div class="empty-state">Loading upcoming fights&hellip;</div>
+  </div>
+
+  <div class="modal-overlay" id="pmBreakdownOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="pmBreakdownClose" title="Close">&times;</button>
+      <div id="pmBreakdownBody"></div>
+    </div>
   </div>
 
 </div>
