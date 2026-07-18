@@ -329,6 +329,17 @@ renderPersonalHours();
   }
 })();
 
+// Called by auth-widget.js after a post-sign-in cloud pull, instead of a
+// full page reload. Profile.html overrides this with its own version that
+// also repopulates the bday/btime fields from the freshly-synced profile;
+// pages without a stored profile (Calculator, Famous Lookup) just need the
+// numbers (e.g. Compatibility with Me, which reads loadProfile() fresh
+// every render) to recompute in place.
+window.__refreshAfterCloudSync = function () {
+  render();
+  if (document.getElementById('btime')) renderPersonalHours();
+};
+
 render();
 
 /* ===================== Compat / Energy Flow popups ===================== */

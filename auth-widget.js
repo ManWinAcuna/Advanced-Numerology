@@ -130,7 +130,14 @@
       if (explicitAuthAction) {
         explicitAuthAction = false;
         document.getElementById('authSyncOverlay').classList.add('active');
-        withTimeout(cloudPullAll(), 8000).then(() => location.reload());
+        withTimeout(cloudPullAll(), 8000).then(() => {
+          document.getElementById('authSyncOverlay').classList.remove('active');
+          if (typeof window.__refreshAfterCloudSync === 'function') {
+            window.__refreshAfterCloudSync();
+          } else {
+            location.reload();
+          }
+        });
       } else {
         cloudPullAll();
       }

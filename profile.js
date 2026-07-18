@@ -24,4 +24,17 @@
 
   bdayInput.addEventListener('input', persist);
   timeInput.addEventListener('input', persist);
+
+  // Called by auth-widget.js after a post-sign-in cloud pull, instead of a
+  // full page reload - re-reads the just-synced profile straight into the
+  // fields and re-renders in place.
+  window.__refreshAfterCloudSync = function () {
+    const freshProfile = loadProfile();
+    if (freshProfile && freshProfile.date) {
+      bdayInput.value = isoToDisplay(freshProfile.date);
+      if (freshProfile.time) timeInput.value = freshProfile.time;
+    }
+    render();
+    renderPersonalHours();
+  };
 })();
