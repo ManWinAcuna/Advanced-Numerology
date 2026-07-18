@@ -1081,6 +1081,59 @@ body::after {
   border-color: var(--bad);
 }
 
+/* ===================== Cloud sign-in widget ===================== */
+
+.auth-widget {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 90;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow);
+  cursor: pointer;
+  box-shadow: var(--glow-cyan);
+  transition: transform 0.15s ease;
+}
+
+.auth-widget:hover {
+  transform: translateY(-1px);
+}
+
+.auth-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.auth-modal-form input {
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 3px;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+
+.auth-modal-error {
+  color: var(--bad);
+  font-size: 12px;
+  min-height: 14px;
+}
+
+@media (max-width: 480px) {
+  .auth-widget {
+    top: auto;
+    bottom: 10px;
+    right: 10px;
+  }
+}
+
 /* ===================== Compatibility Calculator ===================== */
 
 .compat-mode-select {
