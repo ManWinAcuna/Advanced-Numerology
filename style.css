@@ -84,6 +84,17 @@ body::after {
   background-image: radial-gradient(ellipse 1600px 1000px at 50% 0%, rgba(167, 107, 214, 0.05), transparent 70%);
 }
 
+/* The drifting starfield animates background-position, which isn't
+   GPU-composited - on phones that means repainting the whole screen every
+   frame, forever, and it made the entire app (taps, nav, scrolling) feel
+   laggy. Touch devices get the same starfield, just static; the drift is
+   only ~2px/sec anyway. */
+@media (hover: none), (pointer: coarse) {
+  body::before {
+    animation: none;
+  }
+}
+
 .page {
   max-width: 1400px;
   margin: 0 auto;

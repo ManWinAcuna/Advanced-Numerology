@@ -124,6 +124,25 @@
     return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
   }
 
+  // Every tab switch is a full page load, and quietly re-pulling the whole
+  // Firestore doc on all of them (network fetch + rewriting every
+  // localStorage key) added lag to each navigation. Once per 5 minutes per
+  // session is plenty - saveX() pushes keep the cloud current in between.
+  const CLOUD_PULL_THROTTLE_MS = 5 * 60 * 1000;
+  const CLOUD_PULL_STAMP_KEY = 'numerology_last_cloud_pull';
+
+  function stampCloudPull() {
+    try { sessionStorage.setItem(CLOUD_PULL_STAMP_KEY, String(Date.now())); } catch (e) { /* ignore */ }
+  }
+
+  function cloudPullIsDue() {
+    try {
+      return Date.now() - Number(sessionStorage.getItem(CLOUD_PULL_STAMP_KEY) || 0) > CLOUD_PULL_THROTTLE_MS;
+    } catch (e) {
+      return true;
+    }
+  }
+
   firebase.auth().onAuthStateChanged((user) => {
     updateWidgetUI(user);
     if (user) {
@@ -131,6 +150,7 @@
         explicitAuthAction = false;
         document.getElementById('authSyncOverlay').classList.add('active');
         withTimeout(cloudPullAll(), 8000).then(() => {
+          stampCloudPull();
           document.getElementById('authSyncOverlay').classList.remove('active');
           if (typeof window.__refreshAfterCloudSync === 'function') {
             window.__refreshAfterCloudSync();
@@ -138,7 +158,8 @@
             location.reload();
           }
         });
-      } else {
+      } else if (cloudPullIsDue()) {
+        stampCloudPull();
         cloudPullAll();
       }
     }
