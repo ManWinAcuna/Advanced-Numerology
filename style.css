@@ -173,7 +173,8 @@ body::after {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 16px 24px;
   margin-bottom: 24px;
 }
 
