@@ -284,6 +284,64 @@ function saveFighterOverrides(overrides) {
   cloudPushKey(FIGHTER_OVERRIDES_KEY);
 }
 
+/* ===================== Tennis Venues + Custom Players ===================== */
+// Same pattern as the UFC section above - a tournament venue list scoped to
+// tennis (a UFC arena and a tennis tournament site are different lists),
+// plus custom players and overrides to the static TENNIS_PLAYERS seed data.
+
+const TENNIS_VENUES_KEY = 'numerology_tennis_venues';
+
+function loadTennisVenues() {
+  try {
+    const raw = localStorage.getItem(TENNIS_VENUES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveTennisVenues(venues) {
+  localStorage.setItem(TENNIS_VENUES_KEY, JSON.stringify(venues));
+  cloudPushKey(TENNIS_VENUES_KEY);
+}
+
+const TENNIS_CUSTOM_PLAYERS_KEY = 'numerology_tennis_custom_players';
+
+function loadCustomTennisPlayers() {
+  try {
+    const raw = localStorage.getItem(TENNIS_CUSTOM_PLAYERS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomTennisPlayers(players) {
+  localStorage.setItem(TENNIS_CUSTOM_PLAYERS_KEY, JSON.stringify(players));
+  cloudPushKey(TENNIS_CUSTOM_PLAYERS_KEY);
+}
+
+// Edits made to the built-in TENNIS_PLAYERS roster - keyed by a synthetic
+// "seed-<index>" id, same shape as a player: {name, dob, tour, tournament}.
+const TENNIS_PLAYER_OVERRIDES_KEY = 'numerology_tennis_player_overrides';
+
+function loadTennisPlayerOverrides() {
+  try {
+    const raw = localStorage.getItem(TENNIS_PLAYER_OVERRIDES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveTennisPlayerOverrides(overrides) {
+  localStorage.setItem(TENNIS_PLAYER_OVERRIDES_KEY, JSON.stringify(overrides));
+  cloudPushKey(TENNIS_PLAYER_OVERRIDES_KEY);
+}
+
 /* ===================== UFC Numerology Predictions (Stats tracker) ===================== */
 // One entry per fight, recorded the first time its numerology edge is shown
 // on the Polymarket tracker - never overwritten afterward, so it stays a
@@ -338,6 +396,9 @@ const CLOUD_SYNC_FIELDS = {
   [CUSTOM_FIGHTERS_KEY]: 'customFighters',
   [FIGHTER_OVERRIDES_KEY]: 'fighterOverrides',
   [UFC_PREDICTIONS_KEY]: 'ufcPredictions',
+  [TENNIS_VENUES_KEY]: 'tennisVenues',
+  [TENNIS_CUSTOM_PLAYERS_KEY]: 'customTennisPlayers',
+  [TENNIS_PLAYER_OVERRIDES_KEY]: 'tennisPlayerOverrides',
 };
 
 function cloudPushKey(storageKey) {

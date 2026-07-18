@@ -33,11 +33,80 @@
 
   <div class="compat-form active tennis-form">
 
-    <div class="box match-date-box">
-      <div class="box-label">Match Date</div>
-      <div class="inline-form">
-        <input type="text" id="matchDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
-        <button class="btn" id="todayBtn">Today</button>
+    <div class="ufc-top-row">
+      <div class="box match-date-box">
+        <div class="box-label">Match Date</div>
+        <div class="inline-form">
+          <input type="text" id="matchDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
+          <button class="btn" id="todayBtn">Today</button>
+        </div>
+      </div>
+
+      <div class="box ufc-add-fighter-box">
+        <div class="box-label-row">
+          <div class="box-label" id="playerFormLabel">Add Player</div>
+          <button class="btn-link bulk-upload-btn" id="bulkUploadBtn" type="button">📤 Bulk Upload</button>
+        </div>
+        <button class="btn" id="showAddPlayerBtn" type="button">+ Add New Player</button>
+        <div class="ufc-add-fighter-form" id="addPlayerForm">
+          <input type="text" id="newPlayerName" placeholder="Player name">
+          <input type="text" id="newPlayerDob" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
+          <select id="newPlayerTour">
+            <option value="ATP">ATP</option>
+            <option value="WTA">WTA</option>
+          </select>
+          <input type="text" id="newPlayerTournament" placeholder="Tournament (e.g. Bastad)">
+          <div class="famous-status" id="playerDobStatus"></div>
+          <button class="btn" id="savePlayerBtn" type="button">Save Player</button>
+          <button class="btn-link" id="cancelPlayerBtn" type="button">Cancel</button>
+          <button class="btn-link btn-link-danger" id="deletePlayerBtn" type="button" style="display:none;">Delete Player</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="box ufc-location-box">
+      <div class="box-label">Match Location</div>
+      <div class="mode-desc">The tournament venue's founding date factors into the score alongside match day and region &mdash; optional, same as UFC.</div>
+      <div class="hours-toggle ufc-region-toggle" id="regionToggle">
+        <button type="button" class="hours-toggle-btn active" data-region="us">🇺🇸 United States</button>
+        <button type="button" class="hours-toggle-btn" data-region="intl">🌍 International</button>
+      </div>
+      <div class="ufc-location-grid">
+        <div class="ufc-location-field">
+          <label for="stateSelect" id="regionLabel">State</label>
+          <div class="ufc-select-row">
+            <select id="stateSelect">
+              <option value="">Select state...</option>
+            </select>
+            <button class="btn-link" id="editRegionBtn" type="button" style="display:none;">Edit</button>
+          </div>
+        </div>
+        <div class="ufc-location-field">
+          <label for="venueSelect">Tournament Venue <span class="optional-tag">optional</span></label>
+          <div class="ufc-select-row">
+            <select id="venueSelect">
+              <option value="">Select venue...</option>
+            </select>
+            <button class="btn-link" id="editVenueBtn" type="button" style="display:none;">Edit</button>
+          </div>
+        </div>
+      </div>
+      <div class="ufc-add-stadium-form" id="addRegionForm">
+        <div class="ufc-form-sublabel" id="regionFormLabel">Add New City / Region</div>
+        <input type="text" id="newRegionName" placeholder="City / region name">
+        <input type="text" id="newRegionFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+        <button class="btn" id="saveRegionBtn" type="button">Save Region</button>
+        <button class="btn-link" id="cancelRegionBtn" type="button">Cancel</button>
+      </div>
+      <div class="ufc-add-stadium-form" id="addVenueForm">
+        <div class="ufc-form-sublabel" id="venueFormLabel">Add New Venue</div>
+        <input type="text" id="newVenueName" placeholder="Venue name">
+        <input type="text" id="newVenueFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+        <select id="newVenueState">
+          <option value="">Select state...</option>
+        </select>
+        <button class="btn" id="saveVenueBtn" type="button">Save Venue</button>
+        <button class="btn-link" id="cancelVenueBtn" type="button">Cancel</button>
       </div>
     </div>
 
@@ -54,7 +123,10 @@
             <span class="player-selected-meta"></span>
             <span class="player-selected-dob"></span>
           </div>
-          <button class="icon-btn player-clear" data-player="A" title="Clear">&times;</button>
+          <div class="player-selected-actions">
+            <button class="btn-link player-edit" data-player="A" type="button" style="display:none;">Edit</button>
+            <button class="icon-btn player-clear" data-player="A" title="Clear">&times;</button>
+          </div>
         </div>
       </div>
 
@@ -70,12 +142,18 @@
             <span class="player-selected-meta"></span>
             <span class="player-selected-dob"></span>
           </div>
-          <button class="icon-btn player-clear" data-player="B" title="Clear">&times;</button>
+          <div class="player-selected-actions">
+            <button class="btn-link player-edit" data-player="B" type="button" style="display:none;">Edit</button>
+            <button class="icon-btn player-clear" data-player="B" title="Clear">&times;</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <button class="btn btn-large" id="calculateBtn">Calculate Matchup</button>
+    <div class="ufc-calculate-row">
+      <button class="btn btn-large" id="calculateBtn">Calculate Matchup</button>
+      <button class="btn-link" id="clearPlayersBtn" type="button">Clear Players</button>
+    </div>
   </div>
 
   <div class="compat-results tennis-results" id="tennisResults">
@@ -103,6 +181,8 @@
 <script src="firebase-loader.js"></script>
 <script src="compat-render.js"></script>
 <script src="tennis-data.js"></script>
+<script src="us-states-data.js"></script>
+<script src="bulk-upload.js"></script>
 <script src="tennis.js"></script>
 </body>
 </html>

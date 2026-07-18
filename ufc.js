@@ -257,6 +257,47 @@ document.getElementById('saveFighterBtn').addEventListener('click', () => {
   closeFighterForm();
 });
 
+// Matches each uploaded row against the existing roster the same way the
+// Polymarket tracker matches fighter names (normalizeName, from db-core.js)
+// - a name already in the roster gets its dob updated in place (and is
+// un-deleted if it had been soft-deleted) rather than creating a duplicate.
+document.getElementById('bulkUploadBtn').addEventListener('click', () => {
+  openBulkUploadModal((rows) => {
+    let added = 0;
+    let updatedCount = 0;
+
+    rows.forEach(({ name, date }) => {
+      const norm = normalizeName(name);
+      const seedIdx = UFC_FIGHTERS.findIndex((f, i) => {
+        const id = `seed-${i}`;
+        const override = fighterOverrides[id];
+        const currentName = override ? override.name : f.name;
+        return normalizeName(currentName) === norm;
+      });
+
+      if (seedIdx !== -1) {
+        fighterOverrides[`seed-${seedIdx}`] = { name, dob: date };
+        updatedCount++;
+        return;
+      }
+
+      const customIdx = customFighters.findIndex((f) => normalizeName(f.name) === norm);
+      if (customIdx !== -1) {
+        customFighters[customIdx] = { id: customFighters[customIdx].id, name, dob: date };
+        updatedCount++;
+      } else {
+        customFighters.push({ id: uid(), name, dob: date });
+        added++;
+      }
+    });
+
+    saveFighterOverrides(fighterOverrides);
+    saveCustomFighters(customFighters);
+    allFighters = buildAllFighters();
+    return `Imported ${rows.length} fighter${rows.length === 1 ? '' : 's'}: ${added} added, ${updatedCount} updated.`;
+  });
+});
+
 /* ===================== Fight Location: Region + Stadium ===================== */
 // The region is a US state (statehood date) or, for international cards, the
 // host city/emirate/province (its founding date, e.g. Abu Dhabi's) - toggled

@@ -278,6 +278,18 @@ body::after {
   display: block;
 }
 
+.box-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.box-label-row .box-label {
+  margin-bottom: 0;
+}
+
 .box-value {
   font-size: 26px;
   font-weight: 800;
@@ -3688,4 +3700,38 @@ body::after {
   border-radius: 0;
   background: #16111e;
   border-color: rgba(167, 107, 214, 0.3);
+}
+
+/* ===================== Bulk Upload Modal ===================== */
+
+.bulk-upload-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 8px 0 14px;
+  line-height: 1.5;
+}
+
+#bulkUploadFileInput {
+  display: block;
+  width: 100%;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.bulk-upload-status {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+  margin-bottom: 10px;
+}
+
+.bulk-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-upload-btn {
+  margin-left: 8px;
 }

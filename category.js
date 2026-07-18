@@ -190,5 +190,29 @@ function init() {
     if (e.target.id === 'compatModalOverlay') closeCompatModal();
   });
 
+  document.getElementById('bulkUploadBtn').addEventListener('click', () => {
+    openBulkUploadModal((rows) => {
+      let added = 0;
+      let updated = 0;
+      rows.forEach(({ name, date, time }) => {
+        const existing = category.entries.find((e) => e.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          existing.date = date;
+          if (time) existing.time = time; else delete existing.time;
+          updated++;
+        } else {
+          const entry = { id: uid(), name, date };
+          if (time) entry.time = time;
+          category.entries.push(entry);
+          added++;
+        }
+      });
+      category.entries.sort((a, b) => a.name.localeCompare(b.name));
+      saveDBState(db);
+      renderEntries();
+      return `Imported ${rows.length} row${rows.length === 1 ? '' : 's'}: ${added} added, ${updated} updated.`;
+    });
+  });
+
   renderEntries();
 }

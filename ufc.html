@@ -46,7 +46,10 @@
       </div>
 
       <div class="box ufc-add-fighter-box">
-        <div class="box-label" id="fighterFormLabel">Add Fighter</div>
+        <div class="box-label-row">
+          <div class="box-label" id="fighterFormLabel">Add Fighter</div>
+          <button class="btn-link bulk-upload-btn" id="bulkUploadBtn" type="button">📤 Bulk Upload</button>
+        </div>
         <button class="btn" id="showAddFighterBtn" type="button">+ Add New Fighter</button>
         <div class="ufc-add-fighter-form" id="addFighterForm">
           <input type="text" id="newFighterName" placeholder="Fighter name">
@@ -174,6 +177,7 @@
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
 <script src="us-states-data.js"></script>
+<script src="bulk-upload.js"></script>
 <script src="ufc.js"></script>
 </body>
 </html>
