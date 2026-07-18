@@ -175,7 +175,7 @@ body::after {
   align-items: center;
   flex-wrap: wrap;
   gap: 16px 24px;
-  margin-bottom: 24px;
+  margin-bottom: 4px;
   /* Hug its content instead of stretching full-width - without the old
      page-title heading to balance it out, a full-width flex row just left
      its boxes stranded next to a big empty strip. */
