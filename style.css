@@ -2178,6 +2178,30 @@ body::after {
   text-align: center;
 }
 
+.calendar-highlight-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.calendar-highlight-btn:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.calendar-highlight-btn.active {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #111;
+  box-shadow: var(--glow-cyan);
+}
+
 .calendar-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -2233,6 +2257,38 @@ body::after {
   border-color: var(--yellow);
   background: rgba(245, 197, 66, 0.1);
   animation: glow-pulse 2.4s ease-in-out infinite;
+}
+
+.calendar-day.tier-good {
+  background: rgba(139, 195, 74, 0.18);
+  border-color: rgba(139, 195, 74, 0.55);
+}
+
+.calendar-day.tier-good:hover {
+  border-color: var(--good);
+  box-shadow: 0 0 10px rgba(139, 195, 74, 0.35);
+}
+
+.calendar-day.tier-bad {
+  background: rgba(229, 57, 63, 0.18);
+  border-color: rgba(229, 57, 63, 0.55);
+}
+
+.calendar-day.tier-bad:hover {
+  border-color: var(--bad);
+  box-shadow: 0 0 10px rgba(229, 57, 63, 0.35);
+}
+
+/* Already-passed days: dim and desaturate (including any tier tint) so the
+   grid reads as "these are done" at a glance instead of looking actionable. */
+.calendar-day.past {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.calendar-day.past:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .calendar-day-num {

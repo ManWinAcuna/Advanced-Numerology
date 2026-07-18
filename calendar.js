@@ -3,6 +3,7 @@ const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 let viewYear;
 let viewMonth; // 0-11
+let highlightMode = false;
 
 function setToCurrentMonth() {
   const now = new Date();
@@ -127,6 +128,13 @@ function renderGrid() {
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === viewYear && today.getMonth() === viewMonth;
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  let meDate = null;
+  if (highlightMode) {
+    const profile = loadProfile();
+    if (profile && profile.date) meDate = parseDateStr(profile.date);
+  }
 
   // The zodiac month that takes over on the 7th of the viewed month.
   const incomingZodiacSign = getChineseMonth(new Date(viewYear, viewMonth, 7));
@@ -163,6 +171,11 @@ function renderGrid() {
     const cell = document.createElement('div');
     cell.className = 'calendar-day';
     if (isCurrentMonth && d === today.getDate()) cell.classList.add('today');
+    if (date < todayMidnight) cell.classList.add('past');
+    if (meDate) {
+      const tier = tierClass(computeCompatibility(meDate, date).finalScore);
+      if (tier === 'good' || tier === 'bad') cell.classList.add(`tier-${tier}`);
+    }
     cell.innerHTML = `
       <div class="calendar-day-num">${d}</div>
       <div class="calendar-day-universal">${universalDay}</div>${zodiacMarker}
@@ -319,6 +332,19 @@ document.getElementById('calTodayBtn').addEventListener('click', () => {
   renderHeader();
   renderGrid();
   renderRankList();
+});
+
+document.getElementById('calHighlightBtn').addEventListener('click', (e) => {
+  if (!highlightMode) {
+    const profile = loadProfile();
+    if (!profile || !profile.date) {
+      alert('Set your birthday on the My Profile page first, then come back to highlight your best/worst days.');
+      return;
+    }
+  }
+  highlightMode = !highlightMode;
+  e.currentTarget.classList.toggle('active', highlightMode);
+  renderGrid();
 });
 
 renderCalPlanetFilterBar();
