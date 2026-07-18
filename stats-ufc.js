@@ -1,0 +1,192 @@
+const MARKETS_URL = 'https://gamma-api.polymarket.com/markets';
+
+// The /markets endpoint defaults to closed=false (still-open markets only)
+// and silently omits anything that doesn't match - condition_ids alone isn't
+// enough, closed=true has to be passed explicitly or every already-resolved
+// fight just vanishes from the response instead of coming back resolved.
+async function fetchMarketsByConditionIds(ids) {
+  if (!ids.length) return [];
+  const params = new URLSearchParams({ closed: 'true' });
+  ids.forEach((id) => params.append('condition_ids', id));
+  try {
+    const res = await fetch(`${MARKETS_URL}?${params.toString()}`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// A resolved moneyline market's outcomePrices collapse to an exact "1"/"0"
+// split (verified against a real resolved UFC 300 market) - a draw/no
+// contest instead leaves both prices near 0.5, so it's treated as neither a
+// win nor a loss rather than corrupting the win rate.
+function determineResult(market) {
+  if (!market.closed) return null;
+  let prices;
+  let outcomes;
+  try {
+    prices = JSON.parse(market.outcomePrices).map(Number);
+    outcomes = JSON.parse(market.outcomes);
+  } catch (e) {
+    return null;
+  }
+  if (!Array.isArray(prices) || prices.length < 2) return null;
+
+  const maxPrice = Math.max(...prices);
+  if (maxPrice < 0.9) return { winner: null, draw: true, resolvedAt: Date.now() };
+
+  const idx = prices.indexOf(maxPrice);
+  return { winner: outcomes[idx], draw: false, resolvedAt: Date.now() };
+}
+
+async function checkResults() {
+  const predictions = loadUfcPredictions();
+  const pending = predictions.filter((p) => !p.result);
+
+  if (pending.length) {
+    const markets = await fetchMarketsByConditionIds(pending.map((p) => p.conditionId));
+    const byId = new Map(markets.map((m) => [m.conditionId, m]));
+    let changed = false;
+
+    predictions.forEach((p) => {
+      if (p.result) return;
+      const market = byId.get(p.conditionId);
+      if (!market) return;
+      const result = determineResult(market);
+      if (result) {
+        p.result = result;
+        changed = true;
+      }
+    });
+
+    if (changed) saveUfcPredictions(predictions);
+  }
+
+  return predictions;
+}
+
+function isCorrectPick(p) {
+  return normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite);
+}
+
+function computeStats(predictions) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw);
+  const wins = resolved.filter(isCorrectPick);
+  const favoritePicks = resolved.filter((p) => p.pickType === 'favorite');
+  const underdogPicks = resolved.filter((p) => p.pickType === 'underdog');
+  const favoriteWins = favoritePicks.filter(isCorrectPick);
+  const underdogWins = underdogPicks.filter(isCorrectPick);
+
+  return {
+    total: predictions.length,
+    resolvedCount: resolved.length,
+    pendingCount: predictions.filter((p) => !p.result).length,
+    drawCount: predictions.filter((p) => p.result && p.result.draw).length,
+    winsCount: wins.length,
+    overallWinPct: resolved.length ? Math.round((wins.length / resolved.length) * 100) : null,
+    favoriteCount: favoritePicks.length,
+    favoriteWinsCount: favoriteWins.length,
+    favoriteWinPct: favoritePicks.length ? Math.round((favoriteWins.length / favoritePicks.length) * 100) : null,
+    underdogCount: underdogPicks.length,
+    underdogWinsCount: underdogWins.length,
+    underdogWinPct: underdogPicks.length ? Math.round((underdogWins.length / underdogPicks.length) * 100) : null,
+  };
+}
+
+function renderHero(stats) {
+  const hero = document.getElementById('statsHero');
+
+  if (stats.total === 0) {
+    hero.innerHTML = `
+      <div class="score-names">Numerology Win Rate</div>
+      <div class="empty-state">No fights tracked yet &mdash; open the Polymarket UFC tracker and set a fight location to start building a track record.</div>
+    `;
+    return;
+  }
+
+  if (stats.resolvedCount === 0) {
+    hero.innerHTML = `
+      <div class="score-names">Numerology Win Rate</div>
+      <div class="empty-state">${stats.total} fight${stats.total === 1 ? '' : 's'} tracked, none resolved yet. Check back after they finish.</div>
+    `;
+    return;
+  }
+
+  const extras = [];
+  if (stats.pendingCount) extras.push(`${stats.pendingCount} pending`);
+  if (stats.drawCount) extras.push(`${stats.drawCount} no contest`);
+
+  hero.innerHTML = `
+    <div class="score-names">Numerology Win Rate</div>
+    <div class="score-big ${scoreClass(stats.overallWinPct)}">${stats.overallWinPct}<span class="score-out-of">%</span></div>
+    <div class="pm-breakdown-hint">${stats.winsCount} of ${stats.resolvedCount} resolved picks correct${extras.length ? ` &middot; ${extras.join(' &middot; ')}` : ''}</div>
+  `;
+}
+
+function meterRow(label, pct, count, wins) {
+  const known = pct != null;
+  return `
+    <div class="breakdown-header"><span>${label}</span><span>${known ? `${pct}% (${wins}/${count})` : 'No data yet'}</span></div>
+    <div class="meter"><div class="meter-fill" style="width:${known ? pct : 0}%"></div></div>
+  `;
+}
+
+function renderBreakdown(stats) {
+  document.getElementById('statsBreakdown').innerHTML = `
+    ${meterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
+    ${meterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
+  `;
+}
+
+function resultBadge(p) {
+  if (!p.result) return '<span class="pm-countdown-badge">⏳ Pending</span>';
+  if (p.result.draw) return '<span class="coming-soon-tag">🤝 No Contest</span>';
+  return isCorrectPick(p) ? '<span class="score-inline good">✅ Won</span>' : '<span class="score-inline bad">❌ Lost</span>';
+}
+
+function formatFightDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderTable(predictions) {
+  const tbody = document.getElementById('statsTableBody');
+  if (!predictions.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No fights tracked yet.</td></tr>';
+    return;
+  }
+
+  const sorted = [...predictions].sort((a, b) => new Date(b.fightTime) - new Date(a.fightTime));
+  tbody.innerHTML = sorted.map((p) => `
+    <tr>
+      <td>${formatFightDate(p.fightTime)}</td>
+      <td>${escapeHtml(p.fighterAName)} vs ${escapeHtml(p.fighterBName)}</td>
+      <td>${escapeHtml(p.numerologyFavorite)}</td>
+      <td>${p.pickType === 'favorite' ? 'Favorite' : 'Underdog'}</td>
+      <td>${resultBadge(p)}</td>
+    </tr>
+  `).join('');
+}
+
+async function refreshAndRender() {
+  const predictions = await checkResults();
+  const stats = computeStats(predictions);
+  renderHero(stats);
+  renderBreakdown(stats);
+  renderTable(predictions);
+  document.getElementById('statsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+}
+
+document.getElementById('statsRefreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('statsRefreshBtn');
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '🔄 Checking…';
+  await refreshAndRender();
+  btn.textContent = original;
+  btn.disabled = false;
+});
+
+refreshAndRender();

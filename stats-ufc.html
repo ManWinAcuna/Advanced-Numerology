@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
-<title>Sports Betting</title>
+<title>UFC Stats - Sports Betting</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,28 +25,37 @@
   </nav>
   <script src="nav-scroll.js"></script>
 
+  <div class="topbar">
+    <a href="stats.html" class="back-link">&larr; Stats</a>
+  </div>
 
-  <div class="compat-mode-select">
-    <a class="mode-card" href="tennis.html">
-      <div class="mode-icon">🎾</div>
-      <div class="mode-title">Tennis</div>
-      <div class="mode-desc">Compare two players' numerology and zodiac compatibility for a given match date.</div>
-    </a>
-    <a class="mode-card" href="ufc.html">
-      <div class="mode-icon">🥊</div>
-      <div class="mode-title">UFC</div>
-      <div class="mode-desc">Compare two fighters' numerology and zodiac compatibility for a given fight date.</div>
-    </a>
-    <a class="mode-card" href="polymarket.html">
-      <div class="mode-icon">📊</div>
-      <div class="mode-title">Polymarket</div>
-      <div class="mode-desc">Track live whale &amp; smart-money bets and compare them against your numerology edge.</div>
-    </a>
-    <a class="mode-card" href="stats.html">
-      <div class="mode-icon">📈</div>
-      <div class="mode-title">Stats</div>
-      <div class="mode-desc">Track record of numerology picks vs. actual results, over time.</div>
-    </a>
+  <h1 class="page-title">🥊 UFC &mdash; Numerology Track Record</h1>
+
+  <div class="pm-last-updated-row">
+    <span id="statsLastUpdated"></span>
+    <button class="btn-link" id="statsRefreshBtn" type="button">🔄 Check Results</button>
+  </div>
+
+  <div class="score-hero" id="statsHero"></div>
+
+  <div class="breakdown-section" id="statsBreakdown"></div>
+
+  <div class="box" id="statsTableBox">
+    <div class="box-label">Tracked Fights</div>
+    <div class="pm-table-scroll">
+      <table class="astro-table" id="statsTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Matchup</th>
+            <th>Numerology Pick</th>
+            <th>Type</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="statsTableBody"></tbody>
+      </table>
+    </div>
   </div>
 
 </div>
@@ -57,5 +66,7 @@
 <script src="firebase-init.js"></script>
 <script src="db-core.js"></script>
 <script src="auth-widget.js"></script>
+<script src="compat-render.js"></script>
+<script src="stats-ufc.js"></script>
 </body>
 </html>

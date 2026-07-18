@@ -3421,3 +3421,7 @@ body::after {
   justify-content: flex-end;
   margin-top: 10px;
 }
+
+.pm-table-scroll {
+  overflow-x: auto;
+}

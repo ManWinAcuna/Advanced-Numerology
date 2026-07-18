@@ -180,6 +180,32 @@ function scoresForFight(f) {
   };
 }
 
+// Locks in one prediction per fight, the first time its numerology edge is
+// shown - never overwritten afterward, so it stays what was actually seen
+// rather than drifting as odds move. The Stats page resolves `result` later.
+function recordPredictionIfNew(f, scoreA, scoreB, marketFavorite, numerologyFavorite, pickType) {
+  const predictions = loadUfcPredictions();
+  if (predictions.some((p) => p.conditionId === f.conditionId)) return;
+
+  predictions.push({
+    conditionId: f.conditionId,
+    fighterAName: f.fighterAName,
+    fighterBName: f.fighterBName,
+    numerologyFavorite,
+    numerologyScoreA: scoreA.combined,
+    numerologyScoreB: scoreB.combined,
+    marketFavorite,
+    marketPriceA: f.priceA,
+    marketPriceB: f.priceB,
+    pickType,
+    eventTitle: f.eventTitle,
+    fightTime: f.gameStartTime.toISOString(),
+    recordedAt: Date.now(),
+    result: null,
+  });
+  saveUfcPredictions(predictions);
+}
+
 /* ===================== Fighter roster + matching ===================== */
 // Mirrors buildAllFighters() in ufc.js so Polymarket fighter names can be
 // matched against the same seed+override+custom roster the calculator uses.
@@ -195,20 +221,7 @@ function buildAllFighters() {
   return seedFighters.concat(custom);
 }
 
-// Polymarket fighter names sometimes carry suffixes or middle names our
-// roster doesn't ("Levi Rodrigues" vs "Levi Rodrigues Jr.", "Jose Delgado"
-// vs "Jose Miguel Delgado") - normalize and fall back to a first+last token
-// match rather than requiring an exact string match.
-function normalizeName(name) {
-  return (name || '')
-    .toLowerCase()
-    .replace(/[.']/g, '')
-    .replace(/-/g, ' ')
-    .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
+// normalizeName() lives in db-core.js (shared with the Stats page).
 function matchFighter(name, roster) {
   const norm = normalizeName(name);
   if (!norm) return null;
@@ -358,6 +371,8 @@ function numerologyBlockHtml(f) {
   const marketFavName = favA ? f.fighterAName : f.fighterBName;
   const numFavMatched = scoreA.combined >= scoreB.combined ? f.matchedA : f.matchedB;
   const agree = normalizeName(marketFavName) === normalizeName(numFavMatched.name);
+
+  recordPredictionIfNew(f, scoreA, scoreB, marketFavName, numFavMatched.name, agree ? 'favorite' : 'underdog');
 
   return `
     <div class="pm-numerology-clickable" data-condition-id="${f.conditionId}">

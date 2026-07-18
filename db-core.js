@@ -256,6 +256,45 @@ function saveFighterOverrides(overrides) {
   cloudPushKey(FIGHTER_OVERRIDES_KEY);
 }
 
+/* ===================== UFC Numerology Predictions (Stats tracker) ===================== */
+// One entry per fight, recorded the first time its numerology edge is shown
+// on the Polymarket tracker - never overwritten afterward, so it stays a
+// locked-in pick rather than drifting with line movement. result stays null
+// until the Stats page resolves it against Polymarket.
+
+const UFC_PREDICTIONS_KEY = 'numerology_ufc_predictions';
+
+function loadUfcPredictions() {
+  try {
+    const raw = localStorage.getItem(UFC_PREDICTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveUfcPredictions(predictions) {
+  localStorage.setItem(UFC_PREDICTIONS_KEY, JSON.stringify(predictions));
+  cloudPushKey(UFC_PREDICTIONS_KEY);
+}
+
+// Fighter names from Polymarket sometimes carry suffixes or middle names our
+// roster doesn't ("Levi Rodrigues" vs "Levi Rodrigues Jr.") - normalize and
+// fall back to a first+last token match rather than requiring an exact
+// string match. Shared by the Polymarket tracker (matching against the
+// fighter roster) and the Stats page (matching a resolved winner's name
+// against a stored pick).
+function normalizeName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[.']/g, '')
+    .replace(/-/g, ' ')
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /* ===================== Cloud sync (Firebase) ===================== */
 // Signing in is optional - the app works purely on localStorage either way.
 // When signed in, every save also pushes to Firestore under the user's own
@@ -269,6 +308,7 @@ const CLOUD_SYNC_FIELDS = {
   [STADIUMS_KEY]: 'stadiums',
   [CUSTOM_FIGHTERS_KEY]: 'customFighters',
   [FIGHTER_OVERRIDES_KEY]: 'fighterOverrides',
+  [UFC_PREDICTIONS_KEY]: 'ufcPredictions',
 };
 
 function cloudPushKey(storageKey) {
