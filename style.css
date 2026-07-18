@@ -1171,6 +1171,10 @@ body::after {
      doesn't need to sit inline with them) to its own line below - rather
      than stacking everything, which lost the original compact look. */
   .topbar {
+    /* fit-content plus a child forced to flex-basis:100% (below) doesn't
+       shrink-wrap reliably - back to a normal full-width block here, where
+       there's no leftover empty strip to worry about anyway. */
+    width: 100%;
     gap: 10px 12px;
   }
 
