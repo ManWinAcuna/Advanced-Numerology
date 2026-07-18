@@ -190,11 +190,10 @@ body::after {
 }
 
 .profile-note {
+  display: inline-block;
   font-size: 12px;
   color: var(--good);
-  font-weight: 600;
-  margin-top: 4px;
-  min-height: 16px;
+  font-weight: 700;
 }
 
 .box {
@@ -1167,23 +1166,14 @@ body::after {
 
 @media (max-width: 480px) {
   /* Keep the functional boxes (search/BDay/Birth Time) together on their
-     own row like the desktop layout, and only drop the heading (which
-     doesn't need to sit inline with them) to its own line below - rather
-     than stacking everything, which lost the original compact look. */
+     own row like the desktop layout instead of stacking, which lost the
+     original compact look. */
   .topbar {
-    /* fit-content plus a child forced to flex-basis:100% (below) doesn't
-       shrink-wrap reliably - back to a normal full-width block here, where
-       there's no leftover empty strip to worry about anyway. */
+    /* fit-content doesn't shrink-wrap reliably alongside flex-wrap on some
+       engines - a normal full-width block is fine here, since there's no
+       leftover empty strip to worry about on mobile anyway. */
     width: 100%;
     gap: 10px 12px;
-  }
-
-  .topbar > *:last-child {
-    flex-basis: 100%;
-  }
-
-  .topbar h1 {
-    font-size: 18px;
   }
 
   .famous-search-box {

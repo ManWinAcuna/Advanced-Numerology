@@ -9,7 +9,8 @@
     if (profile.time) timeInput.value = profile.time;
     render();
     renderPersonalHours();
-    noteEl.textContent = '✓ Loaded from your saved profile';
+    noteEl.textContent = '✓';
+    noteEl.title = 'Loaded from your saved profile';
   }
 
   let saveTimer = null;
@@ -17,9 +18,10 @@
     const iso = displayToISO(bdayInput.value);
     if (!iso) return;
     saveProfile({ date: iso, time: timeInput.value || '' });
-    noteEl.textContent = '✓ Saved to your profile';
+    noteEl.textContent = '✓';
+    noteEl.title = 'Saved to your profile';
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { noteEl.textContent = ''; }, 2000);
+    saveTimer = setTimeout(() => { noteEl.textContent = ''; noteEl.title = ''; }, 2000);
   }
 
   bdayInput.addEventListener('input', persist);
