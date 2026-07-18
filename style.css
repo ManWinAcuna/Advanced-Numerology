@@ -1749,6 +1749,14 @@ body::after {
   letter-spacing: 0.06em;
 }
 
+/* Founding-date auto-lookup status line - same flex row as the rest of the
+   add-venue/add-region form, but forced onto its own line like the sublabel. */
+.ufc-add-stadium-form .famous-status {
+  flex-basis: 100%;
+  max-width: none;
+  margin-top: -2px;
+}
+
 .ufc-add-stadium-form input[type="text"],
 .ufc-add-stadium-form input[type="date"],
 .ufc-add-stadium-form select {

@@ -374,9 +374,35 @@ function updateEditRegionBtnVisibility() {
   document.getElementById('editRegionBtn').style.display = show ? '' : 'none';
 }
 
+function setRegionFoundedStatus(message, isError) {
+  const el = document.getElementById('regionFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+// Same Wikidata-then-Wikipedia-infobox lookup used for player birthdays
+// (lookupKeyDateByName in db-core.js), just aimed at a city/region's
+// founding date instead - coverage is noticeably thinner here than for
+// people, so failing quietly and leaving manual entry as the fallback is
+// the expected common case, not a bug.
+function lookupRegionFoundedDate(name) {
+  setRegionFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('newRegionFounded').value = isoToDisplay(info.date);
+      setRegionFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openRegionForm(region) {
   closeVenueForm();
   document.getElementById('addRegionForm').classList.add('active');
+  setRegionFoundedStatus('', false);
   if (region) {
     editingRegionId = region.id;
     document.getElementById('newRegionName').value = region.name;
@@ -399,7 +425,14 @@ function closeRegionForm() {
   document.getElementById('newRegionFounded').value = '';
   document.getElementById('regionFormLabel').textContent = 'Add New City / Region';
   document.getElementById('saveRegionBtn').textContent = 'Save Region';
+  setRegionFoundedStatus('', false);
 }
+
+document.getElementById('newRegionName').addEventListener('blur', () => {
+  const name = document.getElementById('newRegionName').value.trim();
+  const foundedFilled = document.getElementById('newRegionFounded').value.trim();
+  if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
+});
 
 populateRegionOptionsInto(document.getElementById('stateSelect'), true);
 populateRegionOptionsInto(document.getElementById('newVenueState'), false);
@@ -508,9 +541,30 @@ document.getElementById('editVenueBtn').addEventListener('click', () => {
   if (venue) openVenueForm(venue);
 });
 
+function setVenueFoundedStatus(message, isError) {
+  const el = document.getElementById('venueFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+function lookupVenueFoundedDate(name) {
+  setVenueFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setVenueFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('newVenueFounded').value = isoToDisplay(info.date);
+      setVenueFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setVenueFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openVenueForm(venue) {
   closeRegionForm();
   document.getElementById('addVenueForm').classList.add('active');
+  setVenueFoundedStatus('', false);
   const regionSel = document.getElementById('newVenueState');
   if (venue) {
     editingVenueId = venue.id;
@@ -543,7 +597,14 @@ function closeVenueForm() {
   document.getElementById('newVenueState').value = '';
   document.getElementById('venueFormLabel').textContent = 'Add New Venue';
   document.getElementById('saveVenueBtn').textContent = 'Save Venue';
+  setVenueFoundedStatus('', false);
 }
+
+document.getElementById('newVenueName').addEventListener('blur', () => {
+  const name = document.getElementById('newVenueName').value.trim();
+  const foundedFilled = document.getElementById('newVenueFounded').value.trim();
+  if (name && !foundedFilled && !editingVenueId) lookupVenueFoundedDate(name);
+});
 
 document.getElementById('cancelVenueBtn').addEventListener('click', closeVenueForm);
 

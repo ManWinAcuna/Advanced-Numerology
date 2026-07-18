@@ -133,10 +133,104 @@ function fetchKeyDate(qid) {
     });
 }
 
+/* ===================== Wikipedia infobox fallback ===================== */
+// Wikidata's P571 (inception) is often missing even when the Wikipedia
+// article's infobox has the date written right in it - infoboxes get filled
+// in by editors well before anyone also adds the structured Wikidata claim.
+// This is a second-tier, best-effort fallback for venues/stadiums/cities
+// (Wikidata alone has noticeably thinner coverage there than it does for
+// people's birthdays) - it raises the hit rate, it doesn't guarantee one:
+// many infoboxes only give a founding YEAR with no day/month, which isn't
+// usable here any more than a coarse Wikidata claim is (see dateFromClaim's
+// precision check above).
+
+const INFOBOX_DATE_FIELDS = [
+  'established', 'founded', 'opened', 'built', 'broke_ground',
+  'inaugurated', 'formed', 'foundation', 'opening',
+];
+
+const MONTH_NAMES = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+function isoFromParts(y, m, d) {
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Handles the handful of date shapes actually seen in infobox wikitext:
+// {{Start date|1968|06|24}}-style templates, plain "1968-06-24", "24 June
+// 1968", "June 24, 1968", and wikilinked versions of the same ("[[24
+// June]] [[1968]]"). Anything coarser than a full day (just a year, a
+// decade, "c. 1900", etc.) intentionally returns null.
+function parseWikitextDateValue(rawValue) {
+  const templateMatch = /\{\{[^}|]*\|(\d{4})\|(\d{1,2})\|(\d{1,2})/.exec(rawValue);
+  if (templateMatch) return isoFromParts(templateMatch[1], templateMatch[2], templateMatch[3]);
+
+  const text = rawValue.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1').replace(/[{}]/g, ' ');
+
+  const isoMatch = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text);
+  if (isoMatch) return isoFromParts(isoMatch[1], isoMatch[2], isoMatch[3]);
+
+  const dmyMatch = /(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/.exec(text);
+  if (dmyMatch) {
+    const month = MONTH_NAMES.indexOf(dmyMatch[2].toLowerCase());
+    if (month !== -1) return isoFromParts(dmyMatch[3], month + 1, dmyMatch[1]);
+  }
+
+  const mdyMatch = /([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/.exec(text);
+  if (mdyMatch) {
+    const month = MONTH_NAMES.indexOf(mdyMatch[1].toLowerCase());
+    if (month !== -1) return isoFromParts(mdyMatch[3], month + 1, mdyMatch[2]);
+  }
+
+  return null;
+}
+
+function extractInfoboxDayDate(wikitext) {
+  for (const field of INFOBOX_DATE_FIELDS) {
+    // Capture to end of line, not to the next "|" - infobox param values are
+    // almost always one per line, and a value that's itself a template (the
+    // common "{{Start date|1968|06|24}}" case) contains its own pipes, which
+    // a "stop at any |" capture would truncate mid-template.
+    const re = new RegExp(`\\|\\s*${field}[a-z_]*\\s*=\\s*([^\\n]+)`, 'i');
+    const match = re.exec(wikitext);
+    if (match) {
+      const date = parseWikitextDateValue(match[1]);
+      if (date) return date;
+    }
+  }
+  return null;
+}
+
+function fetchWikipediaWikitext(title) {
+  const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => ((data.parse && data.parse.wikitext) ? data.parse.wikitext['*'] : null))
+    .catch(() => null);
+}
+
+function lookupKeyDateFromWikipediaInfobox(title) {
+  return fetchWikipediaWikitext(title).then((wikitext) => {
+    if (!wikitext) return null;
+    const date = extractInfoboxDayDate(wikitext);
+    return date ? { date, kind: 'founded' } : null;
+  });
+}
+
 // Looks up a single exact name (no search/disambiguation UI) and resolves
-// to { date, kind } or null if nothing usable was found.
+// to { date, kind } or null if nothing usable was found. Tries Wikidata's
+// structured claims first (fast, precise when present), then falls back to
+// scraping the Wikipedia infobox directly.
 function lookupKeyDateByName(name) {
-  return fetchWikidataId(name).then((qid) => (qid ? fetchKeyDate(qid) : null));
+  return fetchWikidataId(name)
+    .then((qid) => (qid ? fetchKeyDate(qid) : null))
+    .then((result) => (result || lookupKeyDateFromWikipediaInfobox(name)));
 }
 
 const ZODIAC_SYMBOLS = {

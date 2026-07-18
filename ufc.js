@@ -388,9 +388,34 @@ document.getElementById('editRegionBtn').addEventListener('click', () => {
   if (region && region.id) openRegionForm(region);
 });
 
+function setRegionFoundedStatus(message, isError) {
+  const el = document.getElementById('regionFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+// Same Wikidata-then-Wikipedia-infobox lookup used for fighter birthdays
+// (lookupKeyDateByName in db-core.js), aimed at a city/region's founding
+// date instead - coverage is thinner here than for people, so failing
+// quietly and leaving manual entry as the fallback is the expected case.
+function lookupRegionFoundedDate(name) {
+  setRegionFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('newRegionFounded').value = isoToDisplay(info.date);
+      setRegionFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openRegionForm(region) {
   closeStadiumForm();
   document.getElementById('addRegionForm').classList.add('active');
+  setRegionFoundedStatus('', false);
   if (region) {
     editingRegionId = region.id;
     document.getElementById('newRegionName').value = region.name;
@@ -414,7 +439,14 @@ function closeRegionForm() {
   document.getElementById('newRegionFounded').value = '';
   document.getElementById('regionFormLabel').textContent = 'Add New City / Region';
   document.getElementById('saveRegionBtn').textContent = 'Save Region';
+  setRegionFoundedStatus('', false);
 }
+
+document.getElementById('newRegionName').addEventListener('blur', () => {
+  const name = document.getElementById('newRegionName').value.trim();
+  const foundedFilled = document.getElementById('newRegionFounded').value.trim();
+  if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
+});
 
 document.getElementById('cancelRegionBtn').addEventListener('click', closeRegionForm);
 
@@ -482,9 +514,30 @@ document.getElementById('editStadiumBtn').addEventListener('click', () => {
 });
 
 // Only fighters/stadiums created here (which carry an id) can be edited.
+function setStadiumFoundedStatus(message, isError) {
+  const el = document.getElementById('stadiumFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+function lookupStadiumFoundedDate(name) {
+  setStadiumFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('newStadiumFounded').value = isoToDisplay(info.date);
+      setStadiumFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openStadiumForm(stadium) {
   closeRegionForm();
   document.getElementById('addStadiumForm').classList.add('active');
+  setStadiumFoundedStatus('', false);
   const regionSel = document.getElementById('newStadiumState');
   if (stadium) {
     editingStadiumId = stadium.id;
@@ -519,7 +572,14 @@ function closeStadiumForm() {
   document.getElementById('newStadiumState').value = '';
   document.getElementById('stadiumFormLabel').textContent = 'Add New Stadium';
   document.getElementById('saveStadiumBtn').textContent = 'Save Stadium';
+  setStadiumFoundedStatus('', false);
 }
+
+document.getElementById('newStadiumName').addEventListener('blur', () => {
+  const name = document.getElementById('newStadiumName').value.trim();
+  const foundedFilled = document.getElementById('newStadiumFounded').value.trim();
+  if (name && !foundedFilled && !editingStadiumId) lookupStadiumFoundedDate(name);
+});
 
 document.getElementById('cancelStadiumBtn').addEventListener('click', closeStadiumForm);
 

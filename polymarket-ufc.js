@@ -173,9 +173,34 @@ function updateEditRegionBtnVisibility() {
   document.getElementById('pmEditRegionBtn').style.display = show ? '' : 'none';
 }
 
+function setRegionFoundedStatus(message, isError) {
+  const el = document.getElementById('pmRegionFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+// Same Wikidata-then-Wikipedia-infobox lookup used for fighter birthdays
+// (lookupKeyDateByName in db-core.js), aimed at a city/region's founding
+// date instead - coverage is thinner here than for people, so failing
+// quietly and leaving manual entry as the fallback is the expected case.
+function lookupRegionFoundedDate(name) {
+  setRegionFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('pmNewRegionFounded').value = isoToDisplay(info.date);
+      setRegionFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openRegionForm(region) {
   closeStadiumForm();
   document.getElementById('pmAddRegionForm').classList.add('active');
+  setRegionFoundedStatus('', false);
   if (region) {
     editingRegionId = region.id;
     document.getElementById('pmNewRegionName').value = region.name;
@@ -198,6 +223,7 @@ function closeRegionForm() {
   document.getElementById('pmNewRegionFounded').value = '';
   document.getElementById('pmRegionFormLabel').textContent = 'Add New City / Region';
   document.getElementById('pmSaveRegionBtn').textContent = 'Save Region';
+  setRegionFoundedStatus('', false);
 }
 
 function updateEditStadiumBtnVisibility() {
@@ -205,9 +231,30 @@ function updateEditStadiumBtnVisibility() {
   document.getElementById('pmEditStadiumBtn').style.display = (val && val !== '__add__') ? '' : 'none';
 }
 
+function setStadiumFoundedStatus(message, isError) {
+  const el = document.getElementById('pmStadiumFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+function lookupStadiumFoundedDate(name) {
+  setStadiumFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('pmNewStadiumFounded').value = isoToDisplay(info.date);
+      setStadiumFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openStadiumForm(stadium) {
   closeRegionForm();
   document.getElementById('pmAddStadiumForm').classList.add('active');
+  setStadiumFoundedStatus('', false);
   const regionSel = document.getElementById('pmNewStadiumState');
   if (stadium) {
     editingStadiumId = stadium.id;
@@ -241,6 +288,7 @@ function closeStadiumForm() {
   document.getElementById('pmNewStadiumState').value = '';
   document.getElementById('pmStadiumFormLabel').textContent = 'Add New Stadium';
   document.getElementById('pmSaveStadiumBtn').textContent = 'Save Stadium';
+  setStadiumFoundedStatus('', false);
 }
 
 function initLocationControls() {
@@ -290,6 +338,12 @@ function initLocationControls() {
   });
 
   document.getElementById('pmCancelRegionBtn').addEventListener('click', closeRegionForm);
+
+  document.getElementById('pmNewRegionName').addEventListener('blur', () => {
+    const name = document.getElementById('pmNewRegionName').value.trim();
+    const foundedFilled = document.getElementById('pmNewRegionFounded').value.trim();
+    if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
+  });
 
   document.getElementById('pmSaveRegionBtn').addEventListener('click', () => {
     const name = document.getElementById('pmNewRegionName').value.trim();
@@ -359,6 +413,12 @@ function initLocationControls() {
   });
 
   document.getElementById('pmCancelStadiumBtn').addEventListener('click', closeStadiumForm);
+
+  document.getElementById('pmNewStadiumName').addEventListener('blur', () => {
+    const name = document.getElementById('pmNewStadiumName').value.trim();
+    const foundedFilled = document.getElementById('pmNewStadiumFounded').value.trim();
+    if (name && !foundedFilled && !editingStadiumId) lookupStadiumFoundedDate(name);
+  });
 
   document.getElementById('pmSaveStadiumBtn').addEventListener('click', () => {
     const name = document.getElementById('pmNewStadiumName').value.trim();

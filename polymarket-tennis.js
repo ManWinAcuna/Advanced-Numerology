@@ -777,10 +777,55 @@ function startPolling() {
 
 let pendingLocationTournament = null;
 
+function setRegionModalFoundedStatus(message, isError) {
+  const el = document.getElementById('pmRegionModalFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+// Same Wikidata-then-Wikipedia-infobox lookup used for player birthdays
+// (lookupKeyDateByName in db-core.js), aimed at a city/region's founding
+// date instead - coverage is thinner here than for people, so failing
+// quietly and leaving manual entry as the fallback is the expected case.
+function lookupRegionModalFoundedDate(name) {
+  setRegionModalFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('pmModalRegionFounded').value = isoToDisplay(info.date);
+      setRegionModalFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
+function setVenueModalFoundedStatus(message, isError) {
+  const el = document.getElementById('pmVenueModalFoundedStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+function lookupVenueModalFoundedDate(name) {
+  setVenueModalFoundedStatus('🔍 Looking up founding date...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info) {
+        setVenueModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('pmModalVenueFounded').value = isoToDisplay(info.date);
+      setVenueModalFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setVenueModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openRegionModal(tournamentKey) {
   pendingLocationTournament = tournamentKey;
   document.getElementById('pmModalRegionName').value = '';
   document.getElementById('pmModalRegionFounded').value = '';
+  setRegionModalFoundedStatus('', false);
   document.getElementById('pmRegionModal').classList.add('active');
 }
 
@@ -793,6 +838,7 @@ function openVenueModal(tournamentKey) {
   pendingLocationTournament = tournamentKey;
   document.getElementById('pmModalVenueName').value = '';
   document.getElementById('pmModalVenueFounded').value = '';
+  setVenueModalFoundedStatus('', false);
   const st = getTournamentState(tournamentKey);
   const regionSel = document.getElementById('pmModalVenueRegionSelect');
   if (st.regionMode === 'us') {
@@ -818,6 +864,11 @@ function initLocationModals() {
   document.getElementById('pmRegionModal').addEventListener('click', (e) => {
     if (e.target.id === 'pmRegionModal') closeRegionModal();
   });
+  document.getElementById('pmModalRegionName').addEventListener('blur', () => {
+    const name = document.getElementById('pmModalRegionName').value.trim();
+    const foundedFilled = document.getElementById('pmModalRegionFounded').value.trim();
+    if (name && !foundedFilled) lookupRegionModalFoundedDate(name);
+  });
   document.getElementById('pmModalSaveRegionBtn').addEventListener('click', () => {
     const key = pendingLocationTournament;
     if (!key) return;
@@ -841,6 +892,11 @@ function initLocationModals() {
   document.getElementById('pmVenueModalClose').addEventListener('click', closeVenueModal);
   document.getElementById('pmVenueModal').addEventListener('click', (e) => {
     if (e.target.id === 'pmVenueModal') closeVenueModal();
+  });
+  document.getElementById('pmModalVenueName').addEventListener('blur', () => {
+    const name = document.getElementById('pmModalVenueName').value.trim();
+    const foundedFilled = document.getElementById('pmModalVenueFounded').value.trim();
+    if (name && !foundedFilled) lookupVenueModalFoundedDate(name);
   });
   document.getElementById('pmModalSaveVenueBtn').addEventListener('click', () => {
     const key = pendingLocationTournament;
