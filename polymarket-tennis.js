@@ -870,6 +870,12 @@ function initLocationModals() {
     const foundedFilled = document.getElementById('pmModalRegionFounded').value.trim();
     if (name && !foundedFilled) lookupRegionModalFoundedDate(name);
   });
+
+  document.getElementById('pmRegionModalLookupBtn').addEventListener('click', () => {
+    const name = document.getElementById('pmModalRegionName').value.trim();
+    if (!name) { alert('Please enter a city / region name first.'); return; }
+    lookupRegionModalFoundedDate(name);
+  });
   document.getElementById('pmModalSaveRegionBtn').addEventListener('click', () => {
     const key = pendingLocationTournament;
     if (!key) return;
@@ -898,6 +904,12 @@ function initLocationModals() {
     const name = document.getElementById('pmModalVenueName').value.trim();
     const foundedFilled = document.getElementById('pmModalVenueFounded').value.trim();
     if (name && !foundedFilled) lookupVenueModalFoundedDate(name);
+  });
+
+  document.getElementById('pmVenueModalLookupBtn').addEventListener('click', () => {
+    const name = document.getElementById('pmModalVenueName').value.trim();
+    if (!name) { alert('Please enter a venue name first.'); return; }
+    lookupVenueModalFoundedDate(name);
   });
   document.getElementById('pmModalSaveVenueBtn').addEventListener('click', () => {
     const key = pendingLocationTournament;

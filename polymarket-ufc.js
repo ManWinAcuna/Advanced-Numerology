@@ -346,6 +346,12 @@ function initLocationControls() {
     if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
   });
 
+  document.getElementById('pmRegionLookupBtn').addEventListener('click', () => {
+    const name = document.getElementById('pmNewRegionName').value.trim();
+    if (!name) { alert('Please enter a city / region name first.'); return; }
+    lookupRegionFoundedDate(name);
+  });
+
   document.getElementById('pmSaveRegionBtn').addEventListener('click', () => {
     const name = document.getElementById('pmNewRegionName').value.trim();
     const founded = displayToISO(document.getElementById('pmNewRegionFounded').value);
@@ -419,6 +425,12 @@ function initLocationControls() {
     const name = document.getElementById('pmNewStadiumName').value.trim();
     const foundedFilled = document.getElementById('pmNewStadiumFounded').value.trim();
     if (name && !foundedFilled && !editingStadiumId) lookupStadiumFoundedDate(name);
+  });
+
+  document.getElementById('pmStadiumLookupBtn').addEventListener('click', () => {
+    const name = document.getElementById('pmNewStadiumName').value.trim();
+    if (!name) { alert('Please enter a stadium name first.'); return; }
+    lookupStadiumFoundedDate(name);
   });
 
   document.getElementById('pmSaveStadiumBtn').addEventListener('click', () => {

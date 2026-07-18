@@ -449,6 +449,12 @@ document.getElementById('newRegionName').addEventListener('blur', () => {
   if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
 });
 
+document.getElementById('regionLookupBtn').addEventListener('click', () => {
+  const name = document.getElementById('newRegionName').value.trim();
+  if (!name) { alert('Please enter a city / region name first.'); return; }
+  lookupRegionFoundedDate(name);
+});
+
 document.getElementById('cancelRegionBtn').addEventListener('click', closeRegionForm);
 
 document.getElementById('saveRegionBtn').addEventListener('click', () => {
@@ -580,6 +586,12 @@ document.getElementById('newStadiumName').addEventListener('blur', () => {
   const name = document.getElementById('newStadiumName').value.trim();
   const foundedFilled = document.getElementById('newStadiumFounded').value.trim();
   if (name && !foundedFilled && !editingStadiumId) lookupStadiumFoundedDate(name);
+});
+
+document.getElementById('stadiumLookupBtn').addEventListener('click', () => {
+  const name = document.getElementById('newStadiumName').value.trim();
+  if (!name) { alert('Please enter a stadium name first.'); return; }
+  lookupStadiumFoundedDate(name);
 });
 
 document.getElementById('cancelStadiumBtn').addEventListener('click', closeStadiumForm);

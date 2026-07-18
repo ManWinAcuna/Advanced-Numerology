@@ -932,6 +932,13 @@ body::after {
   border-color: #ff6b6b;
 }
 
+/* Founding-date lookup trigger - same size/shape as .icon-btn, but a
+   non-destructive hover color since this isn't a delete/clear action. */
+.icon-btn-lookup:hover {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+
 .empty-state {
   color: var(--muted);
   font-style: italic;

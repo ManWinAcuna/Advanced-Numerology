@@ -435,6 +435,12 @@ document.getElementById('newRegionName').addEventListener('blur', () => {
   if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
 });
 
+document.getElementById('regionLookupBtn').addEventListener('click', () => {
+  const name = document.getElementById('newRegionName').value.trim();
+  if (!name) { alert('Please enter a city / region name first.'); return; }
+  lookupRegionFoundedDate(name);
+});
+
 populateRegionOptionsInto(document.getElementById('stateSelect'), true);
 populateRegionOptionsInto(document.getElementById('newVenueState'), false);
 populateVenueSelect();
@@ -605,6 +611,12 @@ document.getElementById('newVenueName').addEventListener('blur', () => {
   const name = document.getElementById('newVenueName').value.trim();
   const foundedFilled = document.getElementById('newVenueFounded').value.trim();
   if (name && !foundedFilled && !editingVenueId) lookupVenueFoundedDate(name);
+});
+
+document.getElementById('venueLookupBtn').addEventListener('click', () => {
+  const name = document.getElementById('newVenueName').value.trim();
+  if (!name) { alert('Please enter a venue name first.'); return; }
+  lookupVenueFoundedDate(name);
 });
 
 document.getElementById('cancelVenueBtn').addEventListener('click', closeVenueForm);
