@@ -1,6 +1,7 @@
 const GAMMA_EVENTS_URL = 'https://gamma-api.polymarket.com/events/keyset?tag_slug=ufc&closed=false&limit=100';
 const TRADES_URL = 'https://data-api.polymarket.com/trades';
-const LEADERBOARD_URL = 'https://data-api.polymarket.com/v1/leaderboard?category=SPORTS&timePeriod=ALL&orderBy=PNL&limit=50';
+const LEADERBOARD_ALL_URL = 'https://data-api.polymarket.com/v1/leaderboard?category=SPORTS&timePeriod=ALL&orderBy=PNL&limit=50';
+const LEADERBOARD_MONTH_URL = 'https://data-api.polymarket.com/v1/leaderboard?category=SPORTS&timePeriod=MONTH&orderBy=PNL&limit=50';
 
 const WHALE_THRESHOLD_USD = 500;
 const TRADES_POLL_MS = 20000;
@@ -436,14 +437,36 @@ async function fetchTrades(conditionId) {
   }
 }
 
+// A wallet on the all-time SPORTS PNL leaderboard could be resting on one
+// old lucky streak - only ~30% of the current all-time top 50 are still
+// net-positive this month (checked directly against the live leaderboard).
+// "SMART" now requires both: proven money over the long run AND still
+// winning recently, not just once. (Polymarket's leaderboard has no
+// per-sport breakdown, so this is sports-wide rather than UFC-specific -
+// the tightest signal available without the app tracking its own
+// UFC-only history over time.)
 async function fetchLeaderboard() {
   const map = new Map();
   try {
-    const res = await fetch(LEADERBOARD_URL);
-    if (!res.ok) return map;
-    const data = await res.json();
-    (data || []).forEach((r) => {
-      if (r.proxyWallet) map.set(r.proxyWallet.toLowerCase(), { userName: r.userName, pnl: r.pnl });
+    const [allRes, monthRes] = await Promise.all([fetch(LEADERBOARD_ALL_URL), fetch(LEADERBOARD_MONTH_URL)]);
+    const allData = allRes.ok ? await allRes.json() : [];
+    const monthData = monthRes.ok ? await monthRes.json() : [];
+
+    const monthPnlByWallet = new Map();
+    (monthData || []).forEach((r) => {
+      if (r.proxyWallet) monthPnlByWallet.set(r.proxyWallet.toLowerCase(), r.pnl);
+    });
+
+    (allData || []).forEach((r) => {
+      if (!r.proxyWallet) return;
+      const wallet = r.proxyWallet.toLowerCase();
+      const monthPnl = monthPnlByWallet.has(wallet) ? monthPnlByWallet.get(wallet) : null;
+      map.set(wallet, {
+        userName: r.userName,
+        pnl: r.pnl,
+        monthPnl,
+        qualifiesSmart: monthPnl != null && monthPnl > 0,
+      });
     });
   } catch (e) { /* leaderboard is a nice-to-have, fail quiet */ }
   return map;
@@ -631,7 +654,7 @@ function renderTradeFeeds() {
       .map((t) => ({
         ...t,
         usd: t.size * t.price,
-        smart: leaderboardMap.has((t.proxyWallet || '').toLowerCase()),
+        smart: !!leaderboardMap.get((t.proxyWallet || '').toLowerCase())?.qualifiesSmart,
       }))
       .filter((t) => t.usd >= WHALE_THRESHOLD_USD || t.smart)
       .sort((a, b) => b.timestamp - a.timestamp)
@@ -645,7 +668,7 @@ function renderTradeFeeds() {
     el.innerHTML = '<div class="pm-trade-feed-label">🐋 Big Money Activity</div>' + flagged.map((t) => {
       const leader = leaderboardMap.get((t.proxyWallet || '').toLowerCase());
       const who = leader ? leader.userName : shortWallet(t.proxyWallet);
-      const badges = `${t.usd >= WHALE_THRESHOLD_USD ? '<span class="pm-badge-whale">WHALE</span> ' : ''}${t.smart ? '<span class="pm-badge-smart">SMART</span>' : ''}`;
+      const badges = `${t.usd >= WHALE_THRESHOLD_USD ? '<span class="pm-badge-whale">WHALE</span> ' : ''}${t.smart ? '<span class="pm-badge-smart" title="Top 50 all-time on Polymarket\'s Sports PNL leaderboard, and still profitable this month">SMART</span>' : ''}`;
       return `
         <div class="pm-trade-row">
           <span class="pm-trade-who">${escapeHtml(who)}</span>
