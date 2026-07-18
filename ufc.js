@@ -133,8 +133,33 @@ document.getElementById('todayBtn').addEventListener('click', () => {
 
 /* ===================== Add / Edit Fighter ===================== */
 
+function setFighterDobStatus(message, isError) {
+  const el = document.getElementById('fighterDobStatus');
+  el.textContent = message;
+  el.className = 'famous-status' + (isError ? ' error' : '');
+}
+
+// Auto-fills the DOB from Wikidata for a fighter arriving via the Polymarket
+// "add them" deep link, where the exact name is already known - the user
+// still double-checks the filled-in date (or types it themselves if none
+// was found) before saving, same as the rest of this form.
+function lookupFighterBirthday(name) {
+  setFighterDobStatus('🔍 Looking up birthday...', false);
+  lookupKeyDateByName(name)
+    .then((info) => {
+      if (!info || info.kind !== 'born') {
+        setFighterDobStatus(`Couldn't find a birthday automatically for ${name} - please enter it yourself.`, true);
+        return;
+      }
+      document.getElementById('newFighterDob').value = isoToDisplay(info.date);
+      setFighterDobStatus(`✓ Found via Wikidata (${info.date}) - please double-check before saving.`, false);
+    })
+    .catch(() => setFighterDobStatus(`Couldn't find a birthday automatically for ${name} - please enter it yourself.`, true));
+}
+
 function openFighterForm(fighter) {
   document.getElementById('addFighterForm').classList.add('active');
+  setFighterDobStatus('', false);
   if (fighter) {
     editingFighterId = fighter.id;
     document.getElementById('newFighterName').value = fighter.name;
@@ -158,6 +183,7 @@ function closeFighterForm() {
   document.getElementById('newFighterDob').value = '';
   document.getElementById('fighterFormLabel').textContent = 'Add Fighter';
   document.getElementById('saveFighterBtn').textContent = 'Save Fighter';
+  setFighterDobStatus('', false);
 }
 
 document.getElementById('showAddFighterBtn').addEventListener('click', () => openFighterForm(null));
@@ -476,5 +502,6 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   if (addFighterName) {
     openFighterForm(null);
     document.getElementById('newFighterName').value = addFighterName;
+    lookupFighterBirthday(addFighterName);
   }
 })();

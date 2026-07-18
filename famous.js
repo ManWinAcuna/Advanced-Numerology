@@ -57,51 +57,6 @@ function handleFamousInput(value) {
   famousDebounceTimer = setTimeout(() => fetchFamousSuggestions(q), 300);
 }
 
-function fetchWikidataId(title) {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(title)}&format=json&origin=*`;
-  return fetch(url)
-    .then((res) => res.json())
-    .then((data) => {
-      const pages = data.query && data.query.pages;
-      if (!pages) return null;
-      const page = Object.values(pages)[0];
-      return (page && page.pageprops) ? page.pageprops.wikibase_item : null;
-    });
-}
-
-// Wikidata dates look like "+1990-06-15T00:00:00Z". Precision 11 = day-level;
-// anything coarser (year/decade/century only) isn't usable for numerology.
-function dateFromClaim(claims) {
-  if (!claims || claims.length === 0) return null;
-  const snak = claims[0].mainsnak;
-  if (!snak || !snak.datavalue) return null;
-  const value = snak.datavalue.value;
-  if (value.precision < 11) return null;
-  const time = value.time;
-  if (time.charAt(0) === '-') return null;
-  return time.slice(1, 11);
-}
-
-// P569 = date of birth (people). P571 = inception (companies, organizations,
-// countries, buildings, etc.) - tried as a fallback for non-person entities.
-function fetchKeyDate(qid) {
-  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
-  return fetch(url)
-    .then((res) => res.json())
-    .then((data) => {
-      const entity = data.entities && data.entities[qid];
-      if (!entity || !entity.claims) return null;
-
-      const born = dateFromClaim(entity.claims.P569);
-      if (born) return { date: born, kind: 'born' };
-
-      const founded = dateFromClaim(entity.claims.P571);
-      if (founded) return { date: founded, kind: 'founded' };
-
-      return null;
-    });
-}
-
 function selectFamousPerson(title) {
   document.getElementById('famousSearch').value = title;
   document.getElementById('famousSuggestions').innerHTML = '';

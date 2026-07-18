@@ -3043,6 +3043,26 @@ body::after {
 
 /* ===================== Polymarket Tracker ===================== */
 
+.ufc-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ufc-header-row .page-title {
+  margin: 0;
+}
+
+.pm-tracker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
 .mode-card.disabled {
   cursor: default;
   opacity: 0.55;

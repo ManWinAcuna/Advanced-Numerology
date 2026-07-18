@@ -36,6 +36,38 @@
   </div>
   <div class="pm-last-updated" id="pmLastUpdated"></div>
 
+  <div class="box ufc-location-box">
+    <div class="box-label">Fight Location</div>
+    <div class="mode-desc">Applies to every fight below &mdash; a UFC Fight Night is one venue for the whole card. No numerology edge shows until you set this.</div>
+    <div class="ufc-location-grid">
+      <div class="ufc-location-field">
+        <label for="pmStateSelect">State</label>
+        <select id="pmStateSelect">
+          <option value="">Select state...</option>
+        </select>
+      </div>
+      <div class="ufc-location-field">
+        <label for="pmStadiumSelect">Stadium / Venue <span class="optional-tag">optional</span></label>
+        <div class="ufc-select-row">
+          <select id="pmStadiumSelect">
+            <option value="">Select stadium...</option>
+          </select>
+          <button class="btn-link" id="pmEditStadiumBtn" type="button" style="display:none;">Edit</button>
+        </div>
+      </div>
+    </div>
+    <div class="ufc-add-stadium-form" id="pmAddStadiumForm">
+      <div class="ufc-form-sublabel" id="pmStadiumFormLabel">Add New Stadium</div>
+      <input type="text" id="pmNewStadiumName" placeholder="Stadium name">
+      <input type="text" id="pmNewStadiumFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
+      <select id="pmNewStadiumState">
+        <option value="">Select state...</option>
+      </select>
+      <button class="btn" id="pmSaveStadiumBtn" type="button">Save Stadium</button>
+      <button class="btn-link" id="pmCancelStadiumBtn" type="button">Cancel</button>
+    </div>
+  </div>
+
   <div id="fightsContainer">
     <div class="empty-state">Loading upcoming fights&hellip;</div>
   </div>
@@ -55,6 +87,7 @@
 <script src="auth-widget.js"></script>
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
+<script src="us-states-data.js"></script>
 <script src="polymarket-ufc.js"></script>
 </body>
 </html>

@@ -12,6 +12,171 @@ let leaderboardMap = new Map();
 let cardFights = [];
 const tradesCache = new Map();
 
+/* ===================== Fight location (state + stadium) ===================== */
+// Polymarket gives no venue data, and the numerology score depends on it
+// (Day/Stadium/State, same formula as ufc.js) - so no score shows at all
+// until the user sets a location here. Every fight on a UFC Fight Night
+// shares one venue, so this is set once per card rather than per fight.
+
+let stadiums = loadStadiums();
+let editingStadiumId = null;
+let selectedState = null;
+let selectedStadium = null;
+
+function stateIndexByName(name) {
+  return US_STATES.findIndex((s) => s.name === name);
+}
+
+function populateStateSelectInto(selectEl) {
+  selectEl.innerHTML = '<option value="">Select state...</option>'
+    + US_STATES.map((s, idx) => `<option value="${idx}">${escapeHtml(s.name)}</option>`).join('');
+}
+
+function populateStadiumSelect(selectValue) {
+  const sel = document.getElementById('pmStadiumSelect');
+  sel.innerHTML = '<option value="">Select stadium...</option>'
+    + stadiums.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
+    + '<option value="__add__">+ Add New Stadium</option>';
+  sel.value = selectValue || '';
+}
+
+function updateEditStadiumBtnVisibility() {
+  const val = document.getElementById('pmStadiumSelect').value;
+  document.getElementById('pmEditStadiumBtn').style.display = (val && val !== '__add__') ? '' : 'none';
+}
+
+function openStadiumForm(stadium) {
+  document.getElementById('pmAddStadiumForm').classList.add('active');
+  const stateSel = document.getElementById('pmNewStadiumState');
+  if (stadium) {
+    editingStadiumId = stadium.id;
+    document.getElementById('pmNewStadiumName').value = stadium.name;
+    document.getElementById('pmNewStadiumFounded').value = isoToDisplay(stadium.founded);
+    const idx = stadium.state ? stateIndexByName(stadium.state) : -1;
+    stateSel.value = idx !== -1 ? String(idx) : '';
+    document.getElementById('pmStadiumFormLabel').textContent = `Edit Stadium - ${stadium.name}`;
+    document.getElementById('pmSaveStadiumBtn').textContent = 'Update Stadium';
+  } else {
+    editingStadiumId = null;
+    document.getElementById('pmNewStadiumName').value = '';
+    document.getElementById('pmNewStadiumFounded').value = '';
+    stateSel.value = '';
+    document.getElementById('pmStadiumFormLabel').textContent = 'Add New Stadium';
+    document.getElementById('pmSaveStadiumBtn').textContent = 'Save Stadium';
+  }
+}
+
+function closeStadiumForm() {
+  editingStadiumId = null;
+  document.getElementById('pmAddStadiumForm').classList.remove('active');
+  document.getElementById('pmNewStadiumName').value = '';
+  document.getElementById('pmNewStadiumFounded').value = '';
+  document.getElementById('pmNewStadiumState').value = '';
+  document.getElementById('pmStadiumFormLabel').textContent = 'Add New Stadium';
+  document.getElementById('pmSaveStadiumBtn').textContent = 'Save Stadium';
+}
+
+function initLocationControls() {
+  attachDateMask(document.getElementById('pmNewStadiumFounded'));
+  populateStateSelectInto(document.getElementById('pmStateSelect'));
+  populateStateSelectInto(document.getElementById('pmNewStadiumState'));
+  populateStadiumSelect();
+  updateEditStadiumBtnVisibility();
+
+  document.getElementById('pmStateSelect').addEventListener('change', (e) => {
+    const idx = e.target.value;
+    selectedState = idx !== '' ? US_STATES[Number(idx)] : null;
+    updateNumerologyBlocks();
+  });
+
+  document.getElementById('pmStadiumSelect').addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val === '__add__') {
+      e.target.value = '';
+      openStadiumForm(null);
+      updateEditStadiumBtnVisibility();
+      return;
+    }
+
+    closeStadiumForm();
+    updateEditStadiumBtnVisibility();
+
+    if (val) {
+      const stadium = stadiums.find((s) => s.id === val);
+      selectedStadium = stadium || null;
+      if (stadium && stadium.state) {
+        const stIdx = stateIndexByName(stadium.state);
+        if (stIdx !== -1) {
+          document.getElementById('pmStateSelect').value = String(stIdx);
+          selectedState = US_STATES[stIdx];
+        }
+      }
+    } else {
+      selectedStadium = null;
+    }
+    updateNumerologyBlocks();
+  });
+
+  document.getElementById('pmEditStadiumBtn').addEventListener('click', () => {
+    const stadium = stadiums.find((s) => s.id === document.getElementById('pmStadiumSelect').value);
+    if (stadium) openStadiumForm(stadium);
+  });
+
+  document.getElementById('pmCancelStadiumBtn').addEventListener('click', closeStadiumForm);
+
+  document.getElementById('pmSaveStadiumBtn').addEventListener('click', () => {
+    const name = document.getElementById('pmNewStadiumName').value.trim();
+    const founded = displayToISO(document.getElementById('pmNewStadiumFounded').value);
+    const stateIdx = document.getElementById('pmNewStadiumState').value;
+    if (!name) { alert('Please enter a stadium name.'); return; }
+    if (!founded) { alert('Please enter a valid founding date for the stadium (MM/DD/YYYY).'); return; }
+    if (stateIdx === '') { alert('Please select which state this stadium is in.'); return; }
+    const stateName = US_STATES[Number(stateIdx)].name;
+
+    let selectValue;
+    if (editingStadiumId) {
+      const idx = stadiums.findIndex((s) => s.id === editingStadiumId);
+      if (idx !== -1) stadiums[idx] = { id: editingStadiumId, name, founded, state: stateName };
+      selectValue = editingStadiumId;
+    } else {
+      const stadium = { id: uid(), name, founded, state: stateName };
+      stadiums.push(stadium);
+      selectValue = stadium.id;
+    }
+    saveStadiums(stadiums);
+    populateStadiumSelect(selectValue);
+    document.getElementById('pmStateSelect').value = stateIdx;
+    selectedState = US_STATES[Number(stateIdx)];
+    selectedStadium = stadiums.find((s) => s.id === selectValue) || null;
+    updateEditStadiumBtnVisibility();
+    closeStadiumForm();
+    updateNumerologyBlocks();
+  });
+}
+
+// Same Day 60/Stadium 15/State 25 (or Day 75/State 25 without a stadium)
+// blend as computeFighterScore() in ufc.js.
+function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
+  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
+  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
+  if (!stadiumDate) {
+    return Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
+  }
+  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
+  return Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
+}
+
+function scoresForFight(f) {
+  if (!(f.matchedA && f.matchedB && selectedState)) return null;
+  const matchDate = parseDateInput(f.matchDateISO);
+  const stateDate = parseDateInput(selectedState.founded);
+  const stadiumDate = selectedStadium ? parseDateInput(selectedStadium.founded) : null;
+  return {
+    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), matchDate, stadiumDate, stateDate),
+    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), matchDate, stadiumDate, stateDate),
+  };
+}
+
 /* ===================== Fighter roster + matching ===================== */
 // Mirrors buildAllFighters() in ufc.js so Polymarket fighter names can be
 // matched against the same seed+override+custom roster the calculator uses.
@@ -138,12 +303,6 @@ function enrichWithNumerology(f) {
   f.matchedA = matchFighter(f.fighterAName, roster);
   f.matchedB = matchFighter(f.fighterBName, roster);
   f.matchDateISO = isoDateFromUTC(f.gameStartTime);
-
-  if (f.matchedA && f.matchedB) {
-    const matchDate = parseDateInput(f.matchDateISO);
-    f.scoreA = computeCompatibility(parseDateInput(f.matchedA.dob), matchDate, sportsNumerologyCompat).finalScore;
-    f.scoreB = computeCompatibility(parseDateInput(f.matchedB.dob), matchDate, sportsNumerologyCompat).finalScore;
-  }
 }
 
 /* ===================== Rendering helpers ===================== */
@@ -178,26 +337,31 @@ function fightBadge(gameStartTime) {
 }
 
 function numerologyBlockHtml(f) {
-  if (f.matchedA && f.matchedB) {
-    const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
-    const marketFavName = favA ? f.fighterAName : f.fighterBName;
-    const numFavMatched = f.scoreA >= f.scoreB ? f.matchedA : f.matchedB;
-    const agree = normalizeName(marketFavName) === normalizeName(numFavMatched.name);
-
-    return `
-      <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(f.scoreA)}">${escapeHtml(f.matchedA.name)} ${f.scoreA}</span> vs <span class="score-inline ${scoreClass(f.scoreB)}">${escapeHtml(f.matchedB.name)} ${f.scoreB}</span></div>
-      <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
-        ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
-        : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
-    `;
+  if (!(f.matchedA && f.matchedB)) {
+    const unmatched = [];
+    if (!f.matchedA) unmatched.push(f.fighterAName);
+    if (!f.matchedB) unmatched.push(f.fighterBName);
+    return `<div class="pm-unmatched">${unmatched
+      .map((n) => `${escapeHtml(n)} isn't in your fighter database yet &mdash; <a href="ufc.html?addFighter=${encodeURIComponent(n)}">add them</a> for a numerology read.`)
+      .join('<br>')}</div>`;
   }
 
-  const unmatched = [];
-  if (!f.matchedA) unmatched.push(f.fighterAName);
-  if (!f.matchedB) unmatched.push(f.fighterBName);
-  return `<div class="pm-unmatched">${unmatched
-    .map((n) => `${escapeHtml(n)} isn't in your fighter database yet &mdash; <a href="ufc.html?addFighter=${encodeURIComponent(n)}">add them</a> for a numerology read.`)
-    .join('<br>')}</div>`;
+  if (!selectedState) {
+    return '<div class="pm-unmatched">Set the fight location above to see the numerology edge for this card.</div>';
+  }
+
+  const { scoreA, scoreB } = scoresForFight(f);
+  const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
+  const marketFavName = favA ? f.fighterAName : f.fighterBName;
+  const numFavMatched = scoreA >= scoreB ? f.matchedA : f.matchedB;
+  const agree = normalizeName(marketFavName) === normalizeName(numFavMatched.name);
+
+  return `
+    <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA)}">${escapeHtml(f.matchedA.name)} ${scoreA}</span> vs <span class="score-inline ${scoreClass(scoreB)}">${escapeHtml(f.matchedB.name)} ${scoreB}</span></div>
+    <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
+      ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
+      : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
+  `;
 }
 
 function fullMatchupHtml(f) {
@@ -238,7 +402,7 @@ function renderFightCards() {
             <div class="pm-odds-pct">${pctB != null ? `${pctB}%` : '—'}</div>
           </div>
         </div>
-        ${numerologyBlockHtml(f)}
+        <div class="pm-numerology" id="pm-num-${f.conditionId}">${numerologyBlockHtml(f)}</div>
         <div class="pm-trade-feed" id="pm-feed-${f.conditionId}">
           <div class="pm-trade-feed-label">🐋 Big Money Activity</div>
           <div class="empty-state">Loading activity&hellip;</div>
@@ -288,6 +452,13 @@ function renderTradeFeeds() {
 
   const stamp = document.getElementById('pmLastUpdated');
   if (stamp) stamp.textContent = `Last updated ${new Date().toLocaleTimeString()}`;
+}
+
+function updateNumerologyBlocks() {
+  cardFights.forEach((f) => {
+    const el = document.getElementById(`pm-num-${f.conditionId}`);
+    if (el) el.innerHTML = numerologyBlockHtml(f);
+  });
 }
 
 /* ===================== Orchestration ===================== */
@@ -345,6 +516,7 @@ function startPolling() {
 }
 
 (async function init() {
+  initLocationControls();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
   startPolling();
