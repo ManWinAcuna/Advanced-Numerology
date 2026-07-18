@@ -98,7 +98,35 @@ function renderHeader() {
   document.getElementById('calChineseYear').innerHTML = `${VIETNAMESE_ZODIAC_EMOJI[chineseYear] || ''} ${chineseYear}`;
   document.getElementById('calChineseMonth').innerHTML = `${VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || ''} ${chineseMonth}`;
   document.getElementById('calZodiacSeason').innerHTML = `${ZODIAC_SYMBOLS[sunSign] || ''} ${sunSign}`;
-  setText('calMonthLabel', `${MONTH_NAMES[viewMonth]} ${viewYear}`);
+  document.getElementById('calMonthSelect').value = String(viewMonth);
+  document.getElementById('calYearSelect').value = String(viewYear);
+}
+
+const CAL_YEAR_MIN = 1900;
+const CAL_YEAR_MAX = 2100;
+
+function initMonthYearSelects() {
+  const monthSel = document.getElementById('calMonthSelect');
+  monthSel.innerHTML = MONTH_NAMES.map((name, idx) => `<option value="${idx}">${name}</option>`).join('');
+
+  const yearSel = document.getElementById('calYearSelect');
+  const years = [];
+  for (let y = CAL_YEAR_MIN; y <= CAL_YEAR_MAX; y++) years.push(`<option value="${y}">${y}</option>`);
+  yearSel.innerHTML = years.join('');
+
+  monthSel.addEventListener('change', () => {
+    viewMonth = Number(monthSel.value);
+    renderHeader();
+    renderGrid();
+    renderRankList();
+  });
+
+  yearSel.addEventListener('change', () => {
+    viewYear = Number(yearSel.value);
+    renderHeader();
+    renderGrid();
+    renderRankList();
+  });
 }
 
 function setText(id, value) {
@@ -348,6 +376,7 @@ document.getElementById('calHighlightBtn').addEventListener('click', (e) => {
 });
 
 renderCalPlanetFilterBar();
+initMonthYearSelects();
 setToCurrentMonth();
 renderHeader();
 renderGrid();

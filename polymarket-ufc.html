@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="page">
+<div class="page ufc-page">
 
   <nav class="topnav">
     <a href="profile.html" class="nav-link">My Profile</a>
@@ -26,7 +26,7 @@
   <script src="nav-scroll.js"></script>
 
   <div class="topbar">
-    <a href="polymarket.html" class="back-link">&larr; Polymarket</a>
+    <a href="polymarket.html" class="back-link" id="pmBackLink">&larr; Polymarket</a>
   </div>
 
   <h1 class="page-title">🥊 UFC &mdash; Live Polymarket Tracker</h1>
@@ -42,12 +42,19 @@
   <div class="box ufc-location-box">
     <div class="box-label">Fight Location</div>
     <div class="mode-desc">Applies to every fight below &mdash; a UFC Fight Night is one venue for the whole card. No numerology edge shows until you set this.</div>
+    <div class="hours-toggle ufc-region-toggle" id="pmRegionToggle">
+      <button type="button" class="hours-toggle-btn active" data-region="us">🇺🇸 United States</button>
+      <button type="button" class="hours-toggle-btn" data-region="intl">🌍 International</button>
+    </div>
     <div class="ufc-location-grid">
       <div class="ufc-location-field">
-        <label for="pmStateSelect">State</label>
-        <select id="pmStateSelect">
-          <option value="">Select state...</option>
-        </select>
+        <label for="pmStateSelect" id="pmRegionLabel">State</label>
+        <div class="ufc-select-row">
+          <select id="pmStateSelect">
+            <option value="">Select state...</option>
+          </select>
+          <button class="btn-link" id="pmEditCountryBtn" type="button" style="display:none;">Edit</button>
+        </div>
       </div>
       <div class="ufc-location-field">
         <label for="pmStadiumSelect">Stadium / Venue <span class="optional-tag">optional</span></label>
@@ -58,6 +65,13 @@
           <button class="btn-link" id="pmEditStadiumBtn" type="button" style="display:none;">Edit</button>
         </div>
       </div>
+    </div>
+    <div class="ufc-add-stadium-form" id="pmAddCountryForm">
+      <div class="ufc-form-sublabel" id="pmCountryFormLabel">Add New Country</div>
+      <input type="text" id="pmNewCountryName" placeholder="Country name">
+      <input type="text" id="pmNewCountryFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding / independence date">
+      <button class="btn" id="pmSaveCountryBtn" type="button">Save Country</button>
+      <button class="btn-link" id="pmCancelCountryBtn" type="button">Cancel</button>
     </div>
     <div class="ufc-add-stadium-form" id="pmAddStadiumForm">
       <div class="ufc-form-sublabel" id="pmStadiumFormLabel">Add New Stadium</div>
@@ -98,6 +112,7 @@
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
 <script src="us-states-data.js"></script>
+<script src="countries-data.js"></script>
 <script src="polymarket-ufc.js"></script>
 </body>
 </html>

@@ -218,6 +218,35 @@ function saveStadiums(stadiums) {
   cloudPushKey(STADIUMS_KEY);
 }
 
+/* ===================== Countries (international fight venues) ===================== */
+
+const CUSTOM_COUNTRIES_KEY = 'numerology_custom_countries';
+
+function loadCustomCountries() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_COUNTRIES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomCountries(countries) {
+  localStorage.setItem(CUSTOM_COUNTRIES_KEY, JSON.stringify(countries));
+  cloudPushKey(CUSTOM_COUNTRIES_KEY);
+}
+
+// Seed countries (countries-data.js) plus user-added customs as one
+// alphabetical list. Seeds get a synthetic stable id so selects can key on
+// id for both kinds; only customs (no `seed` flag) are editable. The typeof
+// guard is for pages that load db-core.js without countries-data.js.
+function allCountries() {
+  const seeds = (typeof COUNTRIES !== 'undefined' ? COUNTRIES : [])
+    .map((c, idx) => ({ id: `cseed-${idx}`, name: c.name, founded: c.founded, seed: true }));
+  return seeds.concat(loadCustomCountries()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /* ===================== UFC Custom Fighters ===================== */
 
 const CUSTOM_FIGHTERS_KEY = 'numerology_ufc_custom_fighters';
@@ -306,6 +335,7 @@ const CLOUD_SYNC_FIELDS = {
   [STORAGE_KEY]: 'db',
   [PROFILE_KEY]: 'profile',
   [STADIUMS_KEY]: 'stadiums',
+  [CUSTOM_COUNTRIES_KEY]: 'customCountries',
   [CUSTOM_FIGHTERS_KEY]: 'customFighters',
   [FIGHTER_OVERRIDES_KEY]: 'fighterOverrides',
   [UFC_PREDICTIONS_KEY]: 'ufcPredictions',

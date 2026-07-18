@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="page">
+<div class="page ufc-page">
 
   <nav class="topnav">
     <a href="profile.html" class="nav-link">My Profile</a>
@@ -31,7 +31,7 @@
 
   <div class="ufc-header-row">
     <h1 class="page-title">🥊 UFC</h1>
-    <a href="polymarket-ufc.html" class="btn pm-tracker-btn">🐋 Polymarket</a>
+    <a href="polymarket-ufc.html?from=ufc" class="btn pm-tracker-btn">🐋 Polymarket</a>
   </div>
 
   <div class="compat-form active ufc-form">
@@ -61,12 +61,19 @@
 
     <div class="box ufc-location-box">
       <div class="box-label">Fight Location</div>
+      <div class="hours-toggle ufc-region-toggle" id="regionToggle">
+        <button type="button" class="hours-toggle-btn active" data-region="us">🇺🇸 United States</button>
+        <button type="button" class="hours-toggle-btn" data-region="intl">🌍 International</button>
+      </div>
       <div class="ufc-location-grid">
         <div class="ufc-location-field">
-          <label for="stateSelect">State</label>
-          <select id="stateSelect">
-            <option value="">Select state...</option>
-          </select>
+          <label for="stateSelect" id="regionLabel">State</label>
+          <div class="ufc-select-row">
+            <select id="stateSelect">
+              <option value="">Select state...</option>
+            </select>
+            <button class="btn-link" id="editCountryBtn" type="button" style="display:none;">Edit</button>
+          </div>
         </div>
         <div class="ufc-location-field">
           <label for="stadiumSelect">Stadium / Venue <span class="optional-tag">optional</span></label>
@@ -77,6 +84,13 @@
             <button class="btn-link" id="editStadiumBtn" type="button" style="display:none;">Edit</button>
           </div>
         </div>
+      </div>
+      <div class="ufc-add-stadium-form" id="addCountryForm">
+        <div class="ufc-form-sublabel" id="countryFormLabel">Add New Country</div>
+        <input type="text" id="newCountryName" placeholder="Country name">
+        <input type="text" id="newCountryFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding / independence date">
+        <button class="btn" id="saveCountryBtn" type="button">Save Country</button>
+        <button class="btn-link" id="cancelCountryBtn" type="button">Cancel</button>
       </div>
       <div class="ufc-add-stadium-form" id="addStadiumForm">
         <div class="ufc-form-sublabel" id="stadiumFormLabel">Add New Stadium</div>
@@ -164,6 +178,7 @@
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
 <script src="us-states-data.js"></script>
+<script src="countries-data.js"></script>
 <script src="ufc.js"></script>
 </body>
 </html>

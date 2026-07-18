@@ -257,21 +257,46 @@ document.getElementById('saveFighterBtn').addEventListener('click', () => {
   closeFighterForm();
 });
 
-/* ===================== Fight Location: State + Stadium ===================== */
+/* ===================== Fight Location: Region + Stadium ===================== */
+// The region is a US state (statehood date) or, for international cards, a
+// country (founding date) - toggled with the US/International switch. Same
+// model as polymarket-ufc.js.
+
+let editingCountryId = null;
+let regionMode = 'us'; // 'us' | 'intl'
+
+function regionNoun() {
+  return regionMode === 'intl' ? 'country' : 'state';
+}
 
 function stateIndexByName(name) {
   return US_STATES.findIndex((s) => s.name === name);
 }
 
-function populateStateSelectInto(selectEl) {
-  selectEl.innerHTML = '<option value="">Select state...</option>'
-    + US_STATES.map((s, idx) => `<option value="${idx}">${escapeHtml(s.name)}</option>`).join('');
+function populateRegionOptionsInto(selectEl, includeAdd) {
+  if (regionMode === 'us') {
+    selectEl.innerHTML = '<option value="">Select state...</option>'
+      + US_STATES.map((s, idx) => `<option value="${idx}">${escapeHtml(s.name)}</option>`).join('');
+  } else {
+    selectEl.innerHTML = '<option value="">Select country...</option>'
+      + allCountries().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
+      + (includeAdd ? '<option value="__addCountry__">+ Add New Country</option>' : '');
+  }
 }
 
+function regionFromSelectValue(val) {
+  if (val === '' || val == null || val === '__addCountry__') return null;
+  if (regionMode === 'us') return US_STATES[Number(val)] || null;
+  return allCountries().find((c) => c.id === val) || null;
+}
+
+// US stadiums carry a `state`, international ones a `country` - each mode
+// only lists its own kind so a Vegas arena can't be picked for a London card.
 function populateStadiumSelect(selectValue) {
   const sel = document.getElementById('stadiumSelect');
+  const visible = stadiums.filter((s) => (regionMode === 'intl' ? !!s.country : !s.country));
   sel.innerHTML = '<option value="">Select stadium...</option>'
-    + stadiums.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
+    + visible.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
     + '<option value="__add__">+ Add New Stadium</option>';
   sel.value = selectValue || '';
 }
@@ -281,13 +306,109 @@ function updateEditStadiumBtnVisibility() {
   document.getElementById('editStadiumBtn').style.display = (val && val !== '__add__') ? '' : 'none';
 }
 
-populateStateSelectInto(document.getElementById('stateSelect'));
-populateStateSelectInto(document.getElementById('newStadiumState'));
+function updateEditCountryBtnVisibility() {
+  const region = regionFromSelectValue(document.getElementById('stateSelect').value);
+  const show = regionMode === 'intl' && region && region.id && !region.seed;
+  document.getElementById('editCountryBtn').style.display = show ? '' : 'none';
+}
+
+populateRegionOptionsInto(document.getElementById('stateSelect'), true);
+populateRegionOptionsInto(document.getElementById('newStadiumState'), false);
 populateStadiumSelect();
 updateEditStadiumBtnVisibility();
 
-// A stadium saved with a state carries that state with it - picking the
-// stadium always syncs the State dropdown to match, so they can't drift apart.
+document.querySelectorAll('#regionToggle .hours-toggle-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.region === regionMode) return;
+    regionMode = btn.dataset.region;
+    document.querySelectorAll('#regionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    closeCountryForm();
+    closeStadiumForm();
+    document.getElementById('regionLabel').textContent = regionMode === 'intl' ? 'Country' : 'State';
+    populateRegionOptionsInto(document.getElementById('stateSelect'), true);
+    populateRegionOptionsInto(document.getElementById('newStadiumState'), false);
+    populateStadiumSelect();
+    updateEditStadiumBtnVisibility();
+    updateEditCountryBtnVisibility();
+  });
+});
+
+document.getElementById('stateSelect').addEventListener('change', (e) => {
+  if (e.target.value === '__addCountry__') {
+    e.target.value = '';
+    openCountryForm(null);
+  }
+  updateEditCountryBtnVisibility();
+});
+
+document.getElementById('editCountryBtn').addEventListener('click', () => {
+  const region = regionFromSelectValue(document.getElementById('stateSelect').value);
+  if (region && region.id && !region.seed) openCountryForm(region);
+});
+
+function openCountryForm(country) {
+  closeStadiumForm();
+  document.getElementById('addCountryForm').classList.add('active');
+  if (country) {
+    editingCountryId = country.id;
+    document.getElementById('newCountryName').value = country.name;
+    document.getElementById('newCountryFounded').value = isoToDisplay(country.founded);
+    document.getElementById('countryFormLabel').textContent = `Edit Country - ${country.name}`;
+    document.getElementById('saveCountryBtn').textContent = 'Update Country';
+  } else {
+    editingCountryId = null;
+    document.getElementById('newCountryName').value = '';
+    document.getElementById('newCountryFounded').value = '';
+    document.getElementById('countryFormLabel').textContent = 'Add New Country';
+    document.getElementById('saveCountryBtn').textContent = 'Save Country';
+  }
+  document.getElementById('addCountryForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeCountryForm() {
+  editingCountryId = null;
+  document.getElementById('addCountryForm').classList.remove('active');
+  document.getElementById('newCountryName').value = '';
+  document.getElementById('newCountryFounded').value = '';
+  document.getElementById('countryFormLabel').textContent = 'Add New Country';
+  document.getElementById('saveCountryBtn').textContent = 'Save Country';
+}
+
+document.getElementById('cancelCountryBtn').addEventListener('click', closeCountryForm);
+
+document.getElementById('saveCountryBtn').addEventListener('click', () => {
+  const name = document.getElementById('newCountryName').value.trim();
+  const founded = displayToISO(document.getElementById('newCountryFounded').value);
+  if (!name) {
+    alert('Please enter a country name.');
+    return;
+  }
+  if (!founded) {
+    alert('Please enter a valid founding / independence date (MM/DD/YYYY).');
+    return;
+  }
+
+  const customs = loadCustomCountries();
+  let selectId;
+  if (editingCountryId) {
+    const idx = customs.findIndex((c) => c.id === editingCountryId);
+    if (idx !== -1) customs[idx] = { id: editingCountryId, name, founded };
+    selectId = editingCountryId;
+  } else {
+    const country = { id: uid(), name, founded };
+    customs.push(country);
+    selectId = country.id;
+  }
+  saveCustomCountries(customs);
+  populateRegionOptionsInto(document.getElementById('stateSelect'), true);
+  populateRegionOptionsInto(document.getElementById('newStadiumState'), false);
+  document.getElementById('stateSelect').value = selectId;
+  updateEditCountryBtnVisibility();
+  closeCountryForm();
+});
+
+// A stadium saved with a region carries that region with it - picking the
+// stadium always syncs the region dropdown to match, so they can't drift apart.
 document.getElementById('stadiumSelect').addEventListener('change', (e) => {
   const val = e.target.value;
   if (val === '__add__') {
@@ -302,11 +423,15 @@ document.getElementById('stadiumSelect').addEventListener('change', (e) => {
 
   if (val) {
     const stadium = stadiums.find((s) => s.id === val);
-    if (stadium && stadium.state) {
+    if (stadium && regionMode === 'us' && stadium.state) {
       const idx = stateIndexByName(stadium.state);
       if (idx !== -1) document.getElementById('stateSelect').value = String(idx);
+    } else if (stadium && regionMode === 'intl' && stadium.country) {
+      const c = allCountries().find((x) => x.name === stadium.country);
+      if (c) document.getElementById('stateSelect').value = c.id;
     }
   }
+  updateEditCountryBtnVisibility();
 });
 
 document.getElementById('editStadiumBtn').addEventListener('click', () => {
@@ -316,21 +441,27 @@ document.getElementById('editStadiumBtn').addEventListener('click', () => {
 
 // Only fighters/stadiums created here (which carry an id) can be edited.
 function openStadiumForm(stadium) {
+  closeCountryForm();
   document.getElementById('addStadiumForm').classList.add('active');
-  const stateSel = document.getElementById('newStadiumState');
+  const regionSel = document.getElementById('newStadiumState');
   if (stadium) {
     editingStadiumId = stadium.id;
     document.getElementById('newStadiumName').value = stadium.name;
     document.getElementById('newStadiumFounded').value = isoToDisplay(stadium.founded);
-    const idx = stadium.state ? stateIndexByName(stadium.state) : -1;
-    stateSel.value = idx !== -1 ? String(idx) : '';
+    if (regionMode === 'us') {
+      const idx = stadium.state ? stateIndexByName(stadium.state) : -1;
+      regionSel.value = idx !== -1 ? String(idx) : '';
+    } else {
+      const c = stadium.country ? allCountries().find((x) => x.name === stadium.country) : null;
+      regionSel.value = c ? c.id : '';
+    }
     document.getElementById('stadiumFormLabel').textContent = `Edit Stadium - ${stadium.name}`;
     document.getElementById('saveStadiumBtn').textContent = 'Update Stadium';
   } else {
     editingStadiumId = null;
     document.getElementById('newStadiumName').value = '';
     document.getElementById('newStadiumFounded').value = '';
-    stateSel.value = '';
+    regionSel.value = '';
     document.getElementById('stadiumFormLabel').textContent = 'Add New Stadium';
     document.getElementById('saveStadiumBtn').textContent = 'Save Stadium';
   }
@@ -352,7 +483,7 @@ document.getElementById('cancelStadiumBtn').addEventListener('click', closeStadi
 document.getElementById('saveStadiumBtn').addEventListener('click', () => {
   const name = document.getElementById('newStadiumName').value.trim();
   const founded = displayToISO(document.getElementById('newStadiumFounded').value);
-  const stateIdx = document.getElementById('newStadiumState').value;
+  const regionVal = document.getElementById('newStadiumState').value;
   if (!name) {
     alert('Please enter a stadium name.');
     return;
@@ -361,26 +492,30 @@ document.getElementById('saveStadiumBtn').addEventListener('click', () => {
     alert('Please enter a valid founding date for the stadium (MM/DD/YYYY).');
     return;
   }
-  if (stateIdx === '') {
-    alert('Please select which state this stadium is in.');
+  if (regionVal === '') {
+    alert(`Please select which ${regionNoun()} this stadium is in.`);
     return;
   }
-  const stateName = US_STATES[Number(stateIdx)].name;
+
+  const regionFields = regionMode === 'us'
+    ? { state: US_STATES[Number(regionVal)].name }
+    : { country: (allCountries().find((c) => c.id === regionVal) || {}).name };
 
   let selectValue;
   if (editingStadiumId) {
     const idx = stadiums.findIndex((s) => s.id === editingStadiumId);
-    if (idx !== -1) stadiums[idx] = { id: editingStadiumId, name, founded, state: stateName };
+    if (idx !== -1) stadiums[idx] = { id: editingStadiumId, name, founded, ...regionFields };
     selectValue = editingStadiumId;
   } else {
-    const stadium = { id: uid(), name, founded, state: stateName };
+    const stadium = { id: uid(), name, founded, ...regionFields };
     stadiums.push(stadium);
     selectValue = stadium.id;
   }
   saveStadiums(stadiums);
   populateStadiumSelect(selectValue);
-  document.getElementById('stateSelect').value = stateIdx;
+  document.getElementById('stateSelect').value = regionVal;
   updateEditStadiumBtnVisibility();
+  updateEditCountryBtnVisibility();
 
   closeStadiumForm();
 });
@@ -427,7 +562,7 @@ function renderFighterBreakdown(containerEl, fighter, score, stadiumName, stateN
         <span class="ufc-subscore-val ${scoreClass(score.stadium.finalScore)}">${score.stadium.finalScore}</span>
       </button>` : ''}
       <button type="button" class="ufc-subscore-tab" data-factor="state">
-        <span class="ufc-subscore-name">🗺️ State</span>
+        <span class="ufc-subscore-name">${regionMode === 'intl' ? '🌍 Country' : '🗺️ State'}</span>
         <span class="ufc-subscore-val ${scoreClass(score.state.finalScore)}">${score.state.finalScore}</span>
       </button>
     </div>
@@ -464,14 +599,13 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     alert('Please enter a valid fight date (MM/DD/YYYY), or click Today.');
     return;
   }
-  const stateIdx = document.getElementById('stateSelect').value;
-  if (stateIdx === '') {
-    alert('Please select the state the fight is taking place in.');
+  const state = regionFromSelectValue(document.getElementById('stateSelect').value);
+  if (!state) {
+    alert(`Please select the ${regionNoun()} the fight is taking place in.`);
     return;
   }
   const stadiumId = document.getElementById('stadiumSelect').value;
   const stadium = (stadiumId && stadiumId !== '__add__') ? stadiums.find((s) => s.id === stadiumId) : null;
-  const state = US_STATES[Number(stateIdx)];
 
   const matchDate = parseDateInput(matchDateISO);
   const stadiumDate = stadium ? parseDateInput(stadium.founded) : null;

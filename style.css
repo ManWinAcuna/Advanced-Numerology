@@ -882,6 +882,11 @@ body::after {
   color: var(--bad);
 }
 
+.ufc-region-toggle {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
 .icon-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -2170,12 +2175,25 @@ body::after {
   border-radius: 50%;
 }
 
-.calendar-month-label {
-  font-size: 20px;
-  font-weight: 700;
+.calendar-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-nav-select {
+  background: #1c1c1c;
+  border: 1px solid var(--border);
   color: var(--text);
-  min-width: 180px;
-  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.calendar-nav-select:hover {
+  border-color: var(--yellow);
 }
 
 .calendar-highlight-btn {
@@ -2212,6 +2230,10 @@ body::after {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  /* First row is the weekday header; the six possible week rows all share
+     the same 1fr height so a row containing a zodiac/season marker can't
+     end up taller than the rows around it. */
+  grid-auto-rows: auto 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 8px;
 }
 
@@ -3480,4 +3502,193 @@ body::after {
 
 .pm-table-scroll {
   overflow-x: auto;
+}
+
+/* ===================== UFC pages (cyberpunk HUD, warm palette) ===================== */
+/* Scoped via .ufc-page on ufc.html + polymarket-ufc.html, same approach as
+   .astro-page - the rest of the app keeps the plain warm theme. */
+
+.ufc-page {
+  position: relative;
+}
+
+.ufc-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 138, 61, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 138, 61, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 85%);
+}
+
+.ufc-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ufc-page .page-title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 10px rgba(245, 197, 66, 0.45), 0 0 28px rgba(255, 138, 61, 0.22);
+}
+
+/* HUD plates: every .box gets orange corner brackets over a dark gradient. */
+.ufc-page .box {
+  background: linear-gradient(165deg, #191309, #0e0a06 65%);
+  border: 1px solid rgba(255, 138, 61, 0.26);
+  border-radius: 2px;
+  position: relative;
+}
+
+.ufc-page .box::before,
+.ufc-page .box::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ufc-page .box::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--orange);
+  border-left: 2px solid var(--orange);
+}
+
+.ufc-page .box::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--orange);
+  border-right: 2px solid var(--orange);
+}
+
+.ufc-page .box-label {
+  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  color: var(--orange);
+  opacity: 1;
+  letter-spacing: 0.12em;
+}
+
+.ufc-page .box-label::before {
+  content: '// ';
+  color: var(--yellow);
+}
+
+.ufc-page .btn {
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 13px;
+}
+
+.ufc-page select,
+.ufc-page input[type="text"] {
+  background: #120d07;
+  border: 1px solid rgba(255, 138, 61, 0.3);
+  color: var(--text);
+  border-radius: 0;
+}
+
+.ufc-page select:focus,
+.ufc-page input[type="text"]:focus {
+  outline: none;
+  border-color: var(--orange);
+  box-shadow: var(--glow-magenta);
+}
+
+.ufc-page .hours-toggle {
+  border-radius: 0;
+  background: #120d07;
+  border-color: rgba(255, 138, 61, 0.3);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.ufc-page .hours-toggle-btn {
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 12px;
+}
+
+.ufc-page .hours-toggle-btn.active {
+  background: var(--orange);
+  color: #130b04;
+  box-shadow: var(--glow-magenta);
+}
+
+/* Tracker fight cards */
+.ufc-page .pm-fight-card:hover {
+  border-color: var(--orange);
+  box-shadow: var(--glow-magenta);
+}
+
+.ufc-page .pm-fight-names {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ufc-page .pm-odds-pill {
+  border-radius: 0;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  background: #14100a;
+}
+
+.ufc-page .pm-trade-feed-label {
+  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+}
+
+/* Matchup results (ufc.html) */
+.ufc-page .edge-banner .edge-winner,
+.ufc-page .edge-banner .edge-tie {
+  border-radius: 0;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ufc-page .ufc-subscore-tab {
+  border-radius: 0;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  background: #14100a;
+}
+
+.ufc-page .ufc-subscore-tab.active {
+  border-color: var(--orange);
+  box-shadow: var(--glow-magenta);
+}
+
+.ufc-page .ufc-subscore-name {
+  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* Breakdown popup */
+.ufc-page .modal-box {
+  border: 1px solid rgba(255, 138, 61, 0.45);
+  border-radius: 2px;
+  background: linear-gradient(165deg, #191309, #0e0a06 65%);
+  box-shadow: var(--glow-magenta), 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+
+.ufc-page .pm-breakdown-col {
+  border-radius: 0;
+  background: #14100a;
+  border-color: rgba(255, 138, 61, 0.25);
+}
+
+.ufc-page .pm-breakdown-name {
+  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }

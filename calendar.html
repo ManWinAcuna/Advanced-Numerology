@@ -53,9 +53,12 @@
       </div>
 
       <div class="calendar-nav">
-        <button class="icon-btn" id="calPrevBtn" title="Previous month">&lsaquo;</button>
-        <div class="calendar-month-label" id="calMonthLabel">-</div>
-        <button class="icon-btn" id="calNextBtn" title="Next month">&rsaquo;</button>
+        <div class="calendar-nav-group">
+          <button class="icon-btn" id="calPrevBtn" title="Previous month">&lsaquo;</button>
+          <select id="calMonthSelect" class="calendar-nav-select" title="Jump to month"></select>
+          <select id="calYearSelect" class="calendar-nav-select" title="Jump to year"></select>
+          <button class="icon-btn" id="calNextBtn" title="Next month">&rsaquo;</button>
+        </div>
         <button class="btn" id="calTodayBtn">Today</button>
         <button class="calendar-highlight-btn" id="calHighlightBtn" type="button" title="Color each day green (best) or red (worst) based on compatibility with your profile">🎨 Highlight Days</button>
       </div>
