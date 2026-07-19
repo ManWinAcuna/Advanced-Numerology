@@ -884,6 +884,23 @@ function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   return { day, stadium, state, combined };
 }
 
+// Pitcher vs. opposing lineup, person-vs-person rather than person-vs-date -
+// the pitcher's life path run against each opposing batter's through the same
+// sportsNumerologyCompat table fighter-vs-fighter uses. Returns the full
+// per-batter breakdown (not just the average) so both the live tracker's
+// composite (which only needs the average) and the Stats page's matchup
+// modal (which shows the batter-by-batter detail) share one formula instead
+// of drifting apart. batters is [{ name, pos, dobDate }] - already parsed by
+// the caller, same convention computeFighterScore uses above.
+function pitcherVsLineupBreakdown(pitcherDobDate, batters) {
+  const pitcherLifePath = compatLifePathInfo(pitcherDobDate).lookupValue;
+  return batters.map((b) => ({
+    name: b.name,
+    pos: b.pos,
+    combined: sportsNumerologyCompat(pitcherLifePath, compatLifePathInfo(b.dobDate).lookupValue),
+  }));
+}
+
 // MLB team-composite role weights - a starting guess, not doctrine, same
 // spirit as REAL_EDGE_MIN_GAP/EDGE_TIERS below: once enough games resolve on
 // the Stats page, that per-tier breakdown is what should actually move these

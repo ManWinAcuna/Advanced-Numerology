@@ -9,6 +9,15 @@
 // MLB_PITCHER_K_SIGNALS_KEY in db-core.js).
 
 let currentMlbPredictions = [];
+let currentMlbKSignals = [];
+
+function parseDateInput(value) {
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date();
+  date.setFullYear(y, (m || 1) - 1, d || 1);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 // Resolves via MLB's own boxscore/live feed instead of Polymarket - the
 // final score is the ground truth here, not a market closing.
@@ -320,7 +329,7 @@ function renderMlbKSignalPanel(signals) {
           ? `<span class="score-inline good">✅ ${s.actualKs} K (baseline ${baseline})</span>`
           : `<span class="score-inline bad">❌ ${s.actualKs} K (baseline ${baseline})</span>`;
     return `
-      <tr>
+      <tr data-game-pk="${s.gamePk}" data-pitcher-id="${s.pitcherId}">
         <td>${formatMlbGameDate(s.gameTime)}</td>
         <td>${escapeHtml(s.pitcherName)} (${escapeHtml(s.teamName)})</td>
         <td>${dirLabel} (${s.dayScore})</td>
@@ -340,6 +349,103 @@ function renderMlbKSignalPanel(signals) {
   `;
 }
 
+// The K-signal record only ever stored the pitcher's own day score and
+// season baseline (everything it needs to grade itself) - the pitcher-vs-
+// opposing-lineup breakdown was never persisted, so it's fetched fresh from
+// MLB's live feed on click, same data source (and same pitcherVsLineupBreakdown
+// formula in db-core.js) the live tracker uses for its own matchup factor.
+async function fetchPitcherVsLineupDetail(s) {
+  const feed = await fetchGameLiveFeed(s.gamePk);
+  if (!feed) return null;
+  const pitcherSide = [feed.home, feed.away].find((sd) => sd.startingPitcherId === s.pitcherId);
+  if (!pitcherSide) return null;
+  const opposingSide = pitcherSide === feed.home ? feed.away : feed.home;
+  if (!opposingSide.batters.length) return null; // lineup not posted yet
+
+  const birthdates = await fetchPeopleBirthdates([s.pitcherId, ...opposingSide.batters.map((b) => b.id)]);
+  const pitcherBd = birthdates.get(s.pitcherId);
+  if (!pitcherBd || !pitcherBd.birthDate) return null;
+
+  const batters = opposingSide.batters
+    .map((b) => {
+      const bd = birthdates.get(b.id);
+      return bd && bd.birthDate ? { name: bd.name, pos: b.pos, dobDate: parseDateInput(bd.birthDate) } : null;
+    })
+    .filter(Boolean);
+  const rows = pitcherVsLineupBreakdown(parseDateInput(pitcherBd.birthDate), batters);
+  if (!rows.length) return null;
+
+  const avg = Math.round(rows.reduce((sum, r) => sum + r.combined, 0) / rows.length);
+  return { opposingTeamName: opposingSide.teamName, rows, avg };
+}
+
+function mlbKSignalModalHtml(s, detail, loading) {
+  const dirLabel = s.predictedDirection === 'over' ? '🔥 Predicted Over' : (s.predictedDirection === 'under' ? '🧊 Predicted Under' : '➖ Neutral');
+  const baseline = s.seasonAvgKsAtPickTime.toFixed(1);
+  const actualRow = s.result
+    ? `<div class="pm-breakdown-row"><span>This Game</span><span class="score-inline ${s.result.correct === false ? 'bad' : (s.result.correct ? 'good' : '')}">${s.actualKs} K</span></div>`
+    : `<div class="pm-breakdown-row"><span>This Game</span><span class="pm-countdown-badge">⏳ Pending</span></div>`;
+
+  let lineupHtml;
+  if (loading) {
+    lineupHtml = '<div class="pm-unmatched" style="margin-top:12px;">Loading pitcher-vs-batters breakdown&hellip;</div>';
+  } else if (detail) {
+    lineupHtml = `
+      <div class="pm-breakdown-col" style="margin-top:12px;">
+        <div class="pm-breakdown-name">vs ${escapeHtml(detail.opposingTeamName)} Lineup</div>
+        ${detail.rows.map((r) => `<div class="pm-breakdown-row"><span>${escapeHtml(r.pos)} ${escapeHtml(r.name)}</span><span class="score-inline ${scoreClass(r.combined)}">${r.combined}</span></div>`).join('')}
+        <div class="pm-breakdown-row pm-breakdown-total"><span>Lineup Avg</span><span class="score-inline ${scoreClass(detail.avg)}">${detail.avg}</span></div>
+      </div>
+    `;
+  } else {
+    lineupHtml = '<div class="pm-unmatched" style="margin-top:12px;">⏳ Lineups not posted yet &mdash; check back closer to first pitch to see the pitcher-vs-batters breakdown.</div>';
+  }
+
+  return `
+    <div class="score-hero">
+      <div class="score-names">${escapeHtml(s.pitcherName)}</div>
+      <div class="pm-breakdown-hint">${escapeHtml(s.teamName)} &middot; ${formatMlbGameDate(s.gameTime)}</div>
+    </div>
+    <div class="pm-breakdown-grid">
+      <div class="pm-breakdown-col">
+        <div class="pm-breakdown-name">Day Score</div>
+        <div class="pm-breakdown-row"><span>🔢 Numerology</span><span class="score-inline ${scoreClass(s.dayScore)}">${s.dayScore}</span></div>
+        <div class="pm-breakdown-row"><span>Prediction</span><span>${dirLabel}</span></div>
+      </div>
+      <div class="pm-breakdown-col">
+        <div class="pm-breakdown-name">Strikeouts</div>
+        <div class="pm-breakdown-row"><span>Season Avg</span><span>${baseline} K/start</span></div>
+        ${actualRow}
+      </div>
+    </div>
+    ${lineupHtml}
+  `;
+}
+
+function initMlbKSignalModal() {
+  document.getElementById('mlbKSignalBody').addEventListener('click', async (e) => {
+    const row = e.target.closest('tr[data-game-pk]');
+    if (!row) return;
+    const gamePk = Number(row.dataset.gamePk);
+    const pitcherId = Number(row.dataset.pitcherId);
+    const s = currentMlbKSignals.find((x) => x.gamePk === gamePk && x.pitcherId === pitcherId);
+    if (!s) return;
+
+    document.getElementById('mlbKSignalModalBody').innerHTML = mlbKSignalModalHtml(s, null, true);
+    document.getElementById('mlbKSignalModalOverlay').classList.add('active');
+
+    const detail = await fetchPitcherVsLineupDetail(s);
+    document.getElementById('mlbKSignalModalBody').innerHTML = mlbKSignalModalHtml(s, detail, false);
+  });
+
+  document.getElementById('mlbKSignalModalClose').addEventListener('click', () => {
+    document.getElementById('mlbKSignalModalOverlay').classList.remove('active');
+  });
+  document.getElementById('mlbKSignalModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'mlbKSignalModalOverlay') document.getElementById('mlbKSignalModalOverlay').classList.remove('active');
+  });
+}
+
 async function refreshAndRenderMlb() {
   const predictions = await checkMlbResults();
   currentMlbPredictions = predictions;
@@ -352,6 +458,7 @@ async function refreshAndRenderMlb() {
   document.getElementById('mlbStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
   const signals = await checkMlbKSignals();
+  currentMlbKSignals = signals;
   renderMlbKSignalPanel(signals);
 }
 
@@ -366,4 +473,5 @@ document.getElementById('mlbStatsRefreshBtn').addEventListener('click', async ()
 });
 
 initMlbMatchupModal();
+initMlbKSignalModal();
 refreshAndRenderMlb();

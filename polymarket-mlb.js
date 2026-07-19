@@ -211,13 +211,15 @@ function currentMatchDateISO(g) {
 // person-vs-date), which is exactly the point - it's the only place in the
 // model where the two teams' numerology actually meets.
 function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
-  const pitcherLifePath = compatLifePathInfo(pitcherDobDate).lookupValue;
-  const compatScores = opposingBatters
-    .map((b) => birthdates.get(b.id))
-    .filter((bd) => bd && bd.birthDate)
-    .map((bd) => sportsNumerologyCompat(pitcherLifePath, compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue));
-  if (!compatScores.length) return null;
-  return Math.round(compatScores.reduce((s, v) => s + v, 0) / compatScores.length);
+  const batters = opposingBatters
+    .map((b) => {
+      const bd = birthdates.get(b.id);
+      return bd && bd.birthDate ? { name: bd.name, pos: b.pos, dobDate: parseDateInput(bd.birthDate) } : null;
+    })
+    .filter(Boolean);
+  const rows = pitcherVsLineupBreakdown(pitcherDobDate, batters);
+  if (!rows.length) return null;
+  return Math.round(rows.reduce((s, r) => s + r.combined, 0) / rows.length);
 }
 
 // The 13-component weighted composite: starting pitcher, catcher, the 8
@@ -419,10 +421,22 @@ async function recordPitcherKSignals(g) {
 
 /* ===================== Rendering ===================== */
 
-function gameBadge(gameStartTime) {
+// MLB uniquely gives us a real live-game feed (unlike UFC/Tennis, where
+// Polymarket has no such signal) - so once that feed has loaded, trust its
+// actual game state instead of guessing "Live" just because the scheduled
+// first-pitch time has passed (games get delayed, postponed, etc.).
+function gameBadge(g) {
+  const state = g.feed && g.feed.abstractGameState;
+  const detail = (g.feed && g.feed.detailedState) || '';
+  if (state === 'Final') return '<span class="pm-countdown-badge">Final</span>';
+  if (state === 'Live') return '<span class="pm-live-badge">🔴 Live / In Progress</span>';
+  if (state === 'Preview' && /postpon|suspend|delay|cancel/i.test(detail)) {
+    return `<span class="pm-countdown-badge">${escapeHtml(detail)}</span>`;
+  }
+
   const now = Date.now();
-  const t = gameStartTime.getTime();
-  if (t <= now) return '<span class="pm-live-badge">🔴 Live / In Progress</span>';
+  const t = g.gameStartTime.getTime();
+  if (t <= now) return '<span class="pm-countdown-badge">Awaiting first pitch&hellip;</span>';
   const diff = t - now;
   const hours = Math.floor(diff / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
@@ -530,7 +544,7 @@ function gameCardHtml(g) {
     <div class="box pm-fight-card" id="pm-card-${g.conditionId}" data-tier="${cardTierKey(g)}">
       <div class="pm-fight-head">
         <div class="pm-fight-names">${escapeHtml(g.teamAName)} vs ${escapeHtml(g.teamBName)}</div>
-        ${gameBadge(g.gameStartTime)}
+        ${gameBadge(g)}
       </div>
       <div class="pm-odds-row">
         <div class="pm-odds-pill ${favA ? 'favorite' : ''}">

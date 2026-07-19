@@ -275,11 +275,21 @@
       <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
       <div id="mlbKSignalBody"></div>
     </div>
+
+    <div class="modal-overlay" id="mlbKSignalModalOverlay">
+      <div class="modal-box">
+        <button class="modal-close" id="mlbKSignalModalClose" title="Close">&times;</button>
+        <div id="mlbKSignalModalBody"></div>
+      </div>
+    </div>
    </div>
   </div>
 
 </div>
 
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
 <script src="compat-render.js"></script>
