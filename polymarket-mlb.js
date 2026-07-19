@@ -185,6 +185,20 @@ function isoDateOnly(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
+// The calendar date this game falls on at the venue - same pattern as
+// currentMatchDateISO in polymarket-ufc.js/polymarket-tennis.js: computed
+// fresh on every call (not cached) so it can re-trigger the timezone lookup
+// for a US venue this never needs (the fixed lookup resolves instantly) or
+// an international one (Toronto) whose zone may still be in flight. Returns
+// null when unconfirmed - callers must not score against a guess.
+function currentMatchDateISO(g) {
+  if (g.regionMode === 'us') return localMatchDateISO(g.gameStartTime, 'us', g.region);
+  if (g.region && !g.region.timezone) {
+    ensureIntlRegionTimezone(g.region, () => updateGameCard(g.conditionId));
+  }
+  return localMatchDateISO(g.gameStartTime, 'intl', g.region);
+}
+
 // Everything above (pitcher, batters, franchise, manager) only ever scores
 // an entity against the day/venue - it never asks whether the two TEAMS'
 // numerology actually clash. But the one matchup that repeats dozens of
@@ -218,7 +232,9 @@ function computeTeamComposite(g, sideLetter) {
   const teamInfo = sideLetter === 'A' ? g.teamInfoA : g.teamInfoB;
   const manager = sideLetter === 'A' ? g.managerA : g.managerB;
 
-  const matchDate = parseDateInput(g.matchDateISO);
+  const matchDateISO = currentMatchDateISO(g);
+  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
+  const matchDate = parseDateInput(matchDateISO);
   const stateDate = g.region ? parseDateInput(g.region.founded) : null;
   const stadiumDate = g.stadiumFounded ? parseDateInput(g.stadiumFounded) : null;
 
@@ -301,7 +317,6 @@ async function enrichGame(g) {
     await ensureVenueLocation(g);
     ensureVenueFoundedDate(g);
   }
-  g.matchDateISO = localMatchDateISO(g.gameStartTime, g.regionMode, g.region);
 
   recordPitcherKSignals(g);
 
@@ -379,7 +394,8 @@ async function recordPitcherKSignals(g) {
     const bd = birthdates.get(pitcher.id);
     if (!bd || !bd.birthDate || !seasonStats) continue; // no dob, or no starts yet this season to baseline against
 
-    const matchDateISO = g.matchDateISO || isoDateOnly(g.gameStartTime);
+    const matchDateISO = currentMatchDateISO(g);
+    if (!matchDateISO) continue; // timezone not confirmed yet - don't guess; retried on the next enrichment pass
     const dayScore = computeCompatibility(parseDateInput(bd.birthDate), parseDateInput(matchDateISO), sportsNumerologyCompat).finalScore;
 
     const signals = loadMlbPitcherKSignals();
@@ -443,7 +459,7 @@ function numerologyBlockHtml(g) {
   }
 
   const scores = scoresForGame(g);
-  if (!scores) return '<div class="pm-unmatched">Not enough birth-date data to score this matchup yet.</div>';
+  if (!scores) return '<div class="pm-unmatched">⏳ Waiting to confirm this venue\'s timezone (or a birthdate) before scoring &mdash; check back shortly.</div>';
   const { scoreA, scoreB } = scores;
 
   const favA = g.priceA != null && g.priceB != null && g.priceA >= g.priceB;

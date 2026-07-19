@@ -474,16 +474,21 @@ function lookupTimezoneForPlace(name) {
 }
 
 // The calendar date a match falls on at the venue, given its US state or
-// international region - falls back to the plain UTC calendar date if no
-// timezone is resolvable yet (region not backfilled, or lookup failed).
+// international region - returns null (never a guess) when the timezone
+// isn't confirmed yet. A US state always resolves instantly via the fixed
+// lookup above, but an international region's zone is looked up
+// asynchronously and may not have resolved on this call. Callers must treat
+// null as "don't score this yet" - a match a few hours either side of
+// midnight can land on the wrong calendar day entirely under a plain UTC
+// guess, producing a numerology score that looks legitimate but isn't.
 function localMatchDateISO(gameStartTime, regionMode, region) {
   const zone = regionMode === 'us' ? US_STATE_TIMEZONES[region && region.name] : (region && region.timezone);
-  if (zone) {
-    try {
-      return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(gameStartTime);
-    } catch (e) { /* fall through to plain UTC below */ }
+  if (!zone) return null;
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(gameStartTime);
+  } catch (e) {
+    return null;
   }
-  return `${gameStartTime.getUTCFullYear()}-${String(gameStartTime.getUTCMonth() + 1).padStart(2, '0')}-${String(gameStartTime.getUTCDate()).padStart(2, '0')}`;
 }
 
 // The venue's clock right now, formatted for display ("Jul 19, 11:42 AM"),

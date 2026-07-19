@@ -242,7 +242,9 @@ function currentMatchDateISO(gameStartTime, st, tournamentKey) {
 
 function scoresForMatch(m, st) {
   if (!(m.matchedA && m.matchedB && st.selectedRegion)) return null;
-  const matchDate = parseDateInput(currentMatchDateISO(m.gameStartTime, st, m.tournament));
+  const matchDateISO = currentMatchDateISO(m.gameStartTime, st, m.tournament);
+  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
+  const matchDate = parseDateInput(matchDateISO);
   const regionDate = parseDateInput(st.selectedRegion.founded);
   const venueDate = st.selectedVenue ? parseDateInput(st.selectedVenue.founded) : null;
   return {
@@ -450,7 +452,11 @@ function numerologyBlockHtml(m) {
     return '<div class="pm-unmatched">Set this tournament\'s location above to see the numerology edge for its matches.</div>';
   }
 
-  const { scoreA, scoreB } = scoresForMatch(m, st);
+  const scores = scoresForMatch(m, st);
+  if (!scores) {
+    return '<div class="pm-unmatched">⏳ Waiting to confirm this region\'s timezone before scoring &mdash; check back shortly.</div>';
+  }
+  const { scoreA, scoreB } = scores;
   const favA = m.priceA != null && m.priceB != null && m.priceA >= m.priceB;
   const marketFavName = favA ? m.playerAName : m.playerBName;
   const numFavMatched = scoreA.combined >= scoreB.combined ? m.matchedA : m.matchedB;
@@ -563,8 +569,9 @@ function fullMatchupHtml(m) {
 function cardTierKey(m) {
   const st = getTournamentState(m.tournament);
   if (!(m.matchedA && m.matchedB && st.selectedRegion)) return '';
-  const { scoreA, scoreB } = scoresForMatch(m, st);
-  return edgeTierForGap(Math.abs(scoreA.combined - scoreB.combined)).key;
+  const scores = scoresForMatch(m, st);
+  if (!scores) return '';
+  return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
 
 function matchCardHtml(m) {

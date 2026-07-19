@@ -609,7 +609,9 @@ function currentMatchDateISO(gameStartTime) {
 
 function scoresForFight(f) {
   if (!(f.matchedA && f.matchedB && selectedRegion)) return null;
-  const matchDate = parseDateInput(currentMatchDateISO(f.gameStartTime));
+  const matchDateISO = currentMatchDateISO(f.gameStartTime);
+  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
+  const matchDate = parseDateInput(matchDateISO);
   const stateDate = parseDateInput(selectedRegion.founded);
   const stadiumDate = selectedStadium ? parseDateInput(selectedStadium.founded) : null;
   return {
@@ -821,7 +823,11 @@ function numerologyBlockHtml(f) {
     return '<div class="pm-unmatched">Set the fight location above to see the numerology edge for this card.</div>';
   }
 
-  const { scoreA, scoreB } = scoresForFight(f);
+  const scores = scoresForFight(f);
+  if (!scores) {
+    return '<div class="pm-unmatched">⏳ Waiting to confirm this region\'s timezone before scoring &mdash; check back shortly.</div>';
+  }
+  const { scoreA, scoreB } = scores;
   const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
   const marketFavName = favA ? f.fighterAName : f.fighterBName;
   const numFavMatched = scoreA.combined >= scoreB.combined ? f.matchedA : f.matchedB;
@@ -948,8 +954,9 @@ function fullMatchupHtml(f) {
 // location set).
 function cardTierKey(f) {
   if (!(f.matchedA && f.matchedB && selectedRegion)) return '';
-  const { scoreA, scoreB } = scoresForFight(f);
-  return edgeTierForGap(Math.abs(scoreA.combined - scoreB.combined)).key;
+  const scores = scoresForFight(f);
+  if (!scores) return '';
+  return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
 
 function renderFightCards() {
