@@ -963,6 +963,22 @@ async function loadEventsAndRender() {
     matchesByTournament.get(m.tournament).push(m);
   });
 
+  // Once a tournament's matches are all gone (no more games for it), forget
+  // its saved location - same idea as the UFC tracker clearing its shared
+  // location once a card wraps up - so if the same-named tournament recurs
+  // later at a possibly different city, it starts fresh instead of
+  // silently inheriting a stale one.
+  let prefsChanged = false;
+  Object.keys(tournamentLocationPrefs).forEach((key) => {
+    if (!matchesByTournament.has(key)) {
+      delete tournamentLocationPrefs[key];
+      tournamentState.delete(key);
+      tournamentSuggestions.delete(key);
+      prefsChanged = true;
+    }
+  });
+  if (prefsChanged) saveTournamentLocationPrefs(tournamentLocationPrefs);
+
   if (!allMatches.length) {
     document.getElementById('matchesContainer').innerHTML = '<div class="empty-state">No upcoming tennis matches found on Polymarket right now.</div>';
     return;

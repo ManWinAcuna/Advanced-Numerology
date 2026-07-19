@@ -131,6 +131,80 @@ let regionMode = 'us'; // 'us' | 'intl'
 let selectedRegion = null; // a US_STATES entry or an allIntlRegions() entry - both carry .name/.founded
 let selectedStadium = null;
 
+/* ===================== Location persistence ===================== */
+// Remembering the card's location across visits means the user doesn't have
+// to re-pick a state/stadium every single time they open the tracker - it
+// just stays put until the card it was set for has completely wrapped up
+// (no more games), at which point it clears itself automatically so the
+// next (different) card doesn't silently inherit a stale venue.
+const LOCATION_KEY = 'numerology_ufc_pm_location';
+
+function loadSavedLocation() {
+  try {
+    const raw = localStorage.getItem(LOCATION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveLocationState() {
+  localStorage.setItem(LOCATION_KEY, JSON.stringify({
+    regionMode,
+    regionName: selectedRegion ? selectedRegion.name : null,
+    stadiumId: selectedStadium ? selectedStadium.id : null,
+  }));
+}
+
+function clearSavedLocation() {
+  localStorage.removeItem(LOCATION_KEY);
+}
+
+// Clears the in-memory selection and resets the controls' UI to match -
+// called once the card's fights are all gone (no more games).
+function resetLocationSelection() {
+  if (!selectedRegion && !selectedStadium && regionMode === 'us') { clearSavedLocation(); return; }
+  regionMode = 'us';
+  selectedRegion = null;
+  selectedStadium = null;
+  clearSavedLocation();
+  document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.region === 'us'));
+  document.getElementById('pmRegionLabel').textContent = 'State';
+  populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
+  populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
+  document.getElementById('pmStateSelect').value = '';
+  populateStadiumSelect();
+  updateEditRegionBtnVisibility();
+  updateEditStadiumBtnVisibility();
+}
+
+// Applies whatever's saved to both the in-memory state and the location
+// controls' UI - called once at init, before the card's first render.
+function restoreSavedLocationIntoUI() {
+  const saved = loadSavedLocation();
+  if (!saved) return;
+
+  regionMode = saved.regionMode === 'intl' ? 'intl' : 'us';
+  document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.region === regionMode));
+  document.getElementById('pmRegionLabel').textContent = regionMode === 'intl' ? 'City / Region' : 'State';
+  populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
+  populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
+
+  const list = regionMode === 'us' ? US_STATES : allIntlRegions();
+  selectedRegion = saved.regionName ? (list.find((r) => r.name === saved.regionName) || null) : null;
+  if (selectedRegion) {
+    document.getElementById('pmStateSelect').value = regionMode === 'us'
+      ? String(US_STATES.findIndex((s) => s.name === selectedRegion.name))
+      : selectedRegion.id;
+  }
+
+  selectedStadium = saved.stadiumId ? (stadiums.find((s) => s.id === saved.stadiumId) || null) : null;
+  populateStadiumSelect(selectedStadium ? selectedStadium.id : '');
+
+  updateEditRegionBtnVisibility();
+  updateEditStadiumBtnVisibility();
+}
+
 function regionNoun() {
   return regionMode === 'intl' ? 'city / region' : 'state';
 }
@@ -299,6 +373,7 @@ function initLocationControls() {
   populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
   populateStadiumSelect();
   updateEditStadiumBtnVisibility();
+  restoreSavedLocationIntoUI();
 
   document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -884,6 +959,7 @@ function renderTradeFeeds() {
 }
 
 function updateNumerologyBlocks() {
+  saveLocationState();
   cardFights.forEach((f) => {
     const el = document.getElementById(`pm-num-${f.conditionId}`);
     if (el) el.innerHTML = numerologyBlockHtml(f);
@@ -928,6 +1004,7 @@ async function loadEventsAndRender() {
   if (!upcoming.length) {
     cardFights = [];
     document.getElementById('fightsContainer').innerHTML = '<div class="empty-state">No upcoming UFC fights found on Polymarket right now.</div>';
+    resetLocationSelection();
     return;
   }
 
