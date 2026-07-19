@@ -199,6 +199,60 @@ function formatMlbOdds(price) {
   return price != null ? `${Math.round(price * 100)}%` : '—';
 }
 
+// The stored prediction only ever kept team NAMES and the game's gamePk, not
+// individual roster ids, so the Insight tab re-derives the full roster live
+// from MLB's own boxscore via the same teamRosterInsightRows() (db-core.js)
+// the live tracker's Insight tab uses. Box scores stay queryable long after
+// a game ends, so this works for historical predictions too, not just
+// pending ones - same "ask live, never store a roster" philosophy as
+// fetchPitcherVsLineupDetail() below.
+async function fetchMlbMatchupInsightRows(p) {
+  if (!p.gamePk) return null;
+  const feed = await fetchGameLiveFeed(p.gamePk);
+  if (!feed) return null;
+
+  const season = new Date(p.gameTime).getFullYear();
+  const [managerHome, managerAway] = await Promise.all([
+    fetchTeamManager(feed.home.teamId, season),
+    fetchTeamManager(feed.away.teamId, season),
+  ]);
+  const allIds = [
+    feed.home.startingPitcherId, feed.away.startingPitcherId,
+    ...feed.home.batters.map((b) => b.id), ...feed.away.batters.map((b) => b.id),
+    managerHome && managerHome.id, managerAway && managerAway.id,
+  ];
+  const birthdates = await fetchPeopleBirthdates(allIds);
+
+  const sideFor = (teamName) => (normalizeName(feed.home.teamName) === normalizeName(teamName)
+    ? { side: feed.home, manager: managerHome }
+    : { side: feed.away, manager: managerAway });
+  const a = sideFor(p.teamAName);
+  const b = sideFor(p.teamBName);
+
+  return {
+    rowsA: teamRosterInsightRows(a.side, a.manager, birthdates),
+    rowsB: teamRosterInsightRows(b.side, b.manager, birthdates),
+  };
+}
+
+function mlbInsightTabHtml(p, rows, loading) {
+  if (loading) return '<div class="pm-unmatched">Loading roster insight&hellip;</div>';
+  if (!rows) return '<div class="pm-unmatched">Roster data isn\'t available for this game anymore.</div>';
+  return `
+    <div class="pm-insight-grid">
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(p.teamAName)}</div>
+        ${rows.rowsA.map(insightRowHtml).join('') || '<div class="empty-state">No roster data.</div>'}
+      </div>
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(p.teamBName)}</div>
+        ${rows.rowsB.map(insightRowHtml).join('') || '<div class="empty-state">No roster data.</div>'}
+      </div>
+    </div>
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only.</div>
+  `;
+}
+
 function mlbMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
@@ -214,11 +268,13 @@ function mlbMatchupModalHtml(p) {
     ? `<div class="breakdown-row"><span>Result</span><span>${mlbResultBadge(p)}</span></div>`
     : '';
 
-  return `
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(p.teamAName)} <span class="score-vs">&times;</span> ${escapeHtml(p.teamBName)}</div>
     </div>
     <div class="pm-breakdown-hint" style="text-align:center;">${escapeHtml(p.eventTitle)} &middot; ${formatMlbGameDate(p.gameTime)}</div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       <div class="pm-breakdown-col">
         <div class="pm-breakdown-name">${escapeHtml(p.teamAName)}</div>
@@ -234,16 +290,24 @@ function mlbMatchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
+  // Insight tab starts in its loading state - initMlbMatchupModal() fetches
+  // the real roster afterward and patches just that page's innerHTML in,
+  // so switching tabs mid-fetch doesn't get reset back to Breakdown.
+  return hero + modalTabsHtml(breakdown, mlbInsightTabHtml(p, null, true));
 }
 
 function initMlbMatchupModal() {
-  document.getElementById('mlbStatsTableBody').addEventListener('click', (e) => {
+  document.getElementById('mlbStatsTableBody').addEventListener('click', async (e) => {
     const row = e.target.closest('tr[data-condition-id]');
     if (!row) return;
     const p = currentMlbPredictions.find((x) => x.conditionId === row.dataset.conditionId);
     if (!p) return;
     document.getElementById('mlbStatsMatchupBody').innerHTML = mlbMatchupModalHtml(p);
     document.getElementById('mlbStatsMatchupOverlay').classList.add('active');
+
+    const rows = await fetchMlbMatchupInsightRows(p);
+    const insightPage = document.querySelector('#mlbStatsMatchupBody [data-page="insight"]');
+    if (insightPage) insightPage.innerHTML = mlbInsightTabHtml(p, rows, false);
   });
 
   document.getElementById('mlbStatsMatchupClose').addEventListener('click', () => {
@@ -252,6 +316,7 @@ function initMlbMatchupModal() {
   document.getElementById('mlbStatsMatchupOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'mlbStatsMatchupOverlay') document.getElementById('mlbStatsMatchupOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('mlbStatsMatchupBody');
 }
 
 /* ===================== Pitcher strikeout research signal ===================== */

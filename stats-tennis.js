@@ -213,6 +213,71 @@ function formatTennisOdds(price) {
   return price != null ? `${Math.round(price * 100)}%` : '—';
 }
 
+function tennisParseDateInput(value) {
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date();
+  date.setFullYear(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// Mirrors buildAllPlayers()/matchPlayer() in polymarket-tennis.js - the stored
+// prediction only ever kept the player's NAME, not their DOB, so the Insight
+// tab has to re-match it against the current roster the same way the live
+// tracker does. If a player was since renamed or removed, the match simply
+// comes back null and the Insight tab says so instead of guessing.
+function buildAllPlayers() {
+  const overrides = loadTennisPlayerOverrides();
+  const custom = loadCustomTennisPlayers();
+  const seedPlayers = TENNIS_PLAYERS.map((p, idx) => {
+    const id = `seed-${idx}`;
+    const override = overrides[id];
+    if (override && override.deleted) return null;
+    return override ? { id, ...override } : { id, name: p.name, dob: p.dob, tour: p.tour, tournament: p.tournament };
+  }).filter(Boolean);
+  return seedPlayers.concat(custom);
+}
+
+function matchPlayer(name, roster) {
+  const norm = normalizeName(name);
+  if (!norm) return null;
+
+  let found = roster.find((p) => normalizeName(p.name) === norm);
+  if (found) return found;
+
+  const tokens = norm.split(' ');
+  const first = tokens[0];
+  const last = tokens[tokens.length - 1];
+  found = roster.find((p) => {
+    const rTokens = normalizeName(p.name).split(' ');
+    return rTokens[0] === first && rTokens[rTokens.length - 1] === last;
+  });
+  return found || null;
+}
+
+function tennisInsightTabHtml(p) {
+  const roster = buildAllPlayers();
+  const matchedA = matchPlayer(p.playerAName, roster);
+  const matchedB = matchPlayer(p.playerBName, roster);
+  if (!matchedA || !matchedB) {
+    return '<div class="pm-unmatched">One or both players aren\'t in the current database anymore (renamed or removed since this pick was recorded), so a life path reading isn\'t available here.</div>';
+  }
+  const infoA = compatLifePathInfo(tennisParseDateInput(matchedA.dob));
+  const infoB = compatLifePathInfo(tennisParseDateInput(matchedB.dob));
+  const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  return `
+    <div class="pm-insight-grid">
+      ${personInsightHtml(matchedA.name, infoA.display, infoA.lookupValue)}
+      ${personInsightHtml(matchedB.name, infoB.display, infoB.lookupValue)}
+    </div>
+    <div class="pm-insight-pair">
+      <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
+      <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
+    </div>
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 function tennisMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
@@ -228,11 +293,13 @@ function tennisMatchupModalHtml(p) {
     ? `<div class="breakdown-row"><span>Result</span><span>${tennisResultBadge(p)}</span></div>`
     : '';
 
-  return `
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(p.playerAName)} <span class="score-vs">&times;</span> ${escapeHtml(p.playerBName)}</div>
     </div>
     <div class="pm-breakdown-hint" style="text-align:center;">${escapeHtml(p.eventTitle)} &middot; ${formatTennisMatchDate(p.matchTime)}</div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       <div class="pm-breakdown-col">
         <div class="pm-breakdown-name">${escapeHtml(p.playerAName)}</div>
@@ -248,6 +315,7 @@ function tennisMatchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
+  return hero + modalTabsHtml(breakdown, tennisInsightTabHtml(p));
 }
 
 function initTennisMatchupModal() {
@@ -266,6 +334,7 @@ function initTennisMatchupModal() {
   document.getElementById('tennisStatsMatchupOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'tennisStatsMatchupOverlay') document.getElementById('tennisStatsMatchupOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('tennisStatsMatchupBody');
 }
 
 async function refreshTennisAndRender() {

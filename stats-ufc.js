@@ -233,6 +233,70 @@ function formatOdds(price) {
   return price != null ? `${Math.round(price * 100)}%` : '—';
 }
 
+function ufcParseDateInput(value) {
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date();
+  date.setFullYear(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// Mirrors buildAllFighters()/matchFighter() in polymarket-ufc.js - the stored
+// prediction only ever kept the fighter's NAME, not their DOB, so the Insight
+// tab has to re-match it against the current roster the same way the live
+// tracker does. If a fighter was since renamed or removed, the match simply
+// comes back null and the Insight tab says so instead of guessing.
+function buildAllFighters() {
+  const overrides = loadFighterOverrides();
+  const custom = loadCustomFighters();
+  const seedFighters = UFC_FIGHTERS.map((f, idx) => {
+    const id = `seed-${idx}`;
+    const override = overrides[id];
+    return override ? { id, name: override.name, dob: override.dob } : { id, name: f.name, dob: f.dob };
+  });
+  return seedFighters.concat(custom);
+}
+
+function matchFighter(name, roster) {
+  const norm = normalizeName(name);
+  if (!norm) return null;
+
+  let found = roster.find((f) => normalizeName(f.name) === norm);
+  if (found) return found;
+
+  const tokens = norm.split(' ');
+  const first = tokens[0];
+  const last = tokens[tokens.length - 1];
+  found = roster.find((f) => {
+    const rTokens = normalizeName(f.name).split(' ');
+    return rTokens[0] === first && rTokens[rTokens.length - 1] === last;
+  });
+  return found || null;
+}
+
+function insightTabHtml(p) {
+  const roster = buildAllFighters();
+  const matchedA = matchFighter(p.fighterAName, roster);
+  const matchedB = matchFighter(p.fighterBName, roster);
+  if (!matchedA || !matchedB) {
+    return '<div class="pm-unmatched">One or both fighters aren\'t in the current database anymore (renamed or removed since this pick was recorded), so a life path reading isn\'t available here.</div>';
+  }
+  const infoA = compatLifePathInfo(ufcParseDateInput(matchedA.dob));
+  const infoB = compatLifePathInfo(ufcParseDateInput(matchedB.dob));
+  const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  return `
+    <div class="pm-insight-grid">
+      ${personInsightHtml(matchedA.name, infoA.display, infoA.lookupValue)}
+      ${personInsightHtml(matchedB.name, infoB.display, infoB.lookupValue)}
+    </div>
+    <div class="pm-insight-pair">
+      <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
+      <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
+    </div>
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 // Everything shown here was already captured on the Polymarket tracker the
 // moment the fight's edge was first displayed (recordPredictionIfNew in
 // polymarket-ufc.js) - this just replays it, it's not fetched fresh.
@@ -251,11 +315,13 @@ function matchupModalHtml(p) {
     ? `<div class="breakdown-row"><span>Result</span><span>${resultBadge(p)}</span></div>`
     : '';
 
-  return `
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(p.fighterAName)} <span class="score-vs">&times;</span> ${escapeHtml(p.fighterBName)}</div>
     </div>
     <div class="pm-breakdown-hint" style="text-align:center;">${escapeHtml(p.eventTitle)} &middot; ${formatFightDate(p.fightTime)}</div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       <div class="pm-breakdown-col">
         <div class="pm-breakdown-name">${escapeHtml(p.fighterAName)}</div>
@@ -271,6 +337,7 @@ function matchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
+  return hero + modalTabsHtml(breakdown, insightTabHtml(p));
 }
 
 function initMatchupModal() {
@@ -289,6 +356,7 @@ function initMatchupModal() {
   document.getElementById('statsMatchupOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'statsMatchupOverlay') document.getElementById('statsMatchupOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('statsMatchupBody');
 }
 
 async function refreshAndRender() {

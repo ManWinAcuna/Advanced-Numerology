@@ -528,32 +528,9 @@ function breakdownColumnHtml(teamName, score) {
   `;
 }
 
-// One team's roster reduced to {role, lookupValue} rows for the Insight tab -
-// pitcher, batters, and manager only (the franchise's zodiac-year score isn't
-// a person's life path, so it's left out of this reading on purpose).
-function teamRosterInsightRows(side, manager, birthdates) {
-  const rows = [];
-  const pitcherBd = birthdates.get(side.startingPitcherId);
-  if (pitcherBd && pitcherBd.birthDate) {
-    rows.push({ role: `SP ${pitcherBd.name}`, lookupValue: compatLifePathInfo(parseDateInput(pitcherBd.birthDate)).lookupValue });
-  }
-  side.batters.forEach((b) => {
-    const bd = birthdates.get(b.id);
-    if (!bd || !bd.birthDate) return;
-    rows.push({ role: `${b.pos} ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
-  });
-  if (manager) {
-    const bd = birthdates.get(manager.id);
-    if (bd && bd.birthDate) rows.push({ role: `Mgr ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
-  }
-  return rows;
-}
-
-function insightRowHtml(row) {
-  const insight = lifePathInsight(row.lookupValue);
-  const icons = insight.volatility.icon + (insight.athletic ? insight.athletic.icon : '');
-  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span>${escapeHtml(insight.theme)} ${icons}</span></div>`;
-}
+// teamRosterInsightRows()/insightRowHtml() now live in db-core.js (stats-mlb.js
+// needs the exact same roster-to-insight-rows conversion for its own matchup
+// modal, re-derived live from a resolved game's gamePk).
 
 // Research-based read per roster person (theme/volatility/athletic tag), plus
 // a relabeling of the pitcher-vs-lineup number that's already part of the
