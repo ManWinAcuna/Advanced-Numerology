@@ -69,8 +69,11 @@ async function checkTennisResults() {
 // shared with the Polymarket tracker's risk manager so the two can never
 // disagree.
 
+// Same real-edge-only headline as stats-ufc.js - tossups recorded but
+// excluded, tracked separately in the edge-tier table.
 function computeTennisStats(predictions) {
-  const resolved = predictions.filter((p) => p.result && !p.result.draw);
+  const resolvedAll = predictions.filter((p) => p.result && !p.result.draw);
+  const resolved = resolvedAll.filter(hasRealEdge);
   const wins = resolved.filter(isCorrectPick);
   const favoritePicks = resolved.filter((p) => p.pickType === 'favorite');
   const underdogPicks = resolved.filter((p) => p.pickType === 'underdog');
@@ -80,6 +83,7 @@ function computeTennisStats(predictions) {
   return {
     total: predictions.length,
     resolvedCount: resolved.length,
+    tossupResolvedCount: resolvedAll.length - resolved.length,
     pendingCount: predictions.filter((p) => !p.result).length,
     drawCount: predictions.filter((p) => p.result && p.result.draw).length,
     winsCount: wins.length,
@@ -107,19 +111,22 @@ function renderTennisHero(stats) {
   if (stats.resolvedCount === 0) {
     hero.innerHTML = `
       <div class="score-names">Numerology Win Rate</div>
-      <div class="empty-state">${stats.total} match${stats.total === 1 ? '' : 'es'} tracked, none resolved yet. Check back after they finish.</div>
+      <div class="empty-state">${stats.tossupResolvedCount
+        ? `Only tossups (no real edge) have resolved so far (${stats.tossupResolvedCount}) &mdash; see the edge-strength table below.`
+        : `${stats.total} match${stats.total === 1 ? '' : 'es'} tracked, none resolved yet. Check back after they finish.`}</div>
     `;
     return;
   }
 
   const extras = [];
+  if (stats.tossupResolvedCount) extras.push(`${stats.tossupResolvedCount} tossup${stats.tossupResolvedCount === 1 ? '' : 's'} excluded`);
   if (stats.pendingCount) extras.push(`${stats.pendingCount} pending`);
   if (stats.drawCount) extras.push(`${stats.drawCount} no contest`);
 
   hero.innerHTML = `
     <div class="score-names">Numerology Win Rate</div>
     <div class="score-big ${scoreClass(stats.overallWinPct)}">${stats.overallWinPct}<span class="score-out-of">%</span></div>
-    <div class="pm-breakdown-hint">${stats.winsCount} of ${stats.resolvedCount} resolved picks correct${extras.length ? ` &middot; ${extras.join(' &middot; ')}` : ''}</div>
+    <div class="pm-breakdown-hint">${stats.winsCount} of ${stats.resolvedCount} resolved real-edge picks correct${extras.length ? ` &middot; ${extras.join(' &middot; ')}` : ''}</div>
   `;
 }
 
@@ -136,6 +143,19 @@ function renderTennisBreakdown(stats) {
     ${tennisMeterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
     ${tennisMeterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
   `;
+}
+
+function renderTennisEdgeTiers(predictions) {
+  const tiers = computeEdgeTierStats(predictions);
+  document.getElementById('tennisStatsEdgeTiers').innerHTML = tiers.map((t) => `
+    <tr>
+      <td>${t.icon} ${t.label}</td>
+      <td>${t.count}</td>
+      <td>${t.winPct != null && t.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${scoreClass(t.winPct)}">${t.winPct}%</span>`
+        : `<span class="empty-state">${t.count ? `${t.wins}/${t.count} so far` : 'No data yet'}</span>`}</td>
+    </tr>
+  `).join('');
 }
 
 function renderTennisPriceBuckets(predictions) {
@@ -162,10 +182,17 @@ function formatTennisMatchDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function tennisEdgeCell(p) {
+  const gap = edgeGap(p);
+  const tier = edgeTierForGap(gap);
+  if (tier.key === 'none') return `<span class="empty-state">⚖️ Tossup (+${gap})</span>`;
+  return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
+}
+
 function renderTennisTable(predictions) {
   const tbody = document.getElementById('tennisStatsTableBody');
   if (!predictions.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No matches tracked yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No matches tracked yet.</td></tr>';
     return;
   }
 
@@ -175,6 +202,7 @@ function renderTennisTable(predictions) {
       <td>${formatTennisMatchDate(p.matchTime)}</td>
       <td>${escapeHtml(p.playerAName)} vs ${escapeHtml(p.playerBName)}</td>
       <td>${escapeHtml(p.numerologyFavorite)}</td>
+      <td>${tennisEdgeCell(p)}</td>
       <td>${p.pickType === 'favorite' ? 'Favorite' : 'Underdog'}</td>
       <td>${tennisResultBadge(p)}</td>
     </tr>
@@ -187,10 +215,14 @@ function formatTennisOdds(price) {
 
 function tennisMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
+  const gap = edgeGap(p);
+  const tier = edgeTierForGap(gap);
 
-  const signalHtml = agree
-    ? `✅ Numerology agreed with the market favorite (${escapeHtml(p.marketFavorite)})`
-    : `⚡ Numerology favored ${escapeHtml(p.numerologyFavorite)} while the market favored ${escapeHtml(p.marketFavorite)} &mdash; possible value on ${escapeHtml(p.numerologyFavorite)}`;
+  const signalHtml = tier.key === 'none'
+    ? `⚖️ Tossup (${p.numerologyScoreA} vs ${p.numerologyScoreB}) &mdash; no real numerology edge, excluded from the headline win rate`
+    : agree
+      ? `✅ ${tier.icon} ${tier.label} &mdash; numerology agreed with the market favorite (${escapeHtml(p.marketFavorite)})`
+      : `⚡ ${tier.icon} ${tier.label} &mdash; numerology favored ${escapeHtml(p.numerologyFavorite)} while the market favored ${escapeHtml(p.marketFavorite)} &mdash; possible value on ${escapeHtml(p.numerologyFavorite)}`;
 
   const resultRow = p.result
     ? `<div class="breakdown-row"><span>Result</span><span>${tennisResultBadge(p)}</span></div>`
@@ -213,7 +245,7 @@ function tennisMatchupModalHtml(p) {
         <div class="pm-breakdown-row"><span>📊 Market Odds</span><span>${formatTennisOdds(p.marketPriceB)}</span></div>
       </div>
     </div>
-    <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${signalHtml}</div>
+    <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
 }
@@ -242,6 +274,7 @@ async function refreshTennisAndRender() {
   const stats = computeTennisStats(predictions);
   renderTennisHero(stats);
   renderTennisBreakdown(stats);
+  renderTennisEdgeTiers(predictions);
   renderTennisPriceBuckets(predictions);
   renderTennisTable(predictions);
   document.getElementById('tennisStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;

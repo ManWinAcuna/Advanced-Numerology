@@ -3534,6 +3534,13 @@ body::after {
   color: var(--yellow);
 }
 
+/* A tossup (near-tied scores) deliberately reads muted, not like a pick. */
+.pm-signal.neutral {
+  background: rgba(160, 160, 160, 0.1);
+  border-left-color: var(--muted);
+  color: var(--muted);
+}
+
 .pm-trade-feed {
   border-top: 1px solid var(--border);
   padding-top: 10px;

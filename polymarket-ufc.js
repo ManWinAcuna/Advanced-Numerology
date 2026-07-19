@@ -791,17 +791,29 @@ function numerologyBlockHtml(f) {
 
   recordPredictionIfNew(f, scoreA, scoreB, marketFavName, numFavMatched.name, agree ? 'favorite' : 'underdog');
 
+  // A 70-vs-71 was never a pick - showing it as one would be a coin flip
+  // dressed up as a signal. Tossups get a neutral line and no bet pitch;
+  // real edges get their strength labeled so a 76-vs-41 visibly reads
+  // different from a 62-vs-55. (The prediction is still recorded above
+  // either way - the Stats page tracks tossups separately as a sanity
+  // check that they really do land ~50/50.)
+  const gap = Math.abs(scoreA.combined - scoreB.combined);
+  const tier = edgeTierForGap(gap);
   const pickPrice = scoreA.combined >= scoreB.combined ? f.priceA : f.priceB;
+
+  const signalHtml = tier.key === 'none'
+    ? `<div class="pm-signal neutral">⚖️ Too close to call (${scoreA.combined} vs ${scoreB.combined}) &mdash; no real numerology edge on this one</div>`
+    : `<div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
+      ? `✅ ${tier.icon} ${tier.label} &mdash; numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
+      : `⚡ ${tier.icon} ${tier.label} &mdash; numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>`;
 
   return `
     <div class="pm-numerology-clickable" data-condition-id="${f.conditionId}">
       <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(f.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(f.matchedB.name)} ${scoreB.combined}</span></div>
-      <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
-        ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
-        : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
+      ${signalHtml}
       <div class="pm-breakdown-hint">Tap for the full Day / State / Stadium breakdown &rarr;</div>
     </div>
-    ${riskManagerHtml(numFavMatched.name, pickPrice)}
+    ${tier.key === 'none' ? '' : riskManagerHtml(numFavMatched.name, pickPrice)}
   `;
 }
 

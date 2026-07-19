@@ -458,17 +458,27 @@ function numerologyBlockHtml(m) {
 
   recordPredictionIfNew(m, scoreA, scoreB, marketFavName, numFavMatched.name, agree ? 'favorite' : 'underdog');
 
+  // Same tossup handling as polymarket-ufc.js: a near-tie was never a pick,
+  // so it gets a neutral line and no bet pitch, while real edges get their
+  // strength labeled. Still recorded above either way - the Stats page
+  // tracks tossups separately as a ~50/50 sanity check.
+  const gap = Math.abs(scoreA.combined - scoreB.combined);
+  const tier = edgeTierForGap(gap);
   const pickPrice = scoreA.combined >= scoreB.combined ? m.priceA : m.priceB;
+
+  const signalHtml = tier.key === 'none'
+    ? `<div class="pm-signal neutral">⚖️ Too close to call (${scoreA.combined} vs ${scoreB.combined}) &mdash; no real numerology edge on this one</div>`
+    : `<div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
+      ? `✅ ${tier.icon} ${tier.label} &mdash; numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
+      : `⚡ ${tier.icon} ${tier.label} &mdash; numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>`;
 
   return `
     <div class="pm-numerology-clickable" data-condition-id="${m.conditionId}">
       <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(m.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(m.matchedB.name)} ${scoreB.combined}</span></div>
-      <div class="pm-signal ${agree ? 'agree' : 'disagree'}">${agree
-        ? `✅ Numerology agrees with the market favorite (${escapeHtml(marketFavName)})`
-        : `⚡ Numerology favors ${escapeHtml(numFavMatched.name)} while the market favors ${escapeHtml(marketFavName)} &mdash; possible value on ${escapeHtml(numFavMatched.name)}`}</div>
+      ${signalHtml}
       <div class="pm-breakdown-hint">Tap for the full Day / Region / Venue breakdown &rarr;</div>
     </div>
-    ${riskManagerHtml(numFavMatched.name, pickPrice)}
+    ${tier.key === 'none' ? '' : riskManagerHtml(numFavMatched.name, pickPrice)}
   `;
 }
 

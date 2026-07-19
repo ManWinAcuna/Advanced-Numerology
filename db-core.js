@@ -815,11 +815,73 @@ function isCorrectPick(p) {
   return !!(p.result && !p.result.draw && normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite));
 }
 
-// Buckets every resolved (non-draw) prediction by the numerology pick's
-// market price at the time, so "how has a pick like THIS actually done"
-// can be checked against a specific odds range.
+/* ===================== Edge strength tiers ===================== */
+// A 76-vs-41 and a 70-vs-71 both produce "numerology favors X," but only
+// one of them is a signal - the other is a coin flip dressed up as a pick,
+// and counting coin flips in the track record dilutes whatever real signal
+// exists. The gap between the two combined scores is tiered here; a gap
+// below REAL_EDGE_MIN_GAP is a tossup that gets recorded (so its ~50/50-ness
+// can be verified empirically) but excluded from headline win rates and the
+// risk manager's EV history. Both scores are already stored on every
+// prediction, so all of this applies retroactively to existing data.
+//
+// Thresholds are a starting guess, not doctrine - once the per-tier table
+// on the Stats page fills in, the data itself will show where real signal
+// starts, and these cutoffs can move to match.
+
+const REAL_EDGE_MIN_GAP = 5;
+
+const EDGE_TIERS = [
+  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 30, max: Infinity },
+  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 15, max: 30 },
+  { key: 'slight', label: 'Slight Edge', icon: '📈', min: REAL_EDGE_MIN_GAP, max: 15 },
+  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: REAL_EDGE_MIN_GAP },
+];
+
+function edgeGap(p) {
+  const a = Number(p.numerologyScoreA);
+  const b = Number(p.numerologyScoreB);
+  return (Number.isFinite(a) && Number.isFinite(b)) ? Math.abs(a - b) : 0;
+}
+
+function edgeTierForGap(gap) {
+  return EDGE_TIERS.find((t) => gap >= t.min && gap < t.max) || EDGE_TIERS[EDGE_TIERS.length - 1];
+}
+
+function hasRealEdge(p) {
+  return edgeGap(p) >= REAL_EDGE_MIN_GAP;
+}
+
+// Per-tier win rates - the direct empirical test of the core hypothesis: if
+// numerology works, win rate should climb as the gap widens, and the
+// tossup tier should sit near 50%.
+function computeEdgeTierStats(predictions) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw);
+
+  return EDGE_TIERS.map((tier) => {
+    const inTier = resolved.filter((p) => {
+      const gap = edgeGap(p);
+      return gap >= tier.min && gap < tier.max;
+    });
+    const wins = inTier.filter(isCorrectPick);
+    return {
+      key: tier.key,
+      label: tier.label,
+      icon: tier.icon,
+      count: inTier.length,
+      wins: wins.length,
+      winPct: inTier.length ? Math.round((wins.length / inTier.length) * 100) : null,
+    };
+  });
+}
+
+// Buckets every resolved (non-draw) REAL-EDGE prediction by the numerology
+// pick's market price at the time, so "how has a pick like THIS actually
+// done" can be checked against a specific odds range. Tossups are excluded
+// on purpose - they were never picks, and letting their coin-flip outcomes
+// into these numbers would contaminate the risk manager's EV math.
 function computeBucketStats(predictions) {
-  const resolved = predictions.filter((p) => p.result && !p.result.draw && numerologyPickPrice(p) != null);
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && numerologyPickPrice(p) != null && hasRealEdge(p));
 
   return PRICE_BUCKETS.map((bucket) => {
     const inBucket = resolved.filter((p) => {

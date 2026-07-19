@@ -52,6 +52,23 @@
 
     <div class="breakdown-section" id="statsBreakdown"></div>
 
+    <div class="box" id="statsEdgeTiersBox">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsEdgeTiersTable">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="statsEdgeTiers"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="box" id="statsPriceBucketsBox">
       <div class="box-label">Win Rate by Market Price</div>
       <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
@@ -79,6 +96,7 @@
               <th>Date</th>
               <th>Matchup</th>
               <th>Numerology Pick</th>
+              <th>Edge</th>
               <th>Type</th>
               <th>Result</th>
             </tr>
@@ -105,6 +123,23 @@
     <div class="score-hero" id="tennisStatsHero"></div>
 
     <div class="breakdown-section" id="tennisStatsBreakdown"></div>
+
+    <div class="box" id="tennisStatsEdgeTiersBox">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsEdgeTiersTable">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsEdgeTiers"></tbody>
+        </table>
+      </div>
+    </div>
 
     <div class="box" id="tennisStatsPriceBucketsBox">
       <div class="box-label">Win Rate by Market Price</div>
@@ -133,6 +168,7 @@
               <th>Date</th>
               <th>Matchup</th>
               <th>Numerology Pick</th>
+              <th>Edge</th>
               <th>Type</th>
               <th>Result</th>
             </tr>
