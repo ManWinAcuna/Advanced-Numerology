@@ -89,7 +89,9 @@ function attachDateMask(inputEl) {
 // name's key date on Wikidata" and nothing more.
 
 function fetchWikidataId(title) {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(title)}&format=json&origin=*`;
+  // redirects=1 so an alternate spelling/title ("Kitzbuehel" -> "Kitzbühel")
+  // resolves to the real article's item instead of coming back empty.
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&redirects=1&titles=${encodeURIComponent(title)}&format=json&origin=*`;
   return fetch(url)
     .then((res) => res.json())
     .then((data) => {
@@ -243,7 +245,10 @@ function extractInfoboxDayDate(wikitext) {
 }
 
 function fetchWikipediaWikitext(title) {
-  const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&origin=*`;
+  // redirects=1 so a page that's just "#REDIRECT [[Real Title]]" (very
+  // common for alternate names/spellings) resolves to the target article's
+  // actual content instead of the bare redirect line.
+  const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&redirects=1&prop=wikitext&format=json&origin=*`;
   return fetch(url)
     .then((res) => res.json())
     .then((data) => ((data.parse && data.parse.wikitext) ? data.parse.wikitext['*'] : null))

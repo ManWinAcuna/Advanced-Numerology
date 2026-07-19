@@ -1884,6 +1884,22 @@ body::after {
   gap: 12px;
 }
 
+/* Auto-detected tournament location - a suggestion the user confirms or
+   rejects, never silently applied (a wrong guess would quietly feed a bad
+   location into the numerology score with nothing visibly off). */
+.pm-location-suggestion {
+  background: #241a08;
+  border: 1px solid var(--yellow);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ===================== Calculator: Personal Hours ===================== */
 
 .hours-collapsible {

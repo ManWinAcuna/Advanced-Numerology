@@ -590,15 +590,244 @@ function venueOptionsHtml(regionMode, selectedVenue) {
     + '<option value="__add__">+ Add New Venue</option>';
 }
 
+/* ===================== Tournament location suggestion ===================== */
+// Best-effort auto-detection of a tournament's usual host city, so the user
+// doesn't have to already know where e.g. "Kitzbuehel" or "Estoril Open" is
+// played. This is a SUGGESTION the user must accept, never a silent
+// auto-fill - a generically-named tournament can genuinely resolve to the
+// wrong Wikipedia article entirely (a live test found "Swiss Open" redirects
+// to a golf tournament, not the tennis event Polymarket means here), and a
+// wrong location would quietly corrupt the numerology score with nothing
+// visibly off. Manual selection via the dropdowns below always remains the
+// reliable path regardless of whether a suggestion appears.
+
+// key -> 'loading' | 'none' | 'dismissed' | { city, state, country, venue }
+const tournamentSuggestions = new Map();
+
+// Strips the common wikitext decorations out of a single infobox field's
+// raw value: flag-icon templates, HTML comments, <ref> citations, wikilinks
+// (resolved to their display text), and stray tags.
+function cleanWikitextFragment(raw) {
+  return raw
+    .replace(/\{\{flagicon\|[^}]*\}\}/gi, '')
+    .replace(/\{\{flag\|([^}|]*)\}\}/gi, '$1')
+    .replace(/<ref[^>]*>[\s\S]*?<\/ref>|<ref[^>]*\/>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
+// A combined infobox "location" value looks like "Geneva, Switzerland" or
+// "Lincoln, Nebraska, U.S." - the last comma-separated part is the country
+// (or "U.S.", in which case the part before it is a state).
+function parseCommaLocation(text) {
+  const parts = text.split(',').map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const last = parts[parts.length - 1];
+  const isUS = /^(u\.?s\.?a?\.?|united states(?: of america)?)$/i.test(last);
+  if (isUS && parts.length >= 2) {
+    return { city: parts.length >= 3 ? parts[0] : null, state: parts[parts.length - 2], country: 'United States' };
+  }
+  return { city: parts.length >= 2 ? parts[0] : null, state: null, country: last };
+}
+
+// Real {{Infobox tennis tournament}} pages (e.g. "Austrian Open Kitzbühel")
+// use separate city/country/venue fields, not one combined "location" -
+// checked first since it's both more common and gives the venue for free.
+// Everything is restricted to roughly the first ~3000 characters of the
+// wikitext, which reliably covers only the page's own primary infobox - a
+// live test found a "location" field matching deep in the Kitzbühel *city*
+// article that actually belonged to an unrelated defunct 1971-2000 ski
+// event mentioned further down the same page, not the city itself.
+function extractTournamentLocation(wikitext, searchedName) {
+  const head = wikitext.slice(0, 3000);
+
+  const cityMatch = /\|\s*city\s*=\s*([^\n]+)/i.exec(head);
+  const countryMatch = /\|\s*country\s*=\s*([^\n]+)/i.exec(head);
+  const venueMatch = /\|\s*venue\s*=\s*([^\n]+)/i.exec(head);
+  const venue = venueMatch ? cleanWikitextFragment(venueMatch[1]) : null;
+
+  if (cityMatch || countryMatch) {
+    const city = cityMatch ? cleanWikitextFragment(cityMatch[1]) : null;
+    const country = countryMatch ? cleanWikitextFragment(countryMatch[1]) : null;
+    if (city || country) return { city, state: null, country, venue };
+  }
+
+  const locationMatch = /\|\s*location\s*=\s*([^\n]+)/i.exec(head);
+  if (locationMatch) {
+    const parsed = parseCommaLocation(cleanWikitextFragment(locationMatch[1]));
+    if (parsed) return { ...parsed, venue };
+  }
+
+  // The tournament name resolved straight to a place article (e.g.
+  // "Granby" -> the town of Granby) rather than a dedicated tournament
+  // article - the page's own subject IS the location in that case.
+  const subdivTypeMatch = /\|\s*subdivision_type\s*=\s*([^\n]+)/i.exec(head);
+  const subdivNameMatch = /\|\s*subdivision_name\s*=\s*([^\n]+)/i.exec(head);
+  if (subdivTypeMatch && subdivNameMatch && /country/i.test(subdivTypeMatch[1])) {
+    const country = cleanWikitextFragment(subdivNameMatch[1]);
+    const isUS = /^(united states|u\.?s\.?a?\.?)$/i.test(country);
+    let state = null;
+    if (isUS) {
+      const subdivType1Match = /\|\s*subdivision_type1\s*=\s*([^\n]+)/i.exec(head);
+      const subdivName1Match = /\|\s*subdivision_name1\s*=\s*([^\n]+)/i.exec(head);
+      if (subdivType1Match && subdivName1Match && /state/i.test(subdivType1Match[1])) {
+        state = cleanWikitextFragment(subdivName1Match[1]);
+      }
+    }
+    return { city: searchedName, state, country: isUS ? 'United States' : country, venue: null };
+  }
+
+  return null;
+}
+
+// The tournament group key is the grouping/display name (kept as-is so
+// qualifying rounds stay a distinct group from the main draw), but Polymarket
+// tacks on suffixes like ", Qualification" that have no corresponding
+// Wikipedia article - stripped only for the search query itself.
+function tournamentSearchName(tournamentKey) {
+  return tournamentKey.replace(/,?\s*qualification\s*$/i, '').trim();
+}
+
+function lookupTournamentLocation(tournamentName) {
+  const searchName = tournamentSearchName(tournamentName);
+  return fetchWikipediaWikitext(searchName).then((wikitext) => (
+    wikitext ? extractTournamentLocation(wikitext, searchName) : null
+  ));
+}
+
+function suggestionLabel(suggestion) {
+  const place = suggestion.state
+    ? `${suggestion.city ? suggestion.city + ', ' : ''}${suggestion.state}`
+    : `${suggestion.city ? suggestion.city + ', ' : ''}${suggestion.country}`;
+  return suggestion.venue ? `${place} (${suggestion.venue})` : place;
+}
+
+function suggestionBannerHtml(key) {
+  const suggestion = tournamentSuggestions.get(key);
+  if (!suggestion || suggestion === 'none' || suggestion === 'dismissed') return '';
+  if (suggestion === 'loading') {
+    return '<div class="pm-location-suggestion">🔍 Checking where this tournament is usually played&hellip;</div>';
+  }
+  return `
+    <div class="pm-location-suggestion">
+      📍 Guessed location: <strong>${escapeHtml(suggestionLabel(suggestion))}</strong> - is this right?
+      <button class="btn-link" data-accept-suggestion="${escapeHtml(key)}" type="button">Use this</button>
+      <button class="btn-link" data-dismiss-suggestion="${escapeHtml(key)}" type="button">No, I'll set it</button>
+    </div>
+  `;
+}
+
+function updateTournamentSuggestionUI(key) {
+  const groupEl = findTournamentGroupEl(key);
+  if (!groupEl) return;
+  const wrap = groupEl.querySelector('.pm-location-suggestion-wrap');
+  if (!wrap) return;
+  const st = getTournamentState(key);
+  wrap.innerHTML = st.selectedRegion ? '' : suggestionBannerHtml(key);
+}
+
+function ensureTournamentSuggestion(key) {
+  if (tournamentSuggestions.has(key)) return;
+  tournamentSuggestions.set(key, 'loading');
+  lookupTournamentLocation(key).then((loc) => {
+    tournamentSuggestions.set(key, loc || 'none');
+    updateTournamentSuggestionUI(key);
+  });
+}
+
+// Once the region is settled, also try to auto-add/select the detected
+// venue - same founding-date lookup the manual "+ Add New Venue" form uses
+// (no country-fallback here: a specific stadium/venue's own opening date is
+// already the concrete, official record, unlike a city that may only have
+// an ancient, undocumented-to-the-day history).
+function applyDetectedVenue(key, venueName) {
+  const st = getTournamentState(key);
+  const existing = venues.find((v) => v.name.toLowerCase() === venueName.toLowerCase());
+  if (existing) {
+    st.selectedVenue = existing;
+    persistTournamentState(key);
+    updateTournamentMatches(key);
+    return;
+  }
+
+  const regionFields = st.regionMode === 'us' ? { state: st.selectedRegion.name } : { region: st.selectedRegion.name };
+  lookupKeyDateByName(venueName).then((info) => {
+    if (!info) return; // couldn't confirm a founding date - leave venue unset, region alone still applies
+    const venue = { id: uid(), name: venueName, founded: info.date, ...regionFields };
+    venues.push(venue);
+    saveTennisVenues(venues);
+    st.selectedVenue = venue;
+    persistTournamentState(key);
+    updateTournamentMatches(key);
+  });
+}
+
+// Applies an accepted suggestion: matches an existing US state or saved
+// international region by name, or - for a new international city - fetches
+// its founding date (same country-fallback lookup the manual "+ Add New
+// City / Region" flow uses) and adds it before selecting it.
+function acceptTournamentSuggestion(key) {
+  const suggestion = tournamentSuggestions.get(key);
+  if (!suggestion || suggestion === 'loading' || suggestion === 'none' || suggestion === 'dismissed') return;
+  const st = getTournamentState(key);
+
+  const finish = () => {
+    persistTournamentState(key);
+    tournamentSuggestions.delete(key);
+    renderMatchesContainer();
+    if (suggestion.venue) applyDetectedVenue(key, suggestion.venue);
+  };
+
+  if (suggestion.state) {
+    const stateObj = US_STATES.find((s) => s.name.toLowerCase() === suggestion.state.toLowerCase());
+    if (stateObj) {
+      st.regionMode = 'us';
+      st.selectedRegion = stateObj;
+      st.selectedVenue = null;
+      finish();
+      return;
+    }
+  }
+
+  const cityName = suggestion.city || suggestion.country;
+  const regions = loadIntlRegions();
+  const existing = regions.find((r) => r.name.toLowerCase() === cityName.toLowerCase());
+  if (existing) {
+    st.regionMode = 'intl';
+    st.selectedRegion = existing;
+    st.selectedVenue = null;
+    finish();
+    return;
+  }
+
+  lookupPlaceFoundingDate(cityName).then((info) => {
+    if (!info) {
+      alert(`Guessed "${cityName}" as the location, but couldn't automatically find its founding date - please add it yourself via "+ Add New City / Region".`);
+      return;
+    }
+    const region = { id: uid(), name: cityName, founded: info.date };
+    regions.push(region);
+    saveIntlRegions(regions);
+    st.regionMode = 'intl';
+    st.selectedRegion = region;
+    st.selectedVenue = null;
+    finish();
+  });
+}
+
 function tournamentGroupHtml(key, matches) {
   const st = getTournamentState(key);
   const regionLabel = st.regionMode === 'intl' ? 'City / Region' : 'State';
+  if (!st.selectedRegion) ensureTournamentSuggestion(key);
 
   return `
     <div class="box pm-tournament-group" data-tournament="${escapeHtml(key)}">
       <div class="pm-tournament-header">
         <span class="pm-tournament-name">🎾 ${escapeHtml(key)}</span>
       </div>
+      <div class="pm-location-suggestion-wrap">${st.selectedRegion ? '' : suggestionBannerHtml(key)}</div>
       <div class="hours-toggle ufc-region-toggle pm-tournament-region-toggle">
         <button type="button" class="hours-toggle-btn ${st.regionMode === 'us' ? 'active' : ''}" data-region="us">🇺🇸 United States</button>
         <button type="button" class="hours-toggle-btn ${st.regionMode === 'intl' ? 'active' : ''}" data-region="intl">🌍 International</button>
@@ -940,6 +1169,20 @@ function initLocationModals() {
 
 function initTournamentLocationControls() {
   document.getElementById('matchesContainer').addEventListener('click', (e) => {
+    const acceptBtn = e.target.closest('[data-accept-suggestion]');
+    if (acceptBtn) {
+      acceptTournamentSuggestion(acceptBtn.dataset.acceptSuggestion);
+      return;
+    }
+
+    const dismissBtn = e.target.closest('[data-dismiss-suggestion]');
+    if (dismissBtn) {
+      const key = dismissBtn.dataset.dismissSuggestion;
+      tournamentSuggestions.set(key, 'dismissed');
+      updateTournamentSuggestionUI(key);
+      return;
+    }
+
     const toggleBtn = e.target.closest('.pm-tournament-region-toggle .hours-toggle-btn');
     if (!toggleBtn) return;
     const groupEl = toggleBtn.closest('.pm-tournament-group');
