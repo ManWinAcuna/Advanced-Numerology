@@ -1353,6 +1353,7 @@ const MLB_COMPONENT_LABELS = {
   franchise: 'Franchise',
   manager: 'Manager',
   composite: 'Full Composite',
+  reweighted: 'Reweighted V2',
 };
 
 // Collapses a computeTeamComposite() parts array into one score per component,
@@ -1371,6 +1372,60 @@ function extractComponents(parts) {
   });
   if (batterScores.length) out.batters = Math.round(batterScores.reduce((a, b) => a + b, 0) / batterScores.length);
   return out;
+}
+
+// The live composite's weighting expressed over the same six stored
+// components, so any weighting can be recomputed apples-to-apples from a
+// prediction's stored components alone - no re-scoring, no re-fetching.
+// batters at 0.40 exactly reproduces the eight individual 0.05 batter weights
+// (0.05 x 8 = 0.40 x their average).
+const MLB_ROLE_WEIGHTS_CURRENT = {
+  pitcher: 0.24,
+  pitcherMatchup: 0.15,
+  catcher: 0.11,
+  batters: 0.40,
+  franchise: 0.17,
+  manager: 0.08,
+};
+
+// A reworked, data-informed weighting. The live weights above were an up-front
+// guess with nothing behind them; these lean on what the component-signal
+// analysis actually found over ~280 resolved games - the Manager score beat
+// the market most (~+8 pts) and the Starting Pitcher next (~+3), while the
+// Catcher ran negative (~-3) and the batter average ~flat. So Manager and
+// Pitcher carry the most weight here, Catcher and Batters the least. Kept as
+// its own set so it can run in PARALLEL with the live model for out-of-sample
+// validation before it's ever trusted to place a bet: the +8 is only ~2-3
+// standard errors, promising but not proven, and its edge measured on the same
+// games that chose these weights is circular. The honest test is games from
+// MLB_V2_SINCE forward.
+const MLB_ROLE_WEIGHTS_V2 = {
+  pitcher: 0.30,
+  manager: 0.30,
+  pitcherMatchup: 0.15,
+  franchise: 0.10,
+  batters: 0.10,
+  catcher: 0.05,
+};
+
+// The date the V2 weights were fixed. A resolved game on or after this was NOT
+// used to choose the weights, so it's a fair out-of-sample test of them.
+const MLB_V2_SINCE = '2026-07-19';
+
+// Re-derives a team's composite from its stored per-component scores under an
+// arbitrary weight map - the whole reason components are stored. Skips any
+// component the game was missing, normalizing by the weights actually present.
+function mlbCompositeFromComponents(comp, weights) {
+  if (!comp) return null;
+  let sum = 0;
+  let wsum = 0;
+  MLB_COMPONENT_KEYS.forEach((k) => {
+    const w = weights[k] || 0;
+    if (comp[k] == null || !w) return;
+    sum += comp[k] * w;
+    wsum += w;
+  });
+  return wsum ? Math.round(sum / wsum) : null;
 }
 
 // g.enrichState is the live tracker's polling state machine ('loading' /

@@ -613,8 +613,11 @@ function computeComponentSignalStats(predictions) {
   const resolved = predictions.filter((p) => p.result && !p.result.draw && p.components && p.components.A && p.components.B);
   const priceOf = (p, name) => (normalizeName(p.teamAName) === normalizeName(name) ? p.marketPriceA : p.marketPriceB);
 
-  const statFor = (scoreAOf, scoreBOf) => {
-    const picks = resolved
+  // Beat-the-market read for one "picker" over an arbitrary game list: for each
+  // game it favors the team it scores higher, then compares how often that team
+  // won to how often the market said they would.
+  const statOver = (list, scoreAOf, scoreBOf) => {
+    const picks = list
       .map((p) => {
         const a = scoreAOf(p);
         const b = scoreBOf(p);
@@ -632,6 +635,9 @@ function computeComponentSignalStats(predictions) {
     const edge = (winPct != null && marketPct != null) ? winPct - marketPct : null;
     return { count: n, wins, winPct, marketPct, edge };
   };
+  const statFor = (scoreAOf, scoreBOf) => statOver(resolved, scoreAOf, scoreBOf);
+  const v2A = (p) => mlbCompositeFromComponents(p.components.A, MLB_ROLE_WEIGHTS_V2);
+  const v2B = (p) => mlbCompositeFromComponents(p.components.B, MLB_ROLE_WEIGHTS_V2);
 
   const rows = MLB_COMPONENT_KEYS.map((key) => ({
     key,
@@ -639,32 +645,50 @@ function computeComponentSignalStats(predictions) {
     ...statFor((p) => p.components.A[key], (p) => p.components.B[key]),
   }));
   rows.push({
+    key: 'reweighted',
+    label: MLB_COMPONENT_LABELS.reweighted,
+    ...statFor(v2A, v2B),
+  });
+  rows.push({
     key: 'composite',
     label: MLB_COMPONENT_LABELS.composite,
     ...statFor((p) => p.numerologyScoreA, (p) => p.numerologyScoreB),
   });
 
   rows.sort((a, b) => (b.edge == null ? -Infinity : b.edge) - (a.edge == null ? -Infinity : a.edge));
-  return rows;
+
+  // The honest test of the V2 weights: games played AFTER those weights were
+  // fixed, which had no hand in choosing them. Grows over time; starts empty
+  // since the backfill only reaches yesterday. The cutoff is noon UTC, not
+  // midnight, because gameTime is UTC and a night game spills past midnight
+  // into the next UTC day - no MLB game starts between ~04:00 and ~17:00 UTC,
+  // so noon cleanly separates one day's night games from the next day's,
+  // keeping yesterday's late games in-sample where they belong.
+  const oosCutoff = MLB_V2_SINCE + 'T12:00:00.000Z';
+  const oosList = resolved.filter((p) => p.gameTime >= oosCutoff);
+  const v2OutOfSample = statOver(oosList, v2A, v2B);
+
+  return { rows, v2OutOfSample };
 }
 
 function renderMlbComponentSignal(predictions, suffix = '') {
   const el = document.getElementById('mlbComponentSignal' + suffix);
   if (!el) return;
-  const rows = computeComponentSignalStats(predictions);
+  const { rows, v2OutOfSample } = computeComponentSignalStats(predictions);
   const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
   if (!maxCount) {
     el.innerHTML = '<div class="empty-state">No resolved games with component data yet &mdash; run the backfill (or wait for tracked games to finish) to populate this.</div>';
     return;
   }
+  const rowMarker = { composite: '🎯 ', reweighted: '⚡ ' };
   const body = rows.map((r) => {
-    const isComposite = r.key === 'composite';
+    const isModel = r.key === 'composite' || r.key === 'reweighted';
     const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
       ? `<span class="score-inline ${r.edge > 0 ? 'good' : (r.edge < 0 ? 'bad' : '')}">${r.edge > 0 ? '+' : ''}${r.edge}</span>`
       : `<span class="empty-state">${r.count ? 'thin' : '—'}</span>`;
     return `
-      <tr${isComposite ? ' style="border-top:2px solid var(--border);"' : ''}>
-        <td>${isComposite ? '🎯 ' : ''}${escapeHtml(r.label)}</td>
+      <tr${isModel ? ' style="border-top:2px solid var(--border);"' : ''}>
+        <td>${rowMarker[r.key] || ''}${escapeHtml(r.label)}</td>
         <td>${r.count}</td>
         <td>${r.winPct != null ? `${r.winPct}%` : '—'}</td>
         <td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td>
@@ -672,11 +696,21 @@ function renderMlbComponentSignal(predictions, suffix = '') {
       </tr>
     `;
   }).join('');
+
+  // The V2 row's edge above is in-sample (its weights were chosen from these
+  // very games), so it's optimistic. This line is the number that actually
+  // matters - V2 measured only on games played since the weights were fixed.
+  const oos = v2OutOfSample;
+  const oosLine = oos.count >= MIN_BUCKET_SAMPLE
+    ? `⚡ <b>Reweighted V2, out-of-sample</b> (games since ${MLB_V2_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the in-sample edge above was fit to the past.`
+    : `⚡ <b>Reweighted V2</b> leans on the components above (Manager &amp; Pitcher up, Catcher &amp; Batters down). Its edge in the table is <b>in-sample</b> &mdash; those weights were picked from this same data, so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> played since ${MLB_V2_SINCE} so far. Watch that number as new games resolve.`;
+
   el.innerHTML = `
     <table class="astro-table">
       <thead><tr><th>Signal</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
       <tbody>${body}</tbody>
     </table>
+    <div class="mode-desc" style="margin-top:10px;">${oosLine}</div>
   `;
 }
 
