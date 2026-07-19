@@ -842,12 +842,13 @@ function tournamentGroupHtml(key, matches) {
   if (!st.selectedRegion) ensureTournamentSuggestion(key);
 
   // The tournament name links out to a Google search built from one of its
-  // actual matchups ("A vs B where is the game") - the quickest way to find
-  // where a tournament is played when the Wikipedia auto-suggestion can't
+  // actual matchups, asking in one query for everything the location form
+  // needs: the host city, the venue, and the venue's founding date - the
+  // quickest way to fill it all in when the Wikipedia auto-suggestion can't
   // (generic names like "Lincoln" or "Granby" resolve to disambiguation
   // pages, not a tournament article).
   const searchMatch = matches[0];
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchMatch.playerAName} vs ${searchMatch.playerBName} where is the game`)}`;
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchMatch.playerAName} vs ${searchMatch.playerBName} where is the game, what venue, and the venue's founding date`)}`;
 
   return `
     <div class="box pm-tournament-group" data-tournament="${escapeHtml(key)}">
