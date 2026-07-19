@@ -893,6 +893,25 @@ function saveMlbPitcherKSignals(signals) {
   cloudPushKey(MLB_PITCHER_K_SIGNALS_KEY);
 }
 
+// Marks how far the Stats page's historical backfill has already caught up,
+// so a later click tops up only the new gap instead of re-walking (and
+// re-fetching schedules/box scores/prices for) the full window every time.
+const MLB_BACKFILL_STATE_KEY = 'numerology_mlb_backfill_state';
+
+function loadMlbBackfillState() {
+  try {
+    const raw = localStorage.getItem(MLB_BACKFILL_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveMlbBackfillState(state) {
+  localStorage.setItem(MLB_BACKFILL_STATE_KEY, JSON.stringify(state));
+  cloudPushKey(MLB_BACKFILL_STATE_KEY);
+}
+
 /* ===================== Shared athlete scoring (fighters/players/MLB roster) ===================== */
 // Day 60/Venue 15/Region 25 (or Day 75/Region 25 without a venue) blend -
 // used for a single person (or, for MLB, any one entity - a batter, the
@@ -1169,9 +1188,9 @@ const MLB_TEAM_FOUNDING_DATES = {
 const MLB_ROLE_WEIGHTS = {
   pitcher: 0.24,
   pitcherMatchup: 0.15, // pitcher's life path vs. the opposing lineup's,
-  // averaged across all 9 batters (pitcherVsLineupScore in polymarket-mlb.js) -
-  // the one place the two teams' numerology actually meets head-to-head,
-  // instead of each side only ever being scored against the day/venue.
+  // averaged across all 9 batters (pitcherVsLineupScore below) - the one
+  // place the two teams' numerology actually meets head-to-head, instead of
+  // each side only ever being scored against the day/venue.
   catcher: 0.11,
   batter: 0.05, // each of the 8 non-catcher batters
   franchise: 0.17, // Now backed by a real founding date (MLB_TEAM_FOUNDING_DATES
@@ -1179,11 +1198,136 @@ const MLB_ROLE_WEIGHTS = {
   // day/stadium/state blend like everything else - back to its full weight
   // now that the "we only have the year" limitation is gone. A team missing
   // from that table falls back to a thinner zodiac-year-only score, weighted
-  // down instead (franchiseZodiacOnly below) - see computeTeamComposite in
-  // polymarket-mlb.js.
+  // down instead (franchiseZodiacOnly below) - see computeTeamComposite below.
   franchiseZodiacOnly: 0.05,
   manager: 0.08,
 };
+
+// The calendar date a game falls on at the venue - same pattern as
+// currentMatchDateISO in polymarket-ufc.js/polymarket-tennis.js (kept as a
+// separate, differently-shaped function per sport rather than forcing one
+// signature - MLB's region lives per-game on g itself, so this takes the
+// whole game object). Computed fresh on every call, never cached, so it can
+// re-trigger the timezone lookup for a US venue this never needs (the fixed
+// lookup resolves instantly) or an international one (Toronto) whose zone
+// may still be in flight. Returns null when unconfirmed - callers must not
+// score against a guess. onTimezoneResolved is an optional callback fired
+// once an in-flight lookup completes (the live tracker uses it to re-render
+// the card; a one-shot historical backfill has nothing live to re-render, so
+// it's safe to omit - though the backfill path should already have awaited
+// the region's timezone before ever getting here, since that branch existing
+// at all means the calling code didn't score this game yet).
+function currentMlbMatchDateISO(g, onTimezoneResolved) {
+  if (g.regionMode === 'us') return localMatchDateISO(g.gameStartTime, 'us', g.region);
+  if (g.region && !g.region.timezone) {
+    ensureIntlRegionTimezone(g.region, onTimezoneResolved || (() => {}));
+  }
+  return localMatchDateISO(g.gameStartTime, 'intl', g.region);
+}
+
+// Pitcher vs. opposing lineup, averaged across all 9 batters into the one
+// "does this pitcher's number play well against this specific lineup" score
+// that feeds MLB_ROLE_WEIGHTS.pitcherMatchup above. batters is looked up from
+// the shared birthdates map rather than passed pre-parsed, since both the
+// live tracker and the historical backfill build opposingBatters the same
+// way (a roster array of { id, pos }) but never keep parsed DOB objects
+// lying around.
+function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
+  const batters = opposingBatters
+    .map((b) => {
+      const bd = birthdates.get(b.id);
+      return bd && bd.birthDate ? { name: bd.name, pos: b.pos, dobDate: parseDateInput(bd.birthDate) } : null;
+    })
+    .filter(Boolean);
+  const rows = pitcherVsLineupBreakdown(pitcherDobDate, batters);
+  if (!rows.length) return null;
+  return Math.round(rows.reduce((s, r) => s + r.combined, 0) / rows.length);
+}
+
+// The 13-component weighted composite for one side of a game: starting
+// pitcher, catcher, the 8 other batters (flat weight), the franchise (scored
+// against its founding year like a birthdate), the manager, and the
+// pitcher-vs-opposing-lineup matchup edge - every person-vs-date factor runs
+// through the exact same computeFighterScore() UFC uses, weighted-averaged
+// across a roster instead of standing alone. g is a plain object shape (not
+// a class) so both the live tracker (polymarket-mlb.js, enriched from
+// polling) and the historical backfill (stats-mlb.js, enriched once from an
+// already-finished game) can build one and score it identically - nothing
+// here cares how g got populated, only that it's fully populated.
+function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
+  const side = sideLetter === 'A' ? g.sideA : g.sideB;
+  const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
+  const teamInfo = sideLetter === 'A' ? g.teamInfoA : g.teamInfoB;
+  const manager = sideLetter === 'A' ? g.managerA : g.managerB;
+
+  const matchDateISO = currentMlbMatchDateISO(g, onTimezoneResolved);
+  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
+  const matchDate = parseDateInput(matchDateISO);
+  const stateDate = g.region ? parseDateInput(g.region.founded) : null;
+  const stadiumDate = g.stadiumFounded ? parseDateInput(g.stadiumFounded) : null;
+
+  const parts = [];
+  const pitcherBd = g.birthdates.get(side.startingPitcherId);
+  if (pitcherBd && pitcherBd.birthDate) {
+    parts.push({ role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
+
+    const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
+    if (matchupScore != null) {
+      parts.push({ role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
+    }
+  }
+  side.batters.forEach((b) => {
+    const bd = g.birthdates.get(b.id);
+    if (!bd || !bd.birthDate) return;
+    const weight = b.pos === 'C' ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
+    parts.push({ role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+  });
+  if (teamInfo) {
+    const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
+    if (foundingISO) {
+      // A real founding date (day/month/year, sourced from CUE) - scores
+      // exactly like any other entity through computeFighterScore, at full
+      // weight, instead of the thinner zodiac-only fallback below.
+      const foundingDate = parseDateInput(foundingISO);
+      parts.push({ role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate) });
+    } else if (teamInfo.firstYearOfPlay) {
+      // No real date for this team - MLB's own API only gives a founding
+      // YEAR, never a month/day, and (per explicit instruction) no
+      // fabricated "January 1st" stand-in date either. The one thing a bare
+      // year genuinely determines is which Vietnamese zodiac year it falls
+      // in, so that's the only axis scored here - July 1st is just an anchor
+      // safely past any possible Lunar New Year boundary (always Jan 21-Feb
+      // 20) so getChineseZodiacYear resolves the correct animal for that
+      // calendar year without claiming to know the real founding date.
+      const franchiseYearAnchor = new Date(Number(teamInfo.firstYearOfPlay), 6, 1);
+      const franchiseSign = getChineseZodiacYear(franchiseYearAnchor);
+      const todaySign = getChineseZodiacYear(matchDate);
+      const zodiacScore = vietnameseCompat(franchiseSign, todaySign);
+      parts.push({ role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchiseZodiacOnly, score: { combined: zodiacScore } });
+    }
+  }
+  if (manager) {
+    const bd = g.birthdates.get(manager.id);
+    if (bd && bd.birthDate) parts.push({ role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+  }
+
+  if (!parts.length) return null;
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
+  const combined = Math.round(parts.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
+  return { combined, parts };
+}
+
+// g.enrichState is the live tracker's polling state machine ('loading' /
+// 'pending-lineup' / 'pending-location' / 'ready' / 'error' / 'unmatched');
+// a historical backfill has no polling to do, so it just sets 'ready'
+// directly once everything's been fetched once.
+function scoresForGame(g, onTimezoneResolved) {
+  if (g.enrichState !== 'ready') return null;
+  const scoreA = computeTeamComposite(g, 'A', onTimezoneResolved);
+  const scoreB = computeTeamComposite(g, 'B', onTimezoneResolved);
+  if (!scoreA || !scoreB) return null;
+  return { scoreA, scoreB };
+}
 
 /* ===================== UFC pick-price buckets (risk manager) ===================== */
 // Shared by the Stats page (which displays the win rate per bucket) and the
@@ -1335,6 +1479,7 @@ const CLOUD_SYNC_FIELDS = {
   [MLB_PREDICTIONS_KEY]: 'mlbPredictions',
   [MLB_VENUES_KEY]: 'mlbVenues',
   [MLB_PITCHER_K_SIGNALS_KEY]: 'mlbPitcherKSignals',
+  [MLB_BACKFILL_STATE_KEY]: 'mlbBackfillState',
 };
 
 function cloudPushKey(storageKey) {

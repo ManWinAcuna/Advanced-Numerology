@@ -31,25 +31,39 @@
 
   <h1 class="page-title">📈 Stats &mdash; Numerology Track Record</h1>
 
-  <div style="display:flex; gap:12px; flex-wrap:wrap;">
-    <div class="box stats-sport-box">
-      <div class="box-label">Sport</div>
-      <select id="statsSportSelect">
-        <option value="ufc">🥊 UFC</option>
-        <option value="tennis">🎾 Tennis</option>
-        <option value="mlb">⚾ MLB</option>
-        <option value="nba" disabled>🏀 NBA (Coming Soon)</option>
-        <option value="nfl" disabled>🏈 NFL (Coming Soon)</option>
-      </select>
+  <div class="compat-mode-select" id="statsSportPicker">
+    <a class="mode-card" href="#" data-sport="ufc">
+      <div class="mode-icon">🥊</div>
+      <div class="mode-title">UFC</div>
+      <div class="mode-desc">Win-rate track record for the UFC numerology edge.</div>
+    </a>
+    <a class="mode-card" href="#" data-sport="tennis">
+      <div class="mode-icon">🎾</div>
+      <div class="mode-title">Tennis</div>
+      <div class="mode-desc">Win-rate track record for the Tennis numerology edge.</div>
+    </a>
+    <a class="mode-card" href="#" data-sport="mlb">
+      <div class="mode-icon">⚾</div>
+      <div class="mode-title">MLB</div>
+      <div class="mode-desc">Win-rate track record for the MLB team &amp; pitcher numerology edge, plus historical backfill.</div>
+    </a>
+    <div class="mode-card disabled">
+      <div class="mode-icon">🏀</div>
+      <div class="mode-title">NBA</div>
+      <div class="mode-desc">Win-rate tracking for NBA games.</div>
+      <span class="coming-soon-tag">Coming Soon</span>
     </div>
+    <div class="mode-card disabled">
+      <div class="mode-icon">🏈</div>
+      <div class="mode-title">NFL</div>
+      <div class="mode-desc">Win-rate tracking for NFL games.</div>
+      <span class="coming-soon-tag">Coming Soon</span>
+    </div>
+  </div>
 
-    <div class="box stats-sport-box" id="mlbViewBox" style="display:none;">
-      <div class="box-label">MLB View</div>
-      <select id="mlbViewSelect">
-        <option value="game">🎯 Game Picks</option>
-        <option value="strikeout">🔥 Strikeout Signal</option>
-      </select>
-    </div>
+  <div id="statsSportContent" style="display:none;">
+  <div class="topbar">
+    <a href="#" class="back-link" id="statsChooseSportLink">&larr; Choose a different sport</a>
   </div>
 
   <div id="statsUfcSection">
@@ -197,7 +211,21 @@
   </div>
 
   <div id="statsMlbSection" style="display:none;">
-   <div id="mlbGameSection">
+   <div class="pm-modal-tabs" id="mlbScopeTabs">
+     <button class="pm-modal-tab active" data-tab="today" type="button">📅 Today</button>
+     <button class="pm-modal-tab" data-tab="old" type="button">📊 Old Data</button>
+   </div>
+
+   <div class="pm-modal-page" data-page="today">
+    <div class="box stats-sport-box">
+      <div class="box-label">MLB View</div>
+      <select id="mlbViewSelect">
+        <option value="game">🎯 Game Picks</option>
+        <option value="strikeout">🔥 Strikeout Signal</option>
+      </select>
+    </div>
+
+    <div id="mlbGameSection">
     <div class="pm-last-updated-row">
       <span id="mlbStatsLastUpdated"></span>
       <button class="btn-link" id="mlbStatsRefreshBtn" type="button">🔄 Check Results</button>
@@ -242,7 +270,7 @@
     </div>
 
     <div class="box" id="mlbStatsTableBox">
-      <div class="box-label">Tracked Games</div>
+      <div class="box-label">Tracked Games &mdash; Today</div>
       <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
       <div class="pm-table-scroll">
         <table class="astro-table" id="mlbStatsTable">
@@ -267,9 +295,9 @@
         <div id="mlbStatsMatchupBody"></div>
       </div>
     </div>
-   </div>
+    </div>
 
-   <div id="mlbStrikeoutSection" style="display:none;">
+    <div id="mlbStrikeoutSection" style="display:none;">
     <div class="box" id="mlbKSignalBox">
       <div class="box-label">🔥 Pitcher Strikeout Research Signal</div>
       <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
@@ -282,11 +310,119 @@
         <div id="mlbKSignalModalBody"></div>
       </div>
     </div>
+    </div>
    </div>
+
+   <div class="pm-modal-page" data-page="old" style="display:none;">
+    <div class="box stats-sport-box">
+      <div class="box-label">MLB View</div>
+      <select id="mlbViewSelectOld">
+        <option value="game">🎯 Game Picks</option>
+        <option value="strikeout">🔥 Strikeout Signal</option>
+      </select>
+    </div>
+
+    <div class="box" id="mlbBackfillBox">
+      <div class="box-label">🕰️ Historical Backfill</div>
+      <div class="mode-desc">Pull already-played MLB games straight from MLB's and Polymarket's own historical data, instead of waiting for the live tracker to build a track record one game at a time. Old Data keeps growing forever &mdash; this just seeds it.</div>
+      <button class="btn-link" id="mlbBackfillBtn" type="button">🔄 Backfill Last 30 Days</button>
+      <div class="mode-desc" id="mlbBackfillStatus"></div>
+    </div>
+
+    <div id="mlbGameSectionOld">
+    <div class="pm-last-updated-row">
+      <span id="mlbStatsLastUpdatedOld"></span>
+      <button class="btn-link" id="mlbStatsRefreshBtnOld" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="mlbStatsHeroOld"></div>
+
+    <div class="breakdown-section" id="mlbStatsBreakdownOld"></div>
+
+    <div class="box" id="mlbStatsEdgeTiersBoxOld">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsEdgeTiersTableOld">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsEdgeTiersOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="mlbStatsPriceBucketsBoxOld">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsPriceBucketsTableOld">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsPriceBucketsOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="mlbStatsTableBoxOld">
+      <div class="box-label">Tracked Games &mdash; Old Data</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsTableOld">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsTableBodyOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="mlbStatsMatchupOverlayOld">
+      <div class="modal-box">
+        <button class="modal-close" id="mlbStatsMatchupCloseOld" title="Close">&times;</button>
+        <div id="mlbStatsMatchupBodyOld"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="mlbStrikeoutSectionOld" style="display:none;">
+    <div class="box" id="mlbKSignalBoxOld">
+      <div class="box-label">🔥 Pitcher Strikeout Research Signal</div>
+      <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
+      <div id="mlbKSignalBodyOld"></div>
+    </div>
+
+    <div class="modal-overlay" id="mlbKSignalModalOverlayOld">
+      <div class="modal-box">
+        <button class="modal-close" id="mlbKSignalModalCloseOld" title="Close">&times;</button>
+        <div id="mlbKSignalModalBodyOld"></div>
+      </div>
+    </div>
+    </div>
+   </div>
+  </div>
   </div>
 
 </div>
 
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
 <script src="compat-engine.js"></script>
@@ -295,27 +431,45 @@
 <script src="compat-render.js"></script>
 <script src="ufc-data.js"></script>
 <script src="tennis-data.js"></script>
+<script src="us-states-data.js"></script>
 <script src="mlb-api.js"></script>
 <script src="stats-ufc.js"></script>
 <script src="stats-tennis.js"></script>
 <script src="stats-mlb.js"></script>
 <script>
-function applyMlbView() {
-  const view = document.getElementById('mlbViewSelect').value;
-  document.getElementById('mlbGameSection').style.display = view === 'game' ? '' : 'none';
-  document.getElementById('mlbStrikeoutSection').style.display = view === 'strikeout' ? '' : 'none';
+function applyMlbView(selectId, gameSectionId, strikeoutSectionId) {
+  const view = document.getElementById(selectId).value;
+  document.getElementById(gameSectionId).style.display = view === 'game' ? '' : 'none';
+  document.getElementById(strikeoutSectionId).style.display = view === 'strikeout' ? '' : 'none';
 }
 
-document.getElementById('statsSportSelect').addEventListener('change', (e) => {
-  const sport = e.target.value;
+function showSport(sport) {
+  document.getElementById('statsSportPicker').style.display = 'none';
+  document.getElementById('statsSportContent').style.display = '';
   document.getElementById('statsUfcSection').style.display = sport === 'ufc' ? '' : 'none';
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
   document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
-  document.getElementById('mlbViewBox').style.display = sport === 'mlb' ? '' : 'none';
-  if (sport === 'mlb') applyMlbView();
+  if (sport === 'mlb') {
+    applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection');
+    applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld');
+  }
+}
+
+document.getElementById('statsSportPicker').addEventListener('click', (e) => {
+  const card = e.target.closest('.mode-card[data-sport]');
+  if (!card) return;
+  e.preventDefault();
+  showSport(card.dataset.sport);
 });
 
-document.getElementById('mlbViewSelect').addEventListener('change', applyMlbView);
+document.getElementById('statsChooseSportLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('statsSportContent').style.display = 'none';
+  document.getElementById('statsSportPicker').style.display = '';
+});
+
+document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection'));
+document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld'));
 </script>
 </body>
 </html>

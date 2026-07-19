@@ -83,8 +83,13 @@ function computeMlbStats(predictions) {
   };
 }
 
-function renderMlbHero(stats) {
-  const hero = document.getElementById('mlbStatsHero');
+// suffix is '' for the Today scope's DOM ids, 'Old' for Old Data's - both
+// scopes render through the exact same functions against a pre-filtered
+// subset of the same underlying predictions/signals arrays (see
+// isMlbTodayLocal/refreshAndRenderMlb below), rather than keeping two
+// separate copies of this rendering logic.
+function renderMlbHero(stats, suffix = '') {
+  const hero = document.getElementById('mlbStatsHero' + suffix);
 
   if (stats.total === 0) {
     hero.innerHTML = `
@@ -124,16 +129,16 @@ function mlbMeterRow(label, pct, count, wins) {
   `;
 }
 
-function renderMlbBreakdown(stats) {
-  document.getElementById('mlbStatsBreakdown').innerHTML = `
+function renderMlbBreakdown(stats, suffix = '') {
+  document.getElementById('mlbStatsBreakdown' + suffix).innerHTML = `
     ${mlbMeterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
     ${mlbMeterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
   `;
 }
 
-function renderMlbEdgeTiers(predictions) {
+function renderMlbEdgeTiers(predictions, suffix = '') {
   const tiers = computeEdgeTierStats(predictions);
-  document.getElementById('mlbStatsEdgeTiers').innerHTML = tiers.map((t) => `
+  document.getElementById('mlbStatsEdgeTiers' + suffix).innerHTML = tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
@@ -144,9 +149,9 @@ function renderMlbEdgeTiers(predictions) {
   `).join('');
 }
 
-function renderMlbPriceBuckets(predictions) {
+function renderMlbPriceBuckets(predictions, suffix = '') {
   const buckets = computeBucketStats(predictions);
-  document.getElementById('mlbStatsPriceBuckets').innerHTML = buckets.map((b) => `
+  document.getElementById('mlbStatsPriceBuckets' + suffix).innerHTML = buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
       <td>${b.count}</td>
@@ -175,8 +180,8 @@ function mlbEdgeCell(p) {
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
 
-function renderMlbTable(predictions) {
-  const tbody = document.getElementById('mlbStatsTableBody');
+function renderMlbTable(predictions, suffix = '') {
+  const tbody = document.getElementById('mlbStatsTableBody' + suffix);
   if (!predictions.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No games tracked yet.</td></tr>';
     return;
@@ -302,27 +307,27 @@ function mlbMatchupModalHtml(p) {
   return hero + modalTabsHtml(breakdown, mlbInsightTabHtml(p, null, true));
 }
 
-function initMlbMatchupModal() {
-  document.getElementById('mlbStatsTableBody').addEventListener('click', async (e) => {
+function initMlbMatchupModal(suffix = '') {
+  document.getElementById('mlbStatsTableBody' + suffix).addEventListener('click', async (e) => {
     const row = e.target.closest('tr[data-condition-id]');
     if (!row) return;
     const p = currentMlbPredictions.find((x) => x.conditionId === row.dataset.conditionId);
     if (!p) return;
-    document.getElementById('mlbStatsMatchupBody').innerHTML = mlbMatchupModalHtml(p);
-    document.getElementById('mlbStatsMatchupOverlay').classList.add('active');
+    document.getElementById('mlbStatsMatchupBody' + suffix).innerHTML = mlbMatchupModalHtml(p);
+    document.getElementById('mlbStatsMatchupOverlay' + suffix).classList.add('active');
 
     const rows = await fetchMlbMatchupInsightRows(p);
-    const insightPage = document.querySelector('#mlbStatsMatchupBody [data-page="insight"]');
+    const insightPage = document.querySelector('#mlbStatsMatchupBody' + suffix + ' [data-page="insight"]');
     if (insightPage) insightPage.innerHTML = mlbInsightTabHtml(p, rows, false);
   });
 
-  document.getElementById('mlbStatsMatchupClose').addEventListener('click', () => {
-    document.getElementById('mlbStatsMatchupOverlay').classList.remove('active');
+  document.getElementById('mlbStatsMatchupClose' + suffix).addEventListener('click', () => {
+    document.getElementById('mlbStatsMatchupOverlay' + suffix).classList.remove('active');
   });
-  document.getElementById('mlbStatsMatchupOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'mlbStatsMatchupOverlay') document.getElementById('mlbStatsMatchupOverlay').classList.remove('active');
+  document.getElementById('mlbStatsMatchupOverlay' + suffix).addEventListener('click', (e) => {
+    if (e.target.id === 'mlbStatsMatchupOverlay' + suffix) document.getElementById('mlbStatsMatchupOverlay' + suffix).classList.remove('active');
   });
-  initModalTabSwitcher('mlbStatsMatchupBody');
+  initModalTabSwitcher('mlbStatsMatchupBody' + suffix);
 }
 
 /* ===================== Pitcher strikeout research signal ===================== */
@@ -387,7 +392,7 @@ function computeKSignalStats(signals) {
   };
 }
 
-function renderMlbKSignalPanel(signals) {
+function renderMlbKSignalPanel(signals, suffix = '') {
   const stats = computeKSignalStats(signals);
   const headline = stats.predictedCount
     ? `
@@ -422,7 +427,7 @@ function renderMlbKSignalPanel(signals) {
     `;
   }).join('');
 
-  document.getElementById('mlbKSignalBody').innerHTML = `
+  document.getElementById('mlbKSignalBody' + suffix).innerHTML = `
     ${headline}
     <div class="pm-table-scroll">
       <table class="astro-table">
@@ -510,8 +515,8 @@ function mlbKSignalModalHtml(s, detail, loading) {
   `;
 }
 
-function initMlbKSignalModal() {
-  document.getElementById('mlbKSignalBody').addEventListener('click', async (e) => {
+function initMlbKSignalModal(suffix = '') {
+  document.getElementById('mlbKSignalBody' + suffix).addEventListener('click', async (e) => {
     const row = e.target.closest('tr[data-game-pk]');
     if (!row) return;
     const gamePk = Number(row.dataset.gamePk);
@@ -519,47 +524,385 @@ function initMlbKSignalModal() {
     const s = currentMlbKSignals.find((x) => x.gamePk === gamePk && x.pitcherId === pitcherId);
     if (!s) return;
 
-    document.getElementById('mlbKSignalModalBody').innerHTML = mlbKSignalModalHtml(s, null, true);
-    document.getElementById('mlbKSignalModalOverlay').classList.add('active');
+    document.getElementById('mlbKSignalModalBody' + suffix).innerHTML = mlbKSignalModalHtml(s, null, true);
+    document.getElementById('mlbKSignalModalOverlay' + suffix).classList.add('active');
 
     const detail = await fetchPitcherVsLineupDetail(s);
-    document.getElementById('mlbKSignalModalBody').innerHTML = mlbKSignalModalHtml(s, detail, false);
+    document.getElementById('mlbKSignalModalBody' + suffix).innerHTML = mlbKSignalModalHtml(s, detail, false);
   });
 
-  document.getElementById('mlbKSignalModalClose').addEventListener('click', () => {
-    document.getElementById('mlbKSignalModalOverlay').classList.remove('active');
+  document.getElementById('mlbKSignalModalClose' + suffix).addEventListener('click', () => {
+    document.getElementById('mlbKSignalModalOverlay' + suffix).classList.remove('active');
   });
-  document.getElementById('mlbKSignalModalOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'mlbKSignalModalOverlay') document.getElementById('mlbKSignalModalOverlay').classList.remove('active');
+  document.getElementById('mlbKSignalModalOverlay' + suffix).addEventListener('click', (e) => {
+    if (e.target.id === 'mlbKSignalModalOverlay' + suffix) document.getElementById('mlbKSignalModalOverlay' + suffix).classList.remove('active');
   });
+}
+
+// Today is whatever falls on today's calendar date in the viewer's own local
+// time (same convention formatMlbGameDate already renders with) - Old Data is
+// everything else. This is a pure filter over the one underlying array, not
+// a separate store, so a game recorded today simply reads as Old Data once
+// local midnight passes on a later visit - no timer, no explicit rollover.
+function isMlbTodayLocal(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function renderMlbScope(suffix, predictions, signals) {
+  const isOld = suffix === 'Old';
+  const scopedPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
+  const stats = computeMlbStats(scopedPredictions);
+  renderMlbHero(stats, suffix);
+  renderMlbBreakdown(stats, suffix);
+  renderMlbEdgeTiers(scopedPredictions, suffix);
+  renderMlbPriceBuckets(scopedPredictions, suffix);
+  renderMlbTable(scopedPredictions, suffix);
+  document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+
+  const scopedSignals = signals.filter((s) => isMlbTodayLocal(s.gameTime) === !isOld);
+  renderMlbKSignalPanel(scopedSignals, suffix);
 }
 
 async function refreshAndRenderMlb() {
   const predictions = await checkMlbResults();
   currentMlbPredictions = predictions;
-  const stats = computeMlbStats(predictions);
-  renderMlbHero(stats);
-  renderMlbBreakdown(stats);
-  renderMlbEdgeTiers(predictions);
-  renderMlbPriceBuckets(predictions);
-  renderMlbTable(predictions);
-  document.getElementById('mlbStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
-
   const signals = await checkMlbKSignals();
   currentMlbKSignals = signals;
-  renderMlbKSignalPanel(signals);
+
+  renderMlbScope('', predictions, signals);
+  renderMlbScope('Old', predictions, signals);
 }
 
-document.getElementById('mlbStatsRefreshBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('mlbStatsRefreshBtn');
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = '🔄 Checking…';
-  await refreshAndRenderMlb();
-  btn.textContent = original;
-  btn.disabled = false;
-});
+function wireMlbRefreshButton(btnId) {
+  document.getElementById(btnId).addEventListener('click', async () => {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '🔄 Checking…';
+    await refreshAndRenderMlb();
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
 
-initMlbMatchupModal();
-initMlbKSignalModal();
+wireMlbRefreshButton('mlbStatsRefreshBtn');
+wireMlbRefreshButton('mlbStatsRefreshBtnOld');
+
+/* ===================== Historical backfill (MLB only) ===================== */
+// Old Data doesn't have to start empty and wait weeks for the live tracker to
+// build a track record one game at a time - MLB's own box scores and
+// Polymarket's CLOB price history both stay queryable long after a game
+// closes (confirmed live during planning), so already-played games can be
+// scored and resolved directly. This never touches Today (only walks up to
+// yesterday) and never re-processes a game the live tracker already caught
+// (dedup by gamePk for predictions, by gamePk+pitcherId for K-signals) - it's
+// purely a gap-filler, triggered manually since it's a genuinely heavy job.
+
+const MLB_BACKFILL_LOOKBACK_DAYS = 30;
+
+function isoDateOnlyUTC(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function addDaysISO(dateISO, days) {
+  const d = new Date(dateISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoDateOnlyUTC(d);
+}
+
+// Resolves a venue's region the same way the live tracker's
+// ensureVenueLocation/applyVenueLocation do, but awaited directly rather than
+// through their fire-and-forget-with-a-re-render-callback design - a
+// one-shot backfill has nothing live to re-render, and needs the timezone
+// settled before it ever scores anything, not eventually.
+async function resolveMlbRegionForBackfill(venueId, venueName) {
+  const loc = await fetchVenueLocation(venueId);
+  if (!loc) return { regionMode: null, region: null };
+  if (loc.country === 'USA' && loc.state) {
+    return { regionMode: 'us', region: US_STATES.find((s) => s.name === loc.state) || null };
+  }
+  const cityName = loc.city || venueName;
+  const regions = loadIntlRegions();
+  let region = regions.find((r) => normalizeName(r.name) === normalizeName(cityName));
+  if (!region) {
+    const info = await lookupPlaceFoundingDate(cityName);
+    if (!info) return { regionMode: 'intl', region: null };
+    region = { id: uid(), name: cityName, founded: info.date };
+    const list = loadIntlRegions();
+    if (!list.some((r) => normalizeName(r.name) === normalizeName(cityName))) {
+      list.push(region);
+      saveIntlRegions(list);
+    }
+  }
+  if (!region.timezone) {
+    const tz = await lookupTimezoneForPlace(region.name);
+    if (tz) {
+      region = { ...region, timezone: tz };
+      const list = loadIntlRegions();
+      const idx = list.findIndex((r) => r.id === region.id);
+      if (idx !== -1) { list[idx] = { ...list[idx], timezone: tz }; saveIntlRegions(list); }
+    }
+  }
+  return { regionMode: 'intl', region };
+}
+
+async function resolveMlbStadiumFoundedForBackfill(venueId, venueName) {
+  const existing = loadMlbVenues().find((v) => v.id === venueId);
+  if (existing) return existing.founded;
+  const info = await lookupKeyDateByName(venueName);
+  if (!info) return null;
+  const list = loadMlbVenues();
+  if (!list.some((v) => v.id === venueId)) {
+    list.push({ id: venueId, name: venueName, founded: info.date });
+    saveMlbVenues(list);
+  }
+  return info.date;
+}
+
+async function backfillMlbHistory(onProgress) {
+  const todayISO = isoDateOnlyUTC(new Date());
+  const state = loadMlbBackfillState();
+  const startISO = state && state.throughDateISO ? addDaysISO(state.throughDateISO, 1) : addDaysISO(todayISO, -MLB_BACKFILL_LOOKBACK_DAYS);
+  const endISO = addDaysISO(todayISO, -1); // yesterday - today is live-tracked, not backfilled
+
+  if (startISO > endISO) return { gamesProcessed: 0, newPredictionsCount: 0, newSignalsCount: 0, alreadyCurrent: true };
+
+  const scheduleGames = await fetchMlbSchedule(startISO, endISO);
+  const byDate = new Map();
+  scheduleGames.forEach((g) => {
+    if (g.status.abstractGameState !== 'Final') return;
+    const list = byDate.get(g.officialDate) || [];
+    list.push(g);
+    byDate.set(g.officialDate, list);
+  });
+
+  // A day with more than one game between the same two teams is a
+  // doubleheader - Polymarket's slug has no game-number suffix, so there's
+  // no reliable way to tell which game a market belongs to. Skipped for the
+  // Game Picks half only; the Strikeout Signal half needs no market match at
+  // all, so it still processes every game normally.
+  const doubleheaderKeys = new Set();
+  byDate.forEach((games, date) => {
+    const seen = new Set();
+    games.forEach((g) => {
+      const key = `${date}|${[g.teams.away.team.id, g.teams.home.team.id].sort().join('-')}`;
+      if (seen.has(key)) doubleheaderKeys.add(key);
+      seen.add(key);
+    });
+  });
+
+  const existingPredictions = loadMlbPredictions();
+  const existingPredictionGamePks = new Set(existingPredictions.map((p) => p.gamePk));
+  const existingSignals = loadMlbPitcherKSignals();
+  const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
+
+  const teamInfoCache = new Map();
+  const managerCache = new Map();
+  const regionCache = new Map();
+  const stadiumCache = new Map();
+
+  const newPredictions = [];
+  const newSignals = [];
+  const allGames = [...byDate.entries()].flatMap(([date, games]) => games.map((g) => ({ date, g })));
+  const total = allGames.length;
+  let processed = 0;
+  let lastCheckpoint = Date.now();
+
+  for (const { date, g } of allGames) {
+    processed++;
+    if (onProgress) onProgress(processed, total);
+
+    const gamePk = g.gamePk;
+    const feed = await fetchGameLiveFeed(gamePk);
+    if (!feed || feed.abstractGameState !== 'Final') continue;
+    if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) continue; // no full lineup - can't score
+
+    const venueId = feed.venue && feed.venue.id;
+    const venueName = feed.venue && feed.venue.name;
+    if (!venueId) continue; // no venue - can't resolve day/state, don't guess
+
+    let regionInfo = regionCache.get(venueId);
+    if (!regionInfo) {
+      regionInfo = await resolveMlbRegionForBackfill(venueId, venueName);
+      regionCache.set(venueId, regionInfo);
+    }
+    if (!regionInfo.region) continue; // couldn't confirm a region - don't guess
+
+    let stadiumFounded = stadiumCache.get(venueId);
+    if (stadiumFounded === undefined) {
+      stadiumFounded = await resolveMlbStadiumFoundedForBackfill(venueId, venueName);
+      stadiumCache.set(venueId, stadiumFounded);
+    }
+
+    const matchDateISO = currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: new Date(g.gameDate) });
+    if (!matchDateISO) continue; // timezone still unconfirmed - don't guess
+    const matchDate = parseDateInput(matchDateISO);
+
+    const season = new Date(date).getFullYear();
+    const teamIds = [feed.home.teamId, feed.away.teamId];
+    await Promise.all(teamIds.map(async (id) => {
+      if (!teamInfoCache.has(id)) teamInfoCache.set(id, await fetchTeamInfo(id));
+      if (!managerCache.has(id)) managerCache.set(id, await fetchTeamManager(id, season));
+    }));
+
+    const allIds = [
+      feed.home.startingPitcherId, feed.away.startingPitcherId,
+      ...feed.home.batters.map((b) => b.id), ...feed.away.batters.map((b) => b.id),
+      managerCache.get(feed.home.teamId) && managerCache.get(feed.home.teamId).id,
+      managerCache.get(feed.away.teamId) && managerCache.get(feed.away.teamId).id,
+    ];
+    const birthdates = await fetchPeopleBirthdates(allIds);
+
+    // Game Picks half.
+    const dhKey = `${date}|${[feed.home.teamId, feed.away.teamId].sort().join('-')}`;
+    if (!existingPredictionGamePks.has(gamePk) && !doubleheaderKeys.has(dhKey)) {
+      const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
+      if (event) {
+        const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
+        const teamInfoForName = (name) => teamInfoCache.get(sideForName(name).teamId);
+        const managerForName = (name) => managerCache.get(sideForName(name).teamId);
+
+        // gameStartTime is the real UTC first-pitch instant (not the
+        // already-resolved matchDate) so computeTeamComposite's own internal
+        // currentMlbMatchDateISO(g) call re-derives the identical
+        // matchDateISO confirmed above from the same real timestamp + region
+        // - redundant, but avoids re-running a timezone conversion on an
+        // already-local-midnight Date, which could land on the wrong
+        // calendar day if the browser's own timezone differs from the venue's.
+        const gObj = {
+          sideA: sideForName(event.teamAName), sideB: sideForName(event.teamBName),
+          teamInfoA: teamInfoForName(event.teamAName), teamInfoB: teamInfoForName(event.teamBName),
+          managerA: managerForName(event.teamAName), managerB: managerForName(event.teamBName),
+          birthdates,
+          region: regionInfo.region,
+          regionMode: regionInfo.regionMode,
+          stadiumFounded,
+          gameStartTime: new Date(g.gameDate),
+        };
+        const scoreA = computeTeamComposite(gObj, 'A');
+        const scoreB = computeTeamComposite(gObj, 'B');
+        if (scoreA && scoreB) {
+          const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
+          const [priceA, priceB] = await Promise.all([
+            fetchClobPriceNear(event.clobTokenIdA, targetTs),
+            fetchClobPriceNear(event.clobTokenIdB, targetTs),
+          ]);
+          if (priceA != null && priceB != null) {
+            const favA = priceA >= priceB;
+            const marketFavName = favA ? event.teamAName : event.teamBName;
+            const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
+            const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+            const runsForName = (name) => sideForName(name).runs;
+            const runsA = runsForName(event.teamAName);
+            const runsB = runsForName(event.teamBName);
+            const result = !Number.isFinite(runsA) || !Number.isFinite(runsB)
+              ? null
+              : runsA === runsB
+                ? { winner: null, draw: true, resolvedAt: Date.now() }
+                : { winner: runsA > runsB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
+
+            newPredictions.push({
+              conditionId: event.conditionId,
+              gamePk,
+              teamAName: event.teamAName,
+              teamBName: event.teamBName,
+              numerologyFavorite: numFavName,
+              numerologyScoreA: scoreA.combined,
+              numerologyScoreB: scoreB.combined,
+              marketFavorite: marketFavName,
+              marketPriceA: priceA,
+              marketPriceB: priceB,
+              pickType: agree ? 'favorite' : 'underdog',
+              eventTitle: event.eventTitle,
+              gameTime: event.gameStartTime.toISOString(),
+              recordedAt: Date.now(),
+              result,
+            });
+            existingPredictionGamePks.add(gamePk);
+          }
+        }
+      }
+    }
+
+    // Strikeout Signal half - independent of any market match.
+    for (const side of [feed.home, feed.away]) {
+      if (!side.startingPitcherId) continue;
+      const key = `${gamePk}|${side.startingPitcherId}`;
+      if (existingSignalKeys.has(key)) continue;
+      const bd = birthdates.get(side.startingPitcherId);
+      if (!bd || !bd.birthDate || side.startingPitcherStrikeouts == null) continue;
+
+      const baseline = await fetchMlbGameLogBeforeDate(side.startingPitcherId, season, date);
+      if (!baseline) continue; // no starts yet this season to baseline against
+
+      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat).finalScore;
+      const predictedDirection = dayScore >= 60 ? 'over' : (dayScore <= 40 ? 'under' : 'neutral');
+      const actualKs = side.startingPitcherStrikeouts;
+      const actualDirection = actualKs > baseline.strikeoutsPerStart ? 'over' : (actualKs < baseline.strikeoutsPerStart ? 'under' : 'push');
+
+      newSignals.push({
+        gamePk,
+        pitcherId: side.startingPitcherId,
+        pitcherName: bd.name,
+        teamName: side.teamName,
+        gameTime: new Date(g.gameDate).toISOString(),
+        dayScore,
+        predictedDirection,
+        seasonAvgKsAtPickTime: baseline.strikeoutsPerStart,
+        recordedAt: Date.now(),
+        actualKs,
+        result: {
+          actualDirection,
+          correct: predictedDirection !== 'neutral' ? predictedDirection === actualDirection : null,
+          resolvedAt: Date.now(),
+        },
+      });
+      existingSignalKeys.add(key);
+    }
+
+    if (Date.now() - lastCheckpoint > 5000) {
+      if (newPredictions.length) saveMlbPredictions([...existingPredictions, ...newPredictions]);
+      if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
+      lastCheckpoint = Date.now();
+    }
+  }
+
+  if (newPredictions.length) saveMlbPredictions([...existingPredictions, ...newPredictions]);
+  if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
+  saveMlbBackfillState({ throughDateISO: endISO });
+
+  return { gamesProcessed: processed, newPredictionsCount: newPredictions.length, newSignalsCount: newSignals.length, alreadyCurrent: false };
+}
+
+function initMlbBackfillButton() {
+  document.getElementById('mlbBackfillBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('mlbBackfillBtn');
+    const status = document.getElementById('mlbBackfillStatus');
+    btn.disabled = true;
+    const original = btn.textContent;
+    status.textContent = 'Starting…';
+    try {
+      const result = await backfillMlbHistory((processed, total) => {
+        status.textContent = `Backfilling… ${processed}/${total} games`;
+      });
+      status.textContent = result.alreadyCurrent
+        ? 'Already caught up to yesterday - nothing new to backfill.'
+        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals.`;
+      await refreshAndRenderMlb();
+    } catch (e) {
+      status.textContent = 'Something went wrong during backfill - try again.';
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
+
+initMlbMatchupModal('');
+initMlbMatchupModal('Old');
+initMlbKSignalModal('');
+initMlbKSignalModal('Old');
+initModalTabSwitcher('statsMlbSection');
+initMlbBackfillButton();
 refreshAndRenderMlb();

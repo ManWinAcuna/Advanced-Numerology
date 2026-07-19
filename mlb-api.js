@@ -59,11 +59,14 @@ async function fetchMlbMoneylineEvents() {
 }
 
 // MLB's schedule endpoint for a date range, hydrated with each game's
-// probable pitchers and venue. Doubleheaders mean team names alone don't
-// uniquely identify a game - findScheduleGameForMarket below breaks the tie
-// by whichever candidate's start time is closest to Polymarket's.
+// probable pitchers, venue, and full team info (abbreviation - needed to
+// construct a Polymarket event slug for the historical backfill; without
+// this hydration a team is just {id, name, link}). Doubleheaders mean team
+// names alone don't uniquely identify a game - findScheduleGameForMarket
+// below breaks the tie by whichever candidate's start time is closest to
+// Polymarket's.
 async function fetchMlbSchedule(startDateISO, endDateISO) {
-  const url = `${MLB_STATS_BASE}/schedule?sportId=1&startDate=${startDateISO}&endDate=${endDateISO}&hydrate=probablePitcher,venue`;
+  const url = `${MLB_STATS_BASE}/schedule?sportId=1&startDate=${startDateISO}&endDate=${endDateISO}&hydrate=probablePitcher,venue,team`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
@@ -226,6 +229,105 @@ async function fetchPitcherSeasonStats(personId, season) {
       gamesStarted: stat.gamesStarted,
       strikeoutsPerStart: stat.strikeOuts / stat.gamesStarted,
     };
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ===================== Historical backfill (Stats page, MLB only) ===================== */
+// Three helpers that let the Stats page reconstruct already-played games
+// instead of only ever recording new ones live. Confirmed live during
+// planning: MLB's own gameLog endpoint keeps every start with its own date,
+// so a pitcher's "season average as of that start" can be rebuilt for any
+// past date; and Polymarket's CLOB price-history endpoint still returns a
+// market's full pre-resolution price series after it's closed, even though
+// Gamma's own closed-event outcomePrices collapse to the final 0/1 result.
+
+// Same shape fetchPitcherSeasonStats returns, but reconstructed as of a
+// specific historical date instead of "right now" - sums strikeouts and
+// start-counts only from starts strictly before beforeDateISO, so a
+// backfilled pick is graded against the baseline the pitcher actually had
+// at the time, not one inflated by starts that hadn't happened yet.
+async function fetchMlbGameLogBeforeDate(personId, season, beforeDateISO) {
+  try {
+    const res = await fetch(`${MLB_STATS_BASE}/people/${personId}/stats?stats=gameLog&group=pitching&season=${season}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const splits = (data.stats && data.stats[0] && data.stats[0].splits) || [];
+    const prior = splits.filter((s) => s.date < beforeDateISO);
+    const gamesStarted = prior.reduce((sum, s) => sum + (s.stat.gamesStarted || 0), 0);
+    if (!gamesStarted) return null;
+    const strikeOuts = prior.reduce((sum, s) => sum + (s.stat.strikeOuts || 0), 0);
+    return { strikeOuts, gamesStarted, strikeoutsPerStart: strikeOuts / gamesStarted };
+  } catch (e) {
+    return null;
+  }
+}
+
+// A closed game's moneyline market, looked up directly by its predictable
+// slug ("mlb-{awayAbbr}-{homeAbbr}-{officialDate}", all lowercase) instead of
+// paging through Gamma's closed-events feed - confirmed live that paging is
+// unreliable for this: closed events are ordered by an internal startDate
+// that turned out to be each market's own creation time (evidently
+// bulk-created well ahead of the actual games, since it stayed frozen at one
+// timestamp across 40+ pages), not the game's real date, so there's no
+// trustworthy cutoff to page toward. The slug, by contrast, is exactly what
+// the live tracker already has on hand once it's found a game on MLB's own
+// schedule (team abbreviation + officialDate), so this is one direct lookup
+// per game instead of scanning thousands of unrelated markets. Returns null
+// for a doubleheader's second game too - the slug has no game-number suffix,
+// so a day with two games for the same matchup can't be disambiguated and is
+// skipped rather than risking a wrong match.
+async function fetchMlbMoneylineEventForGame(awayAbbr, homeAbbr, officialDate) {
+  const slug = `mlb-${awayAbbr.toLowerCase()}-${homeAbbr.toLowerCase()}-${officialDate}`;
+  try {
+    const res = await fetch(`https://gamma-api.polymarket.com/events?slug=${slug}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const ev = Array.isArray(data) ? data[0] : null;
+    if (!ev) return null;
+    const m = (ev.markets || []).find((mk) => mk.sportsMarketType === 'moneyline');
+    if (!m) return null;
+    let outcomes = [];
+    let clobTokenIds = [];
+    try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
+    try { clobTokenIds = JSON.parse(m.clobTokenIds); } catch (e) { /* leave empty */ }
+    const gameStartTime = parseMlbGameStart(m.gameStartTime);
+    if (!outcomes[0] || !outcomes[1] || !gameStartTime || clobTokenIds.length < 2) return null;
+    return {
+      conditionId: m.conditionId,
+      teamAName: outcomes[0],
+      teamBName: outcomes[1],
+      gameStartTime,
+      clobTokenIdA: clobTokenIds[0],
+      clobTokenIdB: clobTokenIds[1],
+      eventTitle: ev.title,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// The market's price at (or just before) a target time, straight from the
+// CLOB's own price-history - the only place a resolved market's pre-game
+// price still lives, used as the "price at pick time" stand-in since a
+// backfilled game was never actually seen live. history is ordered oldest to
+// newest (confirmed live); returns null if the market has no history at all
+// (shouldn't happen for anything that actually traded) or if every point
+// comes after the target (the whole series started after the target time).
+async function fetchClobPriceNear(clobTokenId, targetTimestampSec) {
+  try {
+    const res = await fetch(`https://clob.polymarket.com/prices-history?market=${clobTokenId}&interval=max`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const history = Array.isArray(data.history) ? data.history : [];
+    if (!history.length) return null;
+    let best = null;
+    for (const point of history) {
+      if (point.t > targetTimestampSec) break;
+      best = point;
+    }
+    return best ? best.p : null;
   } catch (e) {
     return null;
   }

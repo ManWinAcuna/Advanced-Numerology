@@ -185,119 +185,11 @@ function isoDateOnly(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
-// The calendar date this game falls on at the venue - same pattern as
-// currentMatchDateISO in polymarket-ufc.js/polymarket-tennis.js: computed
-// fresh on every call (not cached) so it can re-trigger the timezone lookup
-// for a US venue this never needs (the fixed lookup resolves instantly) or
-// an international one (Toronto) whose zone may still be in flight. Returns
-// null when unconfirmed - callers must not score against a guess.
-function currentMatchDateISO(g) {
-  if (g.regionMode === 'us') return localMatchDateISO(g.gameStartTime, 'us', g.region);
-  if (g.region && !g.region.timezone) {
-    ensureIntlRegionTimezone(g.region, () => updateGameCard(g.conditionId));
-  }
-  return localMatchDateISO(g.gameStartTime, 'intl', g.region);
-}
-
-// Everything above (pitcher, batters, franchise, manager) only ever scores
-// an entity against the day/venue - it never asks whether the two TEAMS'
-// numerology actually clash. But the one matchup that repeats dozens of
-// times a game is pitcher vs. batter, so that's worth a real head-to-head
-// signal of its own: the pitcher's life path run against each of the nine
-// opposing batters' life paths through the same sportsNumerologyCompat
-// table UFC/Tennis use for fighter-vs-fighter, averaged into one "does this
-// pitcher's number play well against this specific lineup" score. This is
-// genuinely a different kind of factor than the rest (person-vs-person, not
-// person-vs-date), which is exactly the point - it's the only place in the
-// model where the two teams' numerology actually meets.
-function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
-  const batters = opposingBatters
-    .map((b) => {
-      const bd = birthdates.get(b.id);
-      return bd && bd.birthDate ? { name: bd.name, pos: b.pos, dobDate: parseDateInput(bd.birthDate) } : null;
-    })
-    .filter(Boolean);
-  const rows = pitcherVsLineupBreakdown(pitcherDobDate, batters);
-  if (!rows.length) return null;
-  return Math.round(rows.reduce((s, r) => s + r.combined, 0) / rows.length);
-}
-
-// The 13-component weighted composite: starting pitcher, catcher, the 8
-// other batters (flat weight), the franchise (scored against its founding
-// year like a birthdate), the manager, and the pitcher-vs-opposing-lineup
-// matchup edge above - every person-vs-date factor runs through the exact
-// same computeFighterScore() UFC uses, weighted-averaged across a roster
-// instead of standing alone.
-function computeTeamComposite(g, sideLetter) {
-  const side = sideLetter === 'A' ? g.sideA : g.sideB;
-  const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
-  const teamInfo = sideLetter === 'A' ? g.teamInfoA : g.teamInfoB;
-  const manager = sideLetter === 'A' ? g.managerA : g.managerB;
-
-  const matchDateISO = currentMatchDateISO(g);
-  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
-  const matchDate = parseDateInput(matchDateISO);
-  const stateDate = g.region ? parseDateInput(g.region.founded) : null;
-  const stadiumDate = g.stadiumFounded ? parseDateInput(g.stadiumFounded) : null;
-
-  const parts = [];
-  const pitcherBd = g.birthdates.get(side.startingPitcherId);
-  if (pitcherBd && pitcherBd.birthDate) {
-    parts.push({ role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
-
-    const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
-    if (matchupScore != null) {
-      parts.push({ role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
-    }
-  }
-  side.batters.forEach((b) => {
-    const bd = g.birthdates.get(b.id);
-    if (!bd || !bd.birthDate) return;
-    const weight = b.pos === 'C' ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
-  });
-  if (teamInfo) {
-    const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
-    if (foundingISO) {
-      // A real founding date (day/month/year, sourced from CUE) - scores
-      // exactly like any other entity through computeFighterScore, at full
-      // weight, instead of the thinner zodiac-only fallback below.
-      const foundingDate = parseDateInput(foundingISO);
-      parts.push({ role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate) });
-    } else if (teamInfo.firstYearOfPlay) {
-      // No real date for this team - MLB's own API only gives a founding
-      // YEAR, never a month/day, and (per explicit instruction) no
-      // fabricated "January 1st" stand-in date either. The one thing a bare
-      // year genuinely determines is which Vietnamese zodiac year it falls
-      // in, so that's the only axis scored here - July 1st is just an anchor
-      // safely past any possible Lunar New Year boundary (always Jan 21-Feb
-      // 20) so getChineseZodiacYear resolves the correct animal for that
-      // calendar year without claiming to know the real founding date.
-      const franchiseYearAnchor = new Date(Number(teamInfo.firstYearOfPlay), 6, 1);
-      const franchiseSign = getChineseZodiacYear(franchiseYearAnchor);
-      const todaySign = getChineseZodiacYear(matchDate);
-      const zodiacScore = vietnameseCompat(franchiseSign, todaySign);
-      parts.push({ role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchiseZodiacOnly, score: { combined: zodiacScore } });
-    }
-  }
-  if (manager) {
-    const bd = g.birthdates.get(manager.id);
-    if (bd && bd.birthDate) parts.push({ role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
-  }
-
-  if (!parts.length) return null;
-  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
-  const combined = Math.round(parts.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
-  return { combined, parts };
-}
-
-function scoresForGame(g) {
-  if (g.enrichState !== 'ready') return null;
-  const scoreA = computeTeamComposite(g, 'A');
-  const scoreB = computeTeamComposite(g, 'B');
-  if (!scoreA || !scoreB) return null;
-  return { scoreA, scoreB };
-}
+// currentMlbMatchDateISO(g, onTimezoneResolved), pitcherVsLineupScore(),
+// computeTeamComposite(g, sideLetter, onTimezoneResolved), and
+// scoresForGame(g, onTimezoneResolved) now live in db-core.js - the
+// historical backfill on the Stats page needs the exact same 13-component
+// scoring against an already-finished game, not a re-derived copy of it.
 
 /* ===================== Enrichment ===================== */
 // Every game starts as a Polymarket moneyline market and gets enriched with
@@ -405,7 +297,7 @@ async function recordPitcherKSignals(g) {
     const bd = birthdates.get(pitcher.id);
     if (!bd || !bd.birthDate || !seasonStats) continue; // no dob, or no starts yet this season to baseline against
 
-    const matchDateISO = currentMatchDateISO(g);
+    const matchDateISO = currentMlbMatchDateISO(g, () => updateGameCard(g.conditionId));
     if (!matchDateISO) continue; // timezone not confirmed yet - don't guess; retried on the next enrichment pass
     const dayScore = computeCompatibility(parseDateInput(bd.birthDate), parseDateInput(matchDateISO), sportsNumerologyCompat).finalScore;
 
@@ -481,7 +373,7 @@ function numerologyBlockHtml(g) {
     return '<div class="pm-unmatched">Loading matchup data&hellip;</div>';
   }
 
-  const scores = scoresForGame(g);
+  const scores = scoresForGame(g, () => updateGameCard(g.conditionId));
   if (!scores) return '<div class="pm-unmatched">⏳ Waiting to confirm this venue\'s timezone (or a birthdate) before scoring &mdash; check back shortly.</div>';
   const { scoreA, scoreB } = scores;
 
@@ -513,7 +405,7 @@ function numerologyBlockHtml(g) {
 }
 
 function cardTierKey(g) {
-  const scores = scoresForGame(g);
+  const scores = scoresForGame(g, () => updateGameCard(g.conditionId));
   if (!scores) return '';
   return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
@@ -541,7 +433,7 @@ function insightTabHtml(g, scores) {
   // added as an extra "Day N" tag on their row alongside the theme/
   // volatility/athletic read, not instead of it. Left off (not guessed) if
   // the venue's timezone hasn't confirmed yet, same as the real edge above.
-  const matchDateISO = currentMatchDateISO(g);
+  const matchDateISO = currentMlbMatchDateISO(g, () => updateGameCard(g.conditionId));
   const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   const rowsA = teamRosterInsightRows(g.sideA, g.managerA, g.birthdates, matchDate).map(insightRowHtml).join('');
   const rowsB = teamRosterInsightRows(g.sideB, g.managerB, g.birthdates, matchDate).map(insightRowHtml).join('');
@@ -764,7 +656,7 @@ function initBreakdownModal() {
     if (!trigger) return;
     const g = cardGames.find((x) => x.conditionId === trigger.dataset.conditionId);
     if (!g) return;
-    const scores = scoresForGame(g);
+    const scores = scoresForGame(g, () => updateGameCard(g.conditionId));
     if (!scores) return;
     document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(g, scores);
     document.getElementById('pmBreakdownOverlay').classList.add('active');
