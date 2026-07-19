@@ -841,10 +841,18 @@ function tournamentGroupHtml(key, matches) {
   const regionLabel = st.regionMode === 'intl' ? 'City / Region' : 'State';
   if (!st.selectedRegion) ensureTournamentSuggestion(key);
 
+  // The tournament name links out to a Google search built from one of its
+  // actual matchups ("A vs B where is the game") - the quickest way to find
+  // where a tournament is played when the Wikipedia auto-suggestion can't
+  // (generic names like "Lincoln" or "Granby" resolve to disambiguation
+  // pages, not a tournament article).
+  const searchMatch = matches[0];
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchMatch.playerAName} vs ${searchMatch.playerBName} where is the game`)}`;
+
   return `
     <div class="box pm-tournament-group" data-tournament="${escapeHtml(key)}">
       <div class="pm-tournament-header">
-        <span class="pm-tournament-name">🎾 ${escapeHtml(key)}</span>
+        <a class="pm-tournament-name" href="${searchUrl}" target="_blank" rel="noopener" title="Google where this tournament's matches are being played">🎾 ${escapeHtml(key)} <span class="pm-tournament-search-icon">🔎</span></a>
       </div>
       <div class="pm-location-suggestion-wrap">${st.selectedRegion ? '' : suggestionBannerHtml(key)}</div>
       <div class="hours-toggle ufc-region-toggle pm-tournament-region-toggle">
