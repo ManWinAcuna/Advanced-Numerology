@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>MLB Polymarket Tracker - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page ufc-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+
+  <div class="topbar">
+    <a href="polymarket.html" class="back-link">&larr; Polymarket</a>
+  </div>
+
+  <h1 class="page-title">⚾ MLB &mdash; Live Polymarket Tracker</h1>
+
+  <div class="pm-last-updated" id="pmLegend">
+    🐋 Whale = single bet ≥ $500 &nbsp;&middot;&nbsp; 💎 Smart = top 50 all-time on Polymarket's Sports PNL leaderboard, and still profitable this month
+  </div>
+  <div class="pm-last-updated-row">
+    <span id="pmLastUpdated"></span>
+    <button class="btn-link" id="pmRefreshBtn" type="button">🔄 Refresh</button>
+  </div>
+
+  <div class="box pm-stake-box">
+    <div class="box-label">🧮 Risk Manager</div>
+    <div class="mode-desc">Enter what you'd actually stake per bet - each game below shows the payout at current odds and whether the track record backs it.</div>
+    <div class="inline-form">
+      <label for="pmStakeInput" class="pm-stake-label">Stake per bet ($)</label>
+      <input type="number" id="pmStakeInput" min="1" step="1" value="10">
+    </div>
+  </div>
+
+  <div class="mode-desc pm-tournament-hint">Venue, state, and every player's numerology are pulled live from MLB's own data as soon as each is available &mdash; nothing here is entered by hand. Lineups usually post a couple hours before first pitch, so the numerology edge won't show until then.</div>
+
+  <div id="gamesContainer">
+    <div class="box pm-fight-card">
+      <div class="pm-skeleton-bar" style="width:55%"></div>
+      <div class="pm-skeleton-bar" style="width:100%;height:38px"></div>
+      <div class="pm-skeleton-bar" style="width:80%"></div>
+    </div>
+    <div class="box pm-fight-card">
+      <div class="pm-skeleton-bar" style="width:65%"></div>
+      <div class="pm-skeleton-bar" style="width:100%;height:38px"></div>
+      <div class="pm-skeleton-bar" style="width:70%"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmBreakdownOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="pmBreakdownClose" title="Close">&times;</button>
+      <div id="pmBreakdownBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="us-states-data.js"></script>
+<script src="mlb-api.js"></script>
+<script src="polymarket-mlb.js"></script>
+</body>
+</html>

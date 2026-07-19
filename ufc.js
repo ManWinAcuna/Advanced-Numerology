@@ -638,24 +638,8 @@ document.getElementById('saveStadiumBtn').addEventListener('click', () => {
 
 /* ===================== Matchup scoring ===================== */
 
-// Blends the location/date factors for one fighter: Fight Day, Stadium
-// founding, and State founding - each scored the same way the rest of the
-// app scores compatibility, just against a different date. When the
-// stadium isn't known yet, it's dropped entirely (not just zeroed) and the
-// remaining two factors are reweighted so the score still adds up cleanly.
-function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
-  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
-  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
-
-  if (!stadiumDate) {
-    const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
-    return { day, stadium: null, state, combined };
-  }
-
-  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
-  const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
-  return { day, stadium, state, combined };
-}
+// computeFighterScore() now lives in db-core.js (shared with polymarket-ufc.js
+// and polymarket-mlb.js, which needed the identical Day/Stadium/State blend).
 
 // Renders one fighter's combined score plus the three clickable sub-score
 // tabs, each swapping in the full breakdown for that factor below.

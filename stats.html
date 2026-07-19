@@ -36,9 +36,9 @@
     <select id="statsSportSelect">
       <option value="ufc">🥊 UFC</option>
       <option value="tennis">🎾 Tennis</option>
+      <option value="mlb">⚾ MLB</option>
       <option value="nba" disabled>🏀 NBA (Coming Soon)</option>
       <option value="nfl" disabled>🏈 NFL (Coming Soon)</option>
-      <option value="mlb" disabled>⚾ MLB (Coming Soon)</option>
     </select>
   </div>
 
@@ -186,18 +186,99 @@
     </div>
   </div>
 
+  <div id="statsMlbSection" style="display:none;">
+    <div class="pm-last-updated-row">
+      <span id="mlbStatsLastUpdated"></span>
+      <button class="btn-link" id="mlbStatsRefreshBtn" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="mlbStatsHero"></div>
+
+    <div class="breakdown-section" id="mlbStatsBreakdown"></div>
+
+    <div class="box" id="mlbStatsEdgeTiersBox">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsEdgeTiersTable">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsEdgeTiers"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="mlbStatsPriceBucketsBox">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsPriceBucketsTable">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsPriceBuckets"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="mlbStatsTableBox">
+      <div class="box-label">Tracked Games</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="mlbStatsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="mlbStatsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="mlbKSignalBox">
+      <div class="box-label">🔥 Pitcher Strikeout Research Signal</div>
+      <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
+      <div id="mlbKSignalBody"></div>
+    </div>
+
+    <div class="modal-overlay" id="mlbStatsMatchupOverlay">
+      <div class="modal-box">
+        <button class="modal-close" id="mlbStatsMatchupClose" title="Close">&times;</button>
+        <div id="mlbStatsMatchupBody"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
 <script src="compat-render.js"></script>
+<script src="mlb-api.js"></script>
 <script src="stats-ufc.js"></script>
 <script src="stats-tennis.js"></script>
+<script src="stats-mlb.js"></script>
 <script>
 document.getElementById('statsSportSelect').addEventListener('change', (e) => {
   const sport = e.target.value;
   document.getElementById('statsUfcSection').style.display = sport === 'ufc' ? '' : 'none';
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
+  document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
 });
 </script>
 </body>

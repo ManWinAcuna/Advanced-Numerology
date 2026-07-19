@@ -787,6 +787,112 @@ function saveTennisPredictions(predictions) {
   cloudPushKey(TENNIS_PREDICTIONS_KEY);
 }
 
+/* ===================== MLB Predictions (Stats tracker) ===================== */
+// Team-composite counterpart of UFC_PREDICTIONS_KEY/TENNIS_PREDICTIONS_KEY -
+// same shape (a favorite/underdog pick vs. the market, resolved later), just
+// with teamAName/teamBName instead of fighterAName/playerAName. Recorded by
+// polymarket-mlb.js only once both teams' full lineups are known (unlike UFC/
+// Tennis, an MLB pick isn't locked in on partial data - the composite isn't
+// stable until the whole roster is).
+
+const MLB_PREDICTIONS_KEY = 'numerology_mlb_predictions';
+
+function loadMlbPredictions() {
+  try {
+    const raw = localStorage.getItem(MLB_PREDICTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMlbPredictions(predictions) {
+  localStorage.setItem(MLB_PREDICTIONS_KEY, JSON.stringify(predictions));
+  cloudPushKey(MLB_PREDICTIONS_KEY);
+}
+
+// Auto-populated cache of MLB ballpark founding dates, keyed by venue name -
+// same role STADIUMS_KEY/TENNIS_VENUES_KEY play, but nothing here is ever
+// manually added through a form. polymarket-mlb.js looks a venue up here
+// first and only falls back to the Wikipedia/Wikidata lookup (already built
+// for UFC/Tennis venues) on a cache miss, then saves the result here so it's
+// a one-time lookup per ballpark rather than once per game.
+const MLB_VENUES_KEY = 'numerology_mlb_venues';
+
+function loadMlbVenues() {
+  try {
+    const raw = localStorage.getItem(MLB_VENUES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMlbVenues(venues) {
+  localStorage.setItem(MLB_VENUES_KEY, JSON.stringify(venues));
+  cloudPushKey(MLB_VENUES_KEY);
+}
+
+/* ===================== MLB pitcher strikeout research signal ===================== */
+// Not a bet - a standalone hypothesis test. Polymarket has no single-game
+// strikeout prop market (only season-long "Strikeouts Leader" futures, in a
+// public-search check), so this tracks a starting pitcher's own numerology
+// day score against THEIR OWN season-average strikeout rate instead of a
+// market line, resolved purely off MLB's own boxscore/season-stat data. Kept
+// separate from MLB_PREDICTIONS_KEY since it's a different kind of claim
+// (deviation from a personal baseline, not a win/loss vs. an opponent).
+const MLB_PITCHER_K_SIGNALS_KEY = 'numerology_mlb_pitcher_k_signals';
+
+function loadMlbPitcherKSignals() {
+  try {
+    const raw = localStorage.getItem(MLB_PITCHER_K_SIGNALS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMlbPitcherKSignals(signals) {
+  localStorage.setItem(MLB_PITCHER_K_SIGNALS_KEY, JSON.stringify(signals));
+  cloudPushKey(MLB_PITCHER_K_SIGNALS_KEY);
+}
+
+/* ===================== Shared athlete scoring (fighters/players/MLB roster) ===================== */
+// Day 60/Venue 15/Region 25 (or Day 75/Region 25 without a venue) blend -
+// used for a single person (or, for MLB, any one entity - a batter, the
+// pitcher, the manager, even the franchise itself scored against its
+// founding date like a birthdate) against a match date, venue, and region.
+// Was duplicated identically in ufc.js and polymarket-ufc.js; hoisted here
+// once MLB needed the exact same formula for an 11th-12th time over.
+function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
+  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
+  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
+  if (!stadiumDate) {
+    const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
+    return { day, stadium: null, state, combined };
+  }
+  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
+  const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
+  return { day, stadium, state, combined };
+}
+
+// MLB team-composite role weights - a starting guess, not doctrine, same
+// spirit as REAL_EDGE_MIN_GAP/EDGE_TIERS below: once enough games resolve on
+// the Stats page, that per-tier breakdown is what should actually move these
+// numbers, not intuition. Batters beyond the catcher are weighted flat
+// (decided against batting-order weighting - the real plate-appearance gap
+// top-to-bottom is modest, not worth the extra complexity yet).
+const MLB_ROLE_WEIGHTS = {
+  pitcher: 0.24,
+  catcher: 0.11,
+  batter: 0.05, // each of the 8 non-catcher batters
+  franchise: 0.17,
+  manager: 0.08,
+};
+
 /* ===================== UFC pick-price buckets (risk manager) ===================== */
 // Shared by the Stats page (which displays the win rate per bucket) and the
 // Polymarket tracker (which looks up the bucket for a live fight's price to
@@ -820,7 +926,7 @@ function bucketForPrice(price) {
 // as its own field. Works for both UFC (fighterAName) and Tennis
 // (playerAName) prediction records, whichever the object carries.
 function numerologyPickPrice(p) {
-  const nameA = p.fighterAName || p.playerAName;
+  const nameA = p.fighterAName || p.playerAName || p.teamAName;
   const favA = normalizeName(p.numerologyFavorite) === normalizeName(nameA);
   const price = favA ? p.marketPriceA : p.marketPriceB;
   return Number.isFinite(price) ? price : null;
@@ -934,6 +1040,9 @@ const CLOUD_SYNC_FIELDS = {
   [TENNIS_CUSTOM_PLAYERS_KEY]: 'customTennisPlayers',
   [TENNIS_PLAYER_OVERRIDES_KEY]: 'tennisPlayerOverrides',
   [TENNIS_PREDICTIONS_KEY]: 'tennisPredictions',
+  [MLB_PREDICTIONS_KEY]: 'mlbPredictions',
+  [MLB_VENUES_KEY]: 'mlbVenues',
+  [MLB_PITCHER_K_SIGNALS_KEY]: 'mlbPitcherKSignals',
 };
 
 function cloudPushKey(storageKey) {

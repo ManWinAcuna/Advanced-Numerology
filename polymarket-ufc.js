@@ -591,20 +591,9 @@ function initLocationControls() {
   });
 }
 
-// Same Day 60/Stadium 15/State 25 (or Day 75/State 25 without a stadium)
-// blend as computeFighterScore() in ufc.js - returns the three factors plus
-// the combined number so the breakdown popup can show all of them.
-function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
-  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
-  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
-  if (!stadiumDate) {
-    const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
-    return { day, stadium: null, state, combined };
-  }
-  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
-  const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
-  return { day, stadium, state, combined };
-}
+// computeFighterScore() now lives in db-core.js (shared with ufc.js and
+// polymarket-mlb.js) - returns the three factors plus the combined number so
+// the breakdown popup can show all of them.
 
 // The calendar date scoring uses is the one that's actually showing on a
 // clock at the venue, not whichever UTC date the fight's timestamp happens
