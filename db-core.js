@@ -409,18 +409,22 @@ const TIMEZONE_LABEL_TO_IANA = {
   'brasilia time': 'America/Sao_Paulo',
 };
 
-function fetchWikidataTimezoneQid(qid) {
+// A place can carry more than one P421 (timezone) claim - confirmed live for
+// Toronto, which links both "America/Toronto" and the broader "Eastern Time
+// Zone" entity. Returns all of them so the caller can try each in order
+// instead of trusting the first is always usable.
+function fetchWikidataTimezoneQids(qid) {
   const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
   return fetch(url)
     .then((res) => res.json())
     .then((data) => {
       const entity = data.entities && data.entities[qid];
-      const claims = entity && entity.claims && entity.claims.P421;
-      if (!claims || !claims.length) return null;
-      const snak = claims[0].mainsnak;
-      return (snak && snak.datavalue && snak.datavalue.value && snak.datavalue.value.id) || null;
+      const claims = (entity && entity.claims && entity.claims.P421) || [];
+      return claims
+        .map((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id)
+        .filter(Boolean);
     })
-    .catch(() => null);
+    .catch(() => []);
 }
 
 function fetchWikidataEntityLabel(qid) {
@@ -460,15 +464,39 @@ function parseUtcOffsetLabel(label) {
   return `Etc/GMT${invertedSign}${hours}`;
 }
 
+// Some Wikidata timezone entities are already labeled with the real IANA
+// identifier ("America/Toronto") rather than a display name like "Eastern
+// Standard Time" - confirmed live for Toronto, whose P421 claim resolves to
+// exactly that. TIMEZONE_LABEL_TO_IANA/parseUtcOffsetLabel only handle the
+// display-name and UTC-offset cases, so neither matched and the lookup
+// always came back null - checking whether the label is already a valid
+// zone id closes that gap.
+function isIanaTimeZoneLabel(label) {
+  if (!/^[A-Za-z_]+(?:\/[A-Za-z_+\-]+)+$/.test(label)) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: label });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function ianaFromTimezoneLabel(label) {
+  if (isIanaTimeZoneLabel(label)) return label;
+  return TIMEZONE_LABEL_TO_IANA[label.toLowerCase()] || parseUtcOffsetLabel(label);
+}
+
 function lookupTimezoneForPlace(name) {
   return fetchWikidataId(name).then((qid) => {
     if (!qid) return null;
-    return fetchWikidataTimezoneQid(qid).then((tzQid) => {
-      if (!tzQid) return null;
-      return fetchWikidataEntityLabel(tzQid).then((label) => {
-        if (!label) return null;
-        return TIMEZONE_LABEL_TO_IANA[label.toLowerCase()] || parseUtcOffsetLabel(label);
-      });
+    return fetchWikidataTimezoneQids(qid).then((tzQids) => {
+      if (!tzQids.length) return null;
+      // Try each linked timezone entity in turn - a place can have more
+      // than one P421 claim and the first isn't guaranteed to resolve.
+      return tzQids.reduce((chain, tzQid) => chain.then((resolved) => {
+        if (resolved) return resolved;
+        return fetchWikidataEntityLabel(tzQid).then((label) => (label ? ianaFromTimezoneLabel(label) : null));
+      }), Promise.resolve(null));
     });
   });
 }
