@@ -226,12 +226,25 @@ function parseDateStr(dateStr) {
   return date;
 }
 
+// ISO 8601 week number - the standard convention behind "what week is it":
+// weeks run Monday-Sunday and week 1 is the one containing the year's first
+// Thursday, so the first days of January can belong to the previous year's
+// week 52/53 (and Dec 29-31 to next year's week 1).
+function isoWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return { week: Math.ceil((((d - yearStart) / 86400000) + 1) / 7), year: d.getUTCFullYear() };
+}
+
 function openDayModal(date) {
   const universalDay = compatLifePathInfo(date).display;
   const reducedEnergy = calendarDayReduce(dailyEnergyRaw(date), date);
   const dayOfYear = getDayOfYear(date);
   const chineseDaySign = getChineseDaySign(date);
   const sunSign = getSunSign(date);
+  const isoWeek = isoWeekNumber(date);
 
   const dateLabel = date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -246,6 +259,7 @@ function openDayModal(date) {
       <div class="breakdown-row"><span>Universal Day</span><span class="breakdown-score">${universalDay}</span></div>
       <div class="breakdown-row"><span>Reduced Daily Energy</span><span class="breakdown-score">${reducedEnergy}</span></div>
       <div class="breakdown-row"><span>Day # of the Year</span><span class="breakdown-score">${dayOfYear}</span></div>
+      <div class="breakdown-row"><span>📅 Week of the Year</span><span class="breakdown-score">Week ${isoWeek.week}${isoWeek.year !== date.getFullYear() ? ` of ${isoWeek.year}` : ''}</span></div>
       <div class="breakdown-row"><span>${VIETNAMESE_ZODIAC_EMOJI[chineseDaySign] || ''} Chinese Zodiac Day</span><span class="breakdown-score">${chineseDaySign}</span></div>
       <div class="breakdown-row"><span>${ZODIAC_SYMBOLS[sunSign] || ''} Western Zodiac Season</span><span class="breakdown-score">${sunSign}</span></div>
       ${transitRows}

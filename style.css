@@ -3908,3 +3908,67 @@ a.pm-tournament-name:hover {
 .bulk-upload-btn {
   margin-left: 8px;
 }
+
+/* ===================== Dark inputs everywhere ===================== */
+/* The app is dark; bright white input fields were the one glaring leftover
+   from an earlier look. One consolidated override (cascade beats the older
+   per-component white rules above) restyles every text field, select, and
+   search box to the same dark plate with a subtle purple border - the same
+   treatment .ufc-page inputs already had, now app-wide. color-scheme: dark
+   keeps the native dropdown/date-picker chrome dark too. */
+
+.bday-box input,
+.inline-form input[type="text"],
+.inline-form input[type="date"],
+.inline-form input[type="time"],
+.inline-form input[type="number"],
+.auth-modal-form input,
+.person-input select.db-picker,
+.player-search,
+.ufc-add-fighter-form input[type="text"],
+.ufc-add-fighter-form input[type="date"],
+.stats-sport-box select,
+.ufc-location-field select,
+.ufc-add-stadium-form input[type="text"],
+.ufc-add-stadium-form input[type="date"],
+.ufc-add-stadium-form select {
+  background: #141019;
+  color: var(--text);
+  border: 1px solid rgba(167, 107, 214, 0.35);
+  color-scheme: dark;
+}
+
+.bday-box input:focus,
+.inline-form input:focus,
+.auth-modal-form input:focus,
+.person-input select.db-picker:focus,
+.player-search:focus,
+.ufc-add-fighter-form input:focus,
+.stats-sport-box select:focus,
+.ufc-location-field select:focus,
+.ufc-add-stadium-form input:focus,
+.ufc-add-stadium-form select:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 6px rgba(167, 107, 214, 0.45), 0 0 14px rgba(167, 107, 214, 0.2);
+}
+
+input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* ===================== iOS safe areas (home-screen PWA) ===================== */
+/* With viewport-fit=cover the page extends under the notch and home
+   indicator - pad the shell so content and the fixed auth widget clear them. */
+
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.auth-widget {
+  margin-bottom: env(safe-area-inset-bottom);
+}
