@@ -742,11 +742,7 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbBreakdown(stats, suffix);
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
-  // "Which component predicts best" is a whole-history diagnostic (which piece
-  // of the score beats the market across ALL resolved games), not a per-scope
-  // stat - feeding it the scoped list made the Today tab show ~1 finished game.
-  // Always give it the full prediction set, regardless of which tab is active.
-  renderMlbComponentSignal(predictions, suffix);
+  renderMlbComponentSignal(scopedPredictions, suffix);
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
@@ -860,6 +856,170 @@ async function recordTodaysMlbGames() {
   todaysMlbSlatePending = pending.sort((a, b) => a.gameStartTime - b.gameStartTime);
 }
 
+// The companion to recordTodaysMlbGames. That pass fills the Today tab from
+// OPEN markets, but a game that has already finished has a CLOSED market and is
+// gone from the open-market feed - so without this, today's completed games
+// would be invisible on Today until tomorrow's backfill swept them into Old
+// Data, which is exactly why the Today tab only showed the one game that
+// happened to be caught live. This reconstructs each finished game the same way
+// the backfill does (closed-market slug lookup + CLOB price history + box-score
+// resolution), for BOTH the Game Picks and Strikeout Signal halves, so "today's
+// worth of games" is complete the moment each one ends. Best-effort, non-
+// blocking, and dedups against anything already stored so nothing double-counts.
+async function recordTodaysFinishedMlbGames() {
+  const now = new Date();
+  const scheduleGames = await fetchMlbSchedule(
+    isoDateOnlyUTC(new Date(now.getTime() - 86400000)),
+    isoDateOnlyUTC(new Date(now.getTime() + 86400000)),
+  );
+  const todaysFinal = scheduleGames.filter(
+    (g) => g.status.abstractGameState === 'Final' && isMlbTodayLocal(g.gameDate),
+  );
+  if (!todaysFinal.length) return;
+
+  // Doubleheader guard for the Game Picks half only (Polymarket's slug has no
+  // game-number suffix, so game 1 vs 2 can't be told apart); the Strikeout half
+  // still processes both games, since it needs no market match.
+  const dhSeen = new Set();
+  const dhKeys = new Set();
+  todaysFinal.forEach((g) => {
+    const key = [g.teams.away.team.id, g.teams.home.team.id].sort().join('-');
+    if (dhSeen.has(key)) dhKeys.add(key);
+    dhSeen.add(key);
+  });
+
+  const existingPreds = loadMlbPredictions();
+  const existingByGamePk = new Map(existingPreds.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
+  const existingSignals = loadMlbPitcherKSignals();
+  const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
+  const signalCountByGamePk = new Map();
+  existingSignals.forEach((s) => signalCountByGamePk.set(s.gamePk, (signalCountByGamePk.get(s.gamePk) || 0) + 1));
+
+  const teamInfoCache = new Map();
+  const managerCache = new Map();
+  const regionCache = new Map();
+  const stadiumCache = new Map();
+  const newPreds = [];
+  const newSignals = [];
+
+  async function processFinal(g) {
+    const gamePk = g.gamePk;
+    // Already fully captured (pick + both starters' signals) by the open pass or
+    // the live tracker? Skip before fetching the feed - no point re-pulling it.
+    if (existingByGamePk.has(gamePk) && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
+
+    const date = g.officialDate;
+    const feed = await fetchGameLiveFeed(gamePk);
+    if (!feed || feed.abstractGameState !== 'Final') return;
+    if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) return;
+
+    const venueId = feed.venue && feed.venue.id;
+    const venueName = feed.venue && feed.venue.name;
+    if (!venueId) return;
+    let regionInfo = regionCache.get(venueId);
+    if (!regionInfo) { regionInfo = await resolveMlbRegionForBackfill(venueId, venueName); regionCache.set(venueId, regionInfo); }
+    if (!regionInfo.region) return;
+    let stadiumFounded = stadiumCache.get(venueId);
+    if (stadiumFounded === undefined) { stadiumFounded = await resolveMlbStadiumFoundedForBackfill(venueId, venueName); stadiumCache.set(venueId, stadiumFounded); }
+
+    const matchDateISO = currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: new Date(g.gameDate) });
+    if (!matchDateISO) return;
+    const matchDate = parseDateInput(matchDateISO);
+
+    const season = new Date(g.gameDate).getFullYear();
+    await Promise.all([feed.home.teamId, feed.away.teamId].map(async (id) => {
+      if (!teamInfoCache.has(id)) teamInfoCache.set(id, await fetchTeamInfo(id));
+      if (!managerCache.has(id)) managerCache.set(id, await fetchTeamManager(id, season));
+    }));
+    const allIds = [
+      feed.home.startingPitcherId, feed.away.startingPitcherId,
+      ...feed.home.batters.map((b) => b.id), ...feed.away.batters.map((b) => b.id),
+      managerCache.get(feed.home.teamId) && managerCache.get(feed.home.teamId).id,
+      managerCache.get(feed.away.teamId) && managerCache.get(feed.away.teamId).id,
+    ];
+    const birthdates = await fetchPeopleBirthdates(allIds);
+    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
+
+    // ---- Game Picks half ----
+    const dhKey = [feed.home.teamId, feed.away.teamId].sort().join('-');
+    if (!existingByGamePk.has(gamePk) && !dhKeys.has(dhKey)) {
+      const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
+      if (event) {
+        const gObj = {
+          sideA: sideForName(event.teamAName), sideB: sideForName(event.teamBName),
+          teamInfoA: teamInfoCache.get(sideForName(event.teamAName).teamId), teamInfoB: teamInfoCache.get(sideForName(event.teamBName).teamId),
+          managerA: managerCache.get(sideForName(event.teamAName).teamId), managerB: managerCache.get(sideForName(event.teamBName).teamId),
+          birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: new Date(g.gameDate),
+        };
+        const scoreA = computeTeamComposite(gObj, 'A');
+        const scoreB = computeTeamComposite(gObj, 'B');
+        if (scoreA && scoreB) {
+          const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
+          const [priceA, priceB] = await Promise.all([
+            fetchClobPriceNear(event.clobTokenIdA, targetTs),
+            fetchClobPriceNear(event.clobTokenIdB, targetTs),
+          ]);
+          if (priceA != null && priceB != null) {
+            const marketFavName = priceA >= priceB ? event.teamAName : event.teamBName;
+            const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
+            const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+            const rA = sideForName(event.teamAName).runs;
+            const rB = sideForName(event.teamBName).runs;
+            const result = (!Number.isFinite(rA) || !Number.isFinite(rB))
+              ? null
+              : rA === rB
+                ? { winner: null, draw: true, resolvedAt: Date.now() }
+                : { winner: rA > rB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
+            const rec = {
+              conditionId: event.conditionId, gamePk,
+              teamAName: event.teamAName, teamBName: event.teamBName,
+              numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
+              components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+              marketFavorite: marketFavName, marketPriceA: priceA, marketPriceB: priceB,
+              pickType: agree ? 'favorite' : 'underdog',
+              eventTitle: event.eventTitle, gameTime: event.gameStartTime.toISOString(),
+              recordedAt: Date.now(), result,
+            };
+            newPreds.push(rec);
+            existingByGamePk.set(gamePk, rec);
+          }
+        }
+      }
+    }
+
+    // ---- Strikeout Signal half - no market match needed ----
+    for (const side of [feed.home, feed.away]) {
+      if (!side.startingPitcherId) continue;
+      const key = `${gamePk}|${side.startingPitcherId}`;
+      if (existingSignalKeys.has(key)) continue;
+      const bd = birthdates.get(side.startingPitcherId);
+      if (!bd || !bd.birthDate || side.startingPitcherStrikeouts == null) continue;
+      const baseline = await fetchMlbGameLogBeforeDate(side.startingPitcherId, season, date);
+      if (!baseline) continue;
+      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat).finalScore;
+      const predictedDirection = dayScore >= 60 ? 'over' : (dayScore <= 40 ? 'under' : 'neutral');
+      const actualKs = side.startingPitcherStrikeouts;
+      const actualDirection = actualKs > baseline.strikeoutsPerStart ? 'over' : (actualKs < baseline.strikeoutsPerStart ? 'under' : 'push');
+      newSignals.push({
+        gamePk, pitcherId: side.startingPitcherId, pitcherName: bd.name, teamName: side.teamName,
+        gameTime: new Date(g.gameDate).toISOString(),
+        dayScore, predictedDirection, seasonAvgKsAtPickTime: baseline.strikeoutsPerStart,
+        recordedAt: Date.now(), actualKs,
+        result: { actualDirection, correct: predictedDirection !== 'neutral' ? predictedDirection === actualDirection : null, resolvedAt: Date.now() },
+      });
+      existingSignalKeys.add(key);
+    }
+  }
+
+  for (let i = 0; i < todaysFinal.length; i += MLB_BACKFILL_CHUNK) {
+    const chunk = todaysFinal.slice(i, i + MLB_BACKFILL_CHUNK);
+    await Promise.all(chunk.map((g) => processFinal(g).catch(() => {})));
+  }
+
+  if (newPreds.length) saveMlbPredictions([...existingPreds, ...newPreds]);
+  if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
+}
+
 async function refreshAndRenderMlb() {
   const predictions = await checkMlbResults();
   currentMlbPredictions = predictions;
@@ -871,11 +1031,18 @@ async function refreshAndRenderMlb() {
 
   // Fill today's slate behind the first render, then re-render Today with any
   // newly-scored picks + pending rows. Best-effort - never blocks the page.
+  // Pass 1 pulls today's OPEN markets (live/upcoming games); pass 2 reconstructs
+  // today's already-FINISHED games, whose markets have closed and dropped off
+  // that feed - together they give the Today tab the whole day, not just games
+  // caught mid-flight.
   try {
     await recordTodaysMlbGames();
+    await recordTodaysFinishedMlbGames();
     const preds2 = loadMlbPredictions();
+    const sigs2 = loadMlbPitcherKSignals();
     currentMlbPredictions = preds2;
-    renderMlbScope('', preds2, currentMlbKSignals);
+    currentMlbKSignals = sigs2;
+    renderMlbScope('', preds2, sigs2);
   } catch (e) { /* today-slate fill is best-effort */ }
 }
 
