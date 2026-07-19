@@ -227,9 +227,22 @@ function computeMatchScore(dobDate, matchDate, venueDate, regionDate) {
   return { day, venue, region, combined };
 }
 
+// The calendar date scoring uses is the one that's actually showing on a
+// clock at the venue, not whichever UTC date the match's timestamp happens
+// to convert to - computed fresh each time (a tournament's region can
+// change after its matches are already loaded) rather than cached once at
+// enrichment time.
+function currentMatchDateISO(gameStartTime, st, tournamentKey) {
+  if (st.regionMode === 'us') return localMatchDateISO(gameStartTime, 'us', st.selectedRegion);
+  if (st.selectedRegion && !st.selectedRegion.timezone) {
+    ensureIntlRegionTimezone(st.selectedRegion, () => updateTournamentMatches(tournamentKey));
+  }
+  return localMatchDateISO(gameStartTime, 'intl', st.selectedRegion);
+}
+
 function scoresForMatch(m, st) {
   if (!(m.matchedA && m.matchedB && st.selectedRegion)) return null;
-  const matchDate = parseDateInput(m.matchDateISO);
+  const matchDate = parseDateInput(currentMatchDateISO(m.gameStartTime, st, m.tournament));
   const regionDate = parseDateInput(st.selectedRegion.founded);
   const venueDate = st.selectedVenue ? parseDateInput(st.selectedVenue.founded) : null;
   return {
@@ -270,10 +283,6 @@ function parseGameStart(raw) {
   const iso = raw.replace(' ', 'T').replace(/\+00$/, 'Z').replace(/\+00:00$/, 'Z');
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d;
-}
-
-function isoDateFromUTC(d) {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 // Event titles look like "Geneva Open: Cameron Norrie vs Mariano Navone" -
@@ -393,7 +402,6 @@ function enrichWithNumerology(m) {
   const roster = buildAllPlayers();
   m.matchedA = matchPlayer(m.playerAName, roster);
   m.matchedB = matchPlayer(m.playerBName, roster);
-  m.matchDateISO = isoDateFromUTC(m.gameStartTime);
 }
 
 /* ===================== Rendering helpers ===================== */
@@ -531,10 +539,11 @@ function initBreakdownModal() {
 
 function fullMatchupHtml(m) {
   if (!(m.matchedA && m.matchedB)) return '';
+  const st = getTournamentState(m.tournament);
   const params = new URLSearchParams({
     a: m.matchedA.name,
     b: m.matchedB.name,
-    date: isoToDisplay(m.matchDateISO),
+    date: isoToDisplay(currentMatchDateISO(m.gameStartTime, st, m.tournament)),
   });
   return `<a class="btn" href="tennis.html?${params.toString()}">Full Matchup &rarr;</a>`;
 }

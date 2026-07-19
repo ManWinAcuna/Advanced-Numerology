@@ -557,9 +557,21 @@ function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   return { day, stadium, state, combined };
 }
 
+// The calendar date scoring uses is the one that's actually showing on a
+// clock at the venue, not whichever UTC date the fight's timestamp happens
+// to convert to - computed fresh each time (region can change after a fight
+// card is already loaded) rather than cached once at enrichment time.
+function currentMatchDateISO(gameStartTime) {
+  if (regionMode === 'us') return localMatchDateISO(gameStartTime, 'us', selectedRegion);
+  if (selectedRegion && !selectedRegion.timezone) {
+    ensureIntlRegionTimezone(selectedRegion, () => updateNumerologyBlocks());
+  }
+  return localMatchDateISO(gameStartTime, 'intl', selectedRegion);
+}
+
 function scoresForFight(f) {
   if (!(f.matchedA && f.matchedB && selectedRegion)) return null;
-  const matchDate = parseDateInput(f.matchDateISO);
+  const matchDate = parseDateInput(currentMatchDateISO(f.gameStartTime));
   const stateDate = parseDateInput(selectedRegion.founded);
   const stadiumDate = selectedStadium ? parseDateInput(selectedStadium.founded) : null;
   return {
@@ -644,10 +656,6 @@ function parseGameStart(raw) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function isoDateFromUTC(d) {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-}
-
 function parseMarket(market, event) {
   let outcomes = [];
   let prices = [];
@@ -728,7 +736,6 @@ function enrichWithNumerology(f) {
   const roster = buildAllFighters();
   f.matchedA = matchFighter(f.fighterAName, roster);
   f.matchedB = matchFighter(f.fighterBName, roster);
-  f.matchDateISO = isoDateFromUTC(f.gameStartTime);
 }
 
 /* ===================== Rendering helpers ===================== */
@@ -870,7 +877,7 @@ function fullMatchupHtml(f) {
   const params = new URLSearchParams({
     a: f.matchedA.name,
     b: f.matchedB.name,
-    date: isoToDisplay(f.matchDateISO),
+    date: isoToDisplay(currentMatchDateISO(f.gameStartTime)),
   });
   return `<a class="btn" href="ufc.html?${params.toString()}">Full Matchup &rarr;</a>`;
 }

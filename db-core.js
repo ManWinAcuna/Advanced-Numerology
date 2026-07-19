@@ -335,6 +335,176 @@ function lookupKeyDateByName(name) {
     .then((result) => (result || lookupKeyDateFromWikipediaInfobox(name)));
 }
 
+/* ===================== Match-day timezone correctness ===================== */
+// A match's numerology "Day" factor needs to be scored against the calendar
+// date it actually falls on AT THE VENUE, not whatever date UTC happens to
+// land on after conversion - a morning match in Australia/Asia can easily
+// be a different calendar day in UTC than what's on a clock at the venue,
+// while a European match (only 1-2 hours from UTC) rarely crosses that
+// boundary. US states get a small fixed lookup (only needs to be right
+// about which side of midnight, even for a state spanning more than one
+// real zone); international regions get their timezone via Wikidata's P421
+// "time zone" property.
+
+const US_STATE_TIMEZONES = {
+  Alabama: 'America/Chicago', Alaska: 'America/Anchorage', Arizona: 'America/Phoenix',
+  Arkansas: 'America/Chicago', California: 'America/Los_Angeles', Colorado: 'America/Denver',
+  Connecticut: 'America/New_York', Delaware: 'America/New_York', Florida: 'America/New_York',
+  Georgia: 'America/New_York', Hawaii: 'Pacific/Honolulu', Idaho: 'America/Boise',
+  Illinois: 'America/Chicago', Indiana: 'America/Indiana/Indianapolis', Iowa: 'America/Chicago',
+  Kansas: 'America/Chicago', Kentucky: 'America/New_York', Louisiana: 'America/Chicago',
+  Maine: 'America/New_York', Maryland: 'America/New_York', Massachusetts: 'America/New_York',
+  Michigan: 'America/Detroit', Minnesota: 'America/Chicago', Mississippi: 'America/Chicago',
+  Missouri: 'America/Chicago', Montana: 'America/Denver', Nebraska: 'America/Chicago',
+  Nevada: 'America/Los_Angeles', 'New Hampshire': 'America/New_York', 'New Jersey': 'America/New_York',
+  'New Mexico': 'America/Denver', 'New York': 'America/New_York', 'North Carolina': 'America/New_York',
+  'North Dakota': 'America/Chicago', Ohio: 'America/New_York', Oklahoma: 'America/Chicago',
+  Oregon: 'America/Los_Angeles', Pennsylvania: 'America/New_York', 'Rhode Island': 'America/New_York',
+  'South Carolina': 'America/New_York', 'South Dakota': 'America/Chicago', Tennessee: 'America/Chicago',
+  Texas: 'America/Chicago', Utah: 'America/Denver', Vermont: 'America/New_York',
+  Virginia: 'America/New_York', Washington: 'America/Los_Angeles', 'West Virginia': 'America/New_York',
+  Wisconsin: 'America/Chicago', Wyoming: 'America/Denver',
+};
+
+// Wikidata's P421 links to a "time zone" entity whose label isn't itself an
+// IANA identifier ("Australian Eastern Standard Time", not "Australia/
+// Sydney") - this maps the common ones to an IANA zone with the same
+// offset/DST behavior. Doesn't need to be the exact city, just correct.
+const TIMEZONE_LABEL_TO_IANA = {
+  'coordinated universal time': 'UTC',
+  'greenwich mean time': 'Etc/UTC',
+  'western european time': 'Europe/Lisbon',
+  'western european summer time': 'Europe/Lisbon',
+  'central european time': 'Europe/Berlin',
+  'central european summer time': 'Europe/Berlin',
+  'eastern european time': 'Europe/Athens',
+  'eastern european summer time': 'Europe/Athens',
+  'moscow time': 'Europe/Moscow',
+  'india standard time': 'Asia/Kolkata',
+  'china standard time': 'Asia/Shanghai',
+  'japan standard time': 'Asia/Tokyo',
+  'korea standard time': 'Asia/Seoul',
+  'australian western standard time': 'Australia/Perth',
+  'australian central standard time': 'Australia/Adelaide',
+  'australian central daylight time': 'Australia/Adelaide',
+  'australian eastern standard time': 'Australia/Sydney',
+  'australian eastern daylight time': 'Australia/Sydney',
+  'new zealand standard time': 'Pacific/Auckland',
+  'new zealand daylight time': 'Pacific/Auckland',
+  'gulf standard time': 'Asia/Dubai',
+  'arabian standard time': 'Asia/Riyadh',
+  'eastern standard time': 'America/New_York',
+  'eastern daylight time': 'America/New_York',
+  'central standard time': 'America/Chicago',
+  'central daylight time': 'America/Chicago',
+  'mountain standard time': 'America/Denver',
+  'mountain daylight time': 'America/Denver',
+  'pacific standard time': 'America/Los_Angeles',
+  'pacific daylight time': 'America/Los_Angeles',
+  'argentina time': 'America/Argentina/Buenos_Aires',
+  'brasilia time': 'America/Sao_Paulo',
+};
+
+function fetchWikidataTimezoneQid(qid) {
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const entity = data.entities && data.entities[qid];
+      const claims = entity && entity.claims && entity.claims.P421;
+      if (!claims || !claims.length) return null;
+      const snak = claims[0].mainsnak;
+      return (snak && snak.datavalue && snak.datavalue.value && snak.datavalue.value.id) || null;
+    })
+    .catch(() => null);
+}
+
+function fetchWikidataEntityLabel(qid) {
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=labels&languages=en&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const entity = data.entities && data.entities[qid];
+      const label = entity && entity.labels && entity.labels.en;
+      return label ? label.value : null;
+    })
+    .catch(() => null);
+}
+
+// Best-effort: place name -> IANA timezone. Returns null (not a guess) if
+// unresolvable - callers fall back to plain UTC date math, same as before
+// this existed.
+// Most city entities on Wikidata link P421 to a plain fixed-offset entity
+// ("UTC+04:00") rather than a named zone ("Gulf Standard Time") - checked
+// live against Abu Dhabi, Kitzbühel, and Sydney, all three of which only had
+// the generic offset. Etc/GMT zones have inverted sign vs. common usage
+// (Etc/GMT-10 is UTC+10) and carry no DST, so this is a close approximation
+// rather than exact during a DST transition - still far better than the
+// plain-UTC baseline, since a 1-hour DST discrepancy only flips the
+// calendar day if the match starts within an hour of local midnight, while
+// plain UTC can be off by up to 12+ hours.
+function parseUtcOffsetLabel(label) {
+  const trimmed = label.trim();
+  if (/^UTC$/i.test(trimmed)) return 'Etc/UTC';
+  const m = /^UTC\s*([+−-])\s*(\d{1,2})(?::(\d{2}))?$/i.exec(trimmed);
+  if (!m) return null;
+  const minutes = Number(m[3] || 0);
+  if (minutes !== 0) return null; // Etc/GMT is whole-hour only; skip half/quarter-hour offsets
+  const hours = Number(m[2]);
+  if (hours === 0) return 'Etc/UTC';
+  const invertedSign = m[1] === '+' ? '-' : '+';
+  return `Etc/GMT${invertedSign}${hours}`;
+}
+
+function lookupTimezoneForPlace(name) {
+  return fetchWikidataId(name).then((qid) => {
+    if (!qid) return null;
+    return fetchWikidataTimezoneQid(qid).then((tzQid) => {
+      if (!tzQid) return null;
+      return fetchWikidataEntityLabel(tzQid).then((label) => {
+        if (!label) return null;
+        return TIMEZONE_LABEL_TO_IANA[label.toLowerCase()] || parseUtcOffsetLabel(label);
+      });
+    });
+  });
+}
+
+// The calendar date a match falls on at the venue, given its US state or
+// international region - falls back to the plain UTC calendar date if no
+// timezone is resolvable yet (region not backfilled, or lookup failed).
+function localMatchDateISO(gameStartTime, regionMode, region) {
+  const zone = regionMode === 'us' ? US_STATE_TIMEZONES[region && region.name] : (region && region.timezone);
+  if (zone) {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(gameStartTime);
+    } catch (e) { /* fall through to plain UTC below */ }
+  }
+  return `${gameStartTime.getUTCFullYear()}-${String(gameStartTime.getUTCMonth() + 1).padStart(2, '0')}-${String(gameStartTime.getUTCDate()).padStart(2, '0')}`;
+}
+
+// Lazily backfills a missing timezone onto an already-saved international
+// region (INTL_REGIONS_KEY) and persists it, so it only has to be looked up
+// once per region rather than on every match that uses it. Safe to call
+// repeatedly for the same region while a lookup is already in flight.
+const regionTimezoneLookupsInFlight = new Set();
+
+function ensureIntlRegionTimezone(region, onResolved) {
+  if (!region || region.timezone || regionTimezoneLookupsInFlight.has(region.id)) return;
+  regionTimezoneLookupsInFlight.add(region.id);
+  lookupTimezoneForPlace(region.name).then((tz) => {
+    regionTimezoneLookupsInFlight.delete(region.id);
+    if (!tz) return;
+    const regions = loadIntlRegions();
+    const idx = regions.findIndex((r) => r.id === region.id);
+    if (idx !== -1) {
+      regions[idx] = { ...regions[idx], timezone: tz };
+      saveIntlRegions(regions);
+    }
+    region.timezone = tz;
+    if (onResolved) onResolved(tz);
+  });
+}
+
 const ZODIAC_SYMBOLS = {
   Aries: '♈', Taurus: '♉', Gemini: '♊', Cancer: '♋', Leo: '♌', Virgo: '♍',
   Libra: '♎', Scorpio: '♏', Sagittarius: '♐', Capricorn: '♑', Aquarius: '♒', Pisces: '♓',
