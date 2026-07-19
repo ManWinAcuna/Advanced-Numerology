@@ -602,6 +602,84 @@ function isMlbTodayLocal(iso) {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
 }
 
+// The whole point of the component storage: test each part of the team score
+// on its own. For a component, "favors" the team with the higher score on that
+// axis; the edge is how much that pick beats (or trails) the market-implied
+// win rate. A component with a persistently positive edge is one the composite
+// should lean on more; a negative one is dead weight or noise. The full
+// composite is included as the baseline to beat. All measured on the same set
+// of games (those carrying component data) for an apples-to-apples read.
+function computeComponentSignalStats(predictions) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && p.components && p.components.A && p.components.B);
+  const priceOf = (p, name) => (normalizeName(p.teamAName) === normalizeName(name) ? p.marketPriceA : p.marketPriceB);
+
+  const statFor = (scoreAOf, scoreBOf) => {
+    const picks = resolved
+      .map((p) => {
+        const a = scoreAOf(p);
+        const b = scoreBOf(p);
+        if (a == null || b == null || a === b) return null; // no lean on this axis
+        const favName = a > b ? p.teamAName : p.teamBName;
+        const implied = priceOf(p, favName);
+        if (implied == null) return null;
+        return { won: normalizeName(p.result.winner) === normalizeName(favName), implied };
+      })
+      .filter(Boolean);
+    const n = picks.length;
+    const wins = picks.filter((x) => x.won).length;
+    const winPct = n ? Math.round((wins / n) * 100) : null;
+    const marketPct = n ? Math.round((picks.reduce((s, x) => s + x.implied, 0) / n) * 100) : null;
+    const edge = (winPct != null && marketPct != null) ? winPct - marketPct : null;
+    return { count: n, wins, winPct, marketPct, edge };
+  };
+
+  const rows = MLB_COMPONENT_KEYS.map((key) => ({
+    key,
+    label: MLB_COMPONENT_LABELS[key],
+    ...statFor((p) => p.components.A[key], (p) => p.components.B[key]),
+  }));
+  rows.push({
+    key: 'composite',
+    label: MLB_COMPONENT_LABELS.composite,
+    ...statFor((p) => p.numerologyScoreA, (p) => p.numerologyScoreB),
+  });
+
+  rows.sort((a, b) => (b.edge == null ? -Infinity : b.edge) - (a.edge == null ? -Infinity : a.edge));
+  return rows;
+}
+
+function renderMlbComponentSignal(predictions, suffix = '') {
+  const el = document.getElementById('mlbComponentSignal' + suffix);
+  if (!el) return;
+  const rows = computeComponentSignalStats(predictions);
+  const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
+  if (!maxCount) {
+    el.innerHTML = '<div class="empty-state">No resolved games with component data yet &mdash; run the backfill (or wait for tracked games to finish) to populate this.</div>';
+    return;
+  }
+  const body = rows.map((r) => {
+    const isComposite = r.key === 'composite';
+    const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
+      ? `<span class="score-inline ${r.edge > 0 ? 'good' : (r.edge < 0 ? 'bad' : '')}">${r.edge > 0 ? '+' : ''}${r.edge}</span>`
+      : `<span class="empty-state">${r.count ? 'thin' : '—'}</span>`;
+    return `
+      <tr${isComposite ? ' style="border-top:2px solid var(--border);"' : ''}>
+        <td>${isComposite ? '🎯 ' : ''}${escapeHtml(r.label)}</td>
+        <td>${r.count}</td>
+        <td>${r.winPct != null ? `${r.winPct}%` : '—'}</td>
+        <td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td>
+        <td>${edgeCell}</td>
+      </tr>
+    `;
+  }).join('');
+  el.innerHTML = `
+    <table class="astro-table">
+      <thead><tr><th>Signal</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+
 function renderMlbScope(suffix, predictions, signals) {
   const isOld = suffix === 'Old';
   const scopedPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
@@ -610,6 +688,7 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbBreakdown(stats, suffix);
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
+  renderMlbComponentSignal(scopedPredictions, suffix);
   renderMlbTable(scopedPredictions, suffix);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
@@ -652,7 +731,18 @@ wireMlbRefreshButton('mlbStatsRefreshBtnOld');
 // (dedup by gamePk for predictions, by gamePk+pitcherId for K-signals) - it's
 // purely a gap-filler, triggered manually since it's a genuinely heavy job.
 
-const MLB_BACKFILL_LOOKBACK_DAYS = 30;
+const MLB_BACKFILL_LOOKBACK_DAYS = 42; // ~6 weeks - deep enough to start the
+// component-signal analysis, shallow enough that every pick (now carrying its
+// per-component breakdown) stays under Firebase's ~1MB per-account sync limit.
+const MLB_BACKFILL_SCHEMA = 2; // bump when the stored prediction shape changes.
+// A stored marker whose schemaVersion doesn't match triggers a one-time full
+// re-walk of the whole window instead of an incremental catch-up, so existing
+// records get upgraded in place (here: back-filled with per-component scores)
+// rather than the marker skipping straight past them.
+const MLB_BACKFILL_CHUNK = 5; // games processed concurrently per batch - a
+// full-window rebuild is hundreds of games x several fetches each, far too slow
+// one at a time; 5-at-a-time keeps it to a few minutes without hammering the
+// upstream APIs.
 
 function isoDateOnlyUTC(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
@@ -716,10 +806,16 @@ async function resolveMlbStadiumFoundedForBackfill(venueId, venueName) {
 async function backfillMlbHistory(onProgress) {
   const todayISO = isoDateOnlyUTC(new Date());
   const state = loadMlbBackfillState();
-  const startISO = state && state.throughDateISO ? addDaysISO(state.throughDateISO, 1) : addDaysISO(todayISO, -MLB_BACKFILL_LOOKBACK_DAYS);
+  // A stored marker only lets us skip ahead if it was written by THIS schema.
+  // On a schema bump (e.g. adding per-component scores) we re-walk the whole
+  // window once so already-stored records get upgraded in place.
+  const schemaCurrent = state && state.schemaVersion === MLB_BACKFILL_SCHEMA;
+  const startISO = (schemaCurrent && state.throughDateISO)
+    ? addDaysISO(state.throughDateISO, 1)
+    : addDaysISO(todayISO, -MLB_BACKFILL_LOOKBACK_DAYS);
   const endISO = addDaysISO(todayISO, -1); // yesterday - today is live-tracked, not backfilled
 
-  if (startISO > endISO) return { gamesProcessed: 0, newPredictionsCount: 0, newSignalsCount: 0, alreadyCurrent: true };
+  if (startISO > endISO) return { gamesProcessed: 0, newPredictionsCount: 0, patchedCount: 0, newSignalsCount: 0, alreadyCurrent: true };
 
   const scheduleGames = await fetchMlbSchedule(startISO, endISO);
   const byDate = new Map();
@@ -746,7 +842,7 @@ async function backfillMlbHistory(onProgress) {
   });
 
   const existingPredictions = loadMlbPredictions();
-  const existingPredictionGamePks = new Set(existingPredictions.map((p) => p.gamePk));
+  const existingByGamePk = new Map(existingPredictions.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
   const existingSignals = loadMlbPitcherKSignals();
   const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
 
@@ -757,30 +853,36 @@ async function backfillMlbHistory(onProgress) {
 
   const newPredictions = [];
   const newSignals = [];
+  let patchedCount = 0; // existing records that got their components back-filled in place
+
   const allGames = [...byDate.entries()].flatMap(([date, games]) => games.map((g) => ({ date, g })));
   const total = allGames.length;
   let processed = 0;
   let lastCheckpoint = Date.now();
 
-  for (const { date, g } of allGames) {
-    processed++;
-    if (onProgress) onProgress(processed, total);
+  const saveProgress = () => {
+    // existingPredictions holds patched records in place (mutated), so spread
+    // it whenever there's either a new prediction OR an in-place patch.
+    if (newPredictions.length || patchedCount) saveMlbPredictions([...existingPredictions, ...newPredictions]);
+    if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
+  };
 
+  async function processGame({ date, g }) {
     const gamePk = g.gamePk;
     const feed = await fetchGameLiveFeed(gamePk);
-    if (!feed || feed.abstractGameState !== 'Final') continue;
-    if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) continue; // no full lineup - can't score
+    if (!feed || feed.abstractGameState !== 'Final') return;
+    if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) return; // no full lineup - can't score
 
     const venueId = feed.venue && feed.venue.id;
     const venueName = feed.venue && feed.venue.name;
-    if (!venueId) continue; // no venue - can't resolve day/state, don't guess
+    if (!venueId) return; // no venue - can't resolve day/state, don't guess
 
     let regionInfo = regionCache.get(venueId);
     if (!regionInfo) {
       regionInfo = await resolveMlbRegionForBackfill(venueId, venueName);
       regionCache.set(venueId, regionInfo);
     }
-    if (!regionInfo.region) continue; // couldn't confirm a region - don't guess
+    if (!regionInfo.region) return; // couldn't confirm a region - don't guess
 
     let stadiumFounded = stadiumCache.get(venueId);
     if (stadiumFounded === undefined) {
@@ -789,7 +891,7 @@ async function backfillMlbHistory(onProgress) {
     }
 
     const matchDateISO = currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: new Date(g.gameDate) });
-    if (!matchDateISO) continue; // timezone still unconfirmed - don't guess
+    if (!matchDateISO) return; // timezone still unconfirmed - don't guess
     const matchDate = parseDateInput(matchDateISO);
 
     const season = new Date(date).getFullYear();
@@ -807,78 +909,93 @@ async function backfillMlbHistory(onProgress) {
     ];
     const birthdates = await fetchPeopleBirthdates(allIds);
 
-    // Game Picks half.
+    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
+    const teamInfoForName = (name) => teamInfoCache.get(sideForName(name).teamId);
+    const managerForName = (name) => managerCache.get(sideForName(name).teamId);
+    // gameStartTime is the real UTC first-pitch instant (not the already-
+    // resolved matchDate) so computeTeamComposite's own currentMlbMatchDateISO(g)
+    // re-derives the identical matchDateISO from the same real timestamp +
+    // region, rather than re-converting an already-local-midnight Date.
+    const buildGObj = (aName, bName) => ({
+      sideA: sideForName(aName), sideB: sideForName(bName),
+      teamInfoA: teamInfoForName(aName), teamInfoB: teamInfoForName(bName),
+      managerA: managerForName(aName), managerB: managerForName(bName),
+      birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode,
+      stadiumFounded, gameStartTime: new Date(g.gameDate),
+    });
+
+    // ---- Game Picks half ----
+    // Skip entirely only if this game is already stored WITH components. If it
+    // lacks components (older record) we recompute to back-fill them in place;
+    // if it isn't stored at all, we create it.
     const dhKey = `${date}|${[feed.home.teamId, feed.away.teamId].sort().join('-')}`;
-    if (!existingPredictionGamePks.has(gamePk) && !doubleheaderKeys.has(dhKey)) {
-      const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
-      if (event) {
-        const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
-        const teamInfoForName = (name) => teamInfoCache.get(sideForName(name).teamId);
-        const managerForName = (name) => managerCache.get(sideForName(name).teamId);
-
-        // gameStartTime is the real UTC first-pitch instant (not the
-        // already-resolved matchDate) so computeTeamComposite's own internal
-        // currentMlbMatchDateISO(g) call re-derives the identical
-        // matchDateISO confirmed above from the same real timestamp + region
-        // - redundant, but avoids re-running a timezone conversion on an
-        // already-local-midnight Date, which could land on the wrong
-        // calendar day if the browser's own timezone differs from the venue's.
-        const gObj = {
-          sideA: sideForName(event.teamAName), sideB: sideForName(event.teamBName),
-          teamInfoA: teamInfoForName(event.teamAName), teamInfoB: teamInfoForName(event.teamBName),
-          managerA: managerForName(event.teamAName), managerB: managerForName(event.teamBName),
-          birthdates,
-          region: regionInfo.region,
-          regionMode: regionInfo.regionMode,
-          stadiumFounded,
-          gameStartTime: new Date(g.gameDate),
-        };
-        const scoreA = computeTeamComposite(gObj, 'A');
-        const scoreB = computeTeamComposite(gObj, 'B');
+    const existingPred = existingByGamePk.get(gamePk);
+    if (!existingPred || !existingPred.components) {
+      let teamAName = null;
+      let teamBName = null;
+      let event = null;
+      if (existingPred) {
+        // Patching: keep the record's own A/B naming so components line up.
+        teamAName = existingPred.teamAName;
+        teamBName = existingPred.teamBName;
+      } else if (!doubleheaderKeys.has(dhKey)) {
+        event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
+        if (event) { teamAName = event.teamAName; teamBName = event.teamBName; }
+      }
+      if (teamAName) {
+        const scoreA = computeTeamComposite(buildGObj(teamAName, teamBName), 'A');
+        const scoreB = computeTeamComposite(buildGObj(teamAName, teamBName), 'B');
         if (scoreA && scoreB) {
-          const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
-          const [priceA, priceB] = await Promise.all([
-            fetchClobPriceNear(event.clobTokenIdA, targetTs),
-            fetchClobPriceNear(event.clobTokenIdB, targetTs),
-          ]);
-          if (priceA != null && priceB != null) {
-            const favA = priceA >= priceB;
-            const marketFavName = favA ? event.teamAName : event.teamBName;
-            const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
-            const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-            const runsForName = (name) => sideForName(name).runs;
-            const runsA = runsForName(event.teamAName);
-            const runsB = runsForName(event.teamBName);
-            const result = !Number.isFinite(runsA) || !Number.isFinite(runsB)
-              ? null
-              : runsA === runsB
-                ? { winner: null, draw: true, resolvedAt: Date.now() }
-                : { winner: runsA > runsB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
-
-            newPredictions.push({
-              conditionId: event.conditionId,
-              gamePk,
-              teamAName: event.teamAName,
-              teamBName: event.teamBName,
-              numerologyFavorite: numFavName,
-              numerologyScoreA: scoreA.combined,
-              numerologyScoreB: scoreB.combined,
-              marketFavorite: marketFavName,
-              marketPriceA: priceA,
-              marketPriceB: priceB,
-              pickType: agree ? 'favorite' : 'underdog',
-              eventTitle: event.eventTitle,
-              gameTime: event.gameStartTime.toISOString(),
-              recordedAt: Date.now(),
-              result,
-            });
-            existingPredictionGamePks.add(gamePk);
+          const components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
+          if (existingPred) {
+            existingPred.components = components;
+            patchedCount++;
+          } else if (event) {
+            const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
+            const [priceA, priceB] = await Promise.all([
+              fetchClobPriceNear(event.clobTokenIdA, targetTs),
+              fetchClobPriceNear(event.clobTokenIdB, targetTs),
+            ]);
+            if (priceA != null && priceB != null) {
+              const favA = priceA >= priceB;
+              const marketFavName = favA ? event.teamAName : event.teamBName;
+              const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
+              const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+              const runsForName = (name) => sideForName(name).runs;
+              const runsA = runsForName(event.teamAName);
+              const runsB = runsForName(event.teamBName);
+              const result = !Number.isFinite(runsA) || !Number.isFinite(runsB)
+                ? null
+                : runsA === runsB
+                  ? { winner: null, draw: true, resolvedAt: Date.now() }
+                  : { winner: runsA > runsB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
+              const rec = {
+                conditionId: event.conditionId,
+                gamePk,
+                teamAName: event.teamAName,
+                teamBName: event.teamBName,
+                numerologyFavorite: numFavName,
+                numerologyScoreA: scoreA.combined,
+                numerologyScoreB: scoreB.combined,
+                components,
+                marketFavorite: marketFavName,
+                marketPriceA: priceA,
+                marketPriceB: priceB,
+                pickType: agree ? 'favorite' : 'underdog',
+                eventTitle: event.eventTitle,
+                gameTime: event.gameStartTime.toISOString(),
+                recordedAt: Date.now(),
+                result,
+              };
+              newPredictions.push(rec);
+              existingByGamePk.set(gamePk, rec); // guard against a same-run duplicate
+            }
           }
         }
       }
     }
 
-    // Strikeout Signal half - independent of any market match.
+    // ---- Strikeout Signal half - independent of any market match ----
     for (const side of [feed.home, feed.away]) {
       if (!side.startingPitcherId) continue;
       const key = `${gamePk}|${side.startingPitcherId}`;
@@ -913,19 +1030,22 @@ async function backfillMlbHistory(onProgress) {
       });
       existingSignalKeys.add(key);
     }
-
-    if (Date.now() - lastCheckpoint > 5000) {
-      if (newPredictions.length) saveMlbPredictions([...existingPredictions, ...newPredictions]);
-      if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
-      lastCheckpoint = Date.now();
-    }
   }
 
-  if (newPredictions.length) saveMlbPredictions([...existingPredictions, ...newPredictions]);
-  if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
-  saveMlbBackfillState({ throughDateISO: endISO });
+  // Process in small concurrent batches - a full-window rebuild is hundreds of
+  // games, each several fetches, so one-at-a-time would take far too long.
+  for (let i = 0; i < allGames.length; i += MLB_BACKFILL_CHUNK) {
+    const chunk = allGames.slice(i, i + MLB_BACKFILL_CHUNK);
+    await Promise.all(chunk.map((entry) => processGame(entry).catch(() => {})));
+    processed += chunk.length;
+    if (onProgress) onProgress(Math.min(processed, total), total);
+    if (Date.now() - lastCheckpoint > 5000) { saveProgress(); lastCheckpoint = Date.now(); }
+  }
 
-  return { gamesProcessed: processed, newPredictionsCount: newPredictions.length, newSignalsCount: newSignals.length, alreadyCurrent: false };
+  saveProgress();
+  saveMlbBackfillState({ throughDateISO: endISO, schemaVersion: MLB_BACKFILL_SCHEMA });
+
+  return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, alreadyCurrent: false };
 }
 
 function initMlbBackfillButton() {
@@ -941,7 +1061,7 @@ function initMlbBackfillButton() {
       });
       status.textContent = result.alreadyCurrent
         ? 'Already caught up to yesterday - nothing new to backfill.'
-        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals.`;
+        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}.`;
       await refreshAndRenderMlb();
     } catch (e) {
       status.textContent = 'Something went wrong during backfill - try again.';

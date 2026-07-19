@@ -263,6 +263,10 @@ function recordMlbPredictionIfNew(g, scoreA, scoreB, marketFavorite, numerologyF
     numerologyFavorite,
     numerologyScoreA: scoreA.combined,
     numerologyScoreB: scoreB.combined,
+    // Per-component scores for each side - lets the Stats page later measure
+    // which single component (pitcher, franchise, etc.) actually predicts the
+    // winner, instead of only ever seeing the blended composite.
+    components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
     marketFavorite,
     marketPriceA: g.priceA,
     marketPriceB: g.priceB,

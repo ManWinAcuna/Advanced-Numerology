@@ -1281,21 +1281,27 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const stateDate = g.region ? parseDateInput(g.region.founded) : null;
   const stadiumDate = g.stadiumFounded ? parseDateInput(g.stadiumFounded) : null;
 
+  // Each part carries a stable `key` (pitcher / pitcherMatchup / catcher /
+  // batter / franchise / manager) alongside its display role, so the Stats
+  // page's component-signal analysis can group scores by what they ARE without
+  // re-parsing the human role string. extractComponents() below turns a parts
+  // array into one score per component.
   const parts = [];
   const pitcherBd = g.birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    parts.push({ role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
+    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
 
     const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
     if (matchupScore != null) {
-      parts.push({ role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
+      parts.push({ key: 'pitcherMatchup', role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
     }
   }
   side.batters.forEach((b) => {
     const bd = g.birthdates.get(b.id);
     if (!bd || !bd.birthDate) return;
-    const weight = b.pos === 'C' ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+    const isCatcher = b.pos === 'C';
+    const weight = isCatcher ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
+    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
   });
   if (teamInfo) {
     const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
@@ -1304,7 +1310,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       // exactly like any other entity through computeFighterScore, at full
       // weight, instead of the thinner zodiac-only fallback below.
       const foundingDate = parseDateInput(foundingISO);
-      parts.push({ role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate) });
+      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate) });
     } else if (teamInfo.firstYearOfPlay) {
       // No real date for this team - MLB's own API only gives a founding
       // YEAR, never a month/day, and (per explicit instruction) no
@@ -1318,18 +1324,53 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       const franchiseSign = getChineseZodiacYear(franchiseYearAnchor);
       const todaySign = getChineseZodiacYear(matchDate);
       const zodiacScore = vietnameseCompat(franchiseSign, todaySign);
-      parts.push({ role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchiseZodiacOnly, score: { combined: zodiacScore } });
+      parts.push({ key: 'franchise', role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchiseZodiacOnly, score: { combined: zodiacScore } });
     }
   }
   if (manager) {
     const bd = g.birthdates.get(manager.id);
-    if (bd && bd.birthDate) parts.push({ role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
   }
 
   if (!parts.length) return null;
   const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
   const combined = Math.round(parts.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
   return { combined, parts };
+}
+
+// The component keys the team composite breaks into, and their display
+// labels. 'batter' collapses to one 'batters' average in extractComponents
+// (8 near-identical flat-weighted entries aren't worth storing individually
+// for signal analysis). Order here is the order the Stats page's
+// component-signal table shows them in before it re-sorts by measured edge.
+const MLB_COMPONENT_KEYS = ['pitcher', 'pitcherMatchup', 'catcher', 'batters', 'franchise', 'manager'];
+
+const MLB_COMPONENT_LABELS = {
+  pitcher: 'Starting Pitcher',
+  pitcherMatchup: 'Pitcher vs Lineup',
+  catcher: 'Catcher',
+  batters: 'Batters (avg)',
+  franchise: 'Franchise',
+  manager: 'Manager',
+  composite: 'Full Composite',
+};
+
+// Collapses a computeTeamComposite() parts array into one score per component,
+// stored on each prediction so the Stats page can later ask which single
+// component best predicts the winner - the empirical way to decide what to
+// weight more, instead of guessing. Returns nulls for anything a given game
+// was missing (e.g. no manager birthdate), which the analysis then skips.
+function extractComponents(parts) {
+  const out = { pitcher: null, pitcherMatchup: null, catcher: null, batters: null, franchise: null, manager: null };
+  const batterScores = [];
+  (parts || []).forEach((p) => {
+    const s = p.score && p.score.combined;
+    if (s == null) return;
+    if (p.key === 'batter') batterScores.push(s);
+    else if (p.key && p.key in out) out[p.key] = s;
+  });
+  if (batterScores.length) out.batters = Math.round(batterScores.reduce((a, b) => a + b, 0) / batterScores.length);
+  return out;
 }
 
 // g.enrichState is the live tracker's polling state machine ('loading' /
