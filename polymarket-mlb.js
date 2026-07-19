@@ -211,7 +211,19 @@ function computeTeamComposite(g, sideLetter) {
     parts.push({ role: `${b.pos === 'C' ? 'C ' : ''}${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
   });
   if (teamInfo && teamInfo.firstYearOfPlay) {
-    parts.push({ role: `Franchise (${teamInfo.firstYearOfPlay})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(parseDateInput(`${teamInfo.firstYearOfPlay}-01-01`), matchDate, stadiumDate, stateDate) });
+    // MLB only gives a founding YEAR, never a real date - no month/day means
+    // no life path, no day-of-year, no western sign, and (per explicit
+    // instruction) no fabricated "January 1st" stand-in date either. The one
+    // thing a bare year genuinely determines is which Vietnamese zodiac year
+    // it falls in, so that's the only axis scored here - July 1st is just an
+    // anchor safely past any possible Lunar New Year boundary (always
+    // Jan 21-Feb 20) so getChineseZodiacYear resolves the correct animal for
+    // that calendar year without claiming to know the real founding date.
+    const franchiseYearAnchor = new Date(Number(teamInfo.firstYearOfPlay), 6, 1);
+    const franchiseSign = getChineseZodiacYear(franchiseYearAnchor);
+    const todaySign = getChineseZodiacYear(matchDate);
+    const zodiacScore = vietnameseCompat(franchiseSign, todaySign);
+    parts.push({ role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchise, score: { combined: zodiacScore } });
   }
   if (manager) {
     const bd = g.birthdates.get(manager.id);

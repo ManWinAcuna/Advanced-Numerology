@@ -889,7 +889,10 @@ const MLB_ROLE_WEIGHTS = {
   pitcher: 0.24,
   catcher: 0.11,
   batter: 0.05, // each of the 8 non-catcher batters
-  franchise: 0.17,
+  franchise: 0.05, // MLB only gives a founding YEAR, never a real date - no
+  // fabricated day, so this only ever scores one axis (Vietnamese zodiac
+  // year) instead of a full person-style blend, and is weighted down to
+  // match how much thinner that signal actually is (see polymarket-mlb.js).
   manager: 0.08,
 };
 
