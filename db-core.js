@@ -901,6 +901,47 @@ function pitcherVsLineupBreakdown(pitcherDobDate, batters) {
   }));
 }
 
+// Real franchise founding dates (month/day/year, not just the year MLB's own
+// firstYearOfPlay field gives us) - sourced from CUE (cuetheapp.com), keyed
+// by MLB Stats API team id so it lines up with teamInfo.id from
+// fetchTeamInfo(). Several teams' years genuinely disagree with MLB's own
+// firstYearOfPlay (expansion-franchise-awarded vs. first-game-played, or a
+// different historical anchor entirely for the oldest clubs like the
+// Reds/Cardinals/Orioles) - that's not an error to reconcile, CUE's date is
+// the one actually used for scoring once a team is listed here.
+const MLB_TEAM_FOUNDING_DATES = {
+  108: '1961-04-11', // Los Angeles Angels
+  109: '1998-03-31', // Arizona Diamondbacks
+  110: '1954-04-13', // Baltimore Orioles
+  111: '1901-04-26', // Boston Red Sox
+  112: '1876-04-25', // Chicago Cubs
+  113: '1869-05-04', // Cincinnati Reds
+  114: '1901-04-24', // Cleveland Guardians
+  115: '1993-04-05', // Colorado Rockies
+  116: '1901-04-25', // Detroit Tigers
+  117: '1962-04-10', // Houston Astros
+  118: '1969-04-08', // Kansas City Royals
+  119: '1884-05-01', // Los Angeles Dodgers
+  120: '1969-04-08', // Washington Nationals
+  121: '1962-04-11', // New York Mets
+  133: '1901-04-26', // Athletics
+  134: '1882-05-02', // Pittsburgh Pirates
+  135: '1969-04-08', // San Diego Padres
+  136: '1977-04-06', // Seattle Mariners
+  137: '1883-05-01', // San Francisco Giants
+  138: '1882-05-02', // St. Louis Cardinals
+  139: '1998-03-31', // Tampa Bay Rays
+  140: '1961-04-10', // Texas Rangers
+  141: '1977-04-07', // Toronto Blue Jays
+  142: '1901-04-26', // Minnesota Twins
+  143: '1883-05-01', // Philadelphia Phillies
+  144: '1871-01-20', // Atlanta Braves
+  145: '1901-04-24', // Chicago White Sox
+  146: '1993-04-05', // Miami Marlins
+  147: '1903-01-09', // New York Yankees
+  158: '1969-04-07', // Milwaukee Brewers
+};
+
 // MLB team-composite role weights - a starting guess, not doctrine, same
 // spirit as REAL_EDGE_MIN_GAP/EDGE_TIERS below: once enough games resolve on
 // the Stats page, that per-tier breakdown is what should actually move these
@@ -915,10 +956,14 @@ const MLB_ROLE_WEIGHTS = {
   // instead of each side only ever being scored against the day/venue.
   catcher: 0.11,
   batter: 0.05, // each of the 8 non-catcher batters
-  franchise: 0.05, // MLB only gives a founding YEAR, never a real date - no
-  // fabricated day, so this only ever scores one axis (Vietnamese zodiac
-  // year) instead of a full person-style blend, and is weighted down to
-  // match how much thinner that signal actually is (see polymarket-mlb.js).
+  franchise: 0.17, // Now backed by a real founding date (MLB_TEAM_FOUNDING_DATES
+  // above) for every current team, so it gets the full person-style
+  // day/stadium/state blend like everything else - back to its full weight
+  // now that the "we only have the year" limitation is gone. A team missing
+  // from that table falls back to a thinner zodiac-year-only score, weighted
+  // down instead (franchiseZodiacOnly below) - see computeTeamComposite in
+  // polymarket-mlb.js.
+  franchiseZodiacOnly: 0.05,
   manager: 0.08,
 };
 
