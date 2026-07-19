@@ -277,6 +277,10 @@ document.getElementById('savePlayerBtn').addEventListener('click', () => {
   }
 
   closePlayerForm();
+
+  if (addPlayerReturnTo) {
+    window.location.href = addPlayerReturnTo;
+  }
 });
 
 // Matches each uploaded row against the existing roster via normalizeName
@@ -774,12 +778,18 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
 // the roster yet), so a whale bet can be followed straight into a full
 // matchup without retyping anything.
 
+// Set when arriving via ?addPlayer=&returnTo= - savePlayerBtn below sends
+// the user straight back to that exact Polymarket card once they're done,
+// instead of stranding them here on the calculator page.
+let addPlayerReturnTo = null;
+
 (function handlePolymarketDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const nameA = params.get('a');
   const nameB = params.get('b');
   const date = params.get('date');
   const addPlayerName = params.get('addPlayer');
+  const returnTo = params.get('returnTo');
 
   if (nameA && nameB) {
     const playerA = allPlayers.find((p) => p.name.toLowerCase() === nameA.toLowerCase());
@@ -794,5 +804,6 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     openPlayerForm(null);
     document.getElementById('newPlayerName').value = addPlayerName;
     lookupPlayerBirthday(addPlayerName);
+    if (returnTo) addPlayerReturnTo = returnTo;
   }
 })();

@@ -442,8 +442,12 @@ function numerologyBlockHtml(m) {
     const unmatched = [];
     if (!m.matchedA) unmatched.push(m.playerAName);
     if (!m.matchedB) unmatched.push(m.playerBName);
+    // returnTo carries the exact card back with it, so tennis.js can send the
+    // user right back here (instead of the Polymarket hub menu) once the
+    // player's saved - see scrollToConditionIdFromQuery below.
+    const returnUrl = `polymarket-tennis.html?conditionId=${encodeURIComponent(m.conditionId)}`;
     return `<div class="pm-unmatched">${unmatched
-      .map((n) => `${escapeHtml(n)} isn't in your player database yet &mdash; <a href="tennis.html?addPlayer=${encodeURIComponent(n)}">add them</a> for a numerology read.`)
+      .map((n) => `${escapeHtml(n)} isn't in your player database yet &mdash; <a href="tennis.html?addPlayer=${encodeURIComponent(n)}&returnTo=${encodeURIComponent(returnUrl)}">add them</a> for a numerology read.`)
       .join('<br>')}</div>`;
   }
 
@@ -580,7 +584,7 @@ function matchCardHtml(m) {
   const favA = pctA != null && pctB != null && pctA >= pctB;
 
   return `
-    <div class="box pm-fight-card" data-tier="${cardTierKey(m)}">
+    <div class="box pm-fight-card" id="pm-card-${m.conditionId}" data-tier="${cardTierKey(m)}">
       <div class="pm-fight-head">
         <div class="pm-fight-names">${escapeHtml(m.playerAName)} vs ${escapeHtml(m.playerBName)}</div>
         ${fightBadge(m.gameStartTime)}
@@ -1365,6 +1369,19 @@ function initTournamentLocationControls() {
   }
 })();
 
+// Arriving back from tennis.js after adding a player via the deep link above
+// (?conditionId=) - scrolls straight back to the exact match card instead of
+// leaving the user at the top of the list to re-find it themselves.
+function scrollToConditionIdFromQuery() {
+  const conditionId = new URLSearchParams(window.location.search).get('conditionId');
+  if (!conditionId) return;
+  const card = document.getElementById(`pm-card-${conditionId}`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.style.boxShadow = '0 0 0 3px var(--purple), 0 0 16px rgba(167, 107, 214, 0.6)';
+  setTimeout(() => { card.style.boxShadow = ''; }, 2500);
+}
+
 (async function init() {
   initLocationModals();
   initTournamentLocationControls();
@@ -1375,5 +1392,6 @@ function initTournamentLocationControls() {
   initStakeInput();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
+  scrollToConditionIdFromQuery();
   startPolling();
 })();

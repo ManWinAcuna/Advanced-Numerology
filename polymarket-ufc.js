@@ -814,8 +814,12 @@ function numerologyBlockHtml(f) {
     const unmatched = [];
     if (!f.matchedA) unmatched.push(f.fighterAName);
     if (!f.matchedB) unmatched.push(f.fighterBName);
+    // returnTo carries the exact card back with it, so ufc.js can send the
+    // user right back here (instead of the Polymarket hub menu) once the
+    // fighter's saved - see scrollToConditionIdFromQuery below.
+    const returnUrl = `polymarket-ufc.html?conditionId=${encodeURIComponent(f.conditionId)}`;
     return `<div class="pm-unmatched">${unmatched
-      .map((n) => `${escapeHtml(n)} isn't in your fighter database yet &mdash; <a href="ufc.html?addFighter=${encodeURIComponent(n)}">add them</a> for a numerology read.`)
+      .map((n) => `${escapeHtml(n)} isn't in your fighter database yet &mdash; <a href="ufc.html?addFighter=${encodeURIComponent(n)}&returnTo=${encodeURIComponent(returnUrl)}">add them</a> for a numerology read.`)
       .join('<br>')}</div>`;
   }
 
@@ -1152,6 +1156,19 @@ function startPolling() {
   }
 })();
 
+// Arriving back from ufc.js after adding a fighter via the deep link above
+// (?conditionId=) - scrolls straight back to the exact fight card instead of
+// leaving the user at the top of the list to re-find it themselves.
+function scrollToConditionIdFromQuery() {
+  const conditionId = new URLSearchParams(window.location.search).get('conditionId');
+  if (!conditionId) return;
+  const card = document.getElementById(`pm-card-${conditionId}`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.style.boxShadow = '0 0 0 3px var(--purple), 0 0 16px rgba(167, 107, 214, 0.6)';
+  setTimeout(() => { card.style.boxShadow = ''; }, 2500);
+}
+
 (async function init() {
   initLocationControls();
   initRefreshButton();
@@ -1161,5 +1178,6 @@ function startPolling() {
   initStakeInput();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
+  scrollToConditionIdFromQuery();
   startPolling();
 })();

@@ -255,6 +255,10 @@ document.getElementById('saveFighterBtn').addEventListener('click', () => {
   }
 
   closeFighterForm();
+
+  if (addFighterReturnTo) {
+    window.location.href = addFighterReturnTo;
+  }
 });
 
 // Matches each uploaded row against the existing roster the same way the
@@ -745,12 +749,18 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
 // in the roster yet), so a whale bet can be followed straight into a full
 // matchup without retyping anything.
 
+// Set when arriving via ?addFighter=&returnTo= - saveFighterBtn below sends
+// the user straight back to that exact Polymarket card once they're done,
+// instead of stranding them here on the calculator page.
+let addFighterReturnTo = null;
+
 (function handlePolymarketDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const nameA = params.get('a');
   const nameB = params.get('b');
   const date = params.get('date');
   const addFighterName = params.get('addFighter');
+  const returnTo = params.get('returnTo');
 
   if (nameA && nameB) {
     const fighterA = allFighters.find((f) => f.name.toLowerCase() === nameA.toLowerCase());
@@ -765,5 +775,6 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     openFighterForm(null);
     document.getElementById('newFighterName').value = addFighterName;
     lookupFighterBirthday(addFighterName);
+    if (returnTo) addFighterReturnTo = returnTo;
   }
 })();
