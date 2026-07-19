@@ -284,6 +284,13 @@ function insightTabHtml(p) {
   const infoA = compatLifePathInfo(ufcParseDateInput(matchedA.dob));
   const infoB = compatLifePathInfo(ufcParseDateInput(matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  // Universal Day - each fighter's own life path vs. the fight date itself,
+  // added alongside the fighter-vs-fighter read above, not instead of it.
+  // The original region/timezone isn't stored on the prediction, so this
+  // reads the fight's UTC timestamp in the browser's own local time rather
+  // than the venue's - a reasonable approximation for a historical,
+  // informational-only read, not the exact figure the live tracker showed.
+  const matchDate = p.fightTime ? new Date(p.fightTime) : null;
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(matchedA.name, infoA.display, infoA.lookupValue)}
@@ -293,6 +300,11 @@ function insightTabHtml(p) {
       <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
       <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
     </div>
+    ${matchDate ? `
+    <div class="pm-insight-grid">
+      ${universalDayInsightHtml(matchedA.name, infoA.lookupValue, matchDate)}
+      ${universalDayInsightHtml(matchedB.name, infoB.lookupValue, matchDate)}
+    </div>` : ''}
     <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
   `;
 }

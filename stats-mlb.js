@@ -228,10 +228,16 @@ async function fetchMlbMatchupInsightRows(p) {
     : { side: feed.away, manager: managerAway });
   const a = sideFor(p.teamAName);
   const b = sideFor(p.teamBName);
+  // Universal Day - each roster person's own life path vs. the game date
+  // itself, shown as an extra "Day N" tag per row. p.gameTime is stored in
+  // UTC without the original venue timezone, so (like UFC/Tennis's stats
+  // re-derivation) this reads it in the browser's own local time - a
+  // reasonable approximation for a historical, informational-only read.
+  const matchDate = p.gameTime ? new Date(p.gameTime) : null;
 
   return {
-    rowsA: teamRosterInsightRows(a.side, a.manager, birthdates),
-    rowsB: teamRosterInsightRows(b.side, b.manager, birthdates),
+    rowsA: teamRosterInsightRows(a.side, a.manager, birthdates, matchDate),
+    rowsB: teamRosterInsightRows(b.side, b.manager, birthdates, matchDate),
   };
 }
 

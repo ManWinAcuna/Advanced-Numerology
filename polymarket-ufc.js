@@ -893,6 +893,12 @@ function insightTabHtml(f) {
   const infoA = compatLifePathInfo(parseDateInput(f.matchedA.dob));
   const infoB = compatLifePathInfo(parseDateInput(f.matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  // Universal Day - each fighter's own life path vs. today itself (reduced
+  // the exact same way a birthdate is) - added alongside the fighter-vs-
+  // fighter read above, not instead of it. Skipped (not guessed) if the
+  // region's timezone hasn't confirmed yet, same as the real edge above.
+  const matchDateISO = currentMatchDateISO(f.gameStartTime);
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(f.matchedA.name, infoA.display, infoA.lookupValue)}
@@ -902,6 +908,11 @@ function insightTabHtml(f) {
       <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
       <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
     </div>
+    ${matchDate ? `
+    <div class="pm-insight-grid">
+      ${universalDayInsightHtml(f.matchedA.name, infoA.lookupValue, matchDate)}
+      ${universalDayInsightHtml(f.matchedB.name, infoB.lookupValue, matchDate)}
+    </div>` : ''}
     <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
   `;
 }

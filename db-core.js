@@ -943,6 +943,31 @@ function lifePathInsight(lookupValue) {
   };
 }
 
+// "Universal Day" - the match/game date itself, run through the exact same
+// compatLifePathInfo() reduction a birthdate gets, then compared to a
+// person's own life path via sportsNumerologyCompat. This isn't a new number:
+// it's the dominant (60%) sub-component already sitting inside
+// computeFighterScore's "day" factor (computeCompatibility's lifePathScore) -
+// today it only ever surfaces blended into day.finalScore, never on its own.
+// Added as an extra Insight-tab layer alongside the person-vs-person read
+// below, not a replacement - this measures how a person's own number is
+// running on this specific day, not how two people's numbers relate.
+function universalDayInsight(personLookupValue, matchDate) {
+  const dayInfo = compatLifePathInfo(matchDate);
+  const score = sportsNumerologyCompat(personLookupValue, dayInfo.lookupValue);
+  return { score, clash: clashTypeForScore(score), dayDisplay: dayInfo.display };
+}
+
+function universalDayInsightHtml(name, personLookupValue, matchDate) {
+  const insight = universalDayInsight(personLookupValue, matchDate);
+  return `
+    <div class="pm-insight-pair">
+      <div class="pm-insight-pair-clash">${insight.clash.icon} ${escapeHtml(insight.clash.label)} <span class="score-inline ${scoreClass(insight.score)}">${insight.score}</span></div>
+      <div class="pm-insight-pair-theme">${escapeHtml(name)} vs Universal Day ${escapeHtml(insight.dayDisplay)}</div>
+    </div>
+  `;
+}
+
 // The pairwise "why" between two entities - runs their life paths through the same
 // numerologyCompat table as everything else, purely to label the relationship, not to
 // score it (UFC/Tennis fighters are never scored against each other for real - only
@@ -979,28 +1004,37 @@ function personInsightHtml(name, lifePathDisplay, lookupValue) {
   `;
 }
 
-// One MLB team's roster reduced to {role, lookupValue} rows for the Insight
-// tab - pitcher, batters, and manager only (the franchise's zodiac-year score
-// isn't a person's life path, so it's left out of this reading on purpose).
-// Shared by the live tracker (polymarket-mlb.js, from already-loaded roster
-// state) and the Stats page (stats-mlb.js, re-derived live from a resolved
-// game's gamePk) - both already have `side`/`manager`/`birthdates` in the
-// exact same shape mlb-api.js's fetchGameLiveFeed()/fetchPeopleBirthdates()
-// produce, so one function covers both call sites.
-function teamRosterInsightRows(side, manager, birthdates) {
+// One MLB team's roster reduced to {role, lookupValue, dayScore} rows for the
+// Insight tab - pitcher, batters, and manager only (the franchise's
+// zodiac-year score isn't a person's life path, so it's left out of this
+// reading on purpose). Shared by the live tracker (polymarket-mlb.js, from
+// already-loaded roster state) and the Stats page (stats-mlb.js, re-derived
+// live from a resolved game's gamePk) - both already have
+// `side`/`manager`/`birthdates` in the exact same shape
+// mlb-api.js's fetchGameLiveFeed()/fetchPeopleBirthdates() produce, so one
+// function covers both call sites. matchDate is optional (null while a
+// timezone hasn't confirmed yet) - dayScore is just left off the row rather
+// than guessed.
+function teamRosterInsightRows(side, manager, birthdates, matchDate) {
+  const dayScoreFor = (lookupValue) => (matchDate ? universalDayInsight(lookupValue, matchDate).score : null);
   const rows = [];
   const pitcherBd = birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    rows.push({ role: `SP ${pitcherBd.name}`, lookupValue: compatLifePathInfo(parseDateInput(pitcherBd.birthDate)).lookupValue });
+    const lookupValue = compatLifePathInfo(parseDateInput(pitcherBd.birthDate)).lookupValue;
+    rows.push({ role: `SP ${pitcherBd.name}`, lookupValue, dayScore: dayScoreFor(lookupValue) });
   }
   side.batters.forEach((b) => {
     const bd = birthdates.get(b.id);
     if (!bd || !bd.birthDate) return;
-    rows.push({ role: `${b.pos} ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
+    const lookupValue = compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue;
+    rows.push({ role: `${b.pos} ${bd.name}`, lookupValue, dayScore: dayScoreFor(lookupValue) });
   });
   if (manager) {
     const bd = birthdates.get(manager.id);
-    if (bd && bd.birthDate) rows.push({ role: `Mgr ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
+    if (bd && bd.birthDate) {
+      const lookupValue = compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue;
+      rows.push({ role: `Mgr ${bd.name}`, lookupValue, dayScore: dayScoreFor(lookupValue) });
+    }
   }
   return rows;
 }
@@ -1008,7 +1042,8 @@ function teamRosterInsightRows(side, manager, birthdates) {
 function insightRowHtml(row) {
   const insight = lifePathInsight(row.lookupValue);
   const icons = insight.volatility.icon + (insight.athletic ? insight.athletic.icon : '');
-  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span>${escapeHtml(insight.theme)} ${icons}</span></div>`;
+  const dayPart = row.dayScore != null ? ` &middot; Day <span class="score-inline ${scoreClass(row.dayScore)}">${row.dayScore}</span>` : '';
+  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span>${escapeHtml(insight.theme)} ${icons}${dayPart}</span></div>`;
 }
 
 // Wraps a breakdown popup's existing content plus the new Insight tab into the

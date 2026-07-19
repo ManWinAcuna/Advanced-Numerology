@@ -265,6 +265,13 @@ function tennisInsightTabHtml(p) {
   const infoA = compatLifePathInfo(tennisParseDateInput(matchedA.dob));
   const infoB = compatLifePathInfo(tennisParseDateInput(matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  // Universal Day - each player's own life path vs. the match date itself,
+  // added alongside the player-vs-player read above, not instead of it. The
+  // original region/timezone isn't stored on the prediction, so this reads
+  // the match's UTC timestamp in the browser's own local time rather than
+  // the venue's - a reasonable approximation for a historical,
+  // informational-only read, not the exact figure the live tracker showed.
+  const matchDate = p.matchTime ? new Date(p.matchTime) : null;
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(matchedA.name, infoA.display, infoA.lookupValue)}
@@ -274,6 +281,11 @@ function tennisInsightTabHtml(p) {
       <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
       <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
     </div>
+    ${matchDate ? `
+    <div class="pm-insight-grid">
+      ${universalDayInsightHtml(matchedA.name, infoA.lookupValue, matchDate)}
+      ${universalDayInsightHtml(matchedB.name, infoB.lookupValue, matchDate)}
+    </div>` : ''}
     <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
   `;
 }

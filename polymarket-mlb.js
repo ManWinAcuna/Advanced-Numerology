@@ -537,8 +537,14 @@ function breakdownColumnHtml(teamName, score) {
 // real composite above - informational framing on an already-real number,
 // not a new one, so nothing here changes what's being bet on.
 function insightTabHtml(g, scores) {
-  const rowsA = teamRosterInsightRows(g.sideA, g.managerA, g.birthdates).map(insightRowHtml).join('');
-  const rowsB = teamRosterInsightRows(g.sideB, g.managerB, g.birthdates).map(insightRowHtml).join('');
+  // Universal Day - each roster person's own life path vs. today itself,
+  // added as an extra "Day N" tag on their row alongside the theme/
+  // volatility/athletic read, not instead of it. Left off (not guessed) if
+  // the venue's timezone hasn't confirmed yet, same as the real edge above.
+  const matchDateISO = currentMatchDateISO(g);
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
+  const rowsA = teamRosterInsightRows(g.sideA, g.managerA, g.birthdates, matchDate).map(insightRowHtml).join('');
+  const rowsB = teamRosterInsightRows(g.sideB, g.managerB, g.birthdates, matchDate).map(insightRowHtml).join('');
   const matchupParts = [scores.scoreA, scores.scoreB]
     .flatMap((s) => s.parts.filter((p) => p.role.includes(' vs ')));
   const matchupHtml = matchupParts.map((p) => {

@@ -516,10 +516,16 @@ function breakdownColumnHtml(name, score, regionMode) {
 // are never scored against each other for the real edge above (each is only
 // ever scored against the day/region/venue), so this is the one place that
 // head-to-head number gets computed and shown at all.
-function insightTabHtml(m) {
+function insightTabHtml(m, st) {
   const infoA = compatLifePathInfo(parseDateInput(m.matchedA.dob));
   const infoB = compatLifePathInfo(parseDateInput(m.matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
+  // Universal Day - each player's own life path vs. today itself (reduced
+  // the exact same way a birthdate is) - added alongside the player-vs-
+  // player read above, not instead of it. Skipped (not guessed) if the
+  // region's timezone hasn't confirmed yet, same as the real edge above.
+  const matchDateISO = currentMatchDateISO(m.gameStartTime, st, m.tournament);
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(m.matchedA.name, infoA.display, infoA.lookupValue)}
@@ -529,11 +535,16 @@ function insightTabHtml(m) {
       <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
       <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
     </div>
+    ${matchDate ? `
+    <div class="pm-insight-grid">
+      ${universalDayInsightHtml(m.matchedA.name, infoA.lookupValue, matchDate)}
+      ${universalDayInsightHtml(m.matchedB.name, infoB.lookupValue, matchDate)}
+    </div>` : ''}
     <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
   `;
 }
 
-function breakdownModalHtml(m, scores, regionMode) {
+function breakdownModalHtml(m, scores, regionMode, st) {
   const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(m.matchedA.name)} <span class="score-vs">&times;</span> ${escapeHtml(m.matchedB.name)}</div>
@@ -545,7 +556,7 @@ function breakdownModalHtml(m, scores, regionMode) {
       ${breakdownColumnHtml(m.matchedB.name, scores.scoreB, regionMode)}
     </div>
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(m));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(m, st));
 }
 
 function initDismissButtons() {
@@ -571,7 +582,7 @@ function initBreakdownModal() {
     const st = getTournamentState(m.tournament);
     const scores = scoresForMatch(m, st);
     if (!scores) return;
-    document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(m, scores, st.regionMode);
+    document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(m, scores, st.regionMode, st);
     document.getElementById('pmBreakdownOverlay').classList.add('active');
   });
 
