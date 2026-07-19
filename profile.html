@@ -36,60 +36,13 @@
     </div>
   </div>
 
-  <div class="layout">
+  <!-- Grouped by how often the numbers change: Today first (different every
+       morning), then the static core numbers, then zodiac, then the deep-dive
+       collapsibles. Same data and IDs as before - only the arrangement moved. -->
 
-    <!-- Center -->
-    <div class="center">
-
-      <div class="grid4 headerrow">
-        <div class="cell head">Lifepath</div>
-        <div class="cell head">Day Born</div>
-        <div class="cell head">Day#</div>
-        <div class="cell head">Combo</div>
-      </div>
-      <div class="grid4">
-        <div class="cell highlight" id="lifePath">-</div>
-        <div class="cell highlight" id="dayBornReduced">-</div>
-        <div class="cell highlight" id="dayNumReduced">-</div>
-        <div class="cell highlight" id="combo">-</div>
-      </div>
-      <div class="grid4 subrow">
-        <div class="cell small" id="lifePathRaw" title="Compound (unreduced) Life Path">-</div>
-        <div class="cell small" id="dayBornRaw">-</div>
-        <div class="cell small" id="dayNumRaw">-</div>
-        <div class="cell small"></div>
-      </div>
-
-      <div class="section-label">Vietnamese Zodiac</div>
-      <div class="grid3 headerrow">
-        <div class="cell head">Year</div>
-        <div class="cell head">Month</div>
-        <div class="cell head">Day</div>
-      </div>
-      <div class="grid3">
-        <div class="cell sign" id="chineseYear" title="">-</div>
-        <div class="cell sign" id="chineseMonth" title="">-</div>
-        <div class="cell sign" id="chineseDay" title="">-</div>
-      </div>
-
-      <div class="section-label">Western Signs</div>
-      <div class="grid4 headerrow">
-        <div class="cell head">Sun Sign</div>
-        <div class="cell head">Saturn</div>
-        <div class="cell head">Jupiter</div>
-        <div class="cell head">Venus</div>
-      </div>
-      <div class="grid4">
-        <div class="cell sign" id="sunSign" title="">-</div>
-        <div class="cell sign" id="saturnSign" title="">-</div>
-        <div class="cell sign" id="jupiterSign" title="">-</div>
-        <div class="cell sign" id="venusSign" title="">-</div>
-      </div>
-
-    </div>
-
-    <!-- Right column -->
-    <div class="right">
+  <div class="profile-section" id="profileTodaySection">
+    <div class="profile-section-title">☀️ Today</div>
+    <div class="profile-grid">
 
       <div class="box stat-box compat-today-box" id="compatTodayBox">
         <div class="box-label">🤝 Compatibility with Today</div>
@@ -117,20 +70,23 @@
         </div>
       </div>
 
-      <div class="grid3 headerrow">
-        <div class="cell head">PY</div>
-        <div class="cell head">PM</div>
-        <div class="cell head">PD</div>
-      </div>
-      <div class="grid3">
-        <div class="cell highlight" id="pyReduced">-</div>
-        <div class="cell highlight" id="pmReduced">-</div>
-        <div class="cell highlight" id="pdReduced">-</div>
-      </div>
-      <div class="grid3 subrow">
-        <div class="cell small" id="pyRaw">-</div>
-        <div class="cell small" id="pmRaw">-</div>
-        <div class="cell small" id="pdRaw">-</div>
+      <div class="box stat-box">
+        <div class="box-label">🔁 Personal Cycles</div>
+        <div class="grid3 headerrow">
+          <div class="cell head">PY</div>
+          <div class="cell head">PM</div>
+          <div class="cell head">PD</div>
+        </div>
+        <div class="grid3">
+          <div class="cell highlight" id="pyReduced">-</div>
+          <div class="cell highlight" id="pmReduced">-</div>
+          <div class="cell highlight" id="pdReduced">-</div>
+        </div>
+        <div class="grid3 subrow">
+          <div class="cell small" id="pyRaw">-</div>
+          <div class="cell small" id="pmRaw">-</div>
+          <div class="cell small" id="pdRaw">-</div>
+        </div>
       </div>
 
       <div class="box stat-box" id="bestWorstHourBox">
@@ -163,22 +119,79 @@
         <div class="dayleft-caption" id="finHourNote"></div>
       </div>
 
+    </div>
+  </div>
+
+  <div class="profile-section" id="profileCoreSection">
+    <div class="profile-section-title">🔢 Core Numbers</div>
+
+    <div class="grid4 headerrow">
+      <div class="cell head">Lifepath</div>
+      <div class="cell head">Day Born</div>
+      <div class="cell head">Day#</div>
+      <div class="cell head">Combo</div>
+    </div>
+    <div class="grid4">
+      <div class="cell highlight" id="lifePath">-</div>
+      <div class="cell highlight" id="dayBornReduced">-</div>
+      <div class="cell highlight" id="dayNumReduced">-</div>
+      <div class="cell highlight" id="combo">-</div>
+    </div>
+    <div class="grid4 subrow">
+      <div class="cell small" id="lifePathRaw" title="Compound (unreduced) Life Path">-</div>
+      <div class="cell small" id="dayBornRaw">-</div>
+      <div class="cell small" id="dayNumRaw">-</div>
+      <div class="cell small"></div>
+    </div>
+
+    <div class="profile-grid profile-core-grid">
       <div class="box stat-box">
         <div class="box-label">🍀 Lucky Number</div>
         <div class="box-value" id="luckyNumber">-</div>
       </div>
-
       <div class="box stat-box">
         <div class="box-label">✨ 28 Day</div>
         <div class="box-value" id="twentyEightDay">-</div>
       </div>
-
       <div class="box stat-box">
         <div class="box-label">🔢 Missing</div>
         <div class="box-value" id="missing">-</div>
       </div>
-
     </div>
+  </div>
+
+  <div class="profile-section" id="profileZodiacSection">
+    <div class="profile-section-title">🐉 Zodiac</div>
+
+    <div class="section-label">Vietnamese Zodiac</div>
+    <div class="grid3 headerrow">
+      <div class="cell head">Year</div>
+      <div class="cell head">Month</div>
+      <div class="cell head">Day</div>
+    </div>
+    <div class="grid3">
+      <div class="cell sign" id="chineseYear" title="">-</div>
+      <div class="cell sign" id="chineseMonth" title="">-</div>
+      <div class="cell sign" id="chineseDay" title="">-</div>
+    </div>
+
+    <div class="section-label">Western Signs</div>
+    <div class="grid4 headerrow">
+      <div class="cell head">Sun Sign</div>
+      <div class="cell head">Saturn</div>
+      <div class="cell head">Jupiter</div>
+      <div class="cell head">Venus</div>
+    </div>
+    <div class="grid4">
+      <div class="cell sign" id="sunSign" title="">-</div>
+      <div class="cell sign" id="saturnSign" title="">-</div>
+      <div class="cell sign" id="jupiterSign" title="">-</div>
+      <div class="cell sign" id="venusSign" title="">-</div>
+    </div>
+  </div>
+
+  <div class="profile-section" id="profileCyclesSection">
+    <div class="profile-section-title">🔄 Deep Dives</div>
 
     <!-- Collapsibles, grouped at the bottom -->
     <div class="collapsibles-group">

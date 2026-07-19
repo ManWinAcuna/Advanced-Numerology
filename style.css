@@ -4073,3 +4073,118 @@ body {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
+
+/* ===================== Stats tables: stacked rows on mobile ===================== */
+/* The 6-column tracked-fights tables scroll sideways on a phone - under
+   700px each row becomes a small stacked card instead: date on top,
+   matchup bold, then labeled pick/edge/type/result lines. Applies only to
+   the two tracked-history tables; the 3-column summary tables still fit. */
+
+@media (max-width: 700px) {
+  #statsTable,
+  #tennisStatsTable,
+  #statsTable tbody,
+  #tennisStatsTable tbody,
+  #statsTable tr,
+  #tennisStatsTable tr,
+  #statsTable td,
+  #tennisStatsTable td {
+    display: block;
+    width: 100%;
+  }
+
+  #statsTable thead,
+  #tennisStatsTable thead {
+    display: none;
+  }
+
+  #statsTable tr,
+  #tennisStatsTable tr {
+    background: #16111e;
+    border: 1px solid rgba(167, 107, 214, 0.3);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  #statsTable td,
+  #tennisStatsTable td {
+    border: none;
+    padding: 2px 0;
+    text-align: left;
+  }
+
+  #statsTable td:nth-child(1),
+  #tennisStatsTable td:nth-child(1) {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  #statsTable td:nth-child(2),
+  #tennisStatsTable td:nth-child(2) {
+    font-weight: 700;
+    font-size: 14px;
+    padding-bottom: 6px;
+  }
+
+  #statsTable td:nth-child(3)::before,
+  #tennisStatsTable td:nth-child(3)::before { content: 'Pick: '; color: var(--muted); font-size: 11px; }
+  #statsTable td:nth-child(4)::before,
+  #tennisStatsTable td:nth-child(4)::before { content: 'Edge: '; color: var(--muted); font-size: 11px; }
+  #statsTable td:nth-child(5)::before,
+  #tennisStatsTable td:nth-child(5)::before { content: 'Type: '; color: var(--muted); font-size: 11px; }
+  #statsTable td:nth-child(6)::before,
+  #tennisStatsTable td:nth-child(6)::before { content: 'Result: '; color: var(--muted); font-size: 11px; }
+}
+
+/* ===================== Profile sections ===================== */
+/* The profile groups by how often a number changes: Today (daily), Core
+   Numbers (fixed for life), Zodiac, Deep Dives - so the daily numbers sit
+   first and static ones stop competing for attention. */
+
+.profile-section {
+  margin-bottom: 30px;
+}
+
+.profile-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--yellow);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(167, 107, 214, 0.35);
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.profile-grid .box {
+  margin-bottom: 0;
+}
+
+.profile-core-grid {
+  margin-top: 14px;
+}
+
+/* ===================== Shared design language ===================== */
+/* Pull the plain pages toward the app's purple/yellow identity without
+   the full cyberpunk treatment (grid background and corner brackets stay
+   betting-only): boxes get a faint purple-tinted border instead of flat
+   gray, buttons share one glow language. */
+
+.box {
+  border-color: rgba(167, 107, 214, 0.2);
+}
+
+.btn:hover {
+  box-shadow: 0 0 8px rgba(245, 197, 66, 0.35);
+}
+
+.collapsible summary:hover {
+  color: var(--yellow);
+}
