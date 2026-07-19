@@ -182,15 +182,35 @@ function mlbEdgeCell(p) {
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
 
-function renderMlbTable(predictions, suffix = '') {
+// A today game that isn't a scored pick yet (lineup not posted / venue still
+// resolving) - shown as a plain non-clickable row so the Today tab reflects the
+// whole slate, not just the games already scored. Only the Today scope passes
+// these in.
+function mlbPendingRowHtml(g) {
+  const label = {
+    lineup: '⏳ Lineup not posted yet',
+    venue: '⏳ Resolving venue',
+    pending: '⏳ Awaiting data',
+  }[g.status] || '⏳ Pending';
+  return `
+    <tr>
+      <td>${formatMlbGameDate(g.gameStartTime.toISOString())}</td>
+      <td>${escapeHtml(g.teamAName)} vs ${escapeHtml(g.teamBName)}</td>
+      <td class="empty-state" colspan="4">${label}</td>
+    </tr>
+  `;
+}
+
+function renderMlbTable(predictions, suffix = '', pendingGames = []) {
   const tbody = document.getElementById('mlbStatsTableBody' + suffix);
-  if (!predictions.length) {
+  const pendingHtml = pendingGames.map(mlbPendingRowHtml).join('');
+  if (!predictions.length && !pendingHtml) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No games tracked yet.</td></tr>';
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
-  tbody.innerHTML = sorted.map((p) => `
+  tbody.innerHTML = pendingHtml + sorted.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatMlbGameDate(p.gameTime)}</td>
       <td>${escapeHtml(p.teamAName)} vs ${escapeHtml(p.teamBName)}</td>
@@ -723,11 +743,117 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
   renderMlbComponentSignal(scopedPredictions, suffix);
-  renderMlbTable(scopedPredictions, suffix);
+  renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
   const scopedSignals = signals.filter((s) => isMlbTodayLocal(s.gameTime) === !isOld);
   renderMlbKSignalPanel(scopedSignals, suffix);
+}
+
+// Today's games the Stats page has fetched but can't score into a pick yet
+// (lineup not posted, venue unresolved) - shown as pending rows on the Today
+// tab. Rebuilt each time recordTodaysMlbGames runs.
+let todaysMlbSlatePending = [];
+
+// So the Today tab reflects today's whole slate without needing the live
+// tracker open: pull today's OPEN Polymarket markets (same source the live
+// tracker uses), and for any today game not already stored, score it if its
+// lineup is up (recording a real pick at the current market price) or list it
+// as pending otherwise. A game already recorded (here or by the live tracker)
+// is skipped - dedup by conditionId. Best-effort and non-blocking: the stored
+// data renders first, this fills in behind it. Finished games that were never
+// recorded drop off the open-market feed and are instead caught by the daily
+// backfill.
+async function recordTodaysMlbGames() {
+  todaysMlbSlatePending = [];
+  let markets = [];
+  try { markets = await fetchMlbMoneylineEvents(); } catch (e) { return; }
+  const todays = markets.filter((m) => isMlbTodayLocal(m.gameStartTime.toISOString()));
+  if (!todays.length) return;
+
+  const now = new Date();
+  const scheduleGames = await fetchMlbSchedule(isoDateOnlyUTC(new Date(now.getTime() - 86400000)), isoDateOnlyUTC(new Date(now.getTime() + 86400000)));
+
+  const existing = loadMlbPredictions();
+  const existingCond = new Set(existing.map((p) => p.conditionId));
+  const teamInfoCache = new Map();
+  const managerCache = new Map();
+  const regionCache = new Map();
+  const stadiumCache = new Map();
+  const newPreds = [];
+  const pending = [];
+
+  await Promise.all(todays.map(async (m) => {
+    if (existingCond.has(m.conditionId)) return; // already a stored pick
+
+    const sched = findScheduleGameForMarket(scheduleGames, m.teamAName, m.teamBName, m.gameStartTime);
+    if (!sched) { pending.push({ ...m, status: 'pending' }); return; }
+    const gamePk = sched.gamePk;
+
+    const feed = await fetchGameLiveFeed(gamePk);
+    if (!feed) { pending.push({ ...m, status: 'pending' }); return; }
+    if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) { pending.push({ ...m, status: 'lineup' }); return; }
+
+    const venueId = feed.venue && feed.venue.id;
+    const venueName = feed.venue && feed.venue.name;
+    if (!venueId) { pending.push({ ...m, status: 'venue' }); return; }
+    let regionInfo = regionCache.get(venueId);
+    if (!regionInfo) { regionInfo = await resolveMlbRegionForBackfill(venueId, venueName); regionCache.set(venueId, regionInfo); }
+    if (!regionInfo.region) { pending.push({ ...m, status: 'venue' }); return; }
+    let stadiumFounded = stadiumCache.get(venueId);
+    if (stadiumFounded === undefined) { stadiumFounded = await resolveMlbStadiumFoundedForBackfill(venueId, venueName); stadiumCache.set(venueId, stadiumFounded); }
+
+    if (!currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: m.gameStartTime })) { pending.push({ ...m, status: 'venue' }); return; }
+
+    const season = now.getFullYear();
+    await Promise.all([feed.home.teamId, feed.away.teamId].map(async (id) => {
+      if (!teamInfoCache.has(id)) teamInfoCache.set(id, await fetchTeamInfo(id));
+      if (!managerCache.has(id)) managerCache.set(id, await fetchTeamManager(id, season));
+    }));
+    const allIds = [
+      feed.home.startingPitcherId, feed.away.startingPitcherId,
+      ...feed.home.batters.map((b) => b.id), ...feed.away.batters.map((b) => b.id),
+      managerCache.get(feed.home.teamId) && managerCache.get(feed.home.teamId).id,
+      managerCache.get(feed.away.teamId) && managerCache.get(feed.away.teamId).id,
+    ];
+    const birthdates = await fetchPeopleBirthdates(allIds);
+
+    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
+    const gObj = {
+      sideA: sideForName(m.teamAName), sideB: sideForName(m.teamBName),
+      teamInfoA: teamInfoCache.get(sideForName(m.teamAName).teamId), teamInfoB: teamInfoCache.get(sideForName(m.teamBName).teamId),
+      managerA: managerCache.get(sideForName(m.teamAName).teamId), managerB: managerCache.get(sideForName(m.teamBName).teamId),
+      birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: m.gameStartTime,
+    };
+    const scoreA = computeTeamComposite(gObj, 'A');
+    const scoreB = computeTeamComposite(gObj, 'B');
+    if (!scoreA || !scoreB || m.priceA == null || m.priceB == null) { pending.push({ ...m, status: 'pending' }); return; }
+
+    const marketFavName = m.priceA >= m.priceB ? m.teamAName : m.teamBName;
+    const numFavName = scoreA.combined >= scoreB.combined ? m.teamAName : m.teamBName;
+    const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+    const rA = sideForName(m.teamAName).runs;
+    const rB = sideForName(m.teamBName).runs;
+    const result = (feed.abstractGameState === 'Final' && Number.isFinite(rA) && Number.isFinite(rB))
+      ? (rA === rB ? { winner: null, draw: true, resolvedAt: Date.now() } : { winner: rA > rB ? m.teamAName : m.teamBName, draw: false, resolvedAt: Date.now() })
+      : null;
+
+    newPreds.push({
+      conditionId: m.conditionId, gamePk,
+      teamAName: m.teamAName, teamBName: m.teamBName,
+      numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
+      components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+      marketFavorite: marketFavName, marketPriceA: m.priceA, marketPriceB: m.priceB,
+      pickType: agree ? 'favorite' : 'underdog',
+      eventTitle: m.eventTitle, gameTime: m.gameStartTime.toISOString(),
+      recordedAt: Date.now(), result,
+    });
+    existingCond.add(m.conditionId);
+  }));
+
+  if (newPreds.length) saveMlbPredictions([...existing, ...newPreds]);
+  // Sort pending soonest-first for display.
+  todaysMlbSlatePending = pending.sort((a, b) => a.gameStartTime - b.gameStartTime);
 }
 
 async function refreshAndRenderMlb() {
@@ -738,6 +864,15 @@ async function refreshAndRenderMlb() {
 
   renderMlbScope('', predictions, signals);
   renderMlbScope('Old', predictions, signals);
+
+  // Fill today's slate behind the first render, then re-render Today with any
+  // newly-scored picks + pending rows. Best-effort - never blocks the page.
+  try {
+    await recordTodaysMlbGames();
+    const preds2 = loadMlbPredictions();
+    currentMlbPredictions = preds2;
+    renderMlbScope('', preds2, currentMlbKSignals);
+  } catch (e) { /* today-slate fill is best-effort */ }
 }
 
 function wireMlbRefreshButton(btnId) {
