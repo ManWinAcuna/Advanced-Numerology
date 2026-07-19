@@ -742,7 +742,11 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbBreakdown(stats, suffix);
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
-  renderMlbComponentSignal(scopedPredictions, suffix);
+  // "Which component predicts best" is a whole-history diagnostic (which piece
+  // of the score beats the market across ALL resolved games), not a per-scope
+  // stat - feeding it the scoped list made the Today tab show ~1 finished game.
+  // Always give it the full prediction set, regardless of which tab is active.
+  renderMlbComponentSignal(predictions, suffix);
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
