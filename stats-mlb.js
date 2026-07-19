@@ -54,12 +54,14 @@ async function checkMlbResults() {
   return predictions;
 }
 
-// isCorrectPick, hasRealEdge, PRICE_BUCKETS, computeBucketStats, edgeGap, and
-// edgeTierForGap live in db-core.js, shared across all three sports' Stats
-// pages and the Polymarket trackers' risk managers.
+// isCorrectPick, PRICE_BUCKETS, computeBucketStats, edgeGap live in db-core.js,
+// shared across all three sports. The edge-tier calls here use the MLB-tuned
+// variants (hasRealEdgeMlb / edgeTierForGapMlb / computeEdgeTierStatsMlb,
+// MLB_REAL_EDGE_MIN_GAP) rather than the one-on-one UFC/Tennis bands - a team
+// composite's gap distribution is far tighter, so it needs its own cutoffs.
 function computeMlbStats(predictions) {
   const resolvedAll = predictions.filter((p) => p.result && !p.result.draw);
-  const resolved = resolvedAll.filter(hasRealEdge);
+  const resolved = resolvedAll.filter(hasRealEdgeMlb);
   const wins = resolved.filter(isCorrectPick);
   const favoritePicks = resolved.filter((p) => p.pickType === 'favorite');
   const underdogPicks = resolved.filter((p) => p.pickType === 'underdog');
@@ -137,7 +139,7 @@ function renderMlbBreakdown(stats, suffix = '') {
 }
 
 function renderMlbEdgeTiers(predictions, suffix = '') {
-  const tiers = computeEdgeTierStats(predictions);
+  const tiers = computeEdgeTierStatsMlb(predictions);
   document.getElementById('mlbStatsEdgeTiers' + suffix).innerHTML = tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
@@ -150,7 +152,7 @@ function renderMlbEdgeTiers(predictions, suffix = '') {
 }
 
 function renderMlbPriceBuckets(predictions, suffix = '') {
-  const buckets = computeBucketStats(predictions);
+  const buckets = computeBucketStats(predictions, MLB_REAL_EDGE_MIN_GAP);
   document.getElementById('mlbStatsPriceBuckets' + suffix).innerHTML = buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
@@ -175,7 +177,7 @@ function formatMlbGameDate(iso) {
 
 function mlbEdgeCell(p) {
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapMlb(gap);
   if (tier.key === 'none') return `<span class="empty-state">⚖️ Tossup (+${gap})</span>`;
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
@@ -267,7 +269,7 @@ function mlbInsightTabHtml(p, rows, loading) {
 function mlbMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapMlb(gap);
 
   const signalHtml = tier.key === 'none'
     ? `⚖️ Tossup (${p.numerologyScoreA} vs ${p.numerologyScoreB}) &mdash; no real numerology edge, excluded from the headline win rate`
@@ -392,6 +394,29 @@ function computeKSignalStats(signals) {
   };
 }
 
+// Hit rate per strength tier - the same idea as the game-pick edge-tier table,
+// but for the strikeout signal: if a high day score really is a signal, a
+// "Strong Over" should hit more often than a "Slight Over." Strength is
+// derived live from the stored dayScore (mlbKSignalTier in db-core.js), so it
+// reclassifies every past start automatically if the bands are ever retuned,
+// rather than freezing whatever tier applied when it was recorded. Only the two
+// directional sides are shown (neutral starts make no prediction to grade).
+function computeKSignalTierStats(signals) {
+  const resolved = signals.filter((s) => s.result && !s.result.scratched && s.predictedDirection !== 'neutral');
+  return MLB_K_SIGNAL_TIERS.filter((t) => t.direction !== 'neutral').map((tier) => {
+    const inTier = resolved.filter((s) => mlbKSignalTier(s.dayScore).key === tier.key);
+    const correct = inTier.filter((s) => s.result.correct);
+    return {
+      key: tier.key,
+      label: tier.label,
+      icon: tier.icon,
+      count: inTier.length,
+      correct: correct.length,
+      hitPct: inTier.length ? Math.round((correct.length / inTier.length) * 100) : null,
+    };
+  });
+}
+
 function renderMlbKSignalPanel(signals, suffix = '') {
   const stats = computeKSignalStats(signals);
   const headline = stats.predictedCount
@@ -404,9 +429,35 @@ function renderMlbKSignalPanel(signals, suffix = '') {
     `
     : `<div class="empty-state">${stats.total ? "No hot/cold-day starts resolved yet - check back once a pitcher with a real day score (≥60 or ≤40) has taken the mound." : 'No starts tracked yet - open the MLB Polymarket tracker to start recording probable pitchers.'}</div>`;
 
+  const tierStats = computeKSignalTierStats(signals);
+  const tierRows = tierStats.map((t) => `
+    <tr>
+      <td>${t.icon} ${t.label}</td>
+      <td>${t.count}</td>
+      <td>${t.hitPct != null && t.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${scoreClass(t.hitPct)}">${t.hitPct}%</span>`
+        : `<span class="empty-state">${t.count ? `${t.correct}/${t.count} so far` : 'No data yet'}</span>`}</td>
+    </tr>
+  `).join('');
+  const tierTable = stats.predictedCount ? `
+    <div class="box" style="margin-top:16px;">
+      <div class="box-label">Hit Rate by Signal Strength</div>
+      <div class="mode-desc">A 61 and a 95 are both "over," but only one is a strong call &mdash; if the day score means anything, the hit rate should climb from Slight to Strong. Day scores sit high by nature, so the Under tiers fill slowly.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table">
+          <thead><tr><th>Signal Strength</th><th>Starts</th><th>Hit Rate</th></tr></thead>
+          <tbody>${tierRows}</tbody>
+        </table>
+      </div>
+    </div>
+  ` : '';
+
   const sorted = [...signals].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
   const rows = sorted.map((s) => {
-    const dirLabel = s.predictedDirection === 'over' ? '🔥 Predicted Over' : (s.predictedDirection === 'under' ? '🧊 Predicted Under' : '➖ Neutral');
+    const dirLabel = s.predictedDirection === 'neutral' ? '➖ Neutral' : (() => {
+      const tier = mlbKSignalTier(s.dayScore);
+      return `${tier.icon} ${tier.label}`;
+    })();
     const baseline = s.seasonAvgKsAtPickTime.toFixed(1);
     const resultLabel = !s.result
       ? '<span class="pm-countdown-badge">⏳ Pending</span>'
@@ -429,9 +480,10 @@ function renderMlbKSignalPanel(signals, suffix = '') {
 
   document.getElementById('mlbKSignalBody' + suffix).innerHTML = `
     ${headline}
-    <div class="pm-table-scroll">
+    ${tierTable}
+    <div class="pm-table-scroll" style="margin-top:16px;">
       <table class="astro-table">
-        <thead><tr><th>Date</th><th>Pitcher</th><th>Day Score / Prediction</th><th>Result</th></tr></thead>
+        <thead><tr><th>Date</th><th>Pitcher</th><th>Signal (Day Score)</th><th>Result</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="4" class="empty-state">No starts tracked yet.</td></tr>'}</tbody>
       </table>
     </div>
@@ -469,7 +521,7 @@ async function fetchPitcherVsLineupDetail(s) {
 }
 
 function mlbKSignalModalHtml(s, detail, loading) {
-  const dirLabel = s.predictedDirection === 'over' ? '🔥 Predicted Over' : (s.predictedDirection === 'under' ? '🧊 Predicted Under' : '➖ Neutral');
+  const dirLabel = s.predictedDirection === 'neutral' ? '➖ Neutral' : `${mlbKSignalTier(s.dayScore).icon} ${mlbKSignalTier(s.dayScore).label}`;
   const baseline = s.seasonAvgKsAtPickTime.toFixed(1);
   const actualRow = !s.result
     ? `<div class="pm-breakdown-row"><span>This Game</span><span class="pm-countdown-badge">⏳ Pending</span></div>`

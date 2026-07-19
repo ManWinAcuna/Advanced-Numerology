@@ -1395,27 +1395,49 @@ const EDGE_TIERS = [
   { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: REAL_EDGE_MIN_GAP },
 ];
 
+// MLB needs its own, much tighter bands. A team composite is a weighted
+// average of ~13 people's scores, and averaging pulls everything hard toward
+// the middle: in real backfilled data every team score landed in 59-73 (std
+// dev under 3), so the gap between two teams is almost always 0-6, rarely as
+// high as ~11 - it can NEVER reach the 15/30 the one-on-one UFC/Tennis tiers
+// need, so those tiers would sit permanently empty. These bands are scaled to
+// the distribution that actually occurs (calibrated to that ~2.8 std-dev
+// spread) so Clear and Strong are reachable while Strong still stays genuinely
+// rare. Same "starting guess, move it once more games resolve" caveat as the
+// UFC/Tennis bands above.
+const MLB_REAL_EDGE_MIN_GAP = 3;
+
+const MLB_EDGE_TIERS = [
+  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 8, max: Infinity },
+  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 5, max: 8 },
+  { key: 'slight', label: 'Slight Edge', icon: '📈', min: MLB_REAL_EDGE_MIN_GAP, max: 5 },
+  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: MLB_REAL_EDGE_MIN_GAP },
+];
+
 function edgeGap(p) {
   const a = Number(p.numerologyScoreA);
   const b = Number(p.numerologyScoreB);
   return (Number.isFinite(a) && Number.isFinite(b)) ? Math.abs(a - b) : 0;
 }
 
-function edgeTierForGap(gap) {
-  return EDGE_TIERS.find((t) => gap >= t.min && gap < t.max) || EDGE_TIERS[EDGE_TIERS.length - 1];
+// tiers/minGap default to the UFC/Tennis one-on-one set; MLB passes its own
+// (via the edgeTierForGapMlb/hasRealEdgeMlb wrappers below) so the three
+// sports share one implementation but not one calibration.
+function edgeTierForGap(gap, tiers = EDGE_TIERS) {
+  return tiers.find((t) => gap >= t.min && gap < t.max) || tiers[tiers.length - 1];
 }
 
-function hasRealEdge(p) {
-  return edgeGap(p) >= REAL_EDGE_MIN_GAP;
+function hasRealEdge(p, minGap = REAL_EDGE_MIN_GAP) {
+  return edgeGap(p) >= minGap;
 }
 
 // Per-tier win rates - the direct empirical test of the core hypothesis: if
 // numerology works, win rate should climb as the gap widens, and the
 // tossup tier should sit near 50%.
-function computeEdgeTierStats(predictions) {
+function computeEdgeTierStats(predictions, tiers = EDGE_TIERS) {
   const resolved = predictions.filter((p) => p.result && !p.result.draw);
 
-  return EDGE_TIERS.map((tier) => {
+  return tiers.map((tier) => {
     const inTier = resolved.filter((p) => {
       const gap = edgeGap(p);
       return gap >= tier.min && gap < tier.max;
@@ -1432,13 +1454,57 @@ function computeEdgeTierStats(predictions) {
   });
 }
 
+// MLB-tuned wrappers - kept as their own named functions (rather than callers
+// passing MLB_EDGE_TIERS inline) both for readability and so hasRealEdgeMlb is
+// safe to hand straight to Array.filter, whose index argument would otherwise
+// land in hasRealEdge's minGap parameter.
+function edgeTierForGapMlb(gap) {
+  return edgeTierForGap(gap, MLB_EDGE_TIERS);
+}
+
+function hasRealEdgeMlb(p) {
+  return edgeGap(p) >= MLB_REAL_EDGE_MIN_GAP;
+}
+
+function computeEdgeTierStatsMlb(predictions) {
+  return computeEdgeTierStats(predictions, MLB_EDGE_TIERS);
+}
+
+// Strength tiers for the pitcher strikeout signal. The signal already calls a
+// direction (over/under/neutral) off the pitcher's day score, but "predicted
+// over" alone says nothing about conviction - a 61 and a 95 were both just
+// "over." These bands subdivide each direction into slight/strong by how
+// extreme the day score is, the same way the edge tiers subdivide a game pick
+// by gap. The direction each band resolves to is identical to the existing
+// predictedDirection cutoffs (>=60 over, <=40 under, else neutral), so this is
+// purely an added conviction layer - it never changes whether a start counts
+// as a hit. Calibrated to the real day-score spread (centered ~63, std dev
+// ~12): "over" fires far more often than "under" because the compat engine's
+// day scores naturally sit above 50, so the under tiers fill slowly - that's
+// the data, not a bug.
+const MLB_K_SIGNAL_TIERS = [
+  { key: 'strongOver', label: 'Strong Over', icon: '🔥', direction: 'over', min: 75, max: Infinity },
+  { key: 'slightOver', label: 'Slight Over', icon: '📈', direction: 'over', min: 60, max: 75 },
+  { key: 'neutral', label: 'Neutral', icon: '➖', direction: 'neutral', min: 41, max: 60 },
+  { key: 'slightUnder', label: 'Slight Under', icon: '📉', direction: 'under', min: 33, max: 41 },
+  { key: 'strongUnder', label: 'Strong Under', icon: '🧊', direction: 'under', min: -Infinity, max: 33 },
+];
+
+function mlbKSignalTier(dayScore) {
+  return MLB_K_SIGNAL_TIERS.find((t) => dayScore >= t.min && dayScore < t.max) || MLB_K_SIGNAL_TIERS[MLB_K_SIGNAL_TIERS.length - 1];
+}
+
 // Buckets every resolved (non-draw) REAL-EDGE prediction by the numerology
 // pick's market price at the time, so "how has a pick like THIS actually
 // done" can be checked against a specific odds range. Tossups are excluded
 // on purpose - they were never picks, and letting their coin-flip outcomes
 // into these numbers would contaminate the risk manager's EV math.
-function computeBucketStats(predictions) {
-  const resolved = predictions.filter((p) => p.result && !p.result.draw && numerologyPickPrice(p) != null && hasRealEdge(p));
+// minGap defaults to the UFC/Tennis threshold; MLB passes MLB_REAL_EDGE_MIN_GAP
+// so its price buckets count the same set of "real edge" picks its own edge
+// tiers and headline win rate do, instead of a stricter one-on-one cutoff that
+// would drop most MLB picks out of the risk manager entirely.
+function computeBucketStats(predictions, minGap = REAL_EDGE_MIN_GAP) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && numerologyPickPrice(p) != null && hasRealEdge(p, minGap));
 
   return PRICE_BUCKETS.map((bucket) => {
     const inBucket = resolved.filter((p) => {

@@ -33,7 +33,7 @@ function riskManagerHtml(pickName, pickPrice) {
   if (pickPrice == null) return '';
 
   const bucket = bucketForPrice(pickPrice);
-  const stat = computeBucketStats(loadMlbPredictions()).find((b) => b.label === bucket.label);
+  const stat = computeBucketStats(loadMlbPredictions(), MLB_REAL_EDGE_MIN_GAP).find((b) => b.label === bucket.label);
 
   const payout = currentStake / pickPrice;
   const profit = payout - currentStake;
@@ -385,7 +385,7 @@ function numerologyBlockHtml(g) {
   recordMlbPredictionIfNew(g, scoreA, scoreB, marketFavName, numFavName, agree ? 'favorite' : 'underdog');
 
   const gap = Math.abs(scoreA.combined - scoreB.combined);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapMlb(gap);
   const pickPrice = scoreA.combined >= scoreB.combined ? g.priceA : g.priceB;
 
   const signalHtml = tier.key === 'none'
@@ -407,7 +407,7 @@ function numerologyBlockHtml(g) {
 function cardTierKey(g) {
   const scores = scoresForGame(g, () => updateGameCard(g.conditionId));
   if (!scores) return '';
-  return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
+  return edgeTierForGapMlb(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
 
 function breakdownColumnHtml(teamName, score) {
