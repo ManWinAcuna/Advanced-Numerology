@@ -1110,14 +1110,29 @@ function modalTabsHtml(breakdownHtml, insightHtml) {
 // innerHTML gets fully replaced on every open, but the body element itself
 // never does, so a single delegated listener (same pattern as the trade-feed
 // toggle) is all that's needed.
+//
+// The toggle is scoped to the clicked tab's OWN .pm-modal-tabs bar and the
+// .pm-modal-page siblings of that bar - never a blanket querySelectorAll over
+// the whole container. That matters because these tab groups nest: the MLB
+// Stats page wraps its Today/Old scope in one .pm-modal-tabs/.pm-modal-page
+// set, and a matchup modal opened inside a scope page brings its own
+// Breakdown/Insight set. A click on the modal's Insight tab bubbles up to the
+// outer scope switcher too, and a blanket toggle there would hide every page
+// whose data-page isn't "insight" - including both scope pages, blanking the
+// screen. Scoping to the clicked bar's siblings makes that bubbled call a
+// harmless no-op on the modal's own pages instead.
 function initModalTabSwitcher(bodyElementId) {
   const body = document.getElementById(bodyElementId);
   body.addEventListener('click', (e) => {
     const btn = e.target.closest('.pm-modal-tab');
     if (!btn) return;
+    const tabsBar = btn.closest('.pm-modal-tabs');
+    if (!tabsBar || !body.contains(tabsBar)) return;
     const tab = btn.dataset.tab;
-    body.querySelectorAll('.pm-modal-tab').forEach((b) => b.classList.toggle('active', b === btn));
-    body.querySelectorAll('.pm-modal-page').forEach((p) => { p.style.display = p.dataset.page === tab ? '' : 'none'; });
+    tabsBar.querySelectorAll('.pm-modal-tab').forEach((b) => b.classList.toggle('active', b === btn));
+    Array.from(tabsBar.parentElement.children)
+      .filter((el) => el.classList && el.classList.contains('pm-modal-page'))
+      .forEach((p) => { p.style.display = p.dataset.page === tab ? '' : 'none'; });
   });
 }
 
