@@ -31,15 +31,25 @@
 
   <h1 class="page-title">📈 Stats &mdash; Numerology Track Record</h1>
 
-  <div class="box stats-sport-box">
-    <div class="box-label">Sport</div>
-    <select id="statsSportSelect">
-      <option value="ufc">🥊 UFC</option>
-      <option value="tennis">🎾 Tennis</option>
-      <option value="mlb">⚾ MLB</option>
-      <option value="nba" disabled>🏀 NBA (Coming Soon)</option>
-      <option value="nfl" disabled>🏈 NFL (Coming Soon)</option>
-    </select>
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <div class="box stats-sport-box">
+      <div class="box-label">Sport</div>
+      <select id="statsSportSelect">
+        <option value="ufc">🥊 UFC</option>
+        <option value="tennis">🎾 Tennis</option>
+        <option value="mlb">⚾ MLB</option>
+        <option value="nba" disabled>🏀 NBA (Coming Soon)</option>
+        <option value="nfl" disabled>🏈 NFL (Coming Soon)</option>
+      </select>
+    </div>
+
+    <div class="box stats-sport-box" id="mlbViewBox" style="display:none;">
+      <div class="box-label">MLB View</div>
+      <select id="mlbViewSelect">
+        <option value="game">🎯 Game Picks</option>
+        <option value="strikeout">🔥 Strikeout Signal</option>
+      </select>
+    </div>
   </div>
 
   <div id="statsUfcSection">
@@ -187,6 +197,7 @@
   </div>
 
   <div id="statsMlbSection" style="display:none;">
+   <div id="mlbGameSection">
     <div class="pm-last-updated-row">
       <span id="mlbStatsLastUpdated"></span>
       <button class="btn-link" id="mlbStatsRefreshBtn" type="button">🔄 Check Results</button>
@@ -250,18 +261,21 @@
       </div>
     </div>
 
-    <div class="box" id="mlbKSignalBox">
-      <div class="box-label">🔥 Pitcher Strikeout Research Signal</div>
-      <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
-      <div id="mlbKSignalBody"></div>
-    </div>
-
     <div class="modal-overlay" id="mlbStatsMatchupOverlay">
       <div class="modal-box">
         <button class="modal-close" id="mlbStatsMatchupClose" title="Close">&times;</button>
         <div id="mlbStatsMatchupBody"></div>
       </div>
     </div>
+   </div>
+
+   <div id="mlbStrikeoutSection" style="display:none;">
+    <div class="box" id="mlbKSignalBox">
+      <div class="box-label">🔥 Pitcher Strikeout Research Signal</div>
+      <div class="mode-desc">Not a bet - a standalone hypothesis test. Tracks whether a starting pitcher's own numerology day score (hot &ge;60, cold &le;40) predicts whether they strike out more or fewer batters than their own season average, resolved purely off MLB's own data (no market involved).</div>
+      <div id="mlbKSignalBody"></div>
+    </div>
+   </div>
   </div>
 
 </div>
@@ -274,12 +288,22 @@
 <script src="stats-tennis.js"></script>
 <script src="stats-mlb.js"></script>
 <script>
+function applyMlbView() {
+  const view = document.getElementById('mlbViewSelect').value;
+  document.getElementById('mlbGameSection').style.display = view === 'game' ? '' : 'none';
+  document.getElementById('mlbStrikeoutSection').style.display = view === 'strikeout' ? '' : 'none';
+}
+
 document.getElementById('statsSportSelect').addEventListener('change', (e) => {
   const sport = e.target.value;
   document.getElementById('statsUfcSection').style.display = sport === 'ufc' ? '' : 'none';
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
   document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
+  document.getElementById('mlbViewBox').style.display = sport === 'mlb' ? '' : 'none';
+  if (sport === 'mlb') applyMlbView();
 });
+
+document.getElementById('mlbViewSelect').addEventListener('change', applyMlbView);
 </script>
 </body>
 </html>
