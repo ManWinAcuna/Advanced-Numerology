@@ -344,7 +344,16 @@ async function checkMlbKSignals() {
       const feed = feedByGamePk.get(s.gamePk);
       if (!feed || feed.abstractGameState !== 'Final') return;
       const side = [feed.home, feed.away].find((sd) => sd.startingPitcherId === s.pitcherId);
-      if (!side || side.startingPitcherStrikeouts == null) return;
+      if (!side) {
+        // The probable pitcher recorded at pick time never actually started -
+        // a real pre-game scratch/rotation change. The box score is final and
+        // still doesn't show him, so this would never resolve on its own;
+        // mark it void instead of leaving it stuck on "Pending" forever.
+        s.result = { scratched: true, resolvedAt: Date.now() };
+        changed = true;
+        return;
+      }
+      if (side.startingPitcherStrikeouts == null) return;
 
       s.actualKs = side.startingPitcherStrikeouts;
       const actualDirection = s.actualKs > s.seasonAvgKsAtPickTime ? 'over' : (s.actualKs < s.seasonAvgKsAtPickTime ? 'under' : 'push');
@@ -363,9 +372,10 @@ async function checkMlbKSignals() {
 }
 
 function computeKSignalStats(signals) {
-  const resolved = signals.filter((s) => s.result);
+  const resolved = signals.filter((s) => s.result && !s.result.scratched);
   const predicted = resolved.filter((s) => s.predictedDirection !== 'neutral');
   const correct = predicted.filter((s) => s.result.correct);
+  const scratchedCount = signals.filter((s) => s.result && s.result.scratched).length;
   return {
     total: signals.length,
     resolvedCount: resolved.length,
@@ -373,6 +383,7 @@ function computeKSignalStats(signals) {
     predictedCount: predicted.length,
     correctCount: correct.length,
     hitPct: predicted.length ? Math.round((correct.length / predicted.length) * 100) : null,
+    scratchedCount,
   };
 }
 
@@ -383,7 +394,7 @@ function renderMlbKSignalPanel(signals) {
       <div class="score-hero">
         <div class="score-names">Hit Rate &mdash; Hot/Cold Day Score vs. Own Season Average</div>
         <div class="score-big ${scoreClass(stats.hitPct)}">${stats.hitPct}<span class="score-out-of">%</span></div>
-        <div class="pm-breakdown-hint">${stats.correctCount} of ${stats.predictedCount} resolved starts correct &middot; ${stats.neutralResolvedCount} neutral (no prediction) &middot; ${stats.total - stats.resolvedCount} pending</div>
+        <div class="pm-breakdown-hint">${stats.correctCount} of ${stats.predictedCount} resolved starts correct &middot; ${stats.neutralResolvedCount} neutral (no prediction) &middot; ${stats.total - stats.resolvedCount - stats.scratchedCount} pending${stats.scratchedCount ? ` &middot; ${stats.scratchedCount} scratched before first pitch` : ''}</div>
       </div>
     `
     : `<div class="empty-state">${stats.total ? "No hot/cold-day starts resolved yet - check back once a pitcher with a real day score (≥60 or ≤40) has taken the mound." : 'No starts tracked yet - open the MLB Polymarket tracker to start recording probable pitchers.'}</div>`;
@@ -394,7 +405,9 @@ function renderMlbKSignalPanel(signals) {
     const baseline = s.seasonAvgKsAtPickTime.toFixed(1);
     const resultLabel = !s.result
       ? '<span class="pm-countdown-badge">⏳ Pending</span>'
-      : s.predictedDirection === 'neutral'
+      : s.result.scratched
+        ? '<span class="empty-state">🚫 Scratched before first pitch</span>'
+        : s.predictedDirection === 'neutral'
         ? `<span class="empty-state">${s.actualKs} K (baseline ${baseline})</span>`
         : s.result.correct
           ? `<span class="score-inline good">✅ ${s.actualKs} K (baseline ${baseline})</span>`
@@ -453,13 +466,17 @@ async function fetchPitcherVsLineupDetail(s) {
 function mlbKSignalModalHtml(s, detail, loading) {
   const dirLabel = s.predictedDirection === 'over' ? '🔥 Predicted Over' : (s.predictedDirection === 'under' ? '🧊 Predicted Under' : '➖ Neutral');
   const baseline = s.seasonAvgKsAtPickTime.toFixed(1);
-  const actualRow = s.result
-    ? `<div class="pm-breakdown-row"><span>This Game</span><span class="score-inline ${s.result.correct === false ? 'bad' : (s.result.correct ? 'good' : '')}">${s.actualKs} K</span></div>`
-    : `<div class="pm-breakdown-row"><span>This Game</span><span class="pm-countdown-badge">⏳ Pending</span></div>`;
+  const actualRow = !s.result
+    ? `<div class="pm-breakdown-row"><span>This Game</span><span class="pm-countdown-badge">⏳ Pending</span></div>`
+    : s.result.scratched
+      ? `<div class="pm-breakdown-row"><span>This Game</span><span class="empty-state">🚫 Scratched before first pitch</span></div>`
+      : `<div class="pm-breakdown-row"><span>This Game</span><span class="score-inline ${s.result.correct === false ? 'bad' : (s.result.correct ? 'good' : '')}">${s.actualKs} K</span></div>`;
 
   let lineupHtml;
   if (loading) {
     lineupHtml = '<div class="pm-unmatched" style="margin-top:12px;">Loading pitcher-vs-batters breakdown&hellip;</div>';
+  } else if (s.result && s.result.scratched) {
+    lineupHtml = '<div class="pm-unmatched" style="margin-top:12px;">This pitcher never actually started the game &mdash; scratched before first pitch, so there\'s no real matchup to show.</div>';
   } else if (detail) {
     lineupHtml = `
       <div class="pm-breakdown-col" style="margin-top:12px;">
