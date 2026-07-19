@@ -4011,3 +4011,65 @@ body {
 .auth-widget {
   margin-bottom: env(safe-area-inset-bottom);
 }
+
+/* ===================== Fight/match card hierarchy ===================== */
+/* The edge tier is the card's verdict, so it reads first: a colored strip
+   across the card's top - green STRONG, yellow CLEAR, purple SLIGHT, gray
+   tossup - visible before a single word is read. Set via data-tier by the
+   trackers whenever scores (re)compute. */
+
+.pm-fight-card,
+.ufc-page .pm-fight-card {
+  border-top: 3px solid rgba(167, 107, 214, 0.3);
+}
+
+.ufc-page .pm-fight-card[data-tier="strong"],
+.pm-fight-card[data-tier="strong"] { border-top-color: var(--good); }
+.ufc-page .pm-fight-card[data-tier="clear"],
+.pm-fight-card[data-tier="clear"] { border-top-color: var(--yellow); }
+.ufc-page .pm-fight-card[data-tier="slight"],
+.pm-fight-card[data-tier="slight"] { border-top-color: var(--purple); }
+.ufc-page .pm-fight-card[data-tier="none"],
+.pm-fight-card[data-tier="none"] { border-top-color: var(--muted); }
+
+/* Whale feed demoted behind a tap - the numerology verdict is the decision
+   layer, trade flow is supporting evidence. */
+.pm-trade-feed-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Consolas', 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--yellow);
+  text-transform: uppercase;
+}
+
+.pm-trade-feed-toggle .pm-feed-caret {
+  color: var(--muted);
+}
+
+/* ===================== Skeleton loading cards ===================== */
+
+.pm-skeleton-bar {
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1c1626 25%, #2a2138 50%, #1c1626 75%);
+  background-size: 200% 100%;
+  animation: pm-shimmer 1.2s linear infinite;
+  margin-bottom: 12px;
+}
+
+.pm-skeleton-bar:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes pm-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

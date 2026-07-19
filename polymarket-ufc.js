@@ -913,6 +913,17 @@ function initDismissButtons() {
   });
 }
 
+function initFeedToggles() {
+  document.getElementById('fightsContainer').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-feed-toggle]');
+    if (!btn) return;
+    const id = btn.dataset.feedToggle;
+    if (openFeeds.has(id)) openFeeds.delete(id);
+    else openFeeds.add(id);
+    renderTradeFeeds();
+  });
+}
+
 function initBreakdownModal() {
   document.getElementById('fightsContainer').addEventListener('click', (e) => {
     const trigger = e.target.closest('.pm-numerology-clickable');
@@ -943,6 +954,15 @@ function fullMatchupHtml(f) {
   return `<a class="btn" href="ufc.html?${params.toString()}">Full Matchup &rarr;</a>`;
 }
 
+// The edge tier's key for a fight's colored card strip - '' (default
+// border) when scores can't be computed yet (unmatched fighter or no
+// location set).
+function cardTierKey(f) {
+  if (!(f.matchedA && f.matchedB && selectedRegion)) return '';
+  const { scoreA, scoreB } = scoresForFight(f);
+  return edgeTierForGap(Math.abs(scoreA.combined - scoreB.combined)).key;
+}
+
 function renderFightCards() {
   const container = document.getElementById('fightsContainer');
   if (!cardFights.length) {
@@ -956,7 +976,7 @@ function renderFightCards() {
     const favA = pctA != null && pctB != null && pctA >= pctB;
 
     return `
-      <div class="box pm-fight-card">
+      <div class="box pm-fight-card" id="pm-card-${f.conditionId}" data-tier="${cardTierKey(f)}">
         <div class="pm-fight-head">
           <div class="pm-fight-names">${escapeHtml(f.fighterAName)} vs ${escapeHtml(f.fighterBName)}</div>
           ${fightBadge(f.gameStartTime)}
@@ -973,8 +993,7 @@ function renderFightCards() {
         </div>
         <div class="pm-numerology" id="pm-num-${f.conditionId}">${numerologyBlockHtml(f)}</div>
         <div class="pm-trade-feed" id="pm-feed-${f.conditionId}">
-          <div class="pm-trade-feed-label">🐋 Big Money Activity</div>
-          <div class="empty-state">Loading activity&hellip;</div>
+          ${feedToggleHtml(f.conditionId, 0, false)}
         </div>
         <div class="pm-fight-actions">
           <button class="btn-link" data-dismiss="${f.conditionId}" type="button">✓ Mark as Over</button>
@@ -983,6 +1002,15 @@ function renderFightCards() {
       </div>
     `;
   }).join('');
+}
+
+// Feeds the user has expanded - the whale feed defaults collapsed so the
+// card leads with the numerology verdict and the bet math; trade flow is
+// supporting evidence one tap away. Survives the 20s re-render cycle.
+const openFeeds = new Set();
+
+function feedToggleHtml(conditionId, count, open) {
+  return `<button class="pm-trade-feed-toggle" data-feed-toggle="${conditionId}" type="button">🐋 ${count ? `${count} whale bet${count === 1 ? '' : 's'}` : 'Big Money Activity'} <span class="pm-feed-caret">${open ? '▾' : '▸'}</span></button>`;
 }
 
 function renderTradeFeeds() {
@@ -1001,12 +1029,15 @@ function renderTradeFeeds() {
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 8);
 
+    const open = openFeeds.has(f.conditionId);
+
     if (!flagged.length) {
-      el.innerHTML = '<div class="pm-trade-feed-label">🐋 Big Money Activity</div><div class="empty-state">No notable big-money activity yet on this fight.</div>';
+      el.innerHTML = feedToggleHtml(f.conditionId, 0, open)
+        + (open ? '<div class="empty-state">No notable big-money activity yet on this fight.</div>' : '');
       return;
     }
 
-    el.innerHTML = '<div class="pm-trade-feed-label">🐋 Big Money Activity</div>' + flagged.map((t) => {
+    el.innerHTML = feedToggleHtml(f.conditionId, flagged.length, open) + (!open ? '' : flagged.map((t) => {
       const leader = leaderboardMap.get((t.proxyWallet || '').toLowerCase());
       const who = leader ? leader.userName : shortWallet(t.proxyWallet);
       const badges = `${t.usd >= WHALE_THRESHOLD_USD ? '<span class="pm-badge-whale">WHALE</span> ' : ''}${t.smart ? '<span class="pm-badge-smart" title="Top 50 all-time on Polymarket\'s Sports PNL leaderboard, and still profitable this month">SMART</span>' : ''}`;
@@ -1019,7 +1050,7 @@ function renderTradeFeeds() {
           <span class="pm-trade-time">${timeAgo(t.timestamp)}</span>
         </div>
       `;
-    }).join('');
+    }).join(''));
   });
 
   const stamp = document.getElementById('pmLastUpdated');
@@ -1033,6 +1064,8 @@ function updateNumerologyBlocks() {
   cardFights.forEach((f) => {
     const el = document.getElementById(`pm-num-${f.conditionId}`);
     if (el) el.innerHTML = numerologyBlockHtml(f);
+    const card = document.getElementById(`pm-card-${f.conditionId}`);
+    if (card) card.dataset.tier = cardTierKey(f);
   });
 }
 
@@ -1128,6 +1161,7 @@ function startPolling() {
   initRefreshButton();
   initBreakdownModal();
   initDismissButtons();
+  initFeedToggles();
   initStakeInput();
   leaderboardMap = await fetchLeaderboard();
   await loadEventsAndRender();
