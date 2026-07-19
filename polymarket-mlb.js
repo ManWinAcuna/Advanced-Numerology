@@ -208,7 +208,7 @@ function computeTeamComposite(g, sideLetter) {
     const bd = g.birthdates.get(b.id);
     if (!bd || !bd.birthDate) return;
     const weight = b.pos === 'C' ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ role: `${b.pos === 'C' ? 'C ' : ''}${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+    parts.push({ role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
   });
   if (teamInfo && teamInfo.firstYearOfPlay) {
     // MLB only gives a founding YEAR, never a real date - no month/day means
