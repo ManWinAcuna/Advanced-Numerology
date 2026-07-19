@@ -887,6 +887,10 @@ function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
 // top-to-bottom is modest, not worth the extra complexity yet).
 const MLB_ROLE_WEIGHTS = {
   pitcher: 0.24,
+  pitcherMatchup: 0.15, // pitcher's life path vs. the opposing lineup's,
+  // averaged across all 9 batters (pitcherVsLineupScore in polymarket-mlb.js) -
+  // the one place the two teams' numerology actually meets head-to-head,
+  // instead of each side only ever being scored against the day/venue.
   catcher: 0.11,
   batter: 0.05, // each of the 8 non-catcher batters
   franchise: 0.05, // MLB only gives a founding YEAR, never a real date - no

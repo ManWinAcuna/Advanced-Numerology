@@ -185,13 +185,36 @@ function isoDateOnly(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
-// The 12-component weighted composite: starting pitcher, catcher, the 8
+// Everything above (pitcher, batters, franchise, manager) only ever scores
+// an entity against the day/venue - it never asks whether the two TEAMS'
+// numerology actually clash. But the one matchup that repeats dozens of
+// times a game is pitcher vs. batter, so that's worth a real head-to-head
+// signal of its own: the pitcher's life path run against each of the nine
+// opposing batters' life paths through the same sportsNumerologyCompat
+// table UFC/Tennis use for fighter-vs-fighter, averaged into one "does this
+// pitcher's number play well against this specific lineup" score. This is
+// genuinely a different kind of factor than the rest (person-vs-person, not
+// person-vs-date), which is exactly the point - it's the only place in the
+// model where the two teams' numerology actually meets.
+function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
+  const pitcherLifePath = compatLifePathInfo(pitcherDobDate).lookupValue;
+  const compatScores = opposingBatters
+    .map((b) => birthdates.get(b.id))
+    .filter((bd) => bd && bd.birthDate)
+    .map((bd) => sportsNumerologyCompat(pitcherLifePath, compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue));
+  if (!compatScores.length) return null;
+  return Math.round(compatScores.reduce((s, v) => s + v, 0) / compatScores.length);
+}
+
+// The 13-component weighted composite: starting pitcher, catcher, the 8
 // other batters (flat weight), the franchise (scored against its founding
-// year like a birthdate), and the manager - every one of them run through
-// the exact same computeFighterScore() UFC uses, just weighted-averaged
-// across a roster instead of standing alone.
+// year like a birthdate), the manager, and the pitcher-vs-opposing-lineup
+// matchup edge above - every person-vs-date factor runs through the exact
+// same computeFighterScore() UFC uses, weighted-averaged across a roster
+// instead of standing alone.
 function computeTeamComposite(g, sideLetter) {
   const side = sideLetter === 'A' ? g.sideA : g.sideB;
+  const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
   const teamInfo = sideLetter === 'A' ? g.teamInfoA : g.teamInfoB;
   const manager = sideLetter === 'A' ? g.managerA : g.managerB;
 
@@ -203,6 +226,11 @@ function computeTeamComposite(g, sideLetter) {
   const pitcherBd = g.birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
     parts.push({ role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
+
+    const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
+    if (matchupScore != null) {
+      parts.push({ role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
+    }
   }
   side.batters.forEach((b) => {
     const bd = g.birthdates.get(b.id);
