@@ -151,7 +151,11 @@ const INFOBOX_DATE_FIELDS = [
   'inaugurated', 'formed', 'foundation', 'opening',
 ];
 
-const MONTH_NAMES = [
+// Named WIKI_ (not plain MONTH_NAMES) because calendar.js declares its own
+// top-level MONTH_NAMES const - two same-named top-level consts across
+// scripts loaded on one page is a SyntaxError that silently kills the
+// second script entirely.
+const WIKI_MONTH_NAMES = [
   'january', 'february', 'march', 'april', 'may', 'june',
   'july', 'august', 'september', 'october', 'november', 'december',
 ];
@@ -180,13 +184,13 @@ function parseWikitextDateValue(rawValue) {
 
   const dmyMatch = /(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/.exec(text);
   if (dmyMatch) {
-    const month = MONTH_NAMES.indexOf(dmyMatch[2].toLowerCase());
+    const month = WIKI_MONTH_NAMES.indexOf(dmyMatch[2].toLowerCase());
     if (month !== -1) return isoFromParts(dmyMatch[3], month + 1, dmyMatch[1]);
   }
 
   const mdyMatch = /([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/.exec(text);
   if (mdyMatch) {
-    const month = MONTH_NAMES.indexOf(mdyMatch[1].toLowerCase());
+    const month = WIKI_MONTH_NAMES.indexOf(mdyMatch[1].toLowerCase());
     if (month !== -1) return isoFromParts(mdyMatch[3], month + 1, mdyMatch[2]);
   }
 
