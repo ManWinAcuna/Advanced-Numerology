@@ -510,16 +510,42 @@ function breakdownColumnHtml(name, score, regionMode) {
   `;
 }
 
-function breakdownModalHtml(m, scores, regionMode) {
+// Research-based read on each player's life path (theme/volatility/athletic
+// tag) plus a player-vs-player numerology reading via the shared
+// numerologyCompat table - informational only, on the Insight tab. Players
+// are never scored against each other for the real edge above (each is only
+// ever scored against the day/region/venue), so this is the one place that
+// head-to-head number gets computed and shown at all.
+function insightTabHtml(m) {
+  const infoA = compatLifePathInfo(parseDateInput(m.matchedA.dob));
+  const infoB = compatLifePathInfo(parseDateInput(m.matchedB.dob));
+  const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
   return `
+    <div class="pm-insight-grid">
+      ${personInsightHtml(m.matchedA.name, infoA.display, infoA.lookupValue)}
+      ${personInsightHtml(m.matchedB.name, infoB.display, infoB.lookupValue)}
+    </div>
+    <div class="pm-insight-pair">
+      <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
+      <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
+    </div>
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
+function breakdownModalHtml(m, scores, regionMode) {
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(m.matchedA.name)} <span class="score-vs">&times;</span> ${escapeHtml(m.matchedB.name)}</div>
     </div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       ${breakdownColumnHtml(m.matchedA.name, scores.scoreA, regionMode)}
       ${breakdownColumnHtml(m.matchedB.name, scores.scoreB, regionMode)}
     </div>
   `;
+  return hero + modalTabsHtml(breakdown, insightTabHtml(m));
 }
 
 function initDismissButtons() {
@@ -555,6 +581,7 @@ function initBreakdownModal() {
   document.getElementById('pmBreakdownOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'pmBreakdownOverlay') document.getElementById('pmBreakdownOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('pmBreakdownBody');
 }
 
 function fullMatchupHtml(m) {

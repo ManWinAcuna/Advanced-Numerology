@@ -883,16 +883,42 @@ function breakdownColumnHtml(name, score) {
   `;
 }
 
-function breakdownModalHtml(f, scores) {
+// Research-based read on each fighter's life path (theme/volatility/athletic
+// tag) plus a fighter-vs-fighter numerology reading via the shared
+// numerologyCompat table - informational only, on the Insight tab. Fighters
+// are never scored against each other for the real edge above (each is only
+// ever scored against the day/state/stadium), so this is the one place that
+// head-to-head number gets computed and shown at all.
+function insightTabHtml(f) {
+  const infoA = compatLifePathInfo(parseDateInput(f.matchedA.dob));
+  const infoB = compatLifePathInfo(parseDateInput(f.matchedB.dob));
+  const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
   return `
+    <div class="pm-insight-grid">
+      ${personInsightHtml(f.matchedA.name, infoA.display, infoA.lookupValue)}
+      ${personInsightHtml(f.matchedB.name, infoB.display, infoB.lookupValue)}
+    </div>
+    <div class="pm-insight-pair">
+      <div class="pm-insight-pair-clash">${pair.clash.icon} ${escapeHtml(pair.clash.label)} <span class="score-inline ${scoreClass(pair.score)}">${pair.score}</span></div>
+      <div class="pm-insight-pair-theme">${escapeHtml(pair.themeLine)}</div>
+    </div>
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
+function breakdownModalHtml(f, scores) {
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(f.matchedA.name)} <span class="score-vs">&times;</span> ${escapeHtml(f.matchedB.name)}</div>
     </div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       ${breakdownColumnHtml(f.matchedA.name, scores.scoreA)}
       ${breakdownColumnHtml(f.matchedB.name, scores.scoreB)}
     </div>
   `;
+  return hero + modalTabsHtml(breakdown, insightTabHtml(f));
 }
 
 // Removes the card from view immediately and remembers it - independent of
@@ -941,6 +967,7 @@ function initBreakdownModal() {
   document.getElementById('pmBreakdownOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'pmBreakdownOverlay') document.getElementById('pmBreakdownOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('pmBreakdownBody');
 }
 
 function fullMatchupHtml(f) {

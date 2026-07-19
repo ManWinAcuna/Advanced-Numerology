@@ -528,16 +528,80 @@ function breakdownColumnHtml(teamName, score) {
   `;
 }
 
-function breakdownModalHtml(g, scores) {
+// One team's roster reduced to {role, lookupValue} rows for the Insight tab -
+// pitcher, batters, and manager only (the franchise's zodiac-year score isn't
+// a person's life path, so it's left out of this reading on purpose).
+function teamRosterInsightRows(side, manager, birthdates) {
+  const rows = [];
+  const pitcherBd = birthdates.get(side.startingPitcherId);
+  if (pitcherBd && pitcherBd.birthDate) {
+    rows.push({ role: `SP ${pitcherBd.name}`, lookupValue: compatLifePathInfo(parseDateInput(pitcherBd.birthDate)).lookupValue });
+  }
+  side.batters.forEach((b) => {
+    const bd = birthdates.get(b.id);
+    if (!bd || !bd.birthDate) return;
+    rows.push({ role: `${b.pos} ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
+  });
+  if (manager) {
+    const bd = birthdates.get(manager.id);
+    if (bd && bd.birthDate) rows.push({ role: `Mgr ${bd.name}`, lookupValue: compatLifePathInfo(parseDateInput(bd.birthDate)).lookupValue });
+  }
+  return rows;
+}
+
+function insightRowHtml(row) {
+  const insight = lifePathInsight(row.lookupValue);
+  const icons = insight.volatility.icon + (insight.athletic ? insight.athletic.icon : '');
+  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span>${escapeHtml(insight.theme)} ${icons}</span></div>`;
+}
+
+// Research-based read per roster person (theme/volatility/athletic tag), plus
+// a relabeling of the pitcher-vs-lineup number that's already part of the
+// real composite above - informational framing on an already-real number,
+// not a new one, so nothing here changes what's being bet on.
+function insightTabHtml(g, scores) {
+  const rowsA = teamRosterInsightRows(g.sideA, g.managerA, g.birthdates).map(insightRowHtml).join('');
+  const rowsB = teamRosterInsightRows(g.sideB, g.managerB, g.birthdates).map(insightRowHtml).join('');
+  const matchupParts = [scores.scoreA, scores.scoreB]
+    .flatMap((s) => s.parts.filter((p) => p.role.includes(' vs ')));
+  const matchupHtml = matchupParts.map((p) => {
+    const clash = clashTypeForScore(p.score.combined);
+    return `
+      <div class="pm-insight-pair">
+        <div class="pm-insight-pair-clash">${clash.icon} ${escapeHtml(clash.label)} <span class="score-inline ${scoreClass(p.score.combined)}">${p.score.combined}</span></div>
+        <div class="pm-insight-pair-theme">${escapeHtml(p.role)}</div>
+      </div>
+    `;
+  }).join('');
   return `
+    <div class="pm-insight-grid">
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(g.teamAName)}</div>
+        ${rowsA || '<div class="empty-state">No roster data yet.</div>'}
+      </div>
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(g.teamBName)}</div>
+        ${rowsB || '<div class="empty-state">No roster data yet.</div>'}
+      </div>
+    </div>
+    ${matchupHtml}
+    <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only.</div>
+  `;
+}
+
+function breakdownModalHtml(g, scores) {
+  const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(g.teamAName)} <span class="score-vs">&times;</span> ${escapeHtml(g.teamBName)}</div>
     </div>
+  `;
+  const breakdown = `
     <div class="pm-breakdown-grid">
       ${breakdownColumnHtml(g.teamAName, scores.scoreA)}
       ${breakdownColumnHtml(g.teamBName, scores.scoreB)}
     </div>
   `;
+  return hero + modalTabsHtml(breakdown, insightTabHtml(g, scores));
 }
 
 function feedToggleHtml(conditionId, count, open) {
@@ -729,6 +793,7 @@ function initBreakdownModal() {
   document.getElementById('pmBreakdownOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'pmBreakdownOverlay') document.getElementById('pmBreakdownOverlay').classList.remove('active');
   });
+  initModalTabSwitcher('pmBreakdownBody');
 }
 
 /* ===================== Orchestration ===================== */

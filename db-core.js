@@ -884,6 +884,129 @@ function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   return { day, stadium, state, combined };
 }
 
+/* ===================== Life Path research insight (informational only) ===================== */
+// Reference data from NUMEROLOGY_RESEARCH.md - describes what a life path number tends to
+// MEAN (its theme, how volatile it runs, whether it carries a physical/athletic read),
+// none of which was in the numeric compat tables above. This is display-only: nothing here
+// feeds computeFighterScore, edge tiers, or any prediction - it only powers the "Insight"
+// tab on the breakdown popups so the numbers on the "Breakdown" tab have a plain-English
+// why behind them. Keyed by numerologyLookupKey() so 13 (karmic, borrows 4's row) resolves
+// the same way it already does everywhere else.
+const LIFE_PATH_THEMES = {
+  1: 'Leadership', 2: 'Cooperation', 3: 'Expression', 4: 'Structure', 5: 'Freedom',
+  6: 'Care', 7: 'Analysis', 8: 'Power', 9: 'Adaptability', 11: 'Emotional Intensity',
+  22: 'Master Building', 28: 'Structural Pressure', 33: 'Influence',
+};
+
+// Boom/bust framing (8, 11, 3, 5) vs. steady framing (4, 6) straight from how CUE describes
+// each number's own risk profile - not derived from any of our own game results yet.
+const LIFE_PATH_VOLATILITY = {
+  1: 'medium', 2: 'low', 3: 'high', 4: 'low', 5: 'high', 6: 'low', 7: 'medium',
+  8: 'high', 9: 'medium', 11: 'high', 22: 'medium', 28: 'medium', 33: 'medium',
+};
+
+const VOLATILITY_BADGES = {
+  low: { icon: '🛡️', label: 'Low Variance' },
+  medium: { icon: '◐', label: 'Medium Variance' },
+  high: { icon: '⚡', label: 'High Variance' },
+};
+
+// Only the numbers CUE explicitly ties to a physical/athletic read get a badge here -
+// everything else is genuinely neutral on this axis, not just missing data.
+const LIFE_PATH_ATHLETIC_ARCHETYPE = {
+  1: { icon: '🏃', label: 'Athletic Archetype' },
+  11: { icon: '🏃', label: 'Athletic Archetype' },
+  5: { icon: '🏃', label: 'Athletic Archetype' },
+  7: { icon: '⚠️', label: 'Injury-Risk Profile' },
+  8: { icon: '😓', label: 'Physical Strain Under Pressure' },
+};
+
+// Reuses the same score bands as EDGE_TIERS in spirit, but as a relationship descriptor
+// rather than a betting-edge label - describing what the existing (already-validated)
+// number actually means, not adding a new one.
+function clashTypeForScore(score) {
+  if (score >= 85) return { icon: '🚀', label: 'Amplifying Synergy' };
+  if (score >= 70) return { icon: '🤝', label: 'Stable Complement' };
+  if (score >= 50) return { icon: '➖', label: 'Workable Overlap' };
+  if (score >= 30) return { icon: '⚠️', label: 'Structural Friction' };
+  return { icon: '⚔️', label: 'Fundamental Clash' };
+}
+
+// One person's insight card: their theme, volatility read, and athletic/injury badge (if
+// CUE called one out for this number). lookupValue is compatLifePathInfo(dobDate).lookupValue.
+function lifePathInsight(lookupValue) {
+  const key = numerologyLookupKey(lookupValue);
+  return {
+    theme: LIFE_PATH_THEMES[key] || 'Unknown',
+    volatility: VOLATILITY_BADGES[LIFE_PATH_VOLATILITY[key]] || VOLATILITY_BADGES.medium,
+    athletic: LIFE_PATH_ATHLETIC_ARCHETYPE[key] || null,
+  };
+}
+
+// The pairwise "why" between two entities - runs their life paths through the same
+// numerologyCompat table as everything else, purely to label the relationship, not to
+// score it (UFC/Tennis fighters are never scored against each other for real - only
+// MLB's pitcher-vs-lineup factor does that, and only there does a number like this one
+// already feed the actual composite).
+function pairInsight(lookupA, lookupB) {
+  const themeA = LIFE_PATH_THEMES[numerologyLookupKey(lookupA)] || 'Unknown';
+  const themeB = LIFE_PATH_THEMES[numerologyLookupKey(lookupB)] || 'Unknown';
+  const score = numerologyCompat(lookupA, lookupB);
+  return {
+    score,
+    clash: clashTypeForScore(score),
+    themeLine: lookupA === lookupB ? `${themeA} meets itself` : `${themeA} meets ${themeB}`,
+  };
+}
+
+function insightBadgeHtml(badge) {
+  return `<span class="pm-insight-badge">${badge.icon} ${escapeHtml(badge.label)}</span>`;
+}
+
+// One person's insight block (life path number + theme + volatility + athletic tag) -
+// shared markup for the UFC/Tennis/MLB insight tabs so they all look identical.
+function personInsightHtml(name, lifePathDisplay, lookupValue) {
+  const insight = lifePathInsight(lookupValue);
+  return `
+    <div class="pm-insight-person">
+      <div class="pm-breakdown-name">${escapeHtml(name)}</div>
+      <div class="pm-insight-lifepath">Life Path <span class="score-inline mid">${escapeHtml(lifePathDisplay)}</span> &middot; ${escapeHtml(insight.theme)}</div>
+      <div class="pm-insight-badges">
+        ${insightBadgeHtml(insight.volatility)}
+        ${insight.athletic ? insightBadgeHtml(insight.athletic) : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Wraps a breakdown popup's existing content plus the new Insight tab into the
+// shared two-tab shell, identical across UFC/Tennis/MLB.
+function modalTabsHtml(breakdownHtml, insightHtml) {
+  return `
+    <div class="pm-modal-tabs">
+      <button class="pm-modal-tab active" data-tab="breakdown" type="button">📊 Breakdown</button>
+      <button class="pm-modal-tab" data-tab="insight" type="button">🔮 Insight</button>
+    </div>
+    <div class="pm-modal-page" data-page="breakdown">${breakdownHtml}</div>
+    <div class="pm-modal-page" data-page="insight" style="display:none;">${insightHtml}</div>
+  `;
+}
+
+// Wires the Breakdown/Insight tab clicks once per page - the modal body's own
+// innerHTML gets fully replaced on every open, but the body element itself
+// never does, so a single delegated listener (same pattern as the trade-feed
+// toggle) is all that's needed.
+function initModalTabSwitcher(bodyElementId) {
+  const body = document.getElementById(bodyElementId);
+  body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pm-modal-tab');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    body.querySelectorAll('.pm-modal-tab').forEach((b) => b.classList.toggle('active', b === btn));
+    body.querySelectorAll('.pm-modal-page').forEach((p) => { p.style.display = p.dataset.page === tab ? '' : 'none'; });
+  });
+}
+
 // Pitcher vs. opposing lineup, person-vs-person rather than person-vs-date -
 // the pitcher's life path run against each opposing batter's through the same
 // sportsNumerologyCompat table fighter-vs-fighter uses. Returns the full
