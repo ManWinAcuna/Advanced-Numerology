@@ -176,6 +176,7 @@ function resetLocationSelection() {
   populateStadiumSelect();
   updateEditRegionBtnVisibility();
   updateEditStadiumBtnVisibility();
+  updateLocationSummaryUI();
 }
 
 // Applies whatever's saved to both the in-memory state and the location
@@ -203,6 +204,43 @@ function restoreSavedLocationIntoUI() {
 
   updateEditRegionBtnVisibility();
   updateEditStadiumBtnVisibility();
+}
+
+/* ===================== Collapsed location summary ===================== */
+// Once a location is set, the full control block collapses to a one-line
+// chip plus a live clock showing the venue's current local time - the
+// clock doubles as reassurance that the right timezone resolved for
+// match-day scoring (see currentMatchDateISO below), in a way a user can
+// sanity-check at a glance. "Change" re-expands the controls.
+
+let locationManuallyExpanded = false;
+
+function updateLocationSummaryUI() {
+  const box = document.getElementById('pmLocationBox');
+  const summary = document.getElementById('pmLocationSummary');
+  if (!selectedRegion || locationManuallyExpanded) {
+    box.classList.remove('collapsed');
+    summary.style.display = 'none';
+    return;
+  }
+
+  box.classList.add('collapsed');
+  summary.style.display = '';
+  document.getElementById('pmLocationSummaryText').textContent =
+    `📍 ${selectedRegion.name}${selectedStadium ? ` · ${selectedStadium.name}` : ''}`;
+
+  const clockEl = document.getElementById('pmLocationClock');
+  const now = venueLocalTimeNow(regionMode, selectedRegion);
+  if (now) {
+    clockEl.classList.remove('warn');
+    clockEl.textContent = `🕐 Local time at the venue right now: ${now} — match days are scored on this clock.`;
+  } else if (regionMode === 'intl') {
+    ensureIntlRegionTimezone(selectedRegion, updateLocationSummaryUI);
+    clockEl.classList.add('warn');
+    clockEl.textContent = "⚠️ Couldn't confirm this region's timezone yet — match days fall back to UTC dates.";
+  } else {
+    clockEl.textContent = '';
+  }
 }
 
 function regionNoun() {
@@ -374,6 +412,17 @@ function initLocationControls() {
   populateStadiumSelect();
   updateEditStadiumBtnVisibility();
   restoreSavedLocationIntoUI();
+  updateLocationSummaryUI();
+
+  document.getElementById('pmLocationChangeBtn').addEventListener('click', () => {
+    locationManuallyExpanded = true;
+    updateLocationSummaryUI();
+  });
+
+  // Keep the venue clock ticking while collapsed.
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && selectedRegion && !locationManuallyExpanded) updateLocationSummaryUI();
+  }, 60000);
 
   document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -979,6 +1028,8 @@ function renderTradeFeeds() {
 
 function updateNumerologyBlocks() {
   saveLocationState();
+  locationManuallyExpanded = false;
+  updateLocationSummaryUI();
   cardFights.forEach((f) => {
     const el = document.getElementById(`pm-num-${f.conditionId}`);
     if (el) el.innerHTML = numerologyBlockHtml(f);

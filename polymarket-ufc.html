@@ -48,8 +48,15 @@
     </div>
   </div>
 
-  <div class="box ufc-location-box">
+  <div class="box ufc-location-box" id="pmLocationBox">
     <div class="box-label">Fight Location</div>
+    <div class="pm-location-summary" id="pmLocationSummary" style="display:none;">
+      <div class="pm-location-summary-row">
+        <span class="pm-location-summary-text" id="pmLocationSummaryText"></span>
+        <button class="btn-link" id="pmLocationChangeBtn" type="button">✏️ Change</button>
+      </div>
+      <div class="pm-location-clock" id="pmLocationClock"></div>
+    </div>
     <div class="mode-desc">Applies to every fight below &mdash; a UFC Fight Night is one venue for the whole card. No numerology edge shows until you set this.</div>
     <div class="hours-toggle ufc-region-toggle" id="pmRegionToggle">
       <button type="button" class="hours-toggle-btn active" data-region="us">🇺🇸 United States</button>

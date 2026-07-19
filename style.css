@@ -1881,6 +1881,45 @@ a.pm-tournament-name:hover {
   opacity: 0.7;
 }
 
+/* ===================== Collapsed location chip ===================== */
+/* Once a location is set, the full toggle-plus-dropdowns control block
+   collapses to one summary line + a live venue-local clock; "Change"
+   expands the controls again. Collapsing is CSS-only (a .collapsed class)
+   so no control state is torn down. */
+
+.ufc-location-box.collapsed .mode-desc,
+.ufc-location-box.collapsed .ufc-region-toggle,
+.ufc-location-box.collapsed .ufc-location-grid,
+.ufc-location-box.collapsed .ufc-add-stadium-form,
+.pm-tournament-group.location-collapsed .pm-tournament-region-toggle,
+.pm-tournament-group.location-collapsed .pm-tournament-location-grid {
+  display: none;
+}
+
+.pm-location-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pm-location-summary-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.pm-location-clock {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.pm-location-clock.warn {
+  color: var(--yellow);
+}
+
 .pm-tournament-region-toggle {
   margin-bottom: 12px;
 }

@@ -836,10 +836,38 @@ function acceptTournamentSuggestion(key) {
   });
 }
 
+// Tournament groups whose set location the user has temporarily re-expanded
+// via "Change" - cleared again the moment a new selection is made.
+const expandedTournamentLocations = new Set();
+
 function tournamentGroupHtml(key, matches) {
   const st = getTournamentState(key);
   const regionLabel = st.regionMode === 'intl' ? 'City / Region' : 'State';
   if (!st.selectedRegion) ensureTournamentSuggestion(key);
+
+  // Same collapsed chip + live venue clock as the UFC tracker's location
+  // box - with 7+ tournament groups on screen, collapsing the set ones is
+  // where most of the vertical space comes back.
+  const collapsed = !!st.selectedRegion && !expandedTournamentLocations.has(key);
+  let locationSummaryHtml = '';
+  if (collapsed) {
+    const now = venueLocalTimeNow(st.regionMode, st.selectedRegion);
+    let clockHtml = '';
+    if (now) {
+      clockHtml = `<div class="pm-location-clock">🕐 Local time at the venue right now: ${now} &mdash; match days are scored on this clock.</div>`;
+    } else if (st.regionMode === 'intl') {
+      ensureIntlRegionTimezone(st.selectedRegion, () => renderMatchesContainer());
+      clockHtml = `<div class="pm-location-clock warn">⚠️ Couldn't confirm this region's timezone yet &mdash; match days fall back to UTC dates.</div>`;
+    }
+    locationSummaryHtml = `
+      <div class="pm-location-summary">
+        <div class="pm-location-summary-row">
+          <span class="pm-location-summary-text">📍 ${escapeHtml(st.selectedRegion.name)}${st.selectedVenue ? ` · ${escapeHtml(st.selectedVenue.name)}` : ''}</span>
+          <button class="btn-link" data-change-location="${escapeHtml(key)}" type="button">✏️ Change</button>
+        </div>
+        ${clockHtml}
+      </div>`;
+  }
 
   // The tournament name links out to a Google search built from one of its
   // actual matchups, asking in one query for everything the location form
@@ -851,10 +879,11 @@ function tournamentGroupHtml(key, matches) {
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchMatch.playerAName} vs ${searchMatch.playerBName} where is the game, what venue, and the venue's founding date`)}`;
 
   return `
-    <div class="box pm-tournament-group" data-tournament="${escapeHtml(key)}">
+    <div class="box pm-tournament-group ${collapsed ? 'location-collapsed' : ''}" data-tournament="${escapeHtml(key)}">
       <div class="pm-tournament-header">
         <a class="pm-tournament-name" href="${searchUrl}" target="_blank" rel="noopener" title="Google where this tournament's matches are being played">🎾 ${escapeHtml(key)} <span class="pm-tournament-search-icon">🔎</span></a>
       </div>
+      ${locationSummaryHtml}
       <div class="pm-location-suggestion-wrap">${st.selectedRegion ? '' : suggestionBannerHtml(key)}</div>
       <div class="hours-toggle ufc-region-toggle pm-tournament-region-toggle">
         <button type="button" class="hours-toggle-btn ${st.regionMode === 'us' ? 'active' : ''}" data-region="us">🇺🇸 United States</button>
@@ -1165,6 +1194,7 @@ function initLocationModals() {
     const st = getTournamentState(key);
     st.selectedRegion = region;
     persistTournamentState(key);
+    expandedTournamentLocations.delete(key);
     closeRegionModal();
     renderMatchesContainer();
   });
@@ -1204,6 +1234,7 @@ function initLocationModals() {
     saveTennisVenues(venues);
     st.selectedVenue = venue;
     persistTournamentState(key);
+    expandedTournamentLocations.delete(key);
     closeVenueModal();
     renderMatchesContainer();
   });
@@ -1213,6 +1244,13 @@ function initLocationModals() {
 
 function initTournamentLocationControls() {
   document.getElementById('matchesContainer').addEventListener('click', (e) => {
+    const changeBtn = e.target.closest('[data-change-location]');
+    if (changeBtn) {
+      expandedTournamentLocations.add(changeBtn.dataset.changeLocation);
+      renderMatchesContainer();
+      return;
+    }
+
     const acceptBtn = e.target.closest('[data-accept-suggestion]');
     if (acceptBtn) {
       acceptTournamentSuggestion(acceptBtn.dataset.acceptSuggestion);
@@ -1256,7 +1294,8 @@ function initTournamentLocationControls() {
       const list = st.regionMode === 'us' ? US_STATES : allIntlRegions();
       st.selectedRegion = val ? (list.find((r) => r.name === val) || null) : null;
       persistTournamentState(key);
-      updateTournamentMatches(key);
+      expandedTournamentLocations.delete(key);
+      renderMatchesContainer();
       return;
     }
 
@@ -1272,7 +1311,8 @@ function initTournamentLocationControls() {
       }
       st.selectedVenue = val ? (venues.find((v) => v.id === val) || null) : null;
       persistTournamentState(key);
-      updateTournamentMatches(key);
+      expandedTournamentLocations.delete(key);
+      renderMatchesContainer();
     }
   });
 }

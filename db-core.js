@@ -486,6 +486,21 @@ function localMatchDateISO(gameStartTime, regionMode, region) {
   return `${gameStartTime.getUTCFullYear()}-${String(gameStartTime.getUTCMonth() + 1).padStart(2, '0')}-${String(gameStartTime.getUTCDate()).padStart(2, '0')}`;
 }
 
+// The venue's clock right now, formatted for display ("Jul 19, 11:42 AM"),
+// or null when no timezone is resolvable for the region. Shown next to a
+// set location as living proof the right timezone resolved - a user can
+// sanity-check a live local time at a glance in a way they never could a
+// zone identifier.
+function venueLocalTimeNow(regionMode, region) {
+  const zone = regionMode === 'us' ? US_STATE_TIMEZONES[region && region.name] : (region && region.timezone);
+  if (!zone) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date());
+  } catch (e) {
+    return null;
+  }
+}
+
 // Lazily backfills a missing timezone onto an already-saved international
 // region (INTL_REGIONS_KEY) and persists it, so it only has to be looked up
 // once per region rather than on every match that uses it. Safe to call
