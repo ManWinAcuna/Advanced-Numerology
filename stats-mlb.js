@@ -743,6 +743,7 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
   renderMlbComponentSignal(scopedPredictions, suffix);
+  renderDimensionEdgeTable('mlbDimensionEdge' + suffix, scopedPredictions, (p) => [p.teamAName, p.teamBName]);
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
@@ -843,6 +844,7 @@ async function recordTodaysMlbGames() {
       teamAName: m.teamAName, teamBName: m.teamBName,
       numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
       components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+      dims: { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) },
       marketFavorite: marketFavName, marketPriceA: m.priceA, marketPriceB: m.priceB,
       pickType: agree ? 'favorite' : 'underdog',
       eventTitle: m.eventTitle, gameTime: m.gameStartTime.toISOString(),
@@ -910,7 +912,7 @@ async function recordTodaysFinishedMlbGames() {
     // A componentless pick still needs patching (that's exactly the case that
     // left today's games out of the component table), so it must not skip here.
     const stored = existingByGamePk.get(gamePk);
-    const pickComplete = stored && stored.components;
+    const pickComplete = stored && stored.components && stored.dims;
     if (pickComplete && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
 
     const date = g.officialDate;
@@ -958,12 +960,13 @@ async function recordTodaysFinishedMlbGames() {
     // pick gets patched in place with its OWN A/B naming (same in-place upgrade
     // the backfill does, but the backfill never reaches today); if nothing's
     // stored yet, a fresh pick is built from the closed market.
-    if (!stored || !stored.components) {
+    if (!stored || !stored.components || !stored.dims) {
       if (stored) {
         const scoreA = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'A');
         const scoreB = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'B');
         if (scoreA && scoreB) {
           stored.components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
+          stored.dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
           patchedCount++;
         }
       } else if (!dhKeys.has(dhKey)) {
@@ -993,6 +996,7 @@ async function recordTodaysFinishedMlbGames() {
                 teamAName: event.teamAName, teamBName: event.teamBName,
                 numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
                 components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+                dims: { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) },
                 marketFavorite: marketFavName, marketPriceA: priceA, marketPriceB: priceB,
                 pickType: agree ? 'favorite' : 'underdog',
                 eventTitle: event.eventTitle, gameTime: event.gameStartTime.toISOString(),
@@ -1095,11 +1099,12 @@ wireMlbRefreshButton('mlbStatsRefreshBtnOld');
 const MLB_BACKFILL_LOOKBACK_DAYS = 42; // ~6 weeks - deep enough to start the
 // component-signal analysis, shallow enough that every pick (now carrying its
 // per-component breakdown) stays under Firebase's ~1MB per-account sync limit.
-const MLB_BACKFILL_SCHEMA = 2; // bump when the stored prediction shape changes.
+const MLB_BACKFILL_SCHEMA = 3; // bump when the stored prediction shape changes.
 // A stored marker whose schemaVersion doesn't match triggers a one-time full
 // re-walk of the whole window instead of an incremental catch-up, so existing
-// records get upgraded in place (here: back-filled with per-component scores)
-// rather than the marker skipping straight past them.
+// records get upgraded in place (v2: per-component scores; v3: per-dimension
+// scores for the compatibility-dimension edge analysis) rather than the marker
+// skipping straight past them.
 const MLB_BACKFILL_CHUNK = 5; // games processed concurrently per batch - a
 // full-window rebuild is hundreds of games x several fetches each, far too slow
 // one at a time; 5-at-a-time keeps it to a few minutes without hammering the
@@ -1286,12 +1291,12 @@ async function backfillMlbHistory(onProgress) {
     });
 
     // ---- Game Picks half ----
-    // Skip entirely only if this game is already stored WITH components. If it
-    // lacks components (older record) we recompute to back-fill them in place;
-    // if it isn't stored at all, we create it.
+    // Skip entirely only if this game is already stored WITH both components and
+    // dimension scores. If it lacks either (older record) we recompute to
+    // back-fill them in place; if it isn't stored at all, we create it.
     const dhKey = `${date}|${[feed.home.teamId, feed.away.teamId].sort().join('-')}`;
     const existingPred = existingByGamePk.get(gamePk);
-    if (!existingPred || !existingPred.components) {
+    if (!existingPred || !existingPred.components || !existingPred.dims) {
       let teamAName = null;
       let teamBName = null;
       let event = null;
@@ -1308,8 +1313,10 @@ async function backfillMlbHistory(onProgress) {
         const scoreB = computeTeamComposite(buildGObj(teamAName, teamBName), 'B');
         if (scoreA && scoreB) {
           const components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
+          const dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
           if (existingPred) {
             existingPred.components = components;
+            existingPred.dims = dims;
             patchedCount++;
           } else if (event) {
             const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
@@ -1339,6 +1346,7 @@ async function backfillMlbHistory(onProgress) {
                 numerologyScoreA: scoreA.combined,
                 numerologyScoreB: scoreB.combined,
                 components,
+                dims,
                 marketFavorite: marketFavName,
                 marketPriceA: priceA,
                 marketPriceB: priceB,

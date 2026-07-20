@@ -267,6 +267,10 @@ function recordMlbPredictionIfNew(g, scoreA, scoreB, marketFavorite, numerologyF
     // which single component (pitcher, franchise, etc.) actually predicts the
     // winner, instead of only ever seeing the blended composite.
     components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+    // Per-dimension scores (day/stadium/state anchors + life-path/day-number/
+    // zodiac/western sub-pieces) - one level deeper than components, for the
+    // "which compatibility dimension predicts best" analysis.
+    dims: { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) },
     marketFavorite,
     marketPriceA: g.priceA,
     marketPriceB: g.priceB,

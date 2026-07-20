@@ -634,6 +634,11 @@ function recordPredictionIfNew(f, scoreA, scoreB, marketFavorite, numerologyFavo
     numerologyFavorite,
     numerologyScoreA: scoreA.combined,
     numerologyScoreB: scoreB.combined,
+    // Per-dimension scores (day/stadium/state anchors + life-path/day-number/
+    // zodiac/western sub-pieces) so the Stats page can measure which
+    // compatibility dimension actually predicts winners. Only accumulates going
+    // forward - a fighter score has no stored venue anchors to recompute from.
+    dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
     marketFavorite,
     marketPriceA: f.priceA,
     marketPriceB: f.priceB,

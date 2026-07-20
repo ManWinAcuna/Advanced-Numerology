@@ -1440,6 +1440,127 @@ function scoresForGame(g, onTimezoneResolved) {
   return { scoreA, scoreB };
 }
 
+/* ===================== Compatibility dimension edge (all sports) ===================== */
+// The component analysis asks which ROSTER ROLE (pitcher, catcher, manager…)
+// predicts best. This asks one level deeper: which COMPATIBILITY DIMENSION - the
+// pieces every person-vs-date score is blended from - actually beats the market.
+// A computeFighterScore() result carries three date-anchor compat objects (day /
+// stadium / state), and each of those carries the numeric sub-scores it was made
+// of. Isolating each dimension and testing it as a standalone pick signal is the
+// only honest way to answer "does the stadium/state anchor add anything," "is
+// life-path-to-life-path stronger than day-number-to-day-number," etc. Shared by
+// all three sports, since they all score people through computeFighterScore.
+const DIMENSION_KEYS = ['day', 'stadium', 'state', 'lifePath', 'dayNum', 'doy', 'zodiac', 'western'];
+
+const DIMENSION_LABELS = {
+  day: 'Day anchor (birth ↔ game day)',
+  stadium: 'Stadium anchor (birth ↔ venue)',
+  state: 'State/region anchor (birth ↔ place)',
+  lifePath: 'Life path ↔ life path',
+  dayNum: 'Day number ↔ day number',
+  doy: 'Day-of-year ↔ day-of-year',
+  zodiac: 'Chinese/Vietnamese zodiac',
+  western: 'Western sun sign',
+  composite: 'Full Score (current blend)',
+};
+
+// One person's dimension vector, pulled from a computeFighterScore() result.
+// The three anchor finalScores come straight off .day/.stadium/.state. The
+// subsystem leaves (lifePath, dayNum, doy, zodiac, western) are read from the
+// DAY anchor specifically: it's 60% of the score and the dominant place each
+// subsystem lives, so it's the cleanest isolation of "does life-path-vs-game-day
+// predict" without diluting the signal through the tiny stadium/state anchors.
+// Returns null for anything not shaped like a real computeFighterScore result
+// (e.g. the pitcher-vs-lineup matchup, which is a bare {combined}).
+function extractDimensionScores(fs) {
+  if (!fs || !fs.day || !fs.day.numerology) return null;
+  const d = fs.day;
+  return {
+    day: fs.day.finalScore != null ? fs.day.finalScore : null,
+    stadium: fs.stadium ? fs.stadium.finalScore : null,
+    state: fs.state ? fs.state.finalScore : null,
+    lifePath: d.numerology.lifePathScore,
+    dayNum: d.numerology.dayScore,
+    doy: d.numerology.doyScore,
+    zodiac: d.vietnamese ? d.vietnamese.score : null,
+    western: d.western ? d.western.score : null,
+  };
+}
+
+// Role-weight-average each dimension across a computeTeamComposite() parts array
+// - the dimension-level analogue of extractComponents(), for MLB's roster. Parts
+// whose score has no anchor breakdown (pitcher-vs-lineup matchup, zodiac-only
+// franchise fallback) contribute nothing here; they're measured elsewhere.
+function extractTeamDimensions(parts) {
+  const acc = {};
+  DIMENSION_KEYS.forEach((k) => { acc[k] = { sum: 0, w: 0 }; });
+  (parts || []).forEach((p) => {
+    const dv = extractDimensionScores(p.score);
+    if (!dv) return;
+    DIMENSION_KEYS.forEach((k) => {
+      if (dv[k] == null) return;
+      acc[k].sum += dv[k] * p.weight;
+      acc[k].w += p.weight;
+    });
+  });
+  const out = {};
+  DIMENSION_KEYS.forEach((k) => { out[k] = acc[k].w ? Math.round(acc[k].sum / acc[k].w) : null; });
+  return out;
+}
+
+// Beat-the-market read for each compatibility dimension, mirroring the MLB
+// component-signal analysis but over DIMENSION_KEYS. Sport-agnostic: each
+// prediction must carry dims:{A,B} (per-side dimension vectors), marketPriceA/B,
+// a non-draw result, and numerologyScoreA/B. sideNames(p) returns [nameA, nameB]
+// (fighterAName/… for UFC & tennis, teamAName/… for MLB). A positive edge means
+// that dimension, used alone to pick the higher-scored side, beat the market.
+function computeDimensionEdgeStats(predictions, sideNames) {
+  const resolved = (predictions || []).filter((p) => p.result && !p.result.draw && p.dims && p.dims.A && p.dims.B);
+  const priceOf = (p, name) => (normalizeName(sideNames(p)[0]) === normalizeName(name) ? p.marketPriceA : p.marketPriceB);
+  const statOver = (key, label, scoreAOf, scoreBOf) => {
+    const picks = resolved.map((p) => {
+      const a = scoreAOf(p);
+      const b = scoreBOf(p);
+      if (a == null || b == null || a === b) return null; // no lean on this axis
+      const [nameA, nameB] = sideNames(p);
+      const favName = a > b ? nameA : nameB;
+      const implied = priceOf(p, favName);
+      if (implied == null) return null;
+      return { won: normalizeName(p.result.winner) === normalizeName(favName), implied };
+    }).filter(Boolean);
+    const n = picks.length;
+    const wins = picks.filter((x) => x.won).length;
+    const winPct = n ? Math.round((wins / n) * 100) : null;
+    const marketPct = n ? Math.round((picks.reduce((s, x) => s + x.implied, 0) / n) * 100) : null;
+    return { key, label, count: n, winPct, marketPct, edge: (winPct != null && marketPct != null) ? winPct - marketPct : null };
+  };
+  const rows = DIMENSION_KEYS.map((k) => statOver(k, DIMENSION_LABELS[k], (p) => p.dims.A[k], (p) => p.dims.B[k]));
+  rows.push(statOver('composite', DIMENSION_LABELS.composite, (p) => p.numerologyScoreA, (p) => p.numerologyScoreB));
+  rows.sort((a, b) => (b.edge == null ? -Infinity : b.edge) - (a.edge == null ? -Infinity : a.edge));
+  return rows;
+}
+
+// Renders the dimension-edge table into an element. Shared by all three Stats
+// sections - each just passes its own predictions + name accessor.
+function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = computeDimensionEdgeStats(predictions, sideNames);
+  const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
+  if (!maxCount) {
+    el.innerHTML = `<div class="empty-state">${escapeHtml(emptyMsg || 'No resolved games with dimension data yet — this fills in as tracked games finish.')}</div>`;
+    return;
+  }
+  const body = rows.map((r) => {
+    const isBase = r.key === 'composite';
+    const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
+      ? `<span class="score-inline ${r.edge > 0 ? 'good' : (r.edge < 0 ? 'bad' : '')}">${r.edge > 0 ? '+' : ''}${r.edge}</span>`
+      : `<span class="empty-state">${r.count ? 'thin' : '—'}</span>`;
+    return `<tr${isBase ? ' style="border-top:2px solid var(--border);"' : ''}><td>${isBase ? '🎯 ' : ''}${escapeHtml(r.label)}</td><td>${r.count}</td><td>${r.winPct != null ? `${r.winPct}%` : '—'}</td><td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td><td>${edgeCell}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table class="astro-table"><thead><tr><th>Dimension</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
 /* ===================== UFC pick-price buckets (risk manager) ===================== */
 // Shared by the Stats page (which displays the win rate per bucket) and the
 // Polymarket tracker (which looks up the bucket for a live fight's price to

@@ -357,6 +357,7 @@ async function refreshTennisAndRender() {
   renderTennisBreakdown(stats);
   renderTennisEdgeTiers(predictions);
   renderTennisPriceBuckets(predictions);
+  renderDimensionEdgeTable('tennisDimensionEdge', predictions, (p) => [p.playerAName, p.playerBName]);
   renderTennisTable(predictions);
   document.getElementById('tennisStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }

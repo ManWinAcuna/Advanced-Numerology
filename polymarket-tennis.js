@@ -266,6 +266,10 @@ function recordPredictionIfNew(m, scoreA, scoreB, marketFavorite, numerologyFavo
     numerologyFavorite,
     numerologyScoreA: scoreA.combined,
     numerologyScoreB: scoreB.combined,
+    // Per-dimension scores for the "which compatibility dimension predicts best"
+    // analysis. Accumulates going forward only - a stored prediction keeps no
+    // venue anchors to recompute the breakdown from after the fact.
+    dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
     marketFavorite,
     marketPriceA: m.priceA,
     marketPriceB: m.priceB,

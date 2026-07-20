@@ -379,6 +379,7 @@ async function refreshAndRender() {
   renderBreakdown(stats);
   renderEdgeTiers(predictions);
   renderPriceBuckets(predictions);
+  renderDimensionEdgeTable('ufcDimensionEdge', predictions, (p) => [p.fighterAName, p.fighterBName]);
   renderTable(predictions);
   document.getElementById('statsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }
