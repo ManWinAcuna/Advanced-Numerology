@@ -901,12 +901,17 @@ async function recordTodaysFinishedMlbGames() {
   const stadiumCache = new Map();
   const newPreds = [];
   const newSignals = [];
+  let patchedCount = 0; // existing componentless picks upgraded in place
 
   async function processFinal(g) {
     const gamePk = g.gamePk;
-    // Already fully captured (pick + both starters' signals) by the open pass or
-    // the live tracker? Skip before fetching the feed - no point re-pulling it.
-    if (existingByGamePk.has(gamePk) && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
+    // Skip before fetching the feed only if there's nothing left to add: an
+    // existing pick that ALREADY has components, plus both starters' signals.
+    // A componentless pick still needs patching (that's exactly the case that
+    // left today's games out of the component table), so it must not skip here.
+    const stored = existingByGamePk.get(gamePk);
+    const pickComplete = stored && stored.components;
+    if (pickComplete && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
 
     const date = g.officialDate;
     const feed = await fetchGameLiveFeed(gamePk);
@@ -941,47 +946,61 @@ async function recordTodaysFinishedMlbGames() {
     const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
 
     // ---- Game Picks half ----
+    // Reuse the same per-side scoring for both the patch and create paths.
+    const buildGObj = (aName, bName) => ({
+      sideA: sideForName(aName), sideB: sideForName(bName),
+      teamInfoA: teamInfoCache.get(sideForName(aName).teamId), teamInfoB: teamInfoCache.get(sideForName(bName).teamId),
+      managerA: managerCache.get(sideForName(aName).teamId), managerB: managerCache.get(sideForName(bName).teamId),
+      birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: new Date(g.gameDate),
+    });
     const dhKey = [feed.home.teamId, feed.away.teamId].sort().join('-');
-    if (!existingByGamePk.has(gamePk) && !dhKeys.has(dhKey)) {
-      const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
-      if (event) {
-        const gObj = {
-          sideA: sideForName(event.teamAName), sideB: sideForName(event.teamBName),
-          teamInfoA: teamInfoCache.get(sideForName(event.teamAName).teamId), teamInfoB: teamInfoCache.get(sideForName(event.teamBName).teamId),
-          managerA: managerCache.get(sideForName(event.teamAName).teamId), managerB: managerCache.get(sideForName(event.teamBName).teamId),
-          birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: new Date(g.gameDate),
-        };
-        const scoreA = computeTeamComposite(gObj, 'A');
-        const scoreB = computeTeamComposite(gObj, 'B');
+    // Skip only a pick that's already complete (has components). A componentless
+    // pick gets patched in place with its OWN A/B naming (same in-place upgrade
+    // the backfill does, but the backfill never reaches today); if nothing's
+    // stored yet, a fresh pick is built from the closed market.
+    if (!stored || !stored.components) {
+      if (stored) {
+        const scoreA = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'A');
+        const scoreB = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'B');
         if (scoreA && scoreB) {
-          const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
-          const [priceA, priceB] = await Promise.all([
-            fetchClobPriceNear(event.clobTokenIdA, targetTs),
-            fetchClobPriceNear(event.clobTokenIdB, targetTs),
-          ]);
-          if (priceA != null && priceB != null) {
-            const marketFavName = priceA >= priceB ? event.teamAName : event.teamBName;
-            const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
-            const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-            const rA = sideForName(event.teamAName).runs;
-            const rB = sideForName(event.teamBName).runs;
-            const result = (!Number.isFinite(rA) || !Number.isFinite(rB))
-              ? null
-              : rA === rB
-                ? { winner: null, draw: true, resolvedAt: Date.now() }
-                : { winner: rA > rB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
-            const rec = {
-              conditionId: event.conditionId, gamePk,
-              teamAName: event.teamAName, teamBName: event.teamBName,
-              numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
-              components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
-              marketFavorite: marketFavName, marketPriceA: priceA, marketPriceB: priceB,
-              pickType: agree ? 'favorite' : 'underdog',
-              eventTitle: event.eventTitle, gameTime: event.gameStartTime.toISOString(),
-              recordedAt: Date.now(), result,
-            };
-            newPreds.push(rec);
-            existingByGamePk.set(gamePk, rec);
+          stored.components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
+          patchedCount++;
+        }
+      } else if (!dhKeys.has(dhKey)) {
+        const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
+        if (event) {
+          const scoreA = computeTeamComposite(buildGObj(event.teamAName, event.teamBName), 'A');
+          const scoreB = computeTeamComposite(buildGObj(event.teamAName, event.teamBName), 'B');
+          if (scoreA && scoreB) {
+            const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
+            const [priceA, priceB] = await Promise.all([
+              fetchClobPriceNear(event.clobTokenIdA, targetTs),
+              fetchClobPriceNear(event.clobTokenIdB, targetTs),
+            ]);
+            if (priceA != null && priceB != null) {
+              const marketFavName = priceA >= priceB ? event.teamAName : event.teamBName;
+              const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
+              const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+              const rA = sideForName(event.teamAName).runs;
+              const rB = sideForName(event.teamBName).runs;
+              const result = (!Number.isFinite(rA) || !Number.isFinite(rB))
+                ? null
+                : rA === rB
+                  ? { winner: null, draw: true, resolvedAt: Date.now() }
+                  : { winner: rA > rB ? event.teamAName : event.teamBName, draw: false, resolvedAt: Date.now() };
+              const rec = {
+                conditionId: event.conditionId, gamePk,
+                teamAName: event.teamAName, teamBName: event.teamBName,
+                numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
+                components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+                marketFavorite: marketFavName, marketPriceA: priceA, marketPriceB: priceB,
+                pickType: agree ? 'favorite' : 'underdog',
+                eventTitle: event.eventTitle, gameTime: event.gameStartTime.toISOString(),
+                recordedAt: Date.now(), result,
+              };
+              newPreds.push(rec);
+              existingByGamePk.set(gamePk, rec);
+            }
           }
         }
       }
@@ -1016,7 +1035,9 @@ async function recordTodaysFinishedMlbGames() {
     await Promise.all(chunk.map((g) => processFinal(g).catch(() => {})));
   }
 
-  if (newPreds.length) saveMlbPredictions([...existingPreds, ...newPreds]);
+  // existingPreds holds any patched records in place (mutated), so persist when
+  // there's a new pick OR an in-place component patch.
+  if (newPreds.length || patchedCount) saveMlbPredictions([...existingPreds, ...newPreds]);
   if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
 }
 
