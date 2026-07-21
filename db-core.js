@@ -1822,3 +1822,34 @@ function cloudPullAll() {
     });
   });
 }
+
+/* ===================== Suppress saved-password autofill (non-auth fields) ===================== */
+// The sign-in modal (auth-widget.js) and the Sports Betting gate both inject a
+// real password field, and once one is on the page Chrome's Google Password
+// Manager will happily offer to dump a saved login into ANY text box it thinks
+// is a username - which meant typing a name/birthday on the Database (or any
+// other) page popped up saved credentials. Turn autofill off on every field the
+// app owns, EXCEPT the actual sign-in inputs (inside the auth modal, the sign-in
+// pill, or the gate), where filling a saved password is the whole point.
+(function () {
+  const AUTH_CONTAINERS = '#authModalOverlay, #authWidget, #authWidgetPlaceholder, #sportsGate';
+
+  function disableNonAuthAutofill() {
+    document.querySelectorAll('input, textarea, select').forEach((el) => {
+      if (el.type === 'password') return;            // never touch a password field
+      if (el.closest && el.closest(AUTH_CONTAINERS)) return; // leave sign-in fields alone
+      if (el.getAttribute('autocomplete') === 'off') return; // already handled
+      el.setAttribute('autocomplete', 'off');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', disableNonAuthAutofill);
+  } else {
+    disableNonAuthAutofill();
+  }
+  // A second pass after full load catches any fields a page's own init script
+  // built after DOMContentLoaded; the auth-modal exclusion above keeps the
+  // sign-in inputs untouched even though they're injected later.
+  window.addEventListener('load', () => setTimeout(disableNonAuthAutofill, 0));
+})();
