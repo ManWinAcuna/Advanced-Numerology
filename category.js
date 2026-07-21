@@ -31,6 +31,7 @@ function updateEntry(entryId, name, date, time) {
   if (!entry) return;
   entry.name = name;
   entry.date = date;
+  delete entry.year; // a real date supersedes any year-only value
   if (time) entry.time = time;
   else delete entry.time;
   category.entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -65,6 +66,31 @@ function renderEntries() {
   }
 
   category.entries.forEach((entry) => {
+    // Year-only entry: a year determines only the Chinese zodiac animal (not a
+    // life path, day number or sun sign, which all need a real month/day), so
+    // that's the one badge shown. July 1 anchors the year safely past any Lunar
+    // New Year boundary (always Jan 21-Feb 20) so the right animal resolves.
+    if (!entry.date && entry.year) {
+      const yearSign = getChineseZodiacYear(new Date(entry.year, 6, 1));
+      const div = document.createElement('div');
+      div.className = 'entry-item';
+      div.innerHTML = `
+        <div class="entry-main">
+          <div class="entry-name">${escapeHtml(entry.name)}</div>
+          <div class="entry-date">${entry.year} · year only</div>
+          <div class="entry-actions">
+            <button class="btn-link" data-edit="${entry.id}">Add full date</button>
+            <button class="icon-btn" data-entry="${entry.id}" title="Delete">&times;</button>
+          </div>
+        </div>
+        <div class="entry-badges">
+          <span class="badge">${VIETNAMESE_ZODIAC_EMOJI[yearSign] || ''} ${yearSign} year</span>
+        </div>
+      `;
+      container.appendChild(div);
+      return;
+    }
+
     const dateObj = parseDateStr(entry.date);
     const lifePath = getLifePath(dateObj);
     const dayReduced = getReducedDay(dateObj);
@@ -120,7 +146,7 @@ function closeCompatModal() {
 function startEdit(entry) {
   editingEntryId = entry.id;
   document.getElementById('newEntryName').value = entry.name;
-  document.getElementById('newEntryDate').value = isoToDisplay(entry.date);
+  document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
   document.getElementById('newEntryTime').value = entry.time || '';
   document.getElementById('entryFormLabel').textContent = `Edit Birthday - ${entry.name}`;
   document.getElementById('addEntryBtn').textContent = 'Save Changes';
@@ -194,15 +220,23 @@ function init() {
     openBulkUploadModal((rows) => {
       let added = 0;
       let updated = 0;
-      rows.forEach(({ name, date, time }) => {
+      rows.forEach(({ name, date, time, year }) => {
         const existing = category.entries.find((e) => e.name.toLowerCase() === name.toLowerCase());
         if (existing) {
-          existing.date = date;
-          if (time) existing.time = time; else delete existing.time;
+          if (date) {
+            existing.date = date;
+            delete existing.year;
+            if (time) existing.time = time; else delete existing.time;
+          } else {
+            // Year-only: keep just the year, never a fabricated date.
+            existing.year = year;
+            delete existing.date;
+            delete existing.time;
+          }
           updated++;
         } else {
-          const entry = { id: uid(), name, date };
-          if (time) entry.time = time;
+          const entry = date ? { id: uid(), name, date } : { id: uid(), name, year };
+          if (date && time) entry.time = time;
           category.entries.push(entry);
           added++;
         }

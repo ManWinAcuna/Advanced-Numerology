@@ -291,8 +291,12 @@ document.getElementById('bulkUploadBtn').addEventListener('click', () => {
   openBulkUploadModal((rows) => {
     let added = 0;
     let updatedCount = 0;
+    let skipped = 0;
 
     rows.forEach(({ name, date }) => {
+      // A player is scored off a full birthdate - a year-only row has nothing
+      // to score, so it's skipped here (the Database page keeps those).
+      if (!date) { skipped++; return; }
       const norm = normalizeName(name);
       const seedIdx = TENNIS_PLAYERS.findIndex((p, i) => {
         const id = `seed-${i}`;
@@ -323,7 +327,8 @@ document.getElementById('bulkUploadBtn').addEventListener('click', () => {
     saveTennisPlayerOverrides(playerOverrides);
     saveCustomTennisPlayers(customPlayers);
     allPlayers = buildAllPlayers();
-    return `Imported ${rows.length} player${rows.length === 1 ? '' : 's'}: ${added} added, ${updatedCount} updated.`;
+    return `Imported ${added + updatedCount} player${added + updatedCount === 1 ? '' : 's'}: ${added} added, ${updatedCount} updated`
+      + `${skipped ? `, skipped ${skipped} without a full birthdate` : ''}.`;
   });
 });
 

@@ -3,21 +3,40 @@
 // instead of typing each one in by hand. Only loaded on pages that offer it
 // (the Database category page, UFC, Tennis) - not part of every page's load.
 
-const XLSX_CDN_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.20.2/dist/xlsx.full.min.js';
+// SheetJS stopped publishing to npm after 0.18.5, so the old jsdelivr/npm URL
+// for 0.20.x 404s (that was the "Could not load the Excel file reader" error).
+// Load from SheetJS's own CDN first, then fall back to the last npm build on
+// jsdelivr if that host is unreachable - either can read the file fine.
+const XLSX_CDN_URLS = [
+  'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+];
 let xlsxLoadPromise = null;
+
+function loadOneScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => (typeof XLSX !== 'undefined' ? resolve() : reject(new Error('script loaded but XLSX missing')));
+    s.onerror = () => reject(new Error('failed to load ' + src));
+    document.body.appendChild(s);
+  });
+}
 
 // SheetJS is ~1MB - only fetched the moment someone actually picks an Excel
 // file, never on page load. Plain .csv needs no library at all.
 function loadXlsxLibrary() {
   if (typeof XLSX !== 'undefined') return Promise.resolve();
   if (!xlsxLoadPromise) {
-    xlsxLoadPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = XLSX_CDN_URL;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Could not load the Excel file reader - check your connection and try again.'));
-      document.body.appendChild(s);
-    });
+    xlsxLoadPromise = (async () => {
+      for (const url of XLSX_CDN_URLS) {
+        try {
+          await loadOneScript(url);
+          if (typeof XLSX !== 'undefined') return;
+        } catch (e) { /* try the next CDN */ }
+      }
+      throw new Error('Could not load the Excel file reader - check your connection and try again.');
+    })();
   }
   return xlsxLoadPromise;
 }
@@ -63,6 +82,34 @@ function parseFlexibleDateToISO(raw) {
   if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1900 && parsed.getFullYear() <= new Date().getFullYear()) {
     return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
   }
+  return null;
+}
+
+// A cell that carries only a year (a bare 4-digit value typed as text, or a
+// plain number in the plausible-birth-year range). A real Excel date serial for
+// a birthday is 5 digits (~15000+), so a value like 1990 is a year the user
+// typed, not a serial. Returns the year, or null. Kept separate from full-date
+// parsing so a year is NEVER fabricated into a Jan-1 date - a year only supports
+// the Chinese zodiac animal, so that's all it's later used for.
+function parseYearOnly(raw) {
+  const thisYear = new Date().getFullYear();
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 1900 && raw <= thisYear + 1) return raw;
+  const s = String(raw == null ? '' : raw).trim();
+  if (/^\d{4}$/.test(s)) {
+    const y = Number(s);
+    if (y >= 1900 && y <= thisYear + 1) return y;
+  }
+  return null;
+}
+
+// Resolves one birthday cell to either a full date ({ iso }) or a year-only
+// value ({ year }), or null if it's neither. Year is checked first so a bare
+// year isn't fabricated into a full date by the flexible date parser.
+function parseDateCell(raw) {
+  const year = parseYearOnly(raw);
+  if (year != null) return { year };
+  const iso = parseFlexibleDateToISO(raw);
+  if (iso) return { iso };
   return null;
 }
 
@@ -124,7 +171,7 @@ function rowsToBirthdayEntries(rows) {
     // No recognizable header names - if row 0's date column doesn't parse,
     // it's still probably a header ("Name, Birthday"), just not one we
     // matched by keyword, so skip it rather than counting it as bad data.
-    if (rows[0][1] !== undefined && parseFlexibleDateToISO(rows[0][1]) === null) startIndex = 1;
+    if (rows[0][1] !== undefined && parseDateCell(rows[0][1]) === null) startIndex = 1;
   }
 
   const imported = [];
@@ -134,11 +181,14 @@ function rowsToBirthdayEntries(rows) {
     const r = rows[i];
     const name = String(r[idx.name] == null ? '' : r[idx.name]).trim();
     const dateRaw = r[idx.date];
-    const iso = (dateRaw != null && dateRaw !== '') ? parseFlexibleDateToISO(dateRaw) : null;
-    if (!name || !iso) { skippedCount++; continue; }
+    const cell = (dateRaw != null && dateRaw !== '') ? parseDateCell(dateRaw) : null;
+    if (!name || !cell) { skippedCount++; continue; }
 
-    const entry = { name, date: iso };
-    if (idx.time !== -1 && r[idx.time]) {
+    // A full date carries name + date (+ optional time); a year-only cell
+    // carries just the year - never a fabricated month/day. Time is only
+    // meaningful alongside a real date.
+    const entry = cell.iso ? { name, date: cell.iso } : { name, year: cell.year };
+    if (cell.iso && idx.time !== -1 && r[idx.time]) {
       const tm = /^(\d{1,2}):(\d{2})/.exec(String(r[idx.time]).trim());
       if (tm) entry.time = `${tm[1].padStart(2, '0')}:${tm[2]}`;
     }
@@ -177,7 +227,7 @@ function ensureBulkUploadModal() {
       <div class="modal-box modal-box-narrow">
         <button class="modal-close" id="bulkUploadClose" title="Close">&times;</button>
         <div class="box-label">Bulk Upload Birthdays</div>
-        <div class="bulk-upload-hint">Upload a CSV or Excel file with a Name column and a Birthday column (any common date format, or a real Excel date column). A header row is optional.</div>
+        <div class="bulk-upload-hint">Upload a CSV or Excel file with a Name column and a Birthday column (any common date format, a real Excel date column, or just a year). A header row is optional.</div>
         <input type="file" id="bulkUploadFileInput" accept=".csv,.xlsx,.xls">
         <div class="bulk-upload-status" id="bulkUploadStatus"></div>
         <div class="bulk-upload-actions" id="bulkUploadActions" style="display:none;">

@@ -269,8 +269,12 @@ document.getElementById('bulkUploadBtn').addEventListener('click', () => {
   openBulkUploadModal((rows) => {
     let added = 0;
     let updatedCount = 0;
+    let skipped = 0;
 
     rows.forEach(({ name, date }) => {
+      // A fighter is scored off a full birthdate - a year-only row has nothing
+      // to score, so it's skipped here (the Database page keeps those).
+      if (!date) { skipped++; return; }
       const norm = normalizeName(name);
       const seedIdx = UFC_FIGHTERS.findIndex((f, i) => {
         const id = `seed-${i}`;
@@ -298,7 +302,8 @@ document.getElementById('bulkUploadBtn').addEventListener('click', () => {
     saveFighterOverrides(fighterOverrides);
     saveCustomFighters(customFighters);
     allFighters = buildAllFighters();
-    return `Imported ${rows.length} fighter${rows.length === 1 ? '' : 's'}: ${added} added, ${updatedCount} updated.`;
+    return `Imported ${added + updatedCount} fighter${added + updatedCount === 1 ? '' : 's'}: ${added} added, ${updatedCount} updated`
+      + `${skipped ? `, skipped ${skipped} without a full birthdate` : ''}.`;
   });
 });
 
