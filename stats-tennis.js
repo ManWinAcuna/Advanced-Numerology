@@ -452,7 +452,13 @@ const TENNIS_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB/UFC's windo
 // marker. Same lesson as MLB/UFC's backfill schema bumps: a schema-current
 // marker only ever continues forward from its own throughDateISO, so the
 // fix alone can't retroactively re-walk a day already (wrongly) marked done.
-const TENNIS_BACKFILL_SCHEMA = 2;
+// v3: the v2 run correctly discovered real match events but still added
+// nothing, because matchPlayer can only match a player already added by
+// hand (via the live tracker's "Add Player" flow) - the roster had ~80
+// entries against 52 weeks of matches. ensurePlayerInRoster now auto-adds
+// an unmatched player via the same Wikidata lookup "Add Player" itself
+// uses, instead of just skipping them.
+const TENNIS_BACKFILL_SCHEMA = 3;
 const TENNIS_BACKFILL_CHUNK = 5;
 // Polymarket lists a tennis event's markets shortly before the match itself
 // (confirmed live) - start_date_min/max below filters by that LISTING date,
@@ -496,10 +502,36 @@ async function fetchClosedTennisEventsInWindow(startISO, endISO) {
   return events.filter((e) => e.eventDate && e.eventDate >= startISO && e.eventDate <= endISO);
 }
 
+// Backfill hits players far outside anyone's ever manually added - the
+// roster only ever grows one tournament at a time from the live tracker's
+// "Add Player" flow, so a 52-week historical walk would match almost
+// nothing without this. Same Wikidata lookup that flow already uses
+// (lookupKeyDateByName, db-core.js); a miss (no Wikidata birthdate) is left
+// unmatched rather than guessed. playerCache holds the in-flight/resolved
+// PROMISE per name (not just the result) so two matches in the same
+// concurrent chunk that share a never-seen name share one lookup instead of
+// both racing to add a duplicate custom player.
+function ensurePlayerInRoster(name, playerCache) {
+  const found = matchPlayer(name, buildAllPlayers());
+  if (found) return Promise.resolve(found);
+
+  if (!playerCache.has(name)) {
+    playerCache.set(name, lookupKeyDateByName(name).then((info) => {
+      if (!info || info.kind !== 'born') return null;
+      const player = { id: uid(), name, dob: info.date };
+      const custom = loadCustomTennisPlayers();
+      custom.push(player);
+      saveCustomTennisPlayers(custom);
+      return player;
+    }).catch(() => null));
+  }
+  return playerCache.get(name);
+}
+
 // One event -> one stored prediction (or null if anything needed to score it
 // honestly is missing - never guessed). regionCache avoids re-resolving the
 // same tournament city's region/timezone for every match in that tournament.
-async function processTennisBackfillEvent(event, existingByConditionId, regionCache) {
+async function processTennisBackfillEvent(event, existingByConditionId, regionCache, playerCache) {
   const m = (event.markets || []).find((mk) => mk.sportsMarketType === 'moneyline');
   if (!m || !m.closed) return null;
   if (existingByConditionId.has(m.conditionId)) return null;
@@ -513,10 +545,11 @@ async function processTennisBackfillEvent(event, existingByConditionId, regionCa
   const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
   if (!gameStartTime) return null;
 
-  const roster = buildAllPlayers();
-  const matchedA = matchPlayer(outcomes[0], roster);
-  const matchedB = matchPlayer(outcomes[1], roster);
-  if (!matchedA || !matchedB) return null; // not in the player database - skip, don't guess
+  const [matchedA, matchedB] = await Promise.all([
+    ensurePlayerInRoster(outcomes[0], playerCache),
+    ensurePlayerInRoster(outcomes[1], playerCache),
+  ]);
+  if (!matchedA || !matchedB) return null; // no Wikidata birthdate either - skip, don't guess
 
   const cityName = tennisCityFromEventTitle(event.title);
   if (!cityName) return null;
@@ -586,6 +619,7 @@ async function backfillTennisHistory(onProgress) {
   const existing = loadTennisPredictions();
   const existingByConditionId = new Map(existing.filter((p) => p.conditionId).map((p) => [p.conditionId, p]));
   const regionCache = new Map();
+  const playerCache = new Map();
 
   const newPredictions = [];
   const total = events.length;
@@ -593,7 +627,7 @@ async function backfillTennisHistory(onProgress) {
 
   for (let i = 0; i < events.length; i += TENNIS_BACKFILL_CHUNK) {
     const chunk = events.slice(i, i + TENNIS_BACKFILL_CHUNK);
-    const results = await Promise.all(chunk.map((ev) => processTennisBackfillEvent(ev, existingByConditionId, regionCache)));
+    const results = await Promise.all(chunk.map((ev) => processTennisBackfillEvent(ev, existingByConditionId, regionCache, playerCache)));
     results.forEach((rec) => {
       if (!rec) return;
       newPredictions.push(rec);

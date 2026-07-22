@@ -478,7 +478,13 @@ const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
 // marker. Same lesson as MLB's backfill schema bumps: a schema-current
 // marker only ever continues forward from its own throughDateISO, so the
 // fix alone can't retroactively re-walk a day already (wrongly) marked done.
-const UFC_BACKFILL_SCHEMA = 2;
+// v3: the v2 run correctly discovered real fight cards but still added
+// nothing, because matchFighter can only match a fighter already added by
+// hand (via the live tracker's "Add Fighter" flow) - the roster had ~22
+// entries against 52 weeks of fights. ensureFighterInRoster now auto-adds
+// an unmatched fighter via the same Wikidata lookup "Add Fighter" itself
+// uses, instead of just skipping them.
+const UFC_BACKFILL_SCHEMA = 3;
 const UFC_BACKFILL_CHUNK = 5;
 // Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
 // itself (confirmed live) - start_date_min/max below filters by that LISTING
@@ -515,11 +521,37 @@ async function fetchClosedUfcEventsInWindow(startISO, endISO) {
   return events.filter((e) => e.eventDate && e.eventDate >= startISO && e.eventDate <= endISO);
 }
 
+// Backfill hits fighters far outside anyone's ever manually added - the
+// roster only ever grows one card at a time from the live tracker's "Add
+// Fighter" flow, so a 52-week historical walk would match almost nothing
+// without this. Same Wikidata lookup that flow already uses
+// (lookupKeyDateByName, db-core.js); a miss (no Wikidata birthdate) is left
+// unmatched rather than guessed. rosterCache holds the in-flight/resolved
+// PROMISE per name (not just the result) so two fights in the same
+// concurrent chunk that share a never-seen name share one lookup instead of
+// both racing to add a duplicate custom fighter.
+function ensureFighterInRoster(name, rosterCache) {
+  const found = matchFighter(name, buildAllFighters());
+  if (found) return Promise.resolve(found);
+
+  if (!rosterCache.has(name)) {
+    rosterCache.set(name, lookupKeyDateByName(name).then((info) => {
+      if (!info || info.kind !== 'born') return null;
+      const fighter = { id: uid(), name, dob: info.date };
+      const custom = loadCustomFighters();
+      custom.push(fighter);
+      saveCustomFighters(custom);
+      return fighter;
+    }).catch(() => null));
+  }
+  return rosterCache.get(name);
+}
+
 // One event -> one stored prediction (or null if anything needed to score it
 // honestly is missing - never guessed). existingByConditionId both dedups
 // against already-tracked fights and guards against re-processing the same
 // fight twice within one backfill run.
-async function processUfcBackfillEvent(event, existingByConditionId) {
+async function processUfcBackfillEvent(event, existingByConditionId, rosterCache) {
   const m = (event.markets || []).find((mk) => mk.sportsMarketType === 'moneyline');
   if (!m || !m.closed) return null;
   if (existingByConditionId.has(m.conditionId)) return null;
@@ -533,10 +565,11 @@ async function processUfcBackfillEvent(event, existingByConditionId) {
   const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
   if (!gameStartTime) return null;
 
-  const roster = buildAllFighters();
-  const matchedA = matchFighter(outcomes[0], roster);
-  const matchedB = matchFighter(outcomes[1], roster);
-  if (!matchedA || !matchedB) return null; // not in the fighter database - skip, don't guess
+  const [matchedA, matchedB] = await Promise.all([
+    ensureFighterInRoster(outcomes[0], rosterCache),
+    ensureFighterInRoster(outcomes[1], rosterCache),
+  ]);
+  if (!matchedA || !matchedB) return null; // no Wikidata birthdate either - skip, don't guess
 
   const result = determineResult(m);
 
@@ -588,6 +621,7 @@ async function backfillUfcHistory(onProgress) {
   const events = await fetchClosedUfcEventsInWindow(startISO, endISO);
   const existing = loadUfcPredictions();
   const existingByConditionId = new Map(existing.filter((p) => p.conditionId).map((p) => [p.conditionId, p]));
+  const rosterCache = new Map();
 
   const newPredictions = [];
   const total = events.length;
@@ -595,7 +629,7 @@ async function backfillUfcHistory(onProgress) {
 
   for (let i = 0; i < events.length; i += UFC_BACKFILL_CHUNK) {
     const chunk = events.slice(i, i + UFC_BACKFILL_CHUNK);
-    const results = await Promise.all(chunk.map((ev) => processUfcBackfillEvent(ev, existingByConditionId)));
+    const results = await Promise.all(chunk.map((ev) => processUfcBackfillEvent(ev, existingByConditionId, rosterCache)));
     results.forEach((rec) => {
       if (!rec) return;
       newPredictions.push(rec);
