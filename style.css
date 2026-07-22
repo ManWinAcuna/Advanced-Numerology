@@ -1747,6 +1747,28 @@ body::after {
   cursor: default;
 }
 
+/* Total-picks summary on breakdown tables (pmTableTotalRow / .pm-table-total
+   in db-core.js/stats-*.js) - a table row for the boxes whose <table> is
+   static markup in stats.html, a plain div for the ones a render function
+   builds from scratch. Same look either way. */
+.pm-table-total,
+.pm-table-total-row td {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pm-table-total {
+  margin-bottom: 6px;
+}
+
+.pm-table-total-row td {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
 .ufc-location-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

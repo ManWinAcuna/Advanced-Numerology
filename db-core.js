@@ -1551,6 +1551,10 @@ function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
     el.innerHTML = `<div class="empty-state">${escapeHtml(emptyMsg || 'No resolved games with dimension data yet — this fills in as tracked games finish.')}</div>`;
     return;
   }
+  // Each dimension can carry a smaller subsample than the full resolved set
+  // (missing data for that one piece) - the composite row is always the full
+  // set, so that's the honest "total," not the max of a possibly-thinner row.
+  const total = (rows.find((r) => r.key === 'composite') || {}).count || maxCount;
   const body = rows.map((r) => {
     const isBase = r.key === 'composite';
     const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
@@ -1558,7 +1562,7 @@ function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
       : `<span class="empty-state">${r.count ? 'thin' : '—'}</span>`;
     return `<tr${isBase ? ' style="border-top:2px solid var(--border);"' : ''}><td>${isBase ? '🎯 ' : ''}${escapeHtml(r.label)}</td><td>${r.count}</td><td>${r.winPct != null ? `${r.winPct}%` : '—'}</td><td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td><td>${edgeCell}</td></tr>`;
   }).join('');
-  el.innerHTML = `<table class="astro-table"><thead><tr><th>Dimension</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${body}</tbody></table>`;
+  el.innerHTML = `<div class="pm-table-total">Total picks: ${total}</div><table class="astro-table"><thead><tr><th>Dimension</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 /* ===================== Day filter (Stats page) ===================== */
@@ -1872,6 +1876,16 @@ function computeBucketStats(predictions, minGap = REAL_EDGE_MIN_GAP) {
   });
 }
 
+// A summary row prepended to a breakdown table's tbody - for the tables
+// whose <table><thead> is static markup in stats.html (Edge Tiers, Price
+// Buckets), so there's no separate element outside the tbody to put a total
+// in. The tables that build their own markup from scratch (day-number,
+// dimension, component) instead get a plain <div class="pm-table-total">
+// above the <table>; same wording, just fitted to how each table is built.
+function pmTableTotalRow(total, colspan) {
+  return `<tr class="pm-table-total-row"><td colspan="${colspan}">Total picks: ${total}</td></tr>`;
+}
+
 // Separate from scoreClass (compat-render.js), which colors a 0-100
 // compatibility score - a win/hit rate percentage is a different scale
 // entirely and needs its own threshold. 65%+ reads as a real edge worth
@@ -1919,6 +1933,7 @@ function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, h
     el.innerHTML = '<div class="empty-state">No resolved real-edge picks yet — this fills in as tracked picks resolve.</div>';
     return;
   }
+  const total = rows.reduce((s, r) => s + r.count, 0);
   const body = rows.map((r) => `
     <tr>
       <td>${r.value}</td>
@@ -1928,7 +1943,7 @@ function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, h
         : `<span class="empty-state">${r.count ? `${r.wins}/${r.count} so far` : 'No data yet'}</span>`}</td>
     </tr>
   `).join('');
-  el.innerHTML = `<table class="astro-table"><thead><tr><th>${escapeHtml(headerLabel)}</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
+  el.innerHTML = `<div class="pm-table-total">Total picks: ${total}</div><table class="astro-table"><thead><tr><th>${escapeHtml(headerLabel)}</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 /* ===================== Pagination (Stats page tracked-picks tables) ===================== */

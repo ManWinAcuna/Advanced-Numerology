@@ -140,7 +140,8 @@ function renderMlbBreakdown(stats, suffix = '') {
 
 function renderMlbEdgeTiers(predictions, suffix = '') {
   const tiers = computeEdgeTierStatsMlb(predictions);
-  document.getElementById('mlbStatsEdgeTiers' + suffix).innerHTML = tiers.map((t) => `
+  const total = tiers.reduce((s, t) => s + t.count, 0);
+  document.getElementById('mlbStatsEdgeTiers' + suffix).innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
@@ -153,7 +154,8 @@ function renderMlbEdgeTiers(predictions, suffix = '') {
 
 function renderMlbPriceBuckets(predictions, suffix = '') {
   const buckets = computeBucketStats(predictions, MLB_REAL_EDGE_MIN_GAP);
-  document.getElementById('mlbStatsPriceBuckets' + suffix).innerHTML = buckets.map((b) => `
+  const total = buckets.reduce((s, b) => s + b.count, 0);
+  document.getElementById('mlbStatsPriceBuckets' + suffix).innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
       <td>${b.count}</td>
@@ -707,6 +709,10 @@ function renderMlbComponentSignal(predictions, suffix = '') {
     el.innerHTML = '<div class="empty-state">No resolved games with component data yet &mdash; run the backfill (or wait for tracked games to finish) to populate this.</div>';
     return;
   }
+  // Some components (catcher, matchup) run thinner than the full resolved
+  // set - the composite row is always the full set, so that's the honest
+  // "total," not the max of a possibly-thinner component row.
+  const total = (rows.find((r) => r.key === 'composite') || {}).count || maxCount;
   const rowMarker = { composite: '🎯 ', reweighted: '⚡ ' };
   const body = rows.map((r) => {
     const isModel = r.key === 'composite' || r.key === 'reweighted';
@@ -733,6 +739,7 @@ function renderMlbComponentSignal(predictions, suffix = '') {
     : `⚡ <b>Reweighted V2</b> leans on the components above (Manager &amp; Pitcher up, Catcher &amp; Batters down). Its edge in the table is <b>in-sample</b> &mdash; those weights were picked from this same data, so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> played since ${MLB_V2_SINCE} so far. Watch that number as new games resolve.`;
 
   el.innerHTML = `
+    <div class="pm-table-total">Total picks: ${total}</div>
     <table class="astro-table">
       <thead><tr><th>Signal</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
       <tbody>${body}</tbody>

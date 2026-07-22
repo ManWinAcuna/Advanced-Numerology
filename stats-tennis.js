@@ -147,7 +147,8 @@ function renderTennisBreakdown(stats) {
 
 function renderTennisEdgeTiers(predictions) {
   const tiers = computeEdgeTierStats(predictions);
-  document.getElementById('tennisStatsEdgeTiers').innerHTML = tiers.map((t) => `
+  const total = tiers.reduce((s, t) => s + t.count, 0);
+  document.getElementById('tennisStatsEdgeTiers').innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
@@ -160,7 +161,8 @@ function renderTennisEdgeTiers(predictions) {
 
 function renderTennisPriceBuckets(predictions) {
   const buckets = computeBucketStats(predictions);
-  document.getElementById('tennisStatsPriceBuckets').innerHTML = buckets.map((b) => `
+  const total = buckets.reduce((s, b) => s + b.count, 0);
+  document.getElementById('tennisStatsPriceBuckets').innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
       <td>${b.count}</td>
