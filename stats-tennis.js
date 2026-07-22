@@ -349,16 +349,26 @@ function initTennisMatchupModal() {
   initModalTabSwitcher('tennisStatsMatchupBody');
 }
 
+// Renders every box from an already-loaded predictions array - no network
+// call, so the day filter (db-core.js) can re-run this on every change
+// without re-hitting Polymarket. refreshTennisAndRender() is the only place
+// that actually re-fetches.
+function renderTennisAll(predictions) {
+  const matchesDay = dayFilterPredicate('tennis');
+  const filtered = predictions.filter((p) => matchesDay(p.matchTime));
+  const stats = computeTennisStats(filtered);
+  renderTennisHero(stats);
+  renderTennisBreakdown(stats);
+  renderTennisEdgeTiers(filtered);
+  renderTennisPriceBuckets(filtered);
+  renderDimensionEdgeTable('tennisDimensionEdge', filtered, (p) => [p.playerAName, p.playerBName]);
+  renderTennisTable(filtered);
+}
+
 async function refreshTennisAndRender() {
   const predictions = await checkTennisResults();
   currentTennisPredictions = predictions;
-  const stats = computeTennisStats(predictions);
-  renderTennisHero(stats);
-  renderTennisBreakdown(stats);
-  renderTennisEdgeTiers(predictions);
-  renderTennisPriceBuckets(predictions);
-  renderDimensionEdgeTable('tennisDimensionEdge', predictions, (p) => [p.playerAName, p.playerBName]);
-  renderTennisTable(predictions);
+  renderTennisAll(predictions);
   document.getElementById('tennisStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }
 
@@ -372,5 +382,7 @@ document.getElementById('tennisStatsRefreshBtn').addEventListener('click', async
   btn.disabled = false;
 });
 
+document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
+initDayFilter('tennis', () => renderTennisAll(currentTennisPredictions));
 initTennisMatchupModal();
 refreshTennisAndRender();

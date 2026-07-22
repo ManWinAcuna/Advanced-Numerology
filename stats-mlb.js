@@ -734,9 +734,13 @@ function renderMlbComponentSignal(predictions, suffix = '') {
   `;
 }
 
+// Today/Old each keep their own day-filter state ('mlb' + suffix, see
+// db-core.js's dayFilterPredicate) since they're independent tabs a user
+// might want sliced differently.
 function renderMlbScope(suffix, predictions, signals) {
   const isOld = suffix === 'Old';
-  const scopedPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
+  const matchesDay = dayFilterPredicate('mlb' + suffix);
+  const scopedPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
   const stats = computeMlbStats(scopedPredictions);
   renderMlbHero(stats, suffix);
   renderMlbBreakdown(stats, suffix);
@@ -747,7 +751,7 @@ function renderMlbScope(suffix, predictions, signals) {
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
   document.getElementById('mlbStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
-  const scopedSignals = signals.filter((s) => isMlbTodayLocal(s.gameTime) === !isOld);
+  const scopedSignals = signals.filter((s) => isMlbTodayLocal(s.gameTime) === !isOld && matchesDay(s.gameTime));
   renderMlbKSignalPanel(scopedSignals, suffix);
 }
 
@@ -1439,6 +1443,11 @@ function initMlbBackfillButton() {
     btn.disabled = false;
   });
 }
+
+document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
+document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
+initDayFilter('mlb', () => renderMlbScope('', currentMlbPredictions, currentMlbKSignals));
+initDayFilter('mlbOld', () => renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals));
 
 initMlbMatchupModal('');
 initMlbMatchupModal('Old');

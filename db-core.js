@@ -1561,6 +1561,123 @@ function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
   el.innerHTML = `<table class="astro-table"><thead><tr><th>Dimension</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
+/* ===================== Day filter (Stats page) ===================== */
+// Lets each Stats section slice its own tracked picks by which kind of day
+// the match/game fell on - independent of the per-fighter/team edge tested
+// elsewhere. Three different readings of one date:
+//  - exact: the literal calendar date
+//  - universal: the date's own life path (full date reduced - the same
+//    reduction a birthdate gets, see compatLifePathInfo/universalDayInsight
+//    above)
+//  - energy: just the day-of-month digits reduced (getReducedDay) - a
+//    narrower, faster-cycling read than Universal Day
+// "both" requires Universal Day AND Day Energy to match at once. State is
+// keyed by an arbitrary string prefix so UFC/Tennis/MLB (and MLB's separate
+// Today/Old scopes) can each keep their own filter independently while
+// sharing one implementation.
+const DAY_FILTER_UNIVERSAL_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 22, 28, 33];
+const DAY_FILTER_ENERGY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28];
+const _dayFilterState = new Map();
+
+function dayFilterNumberOptionsHtml(options) {
+  return options.map((n) => `<option value="${n}">${n}</option>`).join('');
+}
+
+// Injected next to a section's own results (via insertAdjacentHTML) rather
+// than baked into stats.html - one implementation instead of four near-
+// identical copies of the same markup.
+function dayFilterHtml(prefix) {
+  return `
+    <div class="box stats-sport-box pm-day-filter-box">
+      <div class="box-label">📅 Filter by Day</div>
+      <select id="${prefix}DayFilterMode">
+        <option value="all">All picks</option>
+        <option value="exact">Specific date</option>
+        <option value="universal">Universal Day</option>
+        <option value="energy">Day Energy (reduced)</option>
+        <option value="both">Universal Day + Day Energy</option>
+      </select>
+      <div class="pm-day-filter-fields">
+        <input type="text" id="${prefix}DayFilterExact" class="pm-day-filter-exact" style="display:none;" placeholder="MM/DD/YYYY">
+        <select id="${prefix}DayFilterUniversal" style="display:none;">
+          <option value="">Universal Day: Any</option>
+          ${dayFilterNumberOptionsHtml(DAY_FILTER_UNIVERSAL_OPTIONS)}
+        </select>
+        <select id="${prefix}DayFilterEnergy" style="display:none;">
+          <option value="">Day Energy: Any</option>
+          ${dayFilterNumberOptionsHtml(DAY_FILTER_ENERGY_OPTIONS)}
+        </select>
+      </div>
+    </div>
+  `;
+}
+
+// dateValue can be an ISO timestamp string or a Date - read in the browser's
+// own local time, same convention every other Insight-tab date read here
+// already uses (see universalDayInsight above).
+function matchDayFilter(dateValue, state) {
+  if (!state || state.mode === 'all' || !dateValue) return true;
+  const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (isNaN(d)) return true;
+
+  if (state.mode === 'exact') {
+    if (!state.exact) return true;
+    return isoFromParts(d.getFullYear(), d.getMonth() + 1, d.getDate()) === state.exact;
+  }
+
+  const universal = compatLifePathInfo(d).lookupValue;
+  const energy = getReducedDay(d);
+  const universalOk = state.universal == null || universal === state.universal;
+  const energyOk = state.energy == null || energy === state.energy;
+
+  if (state.mode === 'universal') return universalOk;
+  if (state.mode === 'energy') return energyOk;
+  if (state.mode === 'both') return universalOk && energyOk;
+  return true;
+}
+
+function dayFilterState(prefix) {
+  return _dayFilterState.get(prefix) || { mode: 'all' };
+}
+
+function dayFilterPredicate(prefix) {
+  const state = dayFilterState(prefix);
+  return (dateValue) => matchDayFilter(dateValue, state);
+}
+
+// Wires one filter box's controls. onChange fires (no args) on every change
+// so the caller just re-runs its own render pass over already-loaded
+// predictions - this never triggers a network refetch.
+function initDayFilter(prefix, onChange) {
+  const modeSel = document.getElementById(`${prefix}DayFilterMode`);
+  if (!modeSel) return;
+  const exactInput = document.getElementById(`${prefix}DayFilterExact`);
+  const universalSel = document.getElementById(`${prefix}DayFilterUniversal`);
+  const energySel = document.getElementById(`${prefix}DayFilterEnergy`);
+
+  attachDateMask(exactInput);
+  _dayFilterState.set(prefix, { mode: 'all', exact: '', universal: null, energy: null });
+
+  function sync() {
+    const mode = modeSel.value;
+    exactInput.style.display = mode === 'exact' ? '' : 'none';
+    universalSel.style.display = (mode === 'universal' || mode === 'both') ? '' : 'none';
+    energySel.style.display = (mode === 'energy' || mode === 'both') ? '' : 'none';
+    _dayFilterState.set(prefix, {
+      mode,
+      exact: displayToISO(exactInput.value),
+      universal: universalSel.value ? Number(universalSel.value) : null,
+      energy: energySel.value ? Number(energySel.value) : null,
+    });
+  }
+
+  modeSel.addEventListener('change', () => { sync(); onChange(); });
+  exactInput.addEventListener('input', () => { sync(); onChange(); });
+  universalSel.addEventListener('change', () => { sync(); onChange(); });
+  energySel.addEventListener('change', () => { sync(); onChange(); });
+  sync();
+}
+
 /* ===================== UFC pick-price buckets (risk manager) ===================== */
 // Shared by the Stats page (which displays the win rate per bucket) and the
 // Polymarket tracker (which looks up the bucket for a live fight's price to

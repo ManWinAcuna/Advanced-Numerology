@@ -371,16 +371,26 @@ function initMatchupModal() {
   initModalTabSwitcher('statsMatchupBody');
 }
 
+// Renders every box from an already-loaded predictions array - no network
+// call, so the day filter (db-core.js) can re-run this on every change
+// without re-hitting Polymarket. refreshAndRender() is the only place that
+// actually re-fetches.
+function renderAll(predictions) {
+  const matchesDay = dayFilterPredicate('ufc');
+  const filtered = predictions.filter((p) => matchesDay(p.fightTime));
+  const stats = computeStats(filtered);
+  renderHero(stats);
+  renderBreakdown(stats);
+  renderEdgeTiers(filtered);
+  renderPriceBuckets(filtered);
+  renderDimensionEdgeTable('ufcDimensionEdge', filtered, (p) => [p.fighterAName, p.fighterBName]);
+  renderTable(filtered);
+}
+
 async function refreshAndRender() {
   const predictions = await checkResults();
   currentPredictions = predictions;
-  const stats = computeStats(predictions);
-  renderHero(stats);
-  renderBreakdown(stats);
-  renderEdgeTiers(predictions);
-  renderPriceBuckets(predictions);
-  renderDimensionEdgeTable('ufcDimensionEdge', predictions, (p) => [p.fighterAName, p.fighterBName]);
-  renderTable(predictions);
+  renderAll(predictions);
   document.getElementById('statsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }
 
@@ -394,5 +404,7 @@ document.getElementById('statsRefreshBtn').addEventListener('click', async () =>
   btn.disabled = false;
 });
 
+document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
+initDayFilter('ufc', () => renderAll(currentPredictions));
 initMatchupModal();
 refreshAndRender();

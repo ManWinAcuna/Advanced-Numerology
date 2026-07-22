@@ -1700,6 +1700,31 @@ body::after {
   min-width: 200px;
 }
 
+/* Day filter (stats-*.js via dayFilterHtml in db-core.js) - reuses
+   .stats-sport-box for its box/select styling, just adds the wrapping row
+   for the mode-specific fields that appear below the mode select. */
+.pm-day-filter-box select {
+  margin-top: 8px;
+}
+
+.pm-day-filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pm-day-filter-fields select {
+  margin-top: 0;
+}
+
+.pm-day-filter-exact {
+  max-width: 160px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
 .ufc-location-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4070,7 +4095,8 @@ a.pm-tournament-name:hover {
 .ufc-location-field select,
 .ufc-add-stadium-form input[type="text"],
 .ufc-add-stadium-form input[type="date"],
-.ufc-add-stadium-form select {
+.ufc-add-stadium-form select,
+.pm-day-filter-exact {
   background: #141019;
   color: var(--text);
   border: 1px solid rgba(167, 107, 214, 0.35);
@@ -4086,7 +4112,8 @@ a.pm-tournament-name:hover {
 .stats-sport-box select:focus,
 .ufc-location-field select:focus,
 .ufc-add-stadium-form input:focus,
-.ufc-add-stadium-form select:focus {
+.ufc-add-stadium-form select:focus,
+.pm-day-filter-exact:focus {
   outline: none;
   border-color: var(--purple);
   box-shadow: 0 0 6px rgba(167, 107, 214, 0.45), 0 0 14px rgba(167, 107, 214, 0.2);
