@@ -1121,15 +1121,21 @@ wireMlbRefreshButton('mlbStatsRefreshBtnOld');
 // (dedup by gamePk for predictions, by gamePk+pitcherId for K-signals) - it's
 // purely a gap-filler, triggered manually since it's a genuinely heavy job.
 
-const MLB_BACKFILL_LOOKBACK_DAYS = 42; // ~6 weeks - deep enough to start the
-// component-signal analysis, shallow enough that every pick (now carrying its
-// per-component breakdown) stays under Firebase's ~1MB per-account sync limit.
-const MLB_BACKFILL_SCHEMA = 3; // bump when the stored prediction shape changes.
-// A stored marker whose schemaVersion doesn't match triggers a one-time full
-// re-walk of the whole window instead of an incremental catch-up, so existing
-// records get upgraded in place (v2: per-component scores; v3: per-dimension
-// scores for the compatibility-dimension edge analysis) rather than the marker
-// skipping straight past them.
+const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
+// that MLB predictions are local-only (db-core.js's CLOUD_SYNC_FIELDS), the
+// old ~1MB Firebase sync cap that kept this at 6 weeks no longer applies. The
+// real limits now are just how long one run takes (hundreds more games) and
+// whether Polymarket's own price history still reaches back that far - a gap
+// in old data is their retention, not a bug here.
+const MLB_BACKFILL_SCHEMA = 4; // bump when the stored prediction shape changes,
+// OR (as here) when the lookback window itself grows - a schema-current
+// marker just continues forward from its own throughDateISO, so widening
+// MLB_BACKFILL_LOOKBACK_DAYS alone wouldn't reach back any further for
+// someone who'd already completed a backfill under the old window. A stored
+// marker whose schemaVersion doesn't match triggers a one-time full re-walk
+// of the whole window instead, so existing records get upgraded/extended in
+// place (v2: per-component scores; v3: per-dimension scores; v4: the 52-week
+// window) rather than the marker skipping straight past them.
 const MLB_BACKFILL_CHUNK = 5; // games processed concurrently per batch - a
 // full-window rebuild is hundreds of games x several fetches each, far too slow
 // one at a time; 5-at-a-time keeps it to a few minutes without hammering the

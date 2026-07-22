@@ -2080,10 +2080,21 @@ const CLOUD_SYNC_FIELDS = {
   [TENNIS_CUSTOM_PLAYERS_KEY]: 'customTennisPlayers',
   [TENNIS_PLAYER_OVERRIDES_KEY]: 'tennisPlayerOverrides',
   [TENNIS_PREDICTIONS_KEY]: 'tennisPredictions',
-  [MLB_PREDICTIONS_KEY]: 'mlbPredictions',
   [MLB_VENUES_KEY]: 'mlbVenues',
-  [MLB_PITCHER_K_SIGNALS_KEY]: 'mlbPitcherKSignals',
-  [MLB_BACKFILL_STATE_KEY]: 'mlbBackfillState',
+  // MLB_PREDICTIONS_KEY, MLB_PITCHER_K_SIGNALS_KEY, and MLB_BACKFILL_STATE_KEY
+  // are deliberately NOT synced. Each MLB pick stores a 13-person team's full
+  // per-component + per-dimension breakdown, and after months of live
+  // tracking plus a deep historical backfill that array grows well past
+  // Firestore's ~1MB per-document cap. cloudPushKey's write then silently
+  // fails (.catch(() => {})), freezing the cloud copy at an old, smaller
+  // snapshot - and the NEXT cloudPullAll (e.g. the Sports Betting sign-in
+  // gate) unconditionally overwrites the fuller local data back down to that
+  // stale snapshot, wiping out backfilled history that had actually synced
+  // fine right up until it silently didn't. Keeping these three local-only
+  // makes that impossible, at the cost of no longer syncing MLB stats across
+  // devices - a fair trade for a dataset that's reconstructible via the
+  // Backfill button anyway (unlike Database/Profile, which are irreplaceable
+  // user data and stay synced).
 };
 
 function cloudPushKey(storageKey) {
