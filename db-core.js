@@ -557,6 +557,48 @@ function ensureIntlRegionTimezone(region, onResolved) {
   });
 }
 
+// Tennis backfill has no per-match venue ID the way MLB's official venue API
+// gives it - only a city name parsed straight from the tournament's own
+// Polymarket event title ("ITF Brisbane: A vs B" -> "Brisbane"). Mirrors
+// resolveMlbRegionForBackfill's awaited find-or-create-then-resolve-timezone
+// pattern (db-core.js can't reach stats-mlb.js's copy, and this is keyed by
+// name instead of a venue ID anyway), just synchronous/awaited rather than
+// fire-and-forget since a backfill has nothing live to re-render later.
+async function resolveIntlRegionForBackfillByCity(cityName) {
+  let region = loadIntlRegions().find((r) => normalizeName(r.name) === normalizeName(cityName));
+  if (!region) {
+    const info = await lookupPlaceFoundingDate(cityName);
+    if (!info) return null;
+    region = { id: uid(), name: cityName, founded: info.date };
+    const list = loadIntlRegions();
+    list.push(region);
+    saveIntlRegions(list);
+  }
+  if (!region.timezone) {
+    const tz = await lookupTimezoneForPlace(region.name);
+    if (tz) {
+      region = { ...region, timezone: tz };
+      const list = loadIntlRegions();
+      const idx = list.findIndex((r) => r.id === region.id);
+      if (idx !== -1) {
+        list[idx] = region;
+        saveIntlRegions(list);
+      }
+    }
+  }
+  return region;
+}
+
+// Generic "is this ISO timestamp today, in the browser's own local time" -
+// shared by UFC/Tennis's Today/Old Data split. MLB's own isMlbTodayLocal
+// (stats-mlb.js) predates this and is left as-is rather than risk touching
+// already-working code for a pure rename.
+function isTodayLocal(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
 const ZODIAC_SYMBOLS = {
   Aries: '♈', Taurus: '♉', Gemini: '♊', Cancer: '♋', Leo: '♌', Virgo: '♍',
   Libra: '♎', Scorpio: '♏', Sagittarius: '♐', Capricorn: '♑', Aquarius: '♒', Pisces: '♓',
@@ -919,8 +961,16 @@ function saveMlbBackfillState(state) {
 // founding date like a birthdate) against a match date, venue, and region.
 // Was duplicated identically in ufc.js and polymarket-ufc.js; hoisted here
 // once MLB needed the exact same formula for an 11th-12th time over.
+// stateDate is optional too (on top of the already-optional stadiumDate) -
+// used by the UFC backfill, which has no reliable per-fight venue/region
+// source the way MLB's official venue API or Tennis's tournament-city title
+// parsing do. A day-only score is a real, honest degrade (not a guess), same
+// spirit as dropping just the stadium anchor when only that's missing.
 function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
   const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
+  if (!stateDate) {
+    return { day, stadium: null, state: null, combined: day.finalScore };
+  }
   const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
   if (!stadiumDate) {
     const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);

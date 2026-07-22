@@ -1,6 +1,8 @@
-// Mirrors stats-ufc.js exactly, but for tennis predictions - every top-level
+// Mirrors stats-ufc.js closely, but for tennis predictions - every top-level
 // name here is prefixed/renamed versus that file since both scripts run in
-// the same page (stats.html) and share one global scope.
+// the same page (stats.html) and share one global scope. Unlike UFC's
+// backfill, tennis DOES get a real region (the tournament city, parsed
+// straight from the event's own title) - see the backfill section below.
 
 const TENNIS_MARKETS_URL = 'https://gamma-api.polymarket.com/markets';
 
@@ -97,8 +99,10 @@ function computeTennisStats(predictions) {
   };
 }
 
-function renderTennisHero(stats) {
-  const hero = document.getElementById('tennisStatsHero');
+// suffix is '' for the Today scope's DOM ids, 'Old' for Old Data's - same
+// convention MLB's Stats page (and UFC's, now) already established.
+function renderTennisHero(stats, suffix = '') {
+  const hero = document.getElementById('tennisStatsHero' + suffix);
 
   if (stats.total === 0) {
     hero.innerHTML = `
@@ -138,17 +142,17 @@ function tennisMeterRow(label, pct, count, wins) {
   `;
 }
 
-function renderTennisBreakdown(stats) {
-  document.getElementById('tennisStatsBreakdown').innerHTML = `
+function renderTennisBreakdown(stats, suffix = '') {
+  document.getElementById('tennisStatsBreakdown' + suffix).innerHTML = `
     ${tennisMeterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
     ${tennisMeterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
   `;
 }
 
-function renderTennisEdgeTiers(predictions) {
+function renderTennisEdgeTiers(predictions, suffix = '') {
   const tiers = computeEdgeTierStats(predictions);
   const total = tiers.reduce((s, t) => s + t.count, 0);
-  document.getElementById('tennisStatsEdgeTiers').innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
+  document.getElementById('tennisStatsEdgeTiers' + suffix).innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
@@ -159,10 +163,10 @@ function renderTennisEdgeTiers(predictions) {
   `).join('');
 }
 
-function renderTennisPriceBuckets(predictions) {
+function renderTennisPriceBuckets(predictions, suffix = '') {
   const buckets = computeBucketStats(predictions);
   const total = buckets.reduce((s, b) => s + b.count, 0);
-  document.getElementById('tennisStatsPriceBuckets').innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
+  document.getElementById('tennisStatsPriceBuckets' + suffix).innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
       <td>${b.count}</td>
@@ -191,16 +195,16 @@ function tennisEdgeCell(p) {
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
 
-function renderTennisTable(predictions) {
-  const tbody = document.getElementById('tennisStatsTableBody');
+function renderTennisTable(predictions, suffix = '') {
+  const tbody = document.getElementById('tennisStatsTableBody' + suffix);
   if (!predictions.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No matches tracked yet.</td></tr>';
-    renderPaginationControls('tennisStatsTablePagination', 'tennisStatsTable', 1, 1);
+    renderPaginationControls('tennisStatsTablePagination' + suffix, 'tennisStatsTable' + suffix, 1, 1);
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.matchTime) - new Date(a.matchTime));
-  const { rows, page, totalPages } = paginationSlice('tennisStatsTable', sorted);
+  const { rows, page, totalPages } = paginationSlice('tennisStatsTable' + suffix, sorted);
   tbody.innerHTML = rows.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatTennisMatchDate(p.matchTime)}</td>
@@ -211,7 +215,7 @@ function renderTennisTable(predictions) {
       <td>${tennisResultBadge(p)}</td>
     </tr>
   `).join('');
-  renderPaginationControls('tennisStatsTablePagination', 'tennisStatsTable', page, totalPages, () => renderTennisTable(predictions));
+  renderPaginationControls('tennisStatsTablePagination' + suffix, 'tennisStatsTable' + suffix, page, totalPages, () => renderTennisTable(predictions, suffix));
 }
 
 function formatTennisOdds(price) {
@@ -228,9 +232,11 @@ function tennisParseDateInput(value) {
 
 // Mirrors buildAllPlayers()/matchPlayer() in polymarket-tennis.js - the stored
 // prediction only ever kept the player's NAME, not their DOB, so the Insight
-// tab has to re-match it against the current roster the same way the live
-// tracker does. If a player was since renamed or removed, the match simply
-// comes back null and the Insight tab says so instead of guessing.
+// tab (and the backfill, which discovers players purely by name from
+// Polymarket) has to match against the current roster the same way the live
+// tracker does. If a player was since renamed or removed (or was never
+// added), the match simply comes back null and the caller skips rather than
+// guessing.
 function buildAllPlayers() {
   const overrides = loadTennisPlayerOverrides();
   const custom = loadCustomTennisPlayers();
@@ -335,65 +341,296 @@ function tennisMatchupModalHtml(p) {
   return hero + modalTabsHtml(breakdown, tennisInsightTabHtml(p));
 }
 
-function initTennisMatchupModal() {
-  document.getElementById('tennisStatsTableBody').addEventListener('click', (e) => {
+function initTennisMatchupModal(suffix = '') {
+  document.getElementById('tennisStatsTableBody' + suffix).addEventListener('click', (e) => {
     const row = e.target.closest('tr[data-condition-id]');
     if (!row) return;
     const p = currentTennisPredictions.find((x) => x.conditionId === row.dataset.conditionId);
     if (!p) return;
-    document.getElementById('tennisStatsMatchupBody').innerHTML = tennisMatchupModalHtml(p);
-    document.getElementById('tennisStatsMatchupOverlay').classList.add('active');
+    document.getElementById('tennisStatsMatchupBody' + suffix).innerHTML = tennisMatchupModalHtml(p);
+    document.getElementById('tennisStatsMatchupOverlay' + suffix).classList.add('active');
   });
 
-  document.getElementById('tennisStatsMatchupClose').addEventListener('click', () => {
-    document.getElementById('tennisStatsMatchupOverlay').classList.remove('active');
+  document.getElementById('tennisStatsMatchupClose' + suffix).addEventListener('click', () => {
+    document.getElementById('tennisStatsMatchupOverlay' + suffix).classList.remove('active');
   });
-  document.getElementById('tennisStatsMatchupOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'tennisStatsMatchupOverlay') document.getElementById('tennisStatsMatchupOverlay').classList.remove('active');
+  document.getElementById('tennisStatsMatchupOverlay' + suffix).addEventListener('click', (e) => {
+    if (e.target.id === 'tennisStatsMatchupOverlay' + suffix) document.getElementById('tennisStatsMatchupOverlay' + suffix).classList.remove('active');
   });
-  initModalTabSwitcher('tennisStatsMatchupBody');
+  initModalTabSwitcher('tennisStatsMatchupBody' + suffix);
 }
 
-// Renders every box from an already-loaded predictions array - no network
-// call, so the day filter (db-core.js) can re-run this on every change
-// without re-hitting Polymarket. refreshTennisAndRender() is the only place
-// that actually re-fetches.
-function renderTennisAll(predictions) {
-  const matchesDay = dayFilterPredicate('tennis');
-  const filtered = predictions.filter((p) => matchesDay(p.matchTime));
-  const stats = computeTennisStats(filtered);
-  renderTennisHero(stats);
-  renderTennisBreakdown(stats);
-  renderTennisEdgeTiers(filtered);
-  renderTennisPriceBuckets(filtered);
-  renderDimensionEdgeTable('tennisDimensionEdge', filtered, (p) => [p.playerAName, p.playerBName]);
-  renderTennisTable(filtered);
-  // Always the full unfiltered set, not `filtered` - this table's whole point is
-  // showing every day value side by side, which the day filter itself can't.
-  renderDayNumberTable('tennisUniversalDay', predictions, 'matchTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
-  renderDayNumberTable('tennisDayEnergy', predictions, 'matchTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
-  renderDayComboTable('tennisDayCombo', predictions, 'matchTime');
+// Today/Old each keep their own day-filter state ('tennis' + suffix, see
+// db-core.js's dayFilterPredicate). The day-number/day-combo tables always
+// get todayOrOldPredictions (scoped to the tab, not the day filter) - that's
+// the whole point of those tables, a side-by-side view the filter can't give.
+function renderTennisScope(suffix, predictions) {
+  const isOld = suffix === 'Old';
+  const todayOrOldPredictions = predictions.filter((p) => isTodayLocal(p.matchTime) === !isOld);
+  const matchesDay = dayFilterPredicate('tennis' + suffix);
+  const scopedPredictions = todayOrOldPredictions.filter((p) => matchesDay(p.matchTime));
+
+  const stats = computeTennisStats(scopedPredictions);
+  renderTennisHero(stats, suffix);
+  renderTennisBreakdown(stats, suffix);
+  renderTennisEdgeTiers(scopedPredictions, suffix);
+  renderTennisPriceBuckets(scopedPredictions, suffix);
+  renderDimensionEdgeTable('tennisDimensionEdge' + suffix, scopedPredictions, (p) => [p.playerAName, p.playerBName]);
+  renderTennisTable(scopedPredictions, suffix);
+  renderDayNumberTable('tennisUniversalDay' + suffix, todayOrOldPredictions, 'matchTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('tennisDayEnergy' + suffix, todayOrOldPredictions, 'matchTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
+  renderDayComboTable('tennisDayCombo' + suffix, todayOrOldPredictions, 'matchTime');
+  document.getElementById('tennisStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }
 
 async function refreshTennisAndRender() {
   const predictions = await checkTennisResults();
   currentTennisPredictions = predictions;
-  renderTennisAll(predictions);
-  document.getElementById('tennisStatsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+  renderTennisScope('', predictions);
+  renderTennisScope('Old', predictions);
 }
 
-document.getElementById('tennisStatsRefreshBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('tennisStatsRefreshBtn');
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = '🔄 Checking…';
-  await refreshTennisAndRender();
-  btn.textContent = original;
-  btn.disabled = false;
-});
+function wireTennisRefreshButton(btnId) {
+  document.getElementById(btnId).addEventListener('click', async () => {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '🔄 Checking…';
+    await refreshTennisAndRender();
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
+
+/* ===================== Historical backfill (Tennis) ===================== */
+// Mirrors UFC's backfill (stats-ufc.js) in spirit: no official league
+// schedule API for tennis either, so matches are discovered purely from
+// Polymarket's own closed tennis events. Unlike UFC, though, tennis gets a
+// REAL region: the tournament's own city, parsed straight from the event's
+// title ("ITF Brisbane: A vs B" -> "Brisbane") - checked live against every
+// closed tennis event title, which all follow that same "{City}: player vs
+// player" shape - then resolved/created as an Intl Region exactly like the
+// "Add New City/Region" flow does (resolveIntlRegionForBackfillByCity,
+// db-core.js). No venue-level data exists for a backfilled match though, so
+// it scores Day 75% + Region 25% - the same blend the live tracker itself
+// falls back to whenever no specific venue has been set for a card.
+
+const TENNIS_BACKFILL_STATE_KEY = 'numerology_tennis_backfill_state';
+// Deliberately local-only, no cloudPushKey - same lesson learned from MLB's
+// predictions key silently growing past Firestore's ~1MB cap and getting
+// wiped by a stale cloud pull (db-core.js's CLOUD_SYNC_FIELDS comment).
+
+function loadTennisBackfillState() {
+  try {
+    const raw = localStorage.getItem(TENNIS_BACKFILL_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveTennisBackfillState(state) {
+  localStorage.setItem(TENNIS_BACKFILL_STATE_KEY, JSON.stringify(state));
+}
+
+function tennisIsoDateOnlyUTC(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function tennisAddDaysISO(dateISO, days) {
+  const d = new Date(dateISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return tennisIsoDateOnlyUTC(d);
+}
+
+const TENNIS_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB/UFC's window.
+const TENNIS_BACKFILL_SCHEMA = 1;
+const TENNIS_BACKFILL_CHUNK = 5;
+// Polymarket lists a tennis event's markets shortly before the match itself
+// (confirmed live) - start_date_min/max below filters by that LISTING date,
+// not the match date, so the server-side window is padded wider than the
+// real target range and every result is re-checked precisely afterward
+// against the event's own eventDate (the actual scheduled match date).
+const TENNIS_BACKFILL_LISTING_PAD_DAYS = 35;
+
+// "ITF Brisbane: A vs B" -> "Brisbane"; a handful of non-ITF titles observed
+// ("Winnipeg: A vs B") use the same "{City}: player vs player" shape without
+// the prefix, so both are handled by one pattern.
+function tennisCityFromEventTitle(title) {
+  const m = /^(?:ITF\s+)?(.+?):/.exec(title || '');
+  return m ? m[1].trim() : null;
+}
+
+async function fetchClosedTennisEventsInWindow(startISO, endISO) {
+  const paddedMin = tennisAddDaysISO(startISO, -TENNIS_BACKFILL_LISTING_PAD_DAYS);
+  const limit = 100;
+  let offset = 0;
+  const events = [];
+  for (;;) {
+    let page;
+    try {
+      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=tennis&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}`);
+      if (!res.ok) break;
+      page = await res.json();
+    } catch (e) {
+      break;
+    }
+    if (!Array.isArray(page) || !page.length) break;
+    events.push(...page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+  return events.filter((e) => e.eventDate && e.eventDate >= startISO && e.eventDate <= endISO);
+}
+
+// One event -> one stored prediction (or null if anything needed to score it
+// honestly is missing - never guessed). regionCache avoids re-resolving the
+// same tournament city's region/timezone for every match in that tournament.
+async function processTennisBackfillEvent(event, existingByConditionId, regionCache) {
+  const m = (event.markets || []).find((mk) => mk.sportsMarketType === 'moneyline');
+  if (!m || !m.closed) return null;
+  if (existingByConditionId.has(m.conditionId)) return null;
+
+  let outcomes = [];
+  let clobTokenIds = [];
+  try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
+  try { clobTokenIds = JSON.parse(m.clobTokenIds); } catch (e) { /* leave empty */ }
+  if (!outcomes[0] || !outcomes[1] || clobTokenIds.length < 2) return null;
+
+  const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
+  if (!gameStartTime) return null;
+
+  const roster = buildAllPlayers();
+  const matchedA = matchPlayer(outcomes[0], roster);
+  const matchedB = matchPlayer(outcomes[1], roster);
+  if (!matchedA || !matchedB) return null; // not in the player database - skip, don't guess
+
+  const cityName = tennisCityFromEventTitle(event.title);
+  if (!cityName) return null;
+  let region = regionCache.get(cityName);
+  if (region === undefined) {
+    region = await resolveIntlRegionForBackfillByCity(cityName);
+    regionCache.set(cityName, region);
+  }
+  if (!region || !region.timezone) return null; // couldn't confirm a region/timezone - don't guess
+
+  const matchDateISO = localMatchDateISO(gameStartTime, 'intl', region);
+  if (!matchDateISO) return null;
+  const matchDate = tennisParseDateInput(matchDateISO);
+
+  const result = determineTennisResult(m);
+
+  const targetTs = Math.floor(gameStartTime.getTime() / 1000);
+  const [priceA, priceB] = await Promise.all([
+    fetchClobPriceNear(clobTokenIds[0], targetTs),
+    fetchClobPriceNear(clobTokenIds[1], targetTs),
+  ]);
+  if (priceA == null || priceB == null) return null; // no pregame price data - don't guess
+
+  // No venue-level data for a backfilled match - Day 75% + Region 25%,
+  // computeFighterScore's own no-stadium fallback (db-core.js), same blend
+  // the live tracker itself uses whenever no venue has been set.
+  const regionDate = tennisParseDateInput(region.founded);
+  const scoreA = computeFighterScore(tennisParseDateInput(matchedA.dob), matchDate, null, regionDate);
+  const scoreB = computeFighterScore(tennisParseDateInput(matchedB.dob), matchDate, null, regionDate);
+
+  const favA = priceA >= priceB;
+  const marketFavName = favA ? outcomes[0] : outcomes[1];
+  const numFavName = scoreA.combined >= scoreB.combined ? outcomes[0] : outcomes[1];
+  const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+
+  return {
+    conditionId: m.conditionId,
+    playerAName: outcomes[0],
+    playerBName: outcomes[1],
+    numerologyFavorite: numFavName,
+    numerologyScoreA: scoreA.combined,
+    numerologyScoreB: scoreB.combined,
+    dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
+    marketFavorite: marketFavName,
+    marketPriceA: priceA,
+    marketPriceB: priceB,
+    pickType: agree ? 'favorite' : 'underdog',
+    eventTitle: event.title,
+    matchTime: gameStartTime.toISOString(),
+    recordedAt: Date.now(),
+    result,
+  };
+}
+
+async function backfillTennisHistory(onProgress) {
+  const todayISO = tennisIsoDateOnlyUTC(new Date());
+  const state = loadTennisBackfillState();
+  const schemaCurrent = state && state.schemaVersion === TENNIS_BACKFILL_SCHEMA;
+  const startISO = (schemaCurrent && state.throughDateISO)
+    ? tennisAddDaysISO(state.throughDateISO, 1)
+    : tennisAddDaysISO(todayISO, -TENNIS_BACKFILL_LOOKBACK_DAYS);
+  const endISO = tennisAddDaysISO(todayISO, -1);
+
+  if (startISO > endISO) return { eventsProcessed: 0, newPredictionsCount: 0, alreadyCurrent: true };
+
+  const events = await fetchClosedTennisEventsInWindow(startISO, endISO);
+  const existing = loadTennisPredictions();
+  const existingByConditionId = new Map(existing.filter((p) => p.conditionId).map((p) => [p.conditionId, p]));
+  const regionCache = new Map();
+
+  const newPredictions = [];
+  const total = events.length;
+  let processed = 0;
+
+  for (let i = 0; i < events.length; i += TENNIS_BACKFILL_CHUNK) {
+    const chunk = events.slice(i, i + TENNIS_BACKFILL_CHUNK);
+    const results = await Promise.all(chunk.map((ev) => processTennisBackfillEvent(ev, existingByConditionId, regionCache)));
+    results.forEach((rec) => {
+      if (!rec) return;
+      newPredictions.push(rec);
+      existingByConditionId.set(rec.conditionId, rec);
+    });
+    processed += chunk.length;
+    if (onProgress) onProgress(processed, total);
+  }
+
+  if (newPredictions.length) saveTennisPredictions([...existing, ...newPredictions]);
+  saveTennisBackfillState({ throughDateISO: endISO, schemaVersion: TENNIS_BACKFILL_SCHEMA });
+
+  return { eventsProcessed: total, newPredictionsCount: newPredictions.length, alreadyCurrent: false };
+}
+
+function initTennisBackfillButton() {
+  document.getElementById('tennisBackfillBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('tennisBackfillBtn');
+    const status = document.getElementById('tennisBackfillStatus');
+    btn.disabled = true;
+    const original = btn.textContent;
+    status.textContent = 'Starting…';
+    try {
+      const result = await backfillTennisHistory((processed, total) => {
+        status.textContent = `Backfilling… ${processed}/${total} matches`;
+      });
+      status.textContent = result.alreadyCurrent
+        ? 'Already caught up to yesterday - nothing new to backfill.'
+        : `Done - checked ${result.eventsProcessed} matches, added ${result.newPredictionsCount} matches.`;
+      await refreshTennisAndRender();
+    } catch (e) {
+      status.textContent = 'Something went wrong during backfill - try again.';
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
 
 document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
-initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisAll(currentTennisPredictions); });
+document.getElementById('tennisStatsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('tennisOld'));
+initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisScope('', currentTennisPredictions); });
+initDayFilter('tennisOld', () => { resetPagination('tennisStatsTableOld'); renderTennisScope('Old', currentTennisPredictions); });
+
 initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDayComboBox', 'tennisDimensionEdgeBox']);
-initTennisMatchupModal();
+initBreakdownToggle('tennisBreakdownToggleOld', ['tennisStatsEdgeTiersBoxOld', 'tennisStatsPriceBucketsBoxOld', 'tennisUniversalDayBoxOld', 'tennisDayEnergyBoxOld', 'tennisDayComboBoxOld', 'tennisDimensionEdgeBoxOld']);
+
+wireTennisRefreshButton('tennisStatsRefreshBtn');
+wireTennisRefreshButton('tennisStatsRefreshBtnOld');
+initTennisMatchupModal('');
+initTennisMatchupModal('Old');
+initModalTabSwitcher('statsTennisSection');
+initTennisBackfillButton();
 refreshTennisAndRender();

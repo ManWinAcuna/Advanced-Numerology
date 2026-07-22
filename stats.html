@@ -69,6 +69,12 @@
   </div>
 
   <div id="statsUfcSection">
+   <div class="pm-modal-tabs" id="ufcScopeTabs">
+     <button class="pm-modal-tab active" data-tab="today" type="button">📅 Today</button>
+     <button class="pm-modal-tab" data-tab="old" type="button">📊 Old Data</button>
+   </div>
+
+   <div class="pm-modal-page" data-page="today">
     <div class="pm-last-updated-row">
       <span id="statsLastUpdated"></span>
       <button class="btn-link" id="statsRefreshBtn" type="button">🔄 Check Results</button>
@@ -175,9 +181,132 @@
         <div id="statsMatchupBody"></div>
       </div>
     </div>
+   </div>
+
+   <div class="pm-modal-page" data-page="old" style="display:none;">
+    <div class="box" id="ufcBackfillBox">
+      <div class="box-label">🕰️ Historical Backfill</div>
+      <div class="mode-desc">Pull already-fought UFC cards straight from Polymarket's own historical markets, instead of waiting for the live tracker to build a track record one card at a time. Old Data keeps growing forever &mdash; this just seeds it. UFC has no reliable per-fight venue data the way MLB/Tennis do, so backfilled fights are scored on the fight-day anchor only (no stadium/state).</div>
+      <button class="btn-link" id="ufcBackfillBtn" type="button">🔄 Backfill Data</button>
+      <div class="mode-desc" id="ufcBackfillStatus"></div>
+    </div>
+
+    <div class="pm-last-updated-row">
+      <span id="statsLastUpdatedOld"></span>
+      <button class="btn-link" id="statsRefreshBtnOld" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="statsHeroOld"></div>
+
+    <div class="breakdown-section" id="statsBreakdownOld"></div>
+
+    <div class="box stats-sport-box">
+      <div class="box-label">📊 Show Breakdown</div>
+      <select id="statsBreakdownToggleOld">
+        <option value="statsEdgeTiersBoxOld">Win Rate by Edge Strength</option>
+        <option value="statsPriceBucketsBoxOld">Win Rate by Market Price</option>
+        <option value="statsUniversalDayBoxOld">Win Rate by Universal Day</option>
+        <option value="statsDayEnergyBoxOld">Win Rate by Day Energy</option>
+        <option value="statsDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
+        <option value="ufcDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+      </select>
+    </div>
+
+    <div class="box" id="statsEdgeTiersBoxOld">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsEdgeTiersTableOld">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="statsEdgeTiersOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="statsPriceBucketsBoxOld">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsPriceBucketsTableOld">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="statsPriceBucketsOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="statsUniversalDayBoxOld">
+      <div class="box-label">Win Rate by Universal Day</div>
+      <div class="mode-desc">The fight date's own life path (full date reduced), independent of either fighter's own numerology &mdash; some days simply run hotter or colder for the edge than others.</div>
+      <div class="pm-table-scroll" id="statsUniversalDayOld"></div>
+    </div>
+
+    <div class="box" id="statsDayEnergyBoxOld">
+      <div class="box-label">Win Rate by Day Energy</div>
+      <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+      <div class="pm-table-scroll" id="statsDayEnergyOld"></div>
+    </div>
+
+    <div class="box" id="statsDayComboBoxOld">
+      <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+      <div class="mode-desc">Crosses the two instead of testing them one at a time &mdash; the actual best energy combo to bet on. Only combos that have actually come up are listed.</div>
+      <div class="pm-table-scroll" id="statsDayComboOld"></div>
+    </div>
+
+    <div class="box" id="ufcDimensionEdgeBoxOld">
+      <div class="box-label">Which Compatibility Dimension Predicts Best</div>
+      <div class="mode-desc">The fighter score is a blend of date anchors (birth vs. <b>fight day</b>, <b>venue</b>, <b>city/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone &mdash; a positive <b>Edge</b> means it beats the market, ~0 or negative means it&rsquo;s dead weight. &#127919; Full Score is the current blend. Backfilled fights carry Day only, so this fills in fastest from live-tracked cards.</div>
+      <div class="pm-table-scroll" id="ufcDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="statsTableBoxOld">
+      <div class="box-label">Tracked Fights &mdash; Old Data</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="statsTableOld">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="statsTableBodyOld"></tbody>
+        </table>
+      </div>
+      <div class="pm-table-pagination" id="statsTablePaginationOld"></div>
+    </div>
+
+    <div class="modal-overlay" id="statsMatchupOverlayOld">
+      <div class="modal-box">
+        <button class="modal-close" id="statsMatchupCloseOld" title="Close">&times;</button>
+        <div id="statsMatchupBodyOld"></div>
+      </div>
+    </div>
+   </div>
   </div>
 
   <div id="statsTennisSection" style="display:none;">
+   <div class="pm-modal-tabs" id="tennisScopeTabs">
+     <button class="pm-modal-tab active" data-tab="today" type="button">📅 Today</button>
+     <button class="pm-modal-tab" data-tab="old" type="button">📊 Old Data</button>
+   </div>
+
+   <div class="pm-modal-page" data-page="today">
     <div class="pm-last-updated-row">
       <span id="tennisStatsLastUpdated"></span>
       <button class="btn-link" id="tennisStatsRefreshBtn" type="button">🔄 Check Results</button>
@@ -284,6 +413,123 @@
         <div id="tennisStatsMatchupBody"></div>
       </div>
     </div>
+   </div>
+
+   <div class="pm-modal-page" data-page="old" style="display:none;">
+    <div class="box" id="tennisBackfillBox">
+      <div class="box-label">🕰️ Historical Backfill</div>
+      <div class="mode-desc">Pull already-played tennis matches straight from Polymarket's own historical markets, instead of waiting for the live tracker to build a track record one match at a time. Old Data keeps growing forever &mdash; this just seeds it. The tournament's city is auto-detected from the match's own event title, same as adding a new City/Region by hand.</div>
+      <button class="btn-link" id="tennisBackfillBtn" type="button">🔄 Backfill Data</button>
+      <div class="mode-desc" id="tennisBackfillStatus"></div>
+    </div>
+
+    <div class="pm-last-updated-row">
+      <span id="tennisStatsLastUpdatedOld"></span>
+      <button class="btn-link" id="tennisStatsRefreshBtnOld" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="tennisStatsHeroOld"></div>
+
+    <div class="breakdown-section" id="tennisStatsBreakdownOld"></div>
+
+    <div class="box stats-sport-box">
+      <div class="box-label">📊 Show Breakdown</div>
+      <select id="tennisBreakdownToggleOld">
+        <option value="tennisStatsEdgeTiersBoxOld">Win Rate by Edge Strength</option>
+        <option value="tennisStatsPriceBucketsBoxOld">Win Rate by Market Price</option>
+        <option value="tennisUniversalDayBoxOld">Win Rate by Universal Day</option>
+        <option value="tennisDayEnergyBoxOld">Win Rate by Day Energy</option>
+        <option value="tennisDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
+        <option value="tennisDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+      </select>
+    </div>
+
+    <div class="box" id="tennisStatsEdgeTiersBoxOld">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsEdgeTiersTableOld">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsEdgeTiersOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="tennisStatsPriceBucketsBoxOld">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsPriceBucketsTableOld">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsPriceBucketsOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="tennisUniversalDayBoxOld">
+      <div class="box-label">Win Rate by Universal Day</div>
+      <div class="mode-desc">The match date's own life path (full date reduced), independent of either player's own numerology &mdash; some days simply run hotter or colder for the edge than others.</div>
+      <div class="pm-table-scroll" id="tennisUniversalDayOld"></div>
+    </div>
+
+    <div class="box" id="tennisDayEnergyBoxOld">
+      <div class="box-label">Win Rate by Day Energy</div>
+      <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+      <div class="pm-table-scroll" id="tennisDayEnergyOld"></div>
+    </div>
+
+    <div class="box" id="tennisDayComboBoxOld">
+      <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+      <div class="mode-desc">Crosses the two instead of testing them one at a time &mdash; the actual best energy combo to bet on. Only combos that have actually come up are listed.</div>
+      <div class="pm-table-scroll" id="tennisDayComboOld"></div>
+    </div>
+
+    <div class="box" id="tennisDimensionEdgeBoxOld">
+      <div class="box-label">Which Compatibility Dimension Predicts Best</div>
+      <div class="mode-desc">The player score is a blend of date anchors (birth vs. <b>match day</b>, <b>venue</b>, <b>city/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone &mdash; a positive <b>Edge</b> means it beats the market, ~0 or negative means it&rsquo;s dead weight. &#127919; Full Score is the current blend. Fills in as tracked matches resolve.</div>
+      <div class="pm-table-scroll" id="tennisDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="tennisStatsTableBoxOld">
+      <div class="box-label">Tracked Matches &mdash; Old Data</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="tennisStatsTableOld">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="tennisStatsTableBodyOld"></tbody>
+        </table>
+      </div>
+      <div class="pm-table-pagination" id="tennisStatsTablePaginationOld"></div>
+    </div>
+
+    <div class="modal-overlay" id="tennisStatsMatchupOverlayOld">
+      <div class="modal-box">
+        <button class="modal-close" id="tennisStatsMatchupCloseOld" title="Close">&times;</button>
+        <div id="tennisStatsMatchupBodyOld"></div>
+      </div>
+    </div>
+   </div>
   </div>
 
   <div id="statsMlbSection" style="display:none;">

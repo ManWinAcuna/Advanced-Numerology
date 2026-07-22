@@ -2,6 +2,8 @@ const MARKETS_URL = 'https://gamma-api.polymarket.com/markets';
 
 // Kept around so the matchup popup can look a clicked row's full prediction
 // back up by conditionId without re-reading localStorage on every click.
+// Shared across the Today/Old scopes - conditionIds are unique across the
+// whole set either way.
 let currentPredictions = [];
 
 // The /markets endpoint defaults to closed=false (still-open markets only)
@@ -106,8 +108,12 @@ function computeStats(predictions) {
   };
 }
 
-function renderHero(stats) {
-  const hero = document.getElementById('statsHero');
+// suffix is '' for the Today scope's DOM ids, 'Old' for Old Data's - both
+// scopes render through the exact same functions against a pre-filtered
+// subset of the same underlying predictions array, same convention MLB's
+// Stats page already established.
+function renderHero(stats, suffix = '') {
+  const hero = document.getElementById('statsHero' + suffix);
 
   if (stats.total === 0) {
     hero.innerHTML = `
@@ -150,8 +156,8 @@ function meterRow(label, pct, count, wins) {
   `;
 }
 
-function renderBreakdown(stats) {
-  document.getElementById('statsBreakdown').innerHTML = `
+function renderBreakdown(stats, suffix = '') {
+  document.getElementById('statsBreakdown' + suffix).innerHTML = `
     ${meterRow('✅ When numerology agreed with the favorite', stats.favoriteWinPct, stats.favoriteCount, stats.favoriteWinsCount)}
     ${meterRow('⚡ When numerology picked the underdog', stats.underdogWinPct, stats.underdogCount, stats.underdogWinsCount)}
   `;
@@ -161,10 +167,10 @@ function renderBreakdown(stats) {
 // win rate should climb as the score gap widens - and the tossup row
 // should sit near 50%, which is its own sanity check. computeEdgeTierStats
 // lives in db-core.js, shared with stats-tennis.js.
-function renderEdgeTiers(predictions) {
+function renderEdgeTiers(predictions, suffix = '') {
   const tiers = computeEdgeTierStats(predictions);
   const total = tiers.reduce((s, t) => s + t.count, 0);
-  document.getElementById('statsEdgeTiers').innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
+  document.getElementById('statsEdgeTiers' + suffix).innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
@@ -179,10 +185,10 @@ function renderEdgeTiers(predictions) {
 // idea, bucketed by the actual market price of the pick instead of just
 // which side of the line it fell on. Feeds the Polymarket tracker's risk
 // manager, which looks up the bucket for a live fight's price here.
-function renderPriceBuckets(predictions) {
+function renderPriceBuckets(predictions, suffix = '') {
   const buckets = computeBucketStats(predictions);
   const total = buckets.reduce((s, b) => s + b.count, 0);
-  document.getElementById('statsPriceBuckets').innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
+  document.getElementById('statsPriceBuckets' + suffix).innerHTML = pmTableTotalRow(total, 3) + buckets.map((b) => `
     <tr>
       <td>${b.label}</td>
       <td>${b.count}</td>
@@ -211,16 +217,16 @@ function edgeCell(p) {
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
 
-function renderTable(predictions) {
-  const tbody = document.getElementById('statsTableBody');
+function renderTable(predictions, suffix = '') {
+  const tbody = document.getElementById('statsTableBody' + suffix);
   if (!predictions.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No fights tracked yet.</td></tr>';
-    renderPaginationControls('statsTablePagination', 'statsTable', 1, 1);
+    renderPaginationControls('statsTablePagination' + suffix, 'statsTable' + suffix, 1, 1);
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.fightTime) - new Date(a.fightTime));
-  const { rows, page, totalPages } = paginationSlice('statsTable', sorted);
+  const { rows, page, totalPages } = paginationSlice('statsTable' + suffix, sorted);
   tbody.innerHTML = rows.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatFightDate(p.fightTime)}</td>
@@ -231,7 +237,7 @@ function renderTable(predictions) {
       <td>${resultBadge(p)}</td>
     </tr>
   `).join('');
-  renderPaginationControls('statsTablePagination', 'statsTable', page, totalPages, () => renderTable(predictions));
+  renderPaginationControls('statsTablePagination' + suffix, 'statsTable' + suffix, page, totalPages, () => renderTable(predictions, suffix));
 }
 
 function formatOdds(price) {
@@ -248,9 +254,11 @@ function ufcParseDateInput(value) {
 
 // Mirrors buildAllFighters()/matchFighter() in polymarket-ufc.js - the stored
 // prediction only ever kept the fighter's NAME, not their DOB, so the Insight
-// tab has to re-match it against the current roster the same way the live
-// tracker does. If a fighter was since renamed or removed, the match simply
-// comes back null and the Insight tab says so instead of guessing.
+// tab (and the backfill, which discovers fighters purely by name from
+// Polymarket) has to match against the current roster the same way the live
+// tracker does. If a fighter was since renamed or removed (or was never
+// added), the match simply comes back null and the caller skips rather than
+// guessing.
 function buildAllFighters() {
   const overrides = loadFighterOverrides();
   const custom = loadCustomFighters();
@@ -314,9 +322,9 @@ function insightTabHtml(p) {
   `;
 }
 
-// Everything shown here was already captured on the Polymarket tracker the
-// moment the fight's edge was first displayed (recordPredictionIfNew in
-// polymarket-ufc.js) - this just replays it, it's not fetched fresh.
+// Everything shown here was already captured either live (recordPredictionIfNew
+// in polymarket-ufc.js) or by the backfill below the moment the fight's edge
+// was first computed - this just replays it, it's not fetched fresh.
 function matchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
@@ -357,65 +365,273 @@ function matchupModalHtml(p) {
   return hero + modalTabsHtml(breakdown, insightTabHtml(p));
 }
 
-function initMatchupModal() {
-  document.getElementById('statsTableBody').addEventListener('click', (e) => {
+function initMatchupModal(suffix = '') {
+  document.getElementById('statsTableBody' + suffix).addEventListener('click', (e) => {
     const row = e.target.closest('tr[data-condition-id]');
     if (!row) return;
     const p = currentPredictions.find((x) => x.conditionId === row.dataset.conditionId);
     if (!p) return;
-    document.getElementById('statsMatchupBody').innerHTML = matchupModalHtml(p);
-    document.getElementById('statsMatchupOverlay').classList.add('active');
+    document.getElementById('statsMatchupBody' + suffix).innerHTML = matchupModalHtml(p);
+    document.getElementById('statsMatchupOverlay' + suffix).classList.add('active');
   });
 
-  document.getElementById('statsMatchupClose').addEventListener('click', () => {
-    document.getElementById('statsMatchupOverlay').classList.remove('active');
+  document.getElementById('statsMatchupClose' + suffix).addEventListener('click', () => {
+    document.getElementById('statsMatchupOverlay' + suffix).classList.remove('active');
   });
-  document.getElementById('statsMatchupOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'statsMatchupOverlay') document.getElementById('statsMatchupOverlay').classList.remove('active');
+  document.getElementById('statsMatchupOverlay' + suffix).addEventListener('click', (e) => {
+    if (e.target.id === 'statsMatchupOverlay' + suffix) document.getElementById('statsMatchupOverlay' + suffix).classList.remove('active');
   });
-  initModalTabSwitcher('statsMatchupBody');
+  initModalTabSwitcher('statsMatchupBody' + suffix);
 }
 
-// Renders every box from an already-loaded predictions array - no network
-// call, so the day filter (db-core.js) can re-run this on every change
-// without re-hitting Polymarket. refreshAndRender() is the only place that
-// actually re-fetches.
-function renderAll(predictions) {
-  const matchesDay = dayFilterPredicate('ufc');
-  const filtered = predictions.filter((p) => matchesDay(p.fightTime));
-  const stats = computeStats(filtered);
-  renderHero(stats);
-  renderBreakdown(stats);
-  renderEdgeTiers(filtered);
-  renderPriceBuckets(filtered);
-  renderDimensionEdgeTable('ufcDimensionEdge', filtered, (p) => [p.fighterAName, p.fighterBName]);
-  renderTable(filtered);
-  // Always the full unfiltered set, not `filtered` - this table's whole point is
-  // showing every day value side by side, which the day filter itself can't.
-  renderDayNumberTable('statsUniversalDay', predictions, 'fightTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
-  renderDayNumberTable('statsDayEnergy', predictions, 'fightTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
-  renderDayComboTable('statsDayCombo', predictions, 'fightTime');
+// Today/Old each keep their own day-filter state ('ufc' + suffix, see
+// db-core.js's dayFilterPredicate) since they're independent tabs a user
+// might want sliced differently. The day-number/day-combo tables always get
+// todayOrOldPredictions (scoped to the tab, not the day filter) - that's the
+// whole point of those tables, a side-by-side view the filter itself can't
+// give.
+function renderUfcScope(suffix, predictions) {
+  const isOld = suffix === 'Old';
+  const todayOrOldPredictions = predictions.filter((p) => isTodayLocal(p.fightTime) === !isOld);
+  const matchesDay = dayFilterPredicate('ufc' + suffix);
+  const scopedPredictions = todayOrOldPredictions.filter((p) => matchesDay(p.fightTime));
+
+  const stats = computeStats(scopedPredictions);
+  renderHero(stats, suffix);
+  renderBreakdown(stats, suffix);
+  renderEdgeTiers(scopedPredictions, suffix);
+  renderPriceBuckets(scopedPredictions, suffix);
+  renderDimensionEdgeTable('ufcDimensionEdge' + suffix, scopedPredictions, (p) => [p.fighterAName, p.fighterBName]);
+  renderTable(scopedPredictions, suffix);
+  renderDayNumberTable('statsUniversalDay' + suffix, todayOrOldPredictions, 'fightTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('statsDayEnergy' + suffix, todayOrOldPredictions, 'fightTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
+  renderDayComboTable('statsDayCombo' + suffix, todayOrOldPredictions, 'fightTime');
+  document.getElementById('statsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 }
 
-async function refreshAndRender() {
+async function refreshAndRenderUfc() {
   const predictions = await checkResults();
   currentPredictions = predictions;
-  renderAll(predictions);
-  document.getElementById('statsLastUpdated').textContent = `Last checked ${new Date().toLocaleTimeString()}`;
+  renderUfcScope('', predictions);
+  renderUfcScope('Old', predictions);
 }
 
-document.getElementById('statsRefreshBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('statsRefreshBtn');
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = '🔄 Checking…';
-  await refreshAndRender();
-  btn.textContent = original;
-  btn.disabled = false;
-});
+function wireUfcRefreshButton(btnId) {
+  document.getElementById(btnId).addEventListener('click', async () => {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '🔄 Checking…';
+    await refreshAndRenderUfc();
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
+
+/* ===================== Historical backfill (UFC) ===================== */
+// Mirrors MLB's backfill (stats-mlb.js) in spirit, adapted to what's actually
+// available for UFC: there's no official league schedule API the way MLB has
+// one, so fights are discovered purely from Polymarket's own closed UFC
+// events. And unlike MLB (venue -> official region) or Tennis (tournament
+// city parsed straight from the event title), UFC has no reliable per-fight
+// venue/location source at all - the only mention of one is buried in a
+// loose AI-generated paragraph, not something worth trusting. Backfilled
+// fights are therefore scored on the Day anchor only (computeFighterScore's
+// now-optional stateDate, db-core.js) - narrower than a live-tracked pick
+// with a user-selected location, but real and clearly labeled as such,
+// rather than guessing a venue.
+
+const UFC_BACKFILL_STATE_KEY = 'numerology_ufc_backfill_state';
+// Deliberately local-only, no cloudPushKey - same lesson learned from MLB's
+// predictions key silently growing past Firestore's ~1MB cap and getting
+// wiped by a stale cloud pull (db-core.js's CLOUD_SYNC_FIELDS comment).
+
+function loadUfcBackfillState() {
+  try {
+    const raw = localStorage.getItem(UFC_BACKFILL_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveUfcBackfillState(state) {
+  localStorage.setItem(UFC_BACKFILL_STATE_KEY, JSON.stringify(state));
+}
+
+function ufcIsoDateOnlyUTC(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function ufcAddDaysISO(dateISO, days) {
+  const d = new Date(dateISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return ufcIsoDateOnlyUTC(d);
+}
+
+const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
+const UFC_BACKFILL_SCHEMA = 1;
+const UFC_BACKFILL_CHUNK = 5;
+// Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
+// itself (confirmed live) - start_date_min/max below filters by that LISTING
+// date, not the fight date, so the server-side window is padded wider than
+// the real target range and every result is re-checked precisely afterward
+// against the event's own eventDate (the actual scheduled fight date).
+const UFC_BACKFILL_LISTING_PAD_DAYS = 35;
+
+async function fetchClosedUfcEventsInWindow(startISO, endISO) {
+  const paddedMin = ufcAddDaysISO(startISO, -UFC_BACKFILL_LISTING_PAD_DAYS);
+  const limit = 100;
+  let offset = 0;
+  const events = [];
+  for (;;) {
+    let page;
+    try {
+      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=ufc&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}`);
+      if (!res.ok) break;
+      page = await res.json();
+    } catch (e) {
+      break;
+    }
+    if (!Array.isArray(page) || !page.length) break;
+    events.push(...page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+  return events.filter((e) => e.eventDate && e.eventDate >= startISO && e.eventDate <= endISO);
+}
+
+// One event -> one stored prediction (or null if anything needed to score it
+// honestly is missing - never guessed). existingByConditionId both dedups
+// against already-tracked fights and guards against re-processing the same
+// fight twice within one backfill run.
+async function processUfcBackfillEvent(event, existingByConditionId) {
+  const m = (event.markets || []).find((mk) => mk.sportsMarketType === 'moneyline');
+  if (!m || !m.closed) return null;
+  if (existingByConditionId.has(m.conditionId)) return null;
+
+  let outcomes = [];
+  let clobTokenIds = [];
+  try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
+  try { clobTokenIds = JSON.parse(m.clobTokenIds); } catch (e) { /* leave empty */ }
+  if (!outcomes[0] || !outcomes[1] || clobTokenIds.length < 2) return null;
+
+  const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
+  if (!gameStartTime) return null;
+
+  const roster = buildAllFighters();
+  const matchedA = matchFighter(outcomes[0], roster);
+  const matchedB = matchFighter(outcomes[1], roster);
+  if (!matchedA || !matchedB) return null; // not in the fighter database - skip, don't guess
+
+  const result = determineResult(m);
+
+  const targetTs = Math.floor(gameStartTime.getTime() / 1000);
+  const [priceA, priceB] = await Promise.all([
+    fetchClobPriceNear(clobTokenIds[0], targetTs),
+    fetchClobPriceNear(clobTokenIds[1], targetTs),
+  ]);
+  if (priceA == null || priceB == null) return null; // no pregame price data - don't guess
+
+  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), gameStartTime, null, null);
+  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), gameStartTime, null, null);
+
+  const favA = priceA >= priceB;
+  const marketFavName = favA ? outcomes[0] : outcomes[1];
+  const numFavName = scoreA.combined >= scoreB.combined ? outcomes[0] : outcomes[1];
+  const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+
+  return {
+    conditionId: m.conditionId,
+    fighterAName: outcomes[0],
+    fighterBName: outcomes[1],
+    numerologyFavorite: numFavName,
+    numerologyScoreA: scoreA.combined,
+    numerologyScoreB: scoreB.combined,
+    dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
+    marketFavorite: marketFavName,
+    marketPriceA: priceA,
+    marketPriceB: priceB,
+    pickType: agree ? 'favorite' : 'underdog',
+    eventTitle: event.title,
+    fightTime: gameStartTime.toISOString(),
+    recordedAt: Date.now(),
+    result,
+  };
+}
+
+async function backfillUfcHistory(onProgress) {
+  const todayISO = ufcIsoDateOnlyUTC(new Date());
+  const state = loadUfcBackfillState();
+  const schemaCurrent = state && state.schemaVersion === UFC_BACKFILL_SCHEMA;
+  const startISO = (schemaCurrent && state.throughDateISO)
+    ? ufcAddDaysISO(state.throughDateISO, 1)
+    : ufcAddDaysISO(todayISO, -UFC_BACKFILL_LOOKBACK_DAYS);
+  const endISO = ufcAddDaysISO(todayISO, -1);
+
+  if (startISO > endISO) return { eventsProcessed: 0, newPredictionsCount: 0, alreadyCurrent: true };
+
+  const events = await fetchClosedUfcEventsInWindow(startISO, endISO);
+  const existing = loadUfcPredictions();
+  const existingByConditionId = new Map(existing.filter((p) => p.conditionId).map((p) => [p.conditionId, p]));
+
+  const newPredictions = [];
+  const total = events.length;
+  let processed = 0;
+
+  for (let i = 0; i < events.length; i += UFC_BACKFILL_CHUNK) {
+    const chunk = events.slice(i, i + UFC_BACKFILL_CHUNK);
+    const results = await Promise.all(chunk.map((ev) => processUfcBackfillEvent(ev, existingByConditionId)));
+    results.forEach((rec) => {
+      if (!rec) return;
+      newPredictions.push(rec);
+      existingByConditionId.set(rec.conditionId, rec);
+    });
+    processed += chunk.length;
+    if (onProgress) onProgress(processed, total);
+  }
+
+  if (newPredictions.length) saveUfcPredictions([...existing, ...newPredictions]);
+  saveUfcBackfillState({ throughDateISO: endISO, schemaVersion: UFC_BACKFILL_SCHEMA });
+
+  return { eventsProcessed: total, newPredictionsCount: newPredictions.length, alreadyCurrent: false };
+}
+
+function initUfcBackfillButton() {
+  document.getElementById('ufcBackfillBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('ufcBackfillBtn');
+    const status = document.getElementById('ufcBackfillStatus');
+    btn.disabled = true;
+    const original = btn.textContent;
+    status.textContent = 'Starting…';
+    try {
+      const result = await backfillUfcHistory((processed, total) => {
+        status.textContent = `Backfilling… ${processed}/${total} fight cards`;
+      });
+      status.textContent = result.alreadyCurrent
+        ? 'Already caught up to yesterday - nothing new to backfill.'
+        : `Done - checked ${result.eventsProcessed} fight cards, added ${result.newPredictionsCount} fights.`;
+      await refreshAndRenderUfc();
+    } catch (e) {
+      status.textContent = 'Something went wrong during backfill - try again.';
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
 
 document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
-initDayFilter('ufc', () => { resetPagination('statsTable'); renderAll(currentPredictions); });
+document.getElementById('statsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('ufcOld'));
+initDayFilter('ufc', () => { resetPagination('statsTable'); renderUfcScope('', currentPredictions); });
+initDayFilter('ufcOld', () => { resetPagination('statsTableOld'); renderUfcScope('Old', currentPredictions); });
+
 initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'statsDayComboBox', 'ufcDimensionEdgeBox']);
-initMatchupModal();
-refreshAndRender();
+initBreakdownToggle('statsBreakdownToggleOld', ['statsEdgeTiersBoxOld', 'statsPriceBucketsBoxOld', 'statsUniversalDayBoxOld', 'statsDayEnergyBoxOld', 'statsDayComboBoxOld', 'ufcDimensionEdgeBoxOld']);
+
+wireUfcRefreshButton('statsRefreshBtn');
+wireUfcRefreshButton('statsRefreshBtnOld');
+initMatchupModal('');
+initMatchupModal('Old');
+initModalTabSwitcher('statsUfcSection');
+initUfcBackfillButton();
+refreshAndRenderUfc();
