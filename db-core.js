@@ -1918,6 +1918,73 @@ function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, h
   el.innerHTML = `<table class="astro-table"><thead><tr><th>${escapeHtml(headerLabel)}</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
+/* ===================== Pagination (Stats page tracked-picks tables) ===================== */
+// MLB's Old Data table in particular can run into the hundreds of rows once
+// backfilled - keyed by prefix so UFC/Tennis/MLB Today/MLB Old each keep
+// their own page independently, same pattern as the day filter's state.
+const PAGINATION_PAGE_SIZE = 25;
+const _paginationState = new Map();
+
+function resetPagination(prefix) {
+  _paginationState.set(prefix, 1);
+}
+
+// sortedRows must already be in final display order. Clamps the stored page
+// back into range (e.g. after the day filter shrinks the set) rather than
+// leaving the view stuck on a page that no longer exists.
+function paginationSlice(prefix, sortedRows) {
+  const total = sortedRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGINATION_PAGE_SIZE));
+  let page = _paginationState.get(prefix) || 1;
+  if (page > totalPages) page = totalPages;
+  if (page < 1) page = 1;
+  _paginationState.set(prefix, page);
+  const start = (page - 1) * PAGINATION_PAGE_SIZE;
+  return { rows: sortedRows.slice(start, start + PAGINATION_PAGE_SIZE), page, totalPages, total };
+}
+
+// Rebuilds the Prev/Next controls fresh on every call (cheap, and means no
+// separate one-time wiring step) - hidden entirely once everything fits on
+// one page. onChange re-renders the same table from its already-loaded data,
+// never re-fetching or re-filtering.
+function renderPaginationControls(elId, prefix, page, totalPages, onChange) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button type="button" class="btn-link" id="${prefix}PagePrev"${page <= 1 ? ' disabled' : ''}>&larr; Prev</button>
+    <span>Page ${page} of ${totalPages}</span>
+    <button type="button" class="btn-link" id="${prefix}PageNext"${page >= totalPages ? ' disabled' : ''}>Next &rarr;</button>
+  `;
+  document.getElementById(`${prefix}PagePrev`).addEventListener('click', () => {
+    _paginationState.set(prefix, Math.max(1, page - 1));
+    onChange();
+  });
+  document.getElementById(`${prefix}PageNext`).addEventListener('click', () => {
+    _paginationState.set(prefix, Math.min(totalPages, page + 1));
+    onChange();
+  });
+}
+
+/* ===================== Breakdown box toggle (Stats page) ===================== */
+// Edge Strength / Market Price / Universal Day / Day Energy / Dimension (and
+// MLB's Component) breakdowns stacked on top of each other read as clutter -
+// this collapses them to one dropdown that shows exactly one box at a time.
+// Pure show/hide over markup that already renders normally; doesn't touch
+// how any of those boxes compute or render their own contents.
+function initBreakdownToggle(selectId, boxIds) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  function sync() {
+    boxIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = (id === sel.value) ? '' : 'none';
+    });
+  }
+  sel.addEventListener('change', sync);
+  sync();
+}
+
 /* ===================== Cloud sync (Firebase) ===================== */
 // Signing in is optional - the app works purely on localStorage either way.
 // When signed in, every save also pushes to Firestore under the user's own

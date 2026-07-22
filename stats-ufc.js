@@ -213,11 +213,13 @@ function renderTable(predictions) {
   const tbody = document.getElementById('statsTableBody');
   if (!predictions.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No fights tracked yet.</td></tr>';
+    renderPaginationControls('statsTablePagination', 'statsTable', 1, 1);
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.fightTime) - new Date(a.fightTime));
-  tbody.innerHTML = sorted.map((p) => `
+  const { rows, page, totalPages } = paginationSlice('statsTable', sorted);
+  tbody.innerHTML = rows.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatFightDate(p.fightTime)}</td>
       <td>${escapeHtml(p.fighterAName)} vs ${escapeHtml(p.fighterBName)}</td>
@@ -227,6 +229,7 @@ function renderTable(predictions) {
       <td>${resultBadge(p)}</td>
     </tr>
   `).join('');
+  renderPaginationControls('statsTablePagination', 'statsTable', page, totalPages, () => renderTable(predictions));
 }
 
 function formatOdds(price) {
@@ -409,6 +412,7 @@ document.getElementById('statsRefreshBtn').addEventListener('click', async () =>
 });
 
 document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
-initDayFilter('ufc', () => renderAll(currentPredictions));
+initDayFilter('ufc', () => { resetPagination('statsTable'); renderAll(currentPredictions); });
+initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'ufcDimensionEdgeBox']);
 initMatchupModal();
 refreshAndRender();

@@ -201,16 +201,22 @@ function mlbPendingRowHtml(g) {
   `;
 }
 
+// Pending rows (today's slate with no full score yet) always show in full,
+// unpaginated - there are only ever a handful, and they're never in
+// `predictions` to begin with. Only the resolved/tracked predictions below
+// them get paginated.
 function renderMlbTable(predictions, suffix = '', pendingGames = []) {
   const tbody = document.getElementById('mlbStatsTableBody' + suffix);
   const pendingHtml = pendingGames.map(mlbPendingRowHtml).join('');
   if (!predictions.length && !pendingHtml) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No games tracked yet.</td></tr>';
+    renderPaginationControls('mlbStatsTablePagination' + suffix, 'mlbStatsTable' + suffix, 1, 1);
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
-  tbody.innerHTML = pendingHtml + sorted.map((p) => `
+  const { rows, page, totalPages } = paginationSlice('mlbStatsTable' + suffix, sorted);
+  tbody.innerHTML = pendingHtml + rows.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatMlbGameDate(p.gameTime)}</td>
       <td>${escapeHtml(p.teamAName)} vs ${escapeHtml(p.teamBName)}</td>
@@ -220,6 +226,7 @@ function renderMlbTable(predictions, suffix = '', pendingGames = []) {
       <td>${mlbResultBadge(p)}</td>
     </tr>
   `).join('');
+  renderPaginationControls('mlbStatsTablePagination' + suffix, 'mlbStatsTable' + suffix, page, totalPages, () => renderMlbTable(predictions, suffix, pendingGames));
 }
 
 function formatMlbOdds(price) {
@@ -1452,8 +1459,11 @@ function initMlbBackfillButton() {
 
 document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
 document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
-initDayFilter('mlb', () => renderMlbScope('', currentMlbPredictions, currentMlbKSignals));
-initDayFilter('mlbOld', () => renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals));
+initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
+initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
+
+initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
+initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
 
 initMlbMatchupModal('');
 initMlbMatchupModal('Old');

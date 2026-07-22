@@ -193,11 +193,13 @@ function renderTennisTable(predictions) {
   const tbody = document.getElementById('tennisStatsTableBody');
   if (!predictions.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No matches tracked yet.</td></tr>';
+    renderPaginationControls('tennisStatsTablePagination', 'tennisStatsTable', 1, 1);
     return;
   }
 
   const sorted = [...predictions].sort((a, b) => new Date(b.matchTime) - new Date(a.matchTime));
-  tbody.innerHTML = sorted.map((p) => `
+  const { rows, page, totalPages } = paginationSlice('tennisStatsTable', sorted);
+  tbody.innerHTML = rows.map((p) => `
     <tr data-condition-id="${p.conditionId}">
       <td>${formatTennisMatchDate(p.matchTime)}</td>
       <td>${escapeHtml(p.playerAName)} vs ${escapeHtml(p.playerBName)}</td>
@@ -207,6 +209,7 @@ function renderTennisTable(predictions) {
       <td>${tennisResultBadge(p)}</td>
     </tr>
   `).join('');
+  renderPaginationControls('tennisStatsTablePagination', 'tennisStatsTable', page, totalPages, () => renderTennisTable(predictions));
 }
 
 function formatTennisOdds(price) {
@@ -387,6 +390,7 @@ document.getElementById('tennisStatsRefreshBtn').addEventListener('click', async
 });
 
 document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
-initDayFilter('tennis', () => renderTennisAll(currentTennisPredictions));
+initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisAll(currentTennisPredictions); });
+initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDimensionEdgeBox']);
 initTennisMatchupModal();
 refreshTennisAndRender();
