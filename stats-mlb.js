@@ -482,7 +482,8 @@ function renderMlbKSignalPanel(signals, suffix = '') {
   ` : '';
 
   const sorted = [...signals].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
-  const rows = sorted.map((s) => {
+  const { rows: pageSignals, page, totalPages } = paginationSlice('mlbKSignal' + suffix, sorted);
+  const rows = pageSignals.map((s) => {
     const dirLabel = s.predictedDirection === 'neutral' ? '➖ Neutral' : (() => {
       const tier = mlbKSignalTier(s.dayScore);
       return `${tier.icon} ${tier.label}`;
@@ -516,7 +517,9 @@ function renderMlbKSignalPanel(signals, suffix = '') {
         <tbody>${rows || '<tr><td colspan="4" class="empty-state">No starts tracked yet.</td></tr>'}</tbody>
       </table>
     </div>
+    <div class="pm-table-pagination" id="mlbKSignalPagination${suffix}"></div>
   `;
+  renderPaginationControls('mlbKSignalPagination' + suffix, 'mlbKSignal' + suffix, page, totalPages, () => renderMlbKSignalPanel(signals, suffix));
 }
 
 // The K-signal record only ever stored the pitcher's own day score and
@@ -1480,8 +1483,8 @@ function initMlbBackfillButton() {
 
 document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
 document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
-initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
-initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
+initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
+initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
 
 initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
 initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
