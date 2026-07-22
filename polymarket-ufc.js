@@ -1119,6 +1119,16 @@ async function pollTrades() {
   const results = await Promise.all(cardFights.map((f) => fetchTrades(f.conditionId)));
   cardFights.forEach((f, i) => tradesCache.set(f.conditionId, results[i]));
   renderTradeFeeds();
+
+  // A timezone lookup can fail on a transient network hiccup and then just
+  // sit there - ensureIntlRegionTimezone only re-attempts when something
+  // calls it again, and otherwise the next attempt wouldn't come until the
+  // full 5-minute loadEventsAndRender cycle. Retrying here piggybacks on the
+  // already-frequent trade poll instead, so a stuck "waiting to confirm this
+  // region's timezone" message clears within ~20s instead of up to 5 minutes.
+  if (regionMode === 'intl' && selectedRegion && !selectedRegion.timezone) {
+    ensureIntlRegionTimezone(selectedRegion, () => updateNumerologyBlocks());
+  }
 }
 
 async function loadEventsAndRender() {

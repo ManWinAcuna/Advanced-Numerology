@@ -1062,6 +1062,16 @@ async function pollTrades() {
   const results = await Promise.all(allMatches.map((m) => fetchTrades(m.conditionId)));
   allMatches.forEach((m, i) => tradesCache.set(m.conditionId, results[i]));
   renderTradeFeeds();
+
+  // Same reasoning as UFC's pollTrades: a timezone lookup that failed on a
+  // transient hiccup otherwise wouldn't retry until the 5-minute event
+  // refresh. Piggyback on this 20s poll instead so it clears sooner, for
+  // every tournament currently on screen (not just one shared region).
+  tournamentState.forEach((st, key) => {
+    if (st.regionMode === 'intl' && st.selectedRegion && !st.selectedRegion.timezone) {
+      ensureIntlRegionTimezone(st.selectedRegion, () => updateTournamentMatches(key));
+    }
+  });
 }
 
 async function loadEventsAndRender() {
