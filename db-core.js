@@ -1872,6 +1872,52 @@ function computeBucketStats(predictions, minGap = REAL_EDGE_MIN_GAP) {
   });
 }
 
+/* ===================== Win rate by day number (Stats page) ===================== */
+// Answers "does the day matter" directly: buckets every resolved real-edge
+// pick by the match date's own Universal Day or Day Energy (the same two
+// reductions the day filter above slices by) and shows every value's win
+// rate side by side, instead of flipping the filter through one value at a
+// time. Always computed off every tracked pick regardless of the day
+// filter's current setting - that's the point, it's the side-by-side
+// comparison the filter itself can't show on its own.
+function computeDayNumberStats(predictions, dateField, reduceFn, options, minGap = REAL_EDGE_MIN_GAP) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && p[dateField] && hasRealEdge(p, minGap));
+  return options.map((value) => {
+    const inGroup = resolved.filter((p) => {
+      const d = new Date(p[dateField]);
+      return !isNaN(d) && reduceFn(d) === value;
+    });
+    const wins = inGroup.filter(isCorrectPick);
+    return {
+      value,
+      count: inGroup.length,
+      wins: wins.length,
+      winPct: inGroup.length ? Math.round((wins.length / inGroup.length) * 100) : null,
+    };
+  }).sort((a, b) => (b.winPct == null ? -Infinity : b.winPct) - (a.winPct == null ? -Infinity : a.winPct));
+}
+
+function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, headerLabel, minGap) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = computeDayNumberStats(predictions, dateField, reduceFn, options, minGap);
+  const maxCount = rows.reduce((m, r) => Math.max(m, r.count), 0);
+  if (!maxCount) {
+    el.innerHTML = '<div class="empty-state">No resolved real-edge picks yet — this fills in as tracked picks resolve.</div>';
+    return;
+  }
+  const body = rows.map((r) => `
+    <tr>
+      <td>${r.value}</td>
+      <td>${r.count}</td>
+      <td>${r.winPct != null && r.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${scoreClass(r.winPct)}">${r.winPct}%</span>`
+        : `<span class="empty-state">${r.count ? `${r.wins}/${r.count} so far` : 'No data yet'}</span>`}</td>
+    </tr>
+  `).join('');
+  el.innerHTML = `<table class="astro-table"><thead><tr><th>${escapeHtml(headerLabel)}</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
 /* ===================== Cloud sync (Firebase) ===================== */
 // Signing in is optional - the app works purely on localStorage either way.
 // When signed in, every save also pushes to Firestore under the user's own

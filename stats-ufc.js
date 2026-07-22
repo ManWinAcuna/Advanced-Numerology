@@ -385,6 +385,10 @@ function renderAll(predictions) {
   renderPriceBuckets(filtered);
   renderDimensionEdgeTable('ufcDimensionEdge', filtered, (p) => [p.fighterAName, p.fighterBName]);
   renderTable(filtered);
+  // Always the full unfiltered set, not `filtered` - this table's whole point is
+  // showing every day value side by side, which the day filter itself can't.
+  renderDayNumberTable('statsUniversalDay', predictions, 'fightTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('statsDayEnergy', predictions, 'fightTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
 }
 
 async function refreshAndRender() {

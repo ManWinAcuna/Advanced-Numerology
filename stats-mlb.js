@@ -739,13 +739,19 @@ function renderMlbComponentSignal(predictions, suffix = '') {
 // might want sliced differently.
 function renderMlbScope(suffix, predictions, signals) {
   const isOld = suffix === 'Old';
+  const todayOrOldPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
   const matchesDay = dayFilterPredicate('mlb' + suffix);
-  const scopedPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
+  const scopedPredictions = todayOrOldPredictions.filter((p) => matchesDay(p.gameTime));
   const stats = computeMlbStats(scopedPredictions);
   renderMlbHero(stats, suffix);
   renderMlbBreakdown(stats, suffix);
   renderMlbEdgeTiers(scopedPredictions, suffix);
   renderMlbPriceBuckets(scopedPredictions, suffix);
+  // Always todayOrOldPredictions, not scopedPredictions - this table's whole
+  // point is showing every day value side by side, which the day filter
+  // itself can't (it stays scoped to the Today/Old tab, just not the filter).
+  renderDayNumberTable('mlbUniversalDay' + suffix, todayOrOldPredictions, 'gameTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_REAL_EDGE_MIN_GAP);
+  renderDayNumberTable('mlbDayEnergy' + suffix, todayOrOldPredictions, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_REAL_EDGE_MIN_GAP);
   renderMlbComponentSignal(scopedPredictions, suffix);
   renderDimensionEdgeTable('mlbDimensionEdge' + suffix, scopedPredictions, (p) => [p.teamAName, p.teamBName]);
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);

@@ -363,6 +363,10 @@ function renderTennisAll(predictions) {
   renderTennisPriceBuckets(filtered);
   renderDimensionEdgeTable('tennisDimensionEdge', filtered, (p) => [p.playerAName, p.playerBName]);
   renderTennisTable(filtered);
+  // Always the full unfiltered set, not `filtered` - this table's whole point is
+  // showing every day value side by side, which the day filter itself can't.
+  renderDayNumberTable('tennisUniversalDay', predictions, 'matchTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('tennisDayEnergy', predictions, 'matchTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
 }
 
 async function refreshTennisAndRender() {
