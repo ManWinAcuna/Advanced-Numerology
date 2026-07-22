@@ -1612,8 +1612,26 @@ function dayFilterHtml(prefix) {
           ${dayFilterNumberOptionsHtml(DAY_FILTER_ENERGY_OPTIONS)}
         </select>
       </div>
+      <div class="pm-day-filter-status" id="${prefix}DayFilterStatus"></div>
     </div>
   `;
+}
+
+// A filtered hero/table can look like a bug ("where did all my picks go?")
+// if there's nothing on screen saying a filter is even active - this makes
+// the current filter state impossible to miss, right where it's set.
+function dayFilterStatusText(state) {
+  if (!state || state.mode === 'all') return 'Showing all picks (filter off)';
+  if (state.mode === 'exact') return state.exact ? `Showing only ${isoToDisplay(state.exact)}` : 'Pick a date above to filter';
+  if (state.mode === 'universal') return state.universal != null ? `Showing only Universal Day ${state.universal}` : 'Pick a Universal Day above to filter';
+  if (state.mode === 'energy') return state.energy != null ? `Showing only Day Energy ${state.energy}` : 'Pick a Day Energy above to filter';
+  if (state.mode === 'both') {
+    const parts = [];
+    if (state.universal != null) parts.push(`Universal Day ${state.universal}`);
+    if (state.energy != null) parts.push(`Day Energy ${state.energy}`);
+    return parts.length ? `Showing only ${parts.join(' + ')}` : 'Pick values above to filter';
+  }
+  return '';
 }
 
 // dateValue can be an ISO timestamp string or a Date - read in the browser's
@@ -1667,12 +1685,18 @@ function initDayFilter(prefix, onChange) {
     exactInput.style.display = mode === 'exact' ? '' : 'none';
     universalSel.style.display = (mode === 'universal' || mode === 'both') ? '' : 'none';
     energySel.style.display = (mode === 'energy' || mode === 'both') ? '' : 'none';
-    _dayFilterState.set(prefix, {
+    const state = {
       mode,
       exact: displayToISO(exactInput.value),
       universal: universalSel.value ? Number(universalSel.value) : null,
       energy: energySel.value ? Number(energySel.value) : null,
-    });
+    };
+    _dayFilterState.set(prefix, state);
+    const statusEl = document.getElementById(`${prefix}DayFilterStatus`);
+    if (statusEl) {
+      statusEl.textContent = dayFilterStatusText(state);
+      statusEl.classList.toggle('active', state.mode !== 'all');
+    }
   }
 
   modeSel.addEventListener('change', () => { sync(); onChange(); });

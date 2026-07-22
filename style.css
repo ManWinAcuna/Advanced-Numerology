@@ -1725,6 +1725,20 @@ body::after {
   font-size: 14px;
 }
 
+/* Always-visible reminder of the current filter state, right where it's set
+   - a filtered hero/table with nothing on screen saying so looks like a bug
+   ("where did all my picks go?") instead of a filter still being on. */
+.pm-day-filter-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pm-day-filter-status.active {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
 /* Pagination controls (renderPaginationControls in db-core.js) - injected
    under a tracked-picks table, empty/collapsed when everything fits on one
    page (MLB Old Data after a backfill is the one that usually needs it). */
