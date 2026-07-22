@@ -315,9 +315,19 @@ async function fetchMlbMoneylineEventForGame(awayAbbr, homeAbbr, officialDate) {
 // newest (confirmed live); returns null if the market has no history at all
 // (shouldn't happen for anything that actually traded) or if every point
 // comes after the target (the whole series started after the target time).
+//
+// interval=max does NOT mean "since market creation" the way it sounds -
+// confirmed live it silently returns an empty history for anything roughly
+// a month or older, even though the same market's data is still there and
+// fully queryable with explicit startTs/endTs. An MLB moneyline market is
+// only ever created a day or two before its game (never weeks out), so a
+// 7-day lookback is a generous, safe window that reliably covers the whole
+// pregame trading period regardless of how old the game itself is - this is
+// what makes backfilling further back than ~a month actually work at all.
 async function fetchClobPriceNear(clobTokenId, targetTimestampSec) {
   try {
-    const res = await fetch(`https://clob.polymarket.com/prices-history?market=${clobTokenId}&interval=max`);
+    const startTs = targetTimestampSec - 7 * 24 * 3600;
+    const res = await fetch(`https://clob.polymarket.com/prices-history?market=${clobTokenId}&startTs=${startTs}&endTs=${targetTimestampSec}`);
     if (!res.ok) return null;
     const data = await res.json();
     const history = Array.isArray(data.history) ? data.history : [];
