@@ -444,7 +444,15 @@ function tennisAddDaysISO(dateISO, days) {
 }
 
 const TENNIS_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB/UFC's window.
-const TENNIS_BACKFILL_SCHEMA = 1;
+// v2: the very first run added the missing order=eventDate to the event
+// query (fetchClosedTennisEventsInWindow) - without it the result set was
+// dominated by non-match meta-events sharing the same tag, so real match
+// events could sit unreached many pages deep and that first run finished
+// having added nothing, while still saving a "complete through yesterday"
+// marker. Same lesson as MLB/UFC's backfill schema bumps: a schema-current
+// marker only ever continues forward from its own throughDateISO, so the
+// fix alone can't retroactively re-walk a day already (wrongly) marked done.
+const TENNIS_BACKFILL_SCHEMA = 2;
 const TENNIS_BACKFILL_CHUNK = 5;
 // Polymarket lists a tennis event's markets shortly before the match itself
 // (confirmed live) - start_date_min/max below filters by that LISTING date,
@@ -469,7 +477,12 @@ async function fetchClosedTennisEventsInWindow(startISO, endISO) {
   for (;;) {
     let page;
     try {
-      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=tennis&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}`);
+      // order=eventDate is load-bearing, not cosmetic - without it, confirmed
+      // live (same issue as UFC's fetchClosedUfcEventsInWindow), the
+      // tag_slug=tennis result set is dominated by non-match meta-events, and
+      // a real match's own event can sit many pages deep behind them. Sorted
+      // by eventDate, the real per-match events surface directly.
+      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=tennis&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}&order=eventDate&ascending=false`);
       if (!res.ok) break;
       page = await res.json();
     } catch (e) {

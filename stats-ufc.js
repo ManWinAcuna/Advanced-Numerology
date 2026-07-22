@@ -470,7 +470,15 @@ function ufcAddDaysISO(dateISO, days) {
 }
 
 const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
-const UFC_BACKFILL_SCHEMA = 1;
+// v2: the very first run added the missing order=eventDate to the event
+// query (fetchClosedUfcEventsInWindow) - without it the result set was
+// dominated by parlay/prop meta-events sharing the same tag, so real fight
+// events could sit unreached many pages deep and that first run finished
+// having added nothing, while still saving a "complete through yesterday"
+// marker. Same lesson as MLB's backfill schema bumps: a schema-current
+// marker only ever continues forward from its own throughDateISO, so the
+// fix alone can't retroactively re-walk a day already (wrongly) marked done.
+const UFC_BACKFILL_SCHEMA = 2;
 const UFC_BACKFILL_CHUNK = 5;
 // Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
 // itself (confirmed live) - start_date_min/max below filters by that LISTING
@@ -487,7 +495,13 @@ async function fetchClosedUfcEventsInWindow(startISO, endISO) {
   for (;;) {
     let page;
     try {
-      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=ufc&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}`);
+      // order=eventDate is load-bearing, not cosmetic - without it, confirmed
+      // live, the tag_slug=ufc result set is dominated by parlay/method-of-
+      // victory/prop meta-events that share the same tag but aren't real
+      // fights, and a real fight card's own event can sit many pages deep
+      // behind them. Sorted by eventDate, the real per-fight events surface
+      // directly.
+      const res = await fetch(`https://gamma-api.polymarket.com/events?tag_slug=ufc&closed=true&limit=${limit}&offset=${offset}&start_date_min=${paddedMin}&start_date_max=${endISO}&order=eventDate&ascending=false`);
       if (!res.ok) break;
       page = await res.json();
     } catch (e) {
