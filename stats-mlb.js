@@ -1130,22 +1130,21 @@ const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // real limits now are just how long one run takes (hundreds more games) and
 // whether Polymarket's own price history still reaches back that far - a gap
 // in old data is their retention, not a bug here.
-const MLB_BACKFILL_SCHEMA = 5; // bump when the stored prediction shape changes,
+const MLB_BACKFILL_SCHEMA = 6; // bump when the stored prediction shape changes,
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk
-// actually missed data. v5: fetchClobPriceNear (mlb-api.js) was silently
-// returning no price for any game older than ~a month (interval=max, not a
-// real "since creation" query - fixed to use an explicit startTs/endTs
-// window), so the v4 walk that already ran under the new 52-week window still
-// dropped almost everything past the first month even though it marked
-// itself complete through yesterday. Bumping forces one more full re-walk, now
-// with real prices reachable, instead of the marker skipping straight past
-// those days. A stored marker whose schemaVersion doesn't match triggers a
-// one-time full re-walk of the whole window, so existing records get
-// upgraded/extended in place (v2: per-component scores; v3: per-dimension
-// scores; v4: the 52-week window; v5: this fix) rather than the marker
-// skipping straight past them.
+// actually missed data. v6: fetchMlbMoneylineEventForGame (mlb-api.js) built
+// its Polymarket slug straight from MLB's own team.abbreviation, which is
+// off for exactly two teams (Athletics: MLB says ATH, Polymarket's slugs
+// still say oak; Diamondbacks: MLB says AZ, Polymarket says ari) - every
+// Athletics/Diamondbacks game was silently skipped for lack of a matched
+// event, no matter how many times it was re-walked. A stored marker whose
+// schemaVersion doesn't match triggers a one-time full re-walk of the whole
+// window, so existing records get upgraded/extended in place (v2: per-
+// component scores; v3: per-dimension scores; v4: the 52-week window; v5:
+// the CLOB price-history fix; v6: this fix) rather than the marker skipping
+// straight past them.
 const MLB_BACKFILL_CHUNK = 5; // games processed concurrently per batch - a
 // full-window rebuild is hundreds of games x several fetches each, far too slow
 // one at a time; 5-at-a-time keeps it to a few minutes without hammering the

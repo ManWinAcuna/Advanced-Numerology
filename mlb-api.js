@@ -278,8 +278,20 @@ async function fetchMlbGameLogBeforeDate(personId, season, beforeDateISO) {
 // for a doubleheader's second game too - the slug has no game-number suffix,
 // so a day with two games for the same matchup can't be disambiguated and is
 // skipped rather than risking a wrong match.
+// MLB's own team.abbreviation doesn't always match the code Polymarket uses
+// in ITS slugs - checked live against all 30 teams, and exactly two are off:
+// the Athletics (MLB: ATH, since their Oakland/Sacramento move - Polymarket's
+// slugs still say oak) and the Diamondbacks (MLB: AZ, Polymarket: ari). Every
+// other team's abbreviation matches exactly. Without this, every Athletics or
+// Diamondbacks game silently fails the slug guess and never gets a pick.
+const MLB_ABBR_TO_POLYMARKET_SLUG = { ATH: 'oak', AZ: 'ari' };
+
+function polymarketSlugAbbr(mlbAbbr) {
+  return (MLB_ABBR_TO_POLYMARKET_SLUG[mlbAbbr] || mlbAbbr).toLowerCase();
+}
+
 async function fetchMlbMoneylineEventForGame(awayAbbr, homeAbbr, officialDate) {
-  const slug = `mlb-${awayAbbr.toLowerCase()}-${homeAbbr.toLowerCase()}-${officialDate}`;
+  const slug = `mlb-${polymarketSlugAbbr(awayAbbr)}-${polymarketSlugAbbr(homeAbbr)}-${officialDate}`;
   try {
     const res = await fetch(`https://gamma-api.polymarket.com/events?slug=${slug}`);
     if (!res.ok) return null;
