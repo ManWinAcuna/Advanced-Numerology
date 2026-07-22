@@ -1872,6 +1872,19 @@ function computeBucketStats(predictions, minGap = REAL_EDGE_MIN_GAP) {
   });
 }
 
+// Separate from scoreClass (compat-render.js), which colors a 0-100
+// compatibility score - a win/hit rate percentage is a different scale
+// entirely and needs its own threshold. 65%+ reads as a real edge worth
+// green; below 49% reads as actively losing. Shared by every win-rate/
+// hit-rate percentage on the Stats page (hero, edge tiers, price buckets,
+// day-number breakdown, K-signal).
+function winRateClass(pct) {
+  if (pct == null) return '';
+  if (pct >= 65) return 'good';
+  if (pct < 49) return 'bad';
+  return 'mid';
+}
+
 /* ===================== Win rate by day number (Stats page) ===================== */
 // Answers "does the day matter" directly: buckets every resolved real-edge
 // pick by the match date's own Universal Day or Day Energy (the same two
@@ -1911,7 +1924,7 @@ function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, h
       <td>${r.value}</td>
       <td>${r.count}</td>
       <td>${r.winPct != null && r.count >= MIN_BUCKET_SAMPLE
-        ? `<span class="score-inline ${scoreClass(r.winPct)}">${r.winPct}%</span>`
+        ? `<span class="score-inline ${winRateClass(r.winPct)}">${r.winPct}%</span>`
         : `<span class="empty-state">${r.count ? `${r.wins}/${r.count} so far` : 'No data yet'}</span>`}</td>
     </tr>
   `).join('');

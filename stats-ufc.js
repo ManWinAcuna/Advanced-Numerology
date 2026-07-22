@@ -137,7 +137,7 @@ function renderHero(stats) {
 
   hero.innerHTML = `
     <div class="score-names">Numerology Win Rate</div>
-    <div class="score-big ${scoreClass(stats.overallWinPct)}">${stats.overallWinPct}<span class="score-out-of">%</span></div>
+    <div class="score-big ${winRateClass(stats.overallWinPct)}">${stats.overallWinPct}<span class="score-out-of">%</span></div>
     <div class="pm-breakdown-hint">${stats.winsCount} of ${stats.resolvedCount} resolved real-edge picks correct${extras.length ? ` &middot; ${extras.join(' &middot; ')}` : ''}</div>
   `;
 }
@@ -168,7 +168,7 @@ function renderEdgeTiers(predictions) {
       <td>${t.icon} ${t.label}</td>
       <td>${t.count}</td>
       <td>${t.winPct != null && t.count >= MIN_BUCKET_SAMPLE
-        ? `<span class="score-inline ${scoreClass(t.winPct)}">${t.winPct}%</span>`
+        ? `<span class="score-inline ${winRateClass(t.winPct)}">${t.winPct}%</span>`
         : `<span class="empty-state">${t.count ? `${t.wins}/${t.count} so far` : 'No data yet'}</span>`}</td>
     </tr>
   `).join('');
@@ -185,7 +185,7 @@ function renderPriceBuckets(predictions) {
       <td>${b.label}</td>
       <td>${b.count}</td>
       <td>${b.winPct != null && b.count >= MIN_BUCKET_SAMPLE
-        ? `<span class="score-inline ${scoreClass(b.winPct)}">${b.winPct}%</span>`
+        ? `<span class="score-inline ${winRateClass(b.winPct)}">${b.winPct}%</span>`
         : `<span class="empty-state">${b.count ? 'Not enough data yet' : 'No data yet'}</span>`}</td>
     </tr>
   `).join('');
