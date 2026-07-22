@@ -394,6 +394,7 @@ function renderAll(predictions) {
   // showing every day value side by side, which the day filter itself can't.
   renderDayNumberTable('statsUniversalDay', predictions, 'fightTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
   renderDayNumberTable('statsDayEnergy', predictions, 'fightTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
+  renderDayComboTable('statsDayCombo', predictions, 'fightTime');
 }
 
 async function refreshAndRender() {
@@ -415,6 +416,6 @@ document.getElementById('statsRefreshBtn').addEventListener('click', async () =>
 
 document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
 initDayFilter('ufc', () => { resetPagination('statsTable'); renderAll(currentPredictions); });
-initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'ufcDimensionEdgeBox']);
+initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'statsDayComboBox', 'ufcDimensionEdgeBox']);
 initMatchupModal();
 refreshAndRender();

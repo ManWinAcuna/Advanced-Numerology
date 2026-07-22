@@ -372,6 +372,7 @@ function renderTennisAll(predictions) {
   // showing every day value side by side, which the day filter itself can't.
   renderDayNumberTable('tennisUniversalDay', predictions, 'matchTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
   renderDayNumberTable('tennisDayEnergy', predictions, 'matchTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
+  renderDayComboTable('tennisDayCombo', predictions, 'matchTime');
 }
 
 async function refreshTennisAndRender() {
@@ -393,6 +394,6 @@ document.getElementById('tennisStatsRefreshBtn').addEventListener('click', async
 
 document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
 initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisAll(currentTennisPredictions); });
-initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDimensionEdgeBox']);
+initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDayComboBox', 'tennisDimensionEdgeBox']);
 initTennisMatchupModal();
 refreshTennisAndRender();

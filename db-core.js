@@ -1946,6 +1946,54 @@ function renderDayNumberTable(elId, predictions, dateField, reduceFn, options, h
   el.innerHTML = `<div class="pm-table-total">Total picks: ${total}</div><table class="astro-table"><thead><tr><th>${escapeHtml(headerLabel)}</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
+// Crosses Universal Day and Day Energy instead of testing each alone -
+// answers "which SPECIFIC combo wins most," the actual "best energy combo
+// to bet on" question the single-dimension tables above can't answer on
+// their own. Pure date math, no roster/birthdate matching needed, so it
+// applies to every sport the same way (MLB included). Only combos that
+// actually occurred are listed - most of the 14x12 grid never comes up, and
+// showing every empty cell would bury the ones that matter.
+function computeDayComboStats(predictions, dateField, minGap = REAL_EDGE_MIN_GAP) {
+  const resolved = predictions.filter((p) => p.result && !p.result.draw && p[dateField] && hasRealEdge(p, minGap));
+  const byKey = new Map();
+  resolved.forEach((p) => {
+    const d = new Date(p[dateField]);
+    if (isNaN(d)) return;
+    const universalDay = compatLifePathInfo(d).lookupValue;
+    const dayEnergy = getReducedDay(d);
+    const key = `${universalDay}|${dayEnergy}`;
+    if (!byKey.has(key)) byKey.set(key, { universalDay, dayEnergy, count: 0, wins: 0 });
+    const entry = byKey.get(key);
+    entry.count += 1;
+    if (isCorrectPick(p)) entry.wins += 1;
+  });
+  return [...byKey.values()]
+    .map((e) => ({ ...e, winPct: e.count ? Math.round((e.wins / e.count) * 100) : null }))
+    .sort((a, b) => (b.winPct == null ? -Infinity : b.winPct) - (a.winPct == null ? -Infinity : a.winPct) || b.count - a.count);
+}
+
+function renderDayComboTable(elId, predictions, dateField, minGap) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = computeDayComboStats(predictions, dateField, minGap);
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state">No resolved real-edge picks yet — this fills in as tracked picks resolve.</div>';
+    return;
+  }
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const body = rows.map((r) => `
+    <tr>
+      <td>${r.universalDay}</td>
+      <td>${r.dayEnergy}</td>
+      <td>${r.count}</td>
+      <td>${r.winPct != null && r.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${winRateClass(r.winPct)}">${r.winPct}%</span>`
+        : `<span class="empty-state">${r.wins}/${r.count} so far</span>`}</td>
+    </tr>
+  `).join('');
+  el.innerHTML = `<div class="pm-table-total">Total picks: ${total}</div><table class="astro-table"><thead><tr><th>Universal Day</th><th>Day Energy</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
 /* ===================== Pagination (Stats page tracked-picks tables) ===================== */
 // MLB's Old Data table in particular can run into the hundreds of rows once
 // backfilled - keyed by prefix so UFC/Tennis/MLB Today/MLB Old each keep

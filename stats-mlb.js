@@ -766,6 +766,7 @@ function renderMlbScope(suffix, predictions, signals) {
   // itself can't (it stays scoped to the Today/Old tab, just not the filter).
   renderDayNumberTable('mlbUniversalDay' + suffix, todayOrOldPredictions, 'gameTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_REAL_EDGE_MIN_GAP);
   renderDayNumberTable('mlbDayEnergy' + suffix, todayOrOldPredictions, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_REAL_EDGE_MIN_GAP);
+  renderDayComboTable('mlbDayCombo' + suffix, todayOrOldPredictions, 'gameTime', MLB_REAL_EDGE_MIN_GAP);
   renderMlbComponentSignal(scopedPredictions, suffix);
   renderDimensionEdgeTable('mlbDimensionEdge' + suffix, scopedPredictions, (p) => [p.teamAName, p.teamBName]);
   renderMlbTable(scopedPredictions, suffix, isOld ? [] : todaysMlbSlatePending);
@@ -1469,8 +1470,8 @@ document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', d
 initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
 initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
 
-initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
-initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
+initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
+initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
 
 initMlbMatchupModal('');
 initMlbMatchupModal('Old');
