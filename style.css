@@ -1206,6 +1206,13 @@ body::after {
     bottom: 10px;
     right: 10px;
   }
+
+  /* The pill floats fixed over the bottom of the viewport on mobile, so
+     every page needs enough bottom clearance that content scrolled to the
+     end (pagination rows, buttons) never sits underneath it. */
+  .page {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
 }
 
 @media (max-width: 480px) {
