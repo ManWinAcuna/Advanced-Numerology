@@ -94,11 +94,15 @@ function renderBettingToday(slate) {
     el.innerHTML = '<div class="empty-state">No games tracked for today yet &mdash; open the Polymarket trackers to pull today\'s slate first.</div>';
     return;
   }
+  if (!slate.upcomingCount) {
+    el.innerHTML = '<div class="empty-state">All of today\'s tracked games have already started &mdash; nothing left to bet. Today\'s outcome is settling in the ledger below.</div>';
+    return;
+  }
   if (!slate.tickets.length) {
     const msg = slate.notEnoughLegs
-      ? `Only ${slate.qualifiedCount} pick${slate.qualifiedCount === 1 ? '' : 's'} met the betting bar today &mdash; a ${slate.legCount}-leg parlay needs at least ${slate.legCount}.`
+      ? `Only ${slate.qualifiedCount} upcoming pick${slate.qualifiedCount === 1 ? '' : 's'} met the betting bar &mdash; a ${slate.legCount}-leg parlay needs at least ${slate.legCount} games that haven't started yet.`
       : slate.qualifiedCount === 0
-        ? `${slate.totalTodayPicks} pick${slate.totalTodayPicks === 1 ? '' : 's'} tracked today &mdash; none met the betting bar (a pick needs a proven bucket history plus a real edge over its price).`
+        ? `${slate.upcomingCount} upcoming game${slate.upcomingCount === 1 ? '' : 's'} left today &mdash; none met the betting bar (a pick needs a proven bucket history plus a real edge over its price).`
         : 'Stakes rounded to zero &mdash; bankroll too small for today\'s edges.';
     el.innerHTML = `<div class="empty-state">${msg}</div>`;
     return;

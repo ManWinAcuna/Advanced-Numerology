@@ -375,7 +375,16 @@ function buildTodayBettingSlate(scope, mode, userBankroll) {
   picks.filter((p) => p.dateKey < todayKey).forEach((p) => bettingRecordResult(tallies, p));
 
   const todayPicks = picks.filter((p) => p.dateKey === todayKey);
-  const slate = buildBettingSlate(todayPicks, mode, tallies, userBankroll);
+  // Only games that haven't started are placeable - the stored price is the
+  // pre-game quote, and once a game is underway (or already final) that bet
+  // no longer exists, so it must never appear in a suggested ticket. The
+  // day's already-started games still count in the ledger's today row.
+  const nowMs = Date.now();
+  const upcoming = todayPicks.filter((p) => {
+    const t = new Date(p.timeISO).getTime();
+    return Number.isFinite(t) && t > nowMs;
+  });
+  const slate = buildBettingSlate(upcoming, mode, tallies, userBankroll);
   const tickets = slate.tickets.map((t) => ({ ...t, ...settleBettingTicket(t) }));
 
   return {
@@ -384,5 +393,6 @@ function buildTodayBettingSlate(scope, mode, userBankroll) {
     notEnoughLegs: !!slate.notEnoughLegs,
     legCount: slate.legCount,
     totalTodayPicks: todayPicks.length,
+    upcomingCount: upcoming.length,
   };
 }
