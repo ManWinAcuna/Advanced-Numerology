@@ -53,6 +53,45 @@ function saveBettingMode(value) {
   localStorage.setItem(BETTING_MODE_KEY, String(value));
 }
 
+/* ===================== Day filter ===================== */
+// Multi-select: a day passes when its Universal Day is one of the selected
+// universal numbers AND its Day Energy is one of the selected energy numbers
+// (either list empty = that dimension unrestricted; both selected = the
+// combo filter). Restricts WHICH days get bet - the win-probability tallies
+// still learn from every resolved day, so the estimates don't thin out.
+
+const BETTING_DAY_FILTER_KEY = 'numerology_betting_day_filter';
+
+function loadBettingDayFilter() {
+  try {
+    const f = JSON.parse(localStorage.getItem(BETTING_DAY_FILTER_KEY));
+    return {
+      universal: Array.isArray(f && f.universal) ? f.universal.map(Number) : [],
+      energy: Array.isArray(f && f.energy) ? f.energy.map(Number) : [],
+    };
+  } catch (e) {
+    return { universal: [], energy: [] };
+  }
+}
+
+function saveBettingDayFilter(filter) {
+  localStorage.setItem(BETTING_DAY_FILTER_KEY, JSON.stringify(filter));
+}
+
+function bettingDayNumbers(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const date = new Date(y, m - 1, d, 12);
+  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date) };
+}
+
+function bettingDayMatchesFilter(dateKey, filter) {
+  if (!filter || (!filter.universal.length && !filter.energy.length)) return true;
+  const nums = bettingDayNumbers(dateKey);
+  if (filter.universal.length && !filter.universal.includes(nums.universal)) return false;
+  if (filter.energy.length && !filter.energy.includes(nums.energy)) return false;
+  return true;
+}
+
 /* ===================== Sport registry ===================== */
 // Each sport keeps its own edge-tier calibration (the same tiers the Stats
 // page uses) - MLB's composite gaps live on a much tighter scale than the
@@ -283,7 +322,7 @@ function settleBettingTicket(ticket) {
 // live: its picks can still be pending, so its ledger row keeps updating as
 // results land - which is exactly the end-of-day "how did today do" view.
 
-function runBettingSimulation(scope, mode, startBankroll) {
+function runBettingSimulation(scope, mode, startBankroll, dayFilter) {
   const picks = collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
 
@@ -309,10 +348,12 @@ function runBettingSimulation(scope, mode, startBankroll) {
     const dayPicks = byDay.get(dateKey);
     const isToday = dateKey === todayKey;
     // History only replays what actually resolved; today bets its full slate
-    // and settles what it can so far.
+    // and settles what it can so far. A day outside the day filter places no
+    // bets at all (it still feeds the tallies below).
+    const dayAllowed = bettingDayMatchesFilter(dateKey, dayFilter);
     const bettable = isToday ? dayPicks : dayPicks.filter((p) => p.resolved && !p.draw);
 
-    const slate = buildBettingSlate(bettable, mode, tallies, bankroll);
+    const slate = dayAllowed ? buildBettingSlate(bettable, mode, tallies, bankroll) : { tickets: [] };
     const tickets = slate.tickets.map((t) => ({ ...t, ...settleBettingTicket(t) }));
 
     if (tickets.length) {
@@ -367,9 +408,13 @@ function runBettingSimulation(scope, mode, startBankroll) {
 // full resolved history before today - order doesn't matter for counting, so
 // no day walk is needed here.
 
-function buildTodayBettingSlate(scope, mode, userBankroll) {
+function buildTodayBettingSlate(scope, mode, userBankroll, dayFilter) {
   const picks = collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
+
+  if (!bettingDayMatchesFilter(todayKey, dayFilter)) {
+    return { tickets: [], dayFiltered: true, todayNums: bettingDayNumbers(todayKey) };
+  }
 
   const tallies = makeBettingTallies();
   picks.filter((p) => p.dateKey < todayKey).forEach((p) => bettingRecordResult(tallies, p));

@@ -4502,3 +4502,43 @@ body {
   font-size: 0.68rem;
   color: var(--orange);
 }
+
+.betting-day-filter {
+  margin-top: 10px;
+}
+
+.betting-day-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.betting-day-filter-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 104px;
+}
+
+.betting-day-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.betting-day-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 9px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.betting-day-chip.active {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  box-shadow: 0 0 6px rgba(245, 197, 66, 0.25);
+}

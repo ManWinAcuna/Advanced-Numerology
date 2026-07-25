@@ -90,6 +90,10 @@ function bettingTicketsHtml(tickets) {
 function renderBettingToday(slate) {
   const el = document.getElementById('bettingTodayContent');
 
+  if (slate.dayFiltered) {
+    el.innerHTML = `<div class="empty-state">Today is Universal Day ${slate.todayNums.universal} / Day Energy ${slate.todayNums.energy} &mdash; outside your day filter, so no bets today.</div>`;
+    return;
+  }
   if (!slate.totalTodayPicks) {
     el.innerHTML = '<div class="empty-state">No games tracked for today yet &mdash; open the Polymarket trackers to pull today\'s slate first.</div>';
     return;
@@ -188,8 +192,9 @@ function renderBetting() {
   document.getElementById('bettingScopeTitle').textContent = `${meta.icon} ${meta.label}`;
 
   const mode = loadBettingMode();
-  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll()));
-  currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart());
+  const dayFilter = loadBettingDayFilter();
+  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter));
+  currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter);
   renderBettingSummary(currentBettingSim);
   renderBettingLedger(currentBettingSim);
 }
@@ -237,6 +242,38 @@ document.getElementById('bettingLedger').addEventListener('click', (e) => {
     detail.style.display = detail.style.display === 'none' ? '' : 'none';
   }
 });
+
+// Day-filter chips - multi-select toggles for Universal Day / Day Energy
+function renderBettingDayChips() {
+  const filter = loadBettingDayFilter();
+  const chip = (n, group, selected) => `<button type="button" class="betting-day-chip${selected ? ' active' : ''}" data-group="${group}" data-num="${n}">${n}</button>`;
+  document.getElementById('bettingUniversalChips').innerHTML = DAY_FILTER_UNIVERSAL_OPTIONS.map((n) => chip(n, 'universal', filter.universal.includes(n))).join('');
+  document.getElementById('bettingEnergyChips').innerHTML = DAY_FILTER_ENERGY_OPTIONS.map((n) => chip(n, 'energy', filter.energy.includes(n))).join('');
+
+  const status = document.getElementById('bettingDayFilterStatus');
+  const parts = [];
+  if (filter.universal.length) parts.push(`Universal Day ${filter.universal.join(', ')}`);
+  if (filter.energy.length) parts.push(`Day Energy ${filter.energy.join(', ')}`);
+  status.textContent = parts.length ? `Only betting days matching: ${parts.join(' + ')}` : 'Betting every day (no day filter)';
+  status.classList.toggle('active', parts.length > 0);
+}
+
+document.getElementById('bettingDayFilter').addEventListener('click', (e) => {
+  const chipEl = e.target.closest('.betting-day-chip');
+  if (!chipEl) return;
+  const filter = loadBettingDayFilter();
+  const list = filter[chipEl.dataset.group];
+  const num = Number(chipEl.dataset.num);
+  const idx = list.indexOf(num);
+  if (idx >= 0) list.splice(idx, 1); else list.push(num);
+  list.sort((a, b) => a - b);
+  saveBettingDayFilter(filter);
+  renderBettingDayChips();
+  resetPagination('bettingLedger');
+  renderBetting();
+});
+
+renderBettingDayChips();
 
 const bettingBankrollInputEl = document.getElementById('bettingBankrollInput');
 bettingBankrollInputEl.value = loadBettingBankroll();
