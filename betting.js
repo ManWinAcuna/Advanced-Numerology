@@ -129,6 +129,9 @@ function renderBettingSummary(sim) {
   const bits = [`${sim.totals.won}W-${sim.totals.lost}L`];
   if (sim.totals.pending) bits.push(`${sim.totals.pending} pending`);
   if (sim.totals.voided) bits.push(`${sim.totals.voided} void`);
+  bits.push(sim.maxDrawdown > 0
+    ? `Max drawdown <span class="score-inline bad">-${bettingFmtMoney(sim.maxDrawdown)} (${sim.maxDrawdownPct}%)</span>`
+    : 'Max drawdown none');
 
   hero.innerHTML = `
     <div class="score-names">Simulated Bankroll</div>

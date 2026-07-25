@@ -286,6 +286,11 @@ function runBettingSimulation(scope, mode, startBankroll) {
   let bankroll = startBankroll;
   const ledger = [];
   const totals = { staked: 0, profit: 0, won: 0, lost: 0, pending: 0, voided: 0, tickets: 0 };
+  // Worst peak-to-trough slide of the simulated bankroll - the honest "how
+  // bad did it get before it recovered" number next to the headline growth.
+  let bankrollPeak = startBankroll;
+  let maxDrawdown = 0;
+  let maxDrawdownPct = 0;
 
   dayKeys.forEach((dateKey) => {
     const dayPicks = byDay.get(dateKey);
@@ -303,6 +308,13 @@ function runBettingSimulation(scope, mode, startBankroll) {
       const inProgress = tickets.some((t) => t.status === 'pending');
       bankroll = Math.round((bankroll + profit) * 100) / 100;
       ledger.push({ dateKey, tickets, staked, profit, bankrollAfter: bankroll, inProgress });
+
+      if (bankroll > bankrollPeak) bankrollPeak = bankroll;
+      const drawdown = bankrollPeak - bankroll;
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+        maxDrawdownPct = bankrollPeak > 0 ? drawdown / bankrollPeak : 0;
+      }
 
       totals.staked += staked;
       totals.profit += profit;
@@ -328,6 +340,8 @@ function runBettingSimulation(scope, mode, startBankroll) {
     startBankroll,
     totals,
     dayCount: ledger.length,
+    maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+    maxDrawdownPct: Math.round(maxDrawdownPct * 100),
     resolvedPickCount: picks.filter((p) => p.resolved && !p.draw && p.dateKey < todayKey).length,
   };
 }
