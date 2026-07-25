@@ -20,6 +20,7 @@
 // syncing just these two would create cross-device states that disagree.
 
 const BETTING_BANKROLL_KEY = 'numerology_betting_bankroll';
+const BETTING_SIM_START_KEY = 'numerology_betting_sim_start';
 const BETTING_MODE_KEY = 'numerology_betting_mode';
 
 function loadBettingBankroll() {
@@ -29,6 +30,18 @@ function loadBettingBankroll() {
 
 function saveBettingBankroll(value) {
   localStorage.setItem(BETTING_BANKROLL_KEY, String(value));
+}
+
+// The simulation's day-1 bankroll is its own setting so updating the current
+// bankroll every day (which resizes today's stakes) never re-scales the
+// historical ledger's dollar figures out from under you.
+function loadBettingSimStart() {
+  const v = Number(localStorage.getItem(BETTING_SIM_START_KEY));
+  return Number.isFinite(v) && v > 0 ? v : 1000;
+}
+
+function saveBettingSimStart(value) {
+  localStorage.setItem(BETTING_SIM_START_KEY, String(value));
 }
 
 function loadBettingMode() {

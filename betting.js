@@ -183,10 +183,9 @@ function renderBetting() {
   const meta = BETTING_SCOPE_META[currentBettingScope];
   document.getElementById('bettingScopeTitle').textContent = `${meta.icon} ${meta.label}`;
 
-  const bankroll = loadBettingBankroll();
   const mode = loadBettingMode();
-  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, bankroll));
-  currentBettingSim = runBettingSimulation(currentBettingScope, mode, bankroll);
+  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll()));
+  currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart());
   renderBettingSummary(currentBettingSim);
   renderBettingLedger(currentBettingSim);
 }
@@ -241,6 +240,15 @@ bettingBankrollInputEl.addEventListener('change', () => {
   const v = Number(bettingBankrollInputEl.value);
   if (Number.isFinite(v) && v > 0) saveBettingBankroll(v);
   bettingBankrollInputEl.value = loadBettingBankroll();
+  renderBetting();
+});
+
+const bettingSimStartInputEl = document.getElementById('bettingSimStartInput');
+bettingSimStartInputEl.value = loadBettingSimStart();
+bettingSimStartInputEl.addEventListener('change', () => {
+  const v = Number(bettingSimStartInputEl.value);
+  if (Number.isFinite(v) && v > 0) saveBettingSimStart(v);
+  bettingSimStartInputEl.value = loadBettingSimStart();
   renderBetting();
 });
 
