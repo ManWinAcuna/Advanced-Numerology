@@ -58,7 +58,7 @@ function bettingTicketHtml(ticket, comboIndex) {
   const payout = ticket.stake / ticket.prodPrice;
   const title = ticket.legs.length === 1
     ? `${BETTING_SPORTS[ticket.legs[0].sport].icon} Single`
-    : ticket.headline ? `⭐ Top ${ticket.legs.length}-Leg Parlay` : `🔀 Combo ${comboIndex}`;
+    : ticket.headline ? `⭐ Top ${ticket.legs.length}-Leg Parlay` : `🔀 ${ticket.legs.length}-Leg Combo ${comboIndex}`;
   const resultLine = ticket.status === 'won'
     ? `Returned ${bettingFmtMoney(payout)} (<span class="score-inline good">${bettingFmtSignedMoney(ticket.profit)}</span>)`
     : ticket.status === 'lost'
@@ -81,8 +81,12 @@ function bettingTicketHtml(ticket, comboIndex) {
 }
 
 function bettingTicketsHtml(tickets) {
-  let comboN = 0;
-  return tickets.map((t) => bettingTicketHtml(t, (!t.headline && t.legs.length > 1) ? ++comboN : 0)).join('');
+  const comboCounts = {}; // combos numbered per leg count so Mixed reads cleanly
+  return tickets.map((t) => {
+    if (t.headline || t.legs.length === 1) return bettingTicketHtml(t, 0);
+    comboCounts[t.legs.length] = (comboCounts[t.legs.length] || 0) + 1;
+    return bettingTicketHtml(t, comboCounts[t.legs.length]);
+  }).join('');
 }
 
 /* ===================== Today's Bets ===================== */
@@ -193,8 +197,9 @@ function renderBetting() {
 
   const mode = loadBettingMode();
   const dayFilter = loadBettingDayFilter();
-  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter));
-  currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter);
+  const mixedTypes = loadBettingMixedTypes();
+  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes));
+  currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter, mixedTypes);
   renderBettingSummary(currentBettingSim);
   renderBettingLedger(currentBettingSim);
 }
@@ -243,20 +248,44 @@ document.getElementById('bettingLedger').addEventListener('click', (e) => {
   }
 });
 
-// Day-filter chips - multi-select toggles for Universal Day / Day Energy
+// Day-filter chips - multi-select toggles for Universal Day / Day Energy,
+// collapsed behind a summary line that always shows the active filter.
 function renderBettingDayChips() {
   const filter = loadBettingDayFilter();
   const chip = (n, group, selected) => `<button type="button" class="betting-day-chip${selected ? ' active' : ''}" data-group="${group}" data-num="${n}">${n}</button>`;
   document.getElementById('bettingUniversalChips').innerHTML = DAY_FILTER_UNIVERSAL_OPTIONS.map((n) => chip(n, 'universal', filter.universal.includes(n))).join('');
   document.getElementById('bettingEnergyChips').innerHTML = DAY_FILTER_ENERGY_OPTIONS.map((n) => chip(n, 'energy', filter.energy.includes(n))).join('');
 
-  const status = document.getElementById('bettingDayFilterStatus');
+  const summary = document.getElementById('bettingDayFilterSummary');
   const parts = [];
   if (filter.universal.length) parts.push(`Universal Day ${filter.universal.join(', ')}`);
   if (filter.energy.length) parts.push(`Day Energy ${filter.energy.join(', ')}`);
-  status.textContent = parts.length ? `Only betting days matching: ${parts.join(' + ')}` : 'Betting every day (no day filter)';
-  status.classList.toggle('active', parts.length > 0);
+  summary.textContent = parts.length ? `only ${parts.join(' + ')}` : 'off (betting every day)';
+  summary.classList.toggle('active', parts.length > 0);
 }
+
+// Bet-kind chips for Mixed mode - hidden unless the dropdown is on Mixed.
+const BETTING_MIXED_TYPE_LABELS = { singles: 'Singles', 2: '2-Leg', 3: '3-Leg', 4: '4-Leg' };
+
+function renderBettingMixedChips() {
+  const types = loadBettingMixedTypes();
+  document.getElementById('bettingMixedChips').innerHTML = BETTING_MIXED_TYPE_OPTIONS.map((t) =>
+    `<button type="button" class="betting-day-chip${types.includes(t) ? ' active' : ''}" data-type="${t}">${BETTING_MIXED_TYPE_LABELS[t]}</button>`).join('');
+  document.getElementById('bettingMixedRow').style.display = loadBettingMode() === 'mixed' ? '' : 'none';
+}
+
+document.getElementById('bettingMixedRow').addEventListener('click', (e) => {
+  const chipEl = e.target.closest('.betting-day-chip');
+  if (!chipEl) return;
+  const types = loadBettingMixedTypes();
+  const t = chipEl.dataset.type;
+  const idx = types.indexOf(t);
+  if (idx >= 0) types.splice(idx, 1); else types.push(t);
+  saveBettingMixedTypes(types);
+  renderBettingMixedChips();
+  resetPagination('bettingLedger');
+  renderBetting();
+});
 
 document.getElementById('bettingDayFilter').addEventListener('click', (e) => {
   const chipEl = e.target.closest('.betting-day-chip');
@@ -274,6 +303,7 @@ document.getElementById('bettingDayFilter').addEventListener('click', (e) => {
 });
 
 renderBettingDayChips();
+renderBettingMixedChips();
 
 const bettingBankrollInputEl = document.getElementById('bettingBankrollInput');
 bettingBankrollInputEl.value = loadBettingBankroll();
@@ -297,6 +327,7 @@ const bettingModeSelectEl = document.getElementById('bettingModeSelect');
 bettingModeSelectEl.value = loadBettingMode();
 bettingModeSelectEl.addEventListener('change', () => {
   saveBettingMode(bettingModeSelectEl.value);
+  renderBettingMixedChips();
   resetPagination('bettingLedger');
   renderBetting();
 });

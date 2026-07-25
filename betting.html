@@ -81,21 +81,28 @@
             <option value="2">2-Leg Parlay</option>
             <option value="3">3-Leg Parlay</option>
             <option value="4">4-Leg Parlay</option>
+            <option value="mixed">Mixed</option>
           </select>
         </label>
       </div>
-      <div class="betting-day-filter" id="bettingDayFilter">
-        <div class="betting-day-filter-group">
-          <span class="betting-day-filter-label">🔢 Universal Day</span>
-          <div class="betting-day-chips" id="bettingUniversalChips"></div>
-        </div>
-        <div class="betting-day-filter-group">
-          <span class="betting-day-filter-label">⚡ Day Energy</span>
-          <div class="betting-day-chips" id="bettingEnergyChips"></div>
-        </div>
-        <div class="pm-day-filter-status" id="bettingDayFilterStatus"></div>
+      <div class="betting-day-filter-group" id="bettingMixedRow" style="display:none;">
+        <span class="betting-day-filter-label">🎛️ Bet Kinds</span>
+        <div class="betting-day-chips" id="bettingMixedChips"></div>
       </div>
-      <div class="box-hint">Current Bankroll sizes today's stakes &mdash; update it to your real balance each day so the half-Kelly sizing tracks your roll. Sim Starting Bankroll only anchors the Betting Stats ledger below and stays put. Tap day numbers to only bet matching days &mdash; several in one row means any of them counts, and picking from both rows requires the combo. Only picks whose own historical bucket beats the market price qualify &mdash; if the data isn't there yet, no bet is suggested.</div>
+      <details class="collapsible betting-day-details" id="bettingDayDetails">
+        <summary>📅 Day Filter &mdash; <span id="bettingDayFilterSummary"></span></summary>
+        <div class="betting-day-filter" id="bettingDayFilter">
+          <div class="betting-day-filter-group">
+            <span class="betting-day-filter-label">🔢 Universal Day</span>
+            <div class="betting-day-chips" id="bettingUniversalChips"></div>
+          </div>
+          <div class="betting-day-filter-group">
+            <span class="betting-day-filter-label">⚡ Day Energy</span>
+            <div class="betting-day-chips" id="bettingEnergyChips"></div>
+          </div>
+        </div>
+      </details>
+      <div class="box-hint">Current Bankroll sizes today's stakes &mdash; update it to your real balance each day so the half-Kelly sizing tracks your roll. Sim Starting Bankroll only anchors the Betting Stats ledger below and stays put. Mixed runs the bet kinds you toggle on together, with singles and parlays each keeping their own daily budget. Open the Day Filter to only bet matching days &mdash; several numbers in one row means any of them counts, and picking from both rows requires the combo. Only picks whose own historical bucket beats the market price qualify &mdash; if the data isn't there yet, no bet is suggested.</div>
     </div>
 
     <div class="pm-last-updated-row">

@@ -46,11 +46,29 @@ function saveBettingSimStart(value) {
 
 function loadBettingMode() {
   const v = localStorage.getItem(BETTING_MODE_KEY);
-  return ['singles', '2', '3', '4'].includes(v) ? v : 'singles';
+  return ['singles', '2', '3', '4', 'mixed'].includes(v) ? v : 'singles';
 }
 
 function saveBettingMode(value) {
   localStorage.setItem(BETTING_MODE_KEY, String(value));
+}
+
+// Which bet kinds run together when Bet Type is Mixed.
+const BETTING_MIXED_TYPES_KEY = 'numerology_betting_mixed_types';
+const BETTING_MIXED_TYPE_OPTIONS = ['singles', '2', '3', '4'];
+
+function loadBettingMixedTypes() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BETTING_MIXED_TYPES_KEY));
+    const list = Array.isArray(v) ? v.filter((t) => BETTING_MIXED_TYPE_OPTIONS.includes(t)) : [];
+    return list.length ? list : ['singles'];
+  } catch (e) {
+    return ['singles'];
+  }
+}
+
+function saveBettingMixedTypes(types) {
+  localStorage.setItem(BETTING_MIXED_TYPES_KEY, JSON.stringify(types));
 }
 
 /* ===================== Day filter ===================== */
@@ -255,7 +273,7 @@ function bettingCapDayStakes(tickets, bankroll, maxDayFraction) {
 // alternates, so one bad leg doesn't sink the whole day. The day's budget is
 // split across all tickets via the cap above.
 
-function buildBettingSlate(dayPicks, mode, tallies, bankroll) {
+function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes) {
   const seen = new Set();
   const qualified = dayPicks
     .map((p) => bettingQualify(tallies, p))
@@ -270,12 +288,42 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll) {
     })
     .sort((a, b) => b.evEdge - a.evEdge);
 
-  if (mode === 'singles') {
-    const tickets = qualified.map((q) => {
-      const f = Math.min(bettingKellyFraction(q.estProb, q.price) * BETTING_HALF_KELLY, BETTING_MAX_SINGLE_FRACTION);
-      return { legs: [q], stake: bankroll * f, prodPrice: q.price, estProb: q.estProb, headline: false };
+  const makeSingles = () => qualified.map((q) => {
+    const f = Math.min(bettingKellyFraction(q.estProb, q.price) * BETTING_HALF_KELLY, BETTING_MAX_SINGLE_FRACTION);
+    return { legs: [q], stake: bankroll * f, prodPrice: q.price, estProb: q.estProb, headline: false };
+  }).filter((t) => t.stake > 0);
+
+  const makeParlays = (legCount) => {
+    if (qualified.length < legCount) return [];
+    const pool = qualified.slice(0, legCount + 1);
+    return bettingCombinations(pool, legCount).map((legs, i) => {
+      const estProb = legs.reduce((p, l) => p * l.estProb, 1);
+      const prodPrice = legs.reduce((p, l) => p * l.price, 1);
+      const f = bettingKellyFraction(estProb, prodPrice) * BETTING_HALF_KELLY;
+      return { legs, stake: bankroll * f, prodPrice, estProb, headline: i === 0 };
     }).filter((t) => t.stake > 0);
-    return { tickets: bettingCapDayStakes(tickets, bankroll, BETTING_MAX_DAY_SINGLES_FRACTION), qualifiedCount: qualified.length };
+  };
+
+  if (mode === 'singles') {
+    return { tickets: bettingCapDayStakes(makeSingles(), bankroll, BETTING_MAX_DAY_SINGLES_FRACTION), qualifiedCount: qualified.length };
+  }
+
+  // Mixed runs the selected bet kinds side by side over the same qualified
+  // picks: singles keep their own daily budget, and every parlay ticket of
+  // every selected size shares the single parlay budget, so total day risk
+  // stays capped no matter how many kinds are on.
+  if (mode === 'mixed') {
+    const types = (mixedTypes && mixedTypes.length) ? mixedTypes : ['singles'];
+    let tickets = [];
+    if (types.includes('singles')) {
+      tickets = bettingCapDayStakes(makeSingles(), bankroll, BETTING_MAX_DAY_SINGLES_FRACTION);
+    }
+    let parlays = [];
+    ['2', '3', '4'].forEach((n) => {
+      if (types.includes(n)) parlays = parlays.concat(makeParlays(Number(n)));
+    });
+    tickets = tickets.concat(bettingCapDayStakes(parlays, bankroll, BETTING_MAX_DAY_PARLAY_FRACTION));
+    return { tickets, qualifiedCount: qualified.length, mixed: true };
   }
 
   const legCount = Number(mode);
@@ -283,15 +331,7 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll) {
     return { tickets: [], qualifiedCount: qualified.length, notEnoughLegs: true, legCount };
   }
 
-  const pool = qualified.slice(0, legCount + 1);
-  const tickets = bettingCombinations(pool, legCount).map((legs, i) => {
-    const estProb = legs.reduce((p, l) => p * l.estProb, 1);
-    const prodPrice = legs.reduce((p, l) => p * l.price, 1);
-    const f = bettingKellyFraction(estProb, prodPrice) * BETTING_HALF_KELLY;
-    return { legs, stake: bankroll * f, prodPrice, estProb, headline: i === 0 };
-  }).filter((t) => t.stake > 0);
-
-  return { tickets: bettingCapDayStakes(tickets, bankroll, BETTING_MAX_DAY_PARLAY_FRACTION), qualifiedCount: qualified.length, legCount };
+  return { tickets: bettingCapDayStakes(makeParlays(legCount), bankroll, BETTING_MAX_DAY_PARLAY_FRACTION), qualifiedCount: qualified.length, legCount };
 }
 
 /* ===================== Settlement ===================== */
@@ -322,7 +362,7 @@ function settleBettingTicket(ticket) {
 // live: its picks can still be pending, so its ledger row keeps updating as
 // results land - which is exactly the end-of-day "how did today do" view.
 
-function runBettingSimulation(scope, mode, startBankroll, dayFilter) {
+function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes) {
   const picks = collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
 
@@ -353,7 +393,7 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter) {
     const dayAllowed = bettingDayMatchesFilter(dateKey, dayFilter);
     const bettable = isToday ? dayPicks : dayPicks.filter((p) => p.resolved && !p.draw);
 
-    const slate = dayAllowed ? buildBettingSlate(bettable, mode, tallies, bankroll) : { tickets: [] };
+    const slate = dayAllowed ? buildBettingSlate(bettable, mode, tallies, bankroll, mixedTypes) : { tickets: [] };
     const tickets = slate.tickets.map((t) => ({ ...t, ...settleBettingTicket(t) }));
 
     if (tickets.length) {
@@ -408,7 +448,7 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter) {
 // full resolved history before today - order doesn't matter for counting, so
 // no day walk is needed here.
 
-function buildTodayBettingSlate(scope, mode, userBankroll, dayFilter) {
+function buildTodayBettingSlate(scope, mode, userBankroll, dayFilter, mixedTypes) {
   const picks = collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
 
@@ -429,7 +469,7 @@ function buildTodayBettingSlate(scope, mode, userBankroll, dayFilter) {
     const t = new Date(p.timeISO).getTime();
     return Number.isFinite(t) && t > nowMs;
   });
-  const slate = buildBettingSlate(upcoming, mode, tallies, userBankroll);
+  const slate = buildBettingSlate(upcoming, mode, tallies, userBankroll, mixedTypes);
   const tickets = slate.tickets.map((t) => ({ ...t, ...settleBettingTicket(t) }));
 
   return {
