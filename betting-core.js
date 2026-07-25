@@ -340,6 +340,7 @@ function runBettingSimulation(scope, mode, startBankroll) {
     startBankroll,
     totals,
     dayCount: ledger.length,
+    peakBankroll: Math.round(bankrollPeak * 100) / 100,
     maxDrawdown: Math.round(maxDrawdown * 100) / 100,
     maxDrawdownPct: Math.round(maxDrawdownPct * 100),
     resolvedPickCount: picks.filter((p) => p.resolved && !p.draw && p.dateKey < todayKey).length,
