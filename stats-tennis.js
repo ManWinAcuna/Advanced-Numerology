@@ -666,18 +666,23 @@ function initTennisBackfillButton() {
   });
 }
 
-document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
-document.getElementById('tennisStatsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('tennisOld'));
-initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisScope('', currentTennisPredictions); });
-initDayFilter('tennisOld', () => { resetPagination('tennisStatsTableOld'); renderTennisScope('Old', currentTennisPredictions); });
+// Wire the Stats page DOM only when it exists - this file also loads on
+// betting.html purely for checkTennisResults() and the shared prediction
+// helpers, so the Betting page settles results through the same code path.
+if (document.getElementById('statsTennisSection')) {
+  document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
+  document.getElementById('tennisStatsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('tennisOld'));
+  initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisScope('', currentTennisPredictions); });
+  initDayFilter('tennisOld', () => { resetPagination('tennisStatsTableOld'); renderTennisScope('Old', currentTennisPredictions); });
 
-initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDayComboBox', 'tennisDimensionEdgeBox']);
-initBreakdownToggle('tennisBreakdownToggleOld', ['tennisStatsEdgeTiersBoxOld', 'tennisStatsPriceBucketsBoxOld', 'tennisUniversalDayBoxOld', 'tennisDayEnergyBoxOld', 'tennisDayComboBoxOld', 'tennisDimensionEdgeBoxOld']);
+  initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDayComboBox', 'tennisDimensionEdgeBox']);
+  initBreakdownToggle('tennisBreakdownToggleOld', ['tennisStatsEdgeTiersBoxOld', 'tennisStatsPriceBucketsBoxOld', 'tennisUniversalDayBoxOld', 'tennisDayEnergyBoxOld', 'tennisDayComboBoxOld', 'tennisDimensionEdgeBoxOld']);
 
-wireTennisRefreshButton('tennisStatsRefreshBtn');
-wireTennisRefreshButton('tennisStatsRefreshBtnOld');
-initTennisMatchupModal('');
-initTennisMatchupModal('Old');
-initModalTabSwitcher('statsTennisSection');
-initTennisBackfillButton();
-refreshTennisAndRender();
+  wireTennisRefreshButton('tennisStatsRefreshBtn');
+  wireTennisRefreshButton('tennisStatsRefreshBtnOld');
+  initTennisMatchupModal('');
+  initTennisMatchupModal('Old');
+  initModalTabSwitcher('statsTennisSection');
+  initTennisBackfillButton();
+  refreshTennisAndRender();
+}

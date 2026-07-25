@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Betting - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Owner-only gate for the Sports Betting section - must run before content renders -->
+<script src="sports-gate.js"></script>
+<div class="page ufc-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+
+  <div class="topbar">
+    <a href="sports-betting.html" class="back-link">&larr; Sports Betting</a>
+  </div>
+
+  <h1 class="page-title">🎰 Betting &mdash; Numerology Bet Builder</h1>
+
+  <div class="compat-mode-select" id="bettingSportPicker">
+    <a class="mode-card" href="#" data-sport="all">
+      <div class="mode-icon">🌐</div>
+      <div class="mode-title">All Sports</div>
+      <div class="mode-desc">One combined slate &mdash; every qualifying pick across MLB, Tennis, and UFC, with cross-sport parlays.</div>
+    </a>
+    <a class="mode-card" href="#" data-sport="mlb">
+      <div class="mode-icon">⚾</div>
+      <div class="mode-title">MLB</div>
+      <div class="mode-desc">Singles and parlays built from the MLB numerology edge and its backfilled track record.</div>
+    </a>
+    <a class="mode-card" href="#" data-sport="tennis">
+      <div class="mode-icon">🎾</div>
+      <div class="mode-title">Tennis</div>
+      <div class="mode-desc">Singles and parlays built from the Tennis numerology edge.</div>
+    </a>
+    <a class="mode-card" href="#" data-sport="ufc">
+      <div class="mode-icon">🥊</div>
+      <div class="mode-title">UFC</div>
+      <div class="mode-desc">Singles and parlays built from the UFC numerology edge.</div>
+    </a>
+  </div>
+
+  <div id="bettingSportContent" style="display:none;">
+    <div class="topbar">
+      <a href="#" class="back-link" id="bettingChooseSportLink">&larr; Choose a different sport</a>
+    </div>
+
+    <h2 class="section-title" id="bettingScopeTitle"></h2>
+
+    <div class="box stats-sport-box">
+      <div class="box-label">⚙️ Bet Settings</div>
+      <div class="betting-controls">
+        <label class="betting-control">
+          <span>💰 Bankroll ($)</span>
+          <input type="number" id="bettingBankrollInput" min="1" step="1" inputmode="decimal">
+        </label>
+        <label class="betting-control">
+          <span>🎟️ Bet Type</span>
+          <select id="bettingModeSelect">
+            <option value="singles">Singles</option>
+            <option value="2">2-Leg Parlay</option>
+            <option value="3">3-Leg Parlay</option>
+            <option value="4">4-Leg Parlay</option>
+          </select>
+        </label>
+      </div>
+      <div class="box-hint">Stakes are sized automatically from your bankroll (half-Kelly with daily caps). Only picks whose own historical bucket beats the market price qualify &mdash; if the data isn't there yet, no bet is suggested.</div>
+    </div>
+
+    <div class="pm-last-updated-row">
+      <span id="bettingLastUpdated"></span>
+      <button class="btn-link" id="bettingRefreshBtn" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="box" id="bettingTodayBox">
+      <div class="box-label">🎟️ Today's Bets</div>
+      <div id="bettingTodayContent"></div>
+    </div>
+
+    <div class="score-hero" id="bettingSummaryHero"></div>
+
+    <div class="box" id="bettingLedgerBox">
+      <div class="box-label">📒 Betting Stats &mdash; Daily Ledger</div>
+      <div class="box-hint">What the system would have bet each day using only the data available before that day, with the bankroll compounding. Click a day to see its tickets. Today's row updates as results come in.</div>
+      <div class="pm-table-scroll" id="bettingLedger"></div>
+      <div class="pm-table-pagination" id="bettingLedgerPagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="ufc-data.js"></script>
+<script src="tennis-data.js"></script>
+<script src="us-states-data.js"></script>
+<script src="mlb-api.js"></script>
+<script src="stats-ufc.js"></script>
+<script src="stats-tennis.js"></script>
+<script src="stats-mlb.js"></script>
+<script src="betting-core.js"></script>
+<script src="betting.js"></script>
+</body>
+</html>

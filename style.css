@@ -4373,3 +4373,125 @@ body {
 .collapsible summary:hover {
   color: var(--yellow);
 }
+
+/* ===================== Betting page ===================== */
+
+.box-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.betting-controls {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.betting-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.betting-control input,
+.betting-control select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  min-width: 130px;
+}
+
+.bet-day-summary {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 6px 0 10px;
+}
+
+.bet-ticket {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.bet-ticket.headline {
+  border-color: rgba(245, 197, 66, 0.45);
+  box-shadow: 0 0 8px rgba(245, 197, 66, 0.12);
+}
+
+.bet-ticket-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.bet-ticket-title {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--yellow);
+}
+
+.bet-ticket-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bet-ticket-status.won { color: var(--good); }
+.bet-ticket-status.lost { color: var(--bad); }
+.bet-ticket-status.pending { color: var(--muted); }
+.bet-ticket-status.void { color: var(--purple); }
+
+.bet-leg {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  padding: 3px 0;
+  border-top: 1px dashed rgba(61, 50, 38, 0.6);
+}
+
+.bet-leg-main { flex: 1 1 auto; min-width: 160px; }
+
+.bet-leg-nums {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.bet-ticket-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.bet-ledger-row { cursor: pointer; }
+
+.bet-ledger-row:hover td { background: rgba(245, 197, 66, 0.05); }
+
+.bet-ledger-detail td {
+  background: rgba(5, 4, 3, 0.5);
+  padding: 8px 10px;
+}
+
+.bet-inprogress {
+  font-size: 0.68rem;
+  color: var(--orange);
+}

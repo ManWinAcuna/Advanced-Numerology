@@ -1480,18 +1480,23 @@ function initMlbBackfillButton() {
   });
 }
 
-document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
-document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
-initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
-initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
+// Wire the Stats page DOM only when it exists - this file also loads on
+// betting.html purely for checkMlbResults() and the shared prediction
+// helpers, so the Betting page settles results through the same code path.
+if (document.getElementById('statsMlbSection')) {
+  document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
+  document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
+  initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
+  initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
 
-initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
-initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
+  initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
+  initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
 
-initMlbMatchupModal('');
-initMlbMatchupModal('Old');
-initMlbKSignalModal('');
-initMlbKSignalModal('Old');
-initModalTabSwitcher('statsMlbSection');
-initMlbBackfillButton();
-refreshAndRenderMlb();
+  initMlbMatchupModal('');
+  initMlbMatchupModal('Old');
+  initMlbKSignalModal('');
+  initMlbKSignalModal('Old');
+  initModalTabSwitcher('statsMlbSection');
+  initMlbBackfillButton();
+  refreshAndRenderMlb();
+}

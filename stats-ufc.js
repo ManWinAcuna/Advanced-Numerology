@@ -668,18 +668,23 @@ function initUfcBackfillButton() {
   });
 }
 
-document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
-document.getElementById('statsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('ufcOld'));
-initDayFilter('ufc', () => { resetPagination('statsTable'); renderUfcScope('', currentPredictions); });
-initDayFilter('ufcOld', () => { resetPagination('statsTableOld'); renderUfcScope('Old', currentPredictions); });
+// Wire the Stats page DOM only when it exists - this file also loads on
+// betting.html purely for checkResults() and the shared prediction helpers,
+// so the Betting page settles results through the exact same code path.
+if (document.getElementById('statsUfcSection')) {
+  document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
+  document.getElementById('statsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('ufcOld'));
+  initDayFilter('ufc', () => { resetPagination('statsTable'); renderUfcScope('', currentPredictions); });
+  initDayFilter('ufcOld', () => { resetPagination('statsTableOld'); renderUfcScope('Old', currentPredictions); });
 
-initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'statsDayComboBox', 'ufcDimensionEdgeBox']);
-initBreakdownToggle('statsBreakdownToggleOld', ['statsEdgeTiersBoxOld', 'statsPriceBucketsBoxOld', 'statsUniversalDayBoxOld', 'statsDayEnergyBoxOld', 'statsDayComboBoxOld', 'ufcDimensionEdgeBoxOld']);
+  initBreakdownToggle('statsBreakdownToggle', ['statsEdgeTiersBox', 'statsPriceBucketsBox', 'statsUniversalDayBox', 'statsDayEnergyBox', 'statsDayComboBox', 'ufcDimensionEdgeBox']);
+  initBreakdownToggle('statsBreakdownToggleOld', ['statsEdgeTiersBoxOld', 'statsPriceBucketsBoxOld', 'statsUniversalDayBoxOld', 'statsDayEnergyBoxOld', 'statsDayComboBoxOld', 'ufcDimensionEdgeBoxOld']);
 
-wireUfcRefreshButton('statsRefreshBtn');
-wireUfcRefreshButton('statsRefreshBtnOld');
-initMatchupModal('');
-initMatchupModal('Old');
-initModalTabSwitcher('statsUfcSection');
-initUfcBackfillButton();
-refreshAndRenderUfc();
+  wireUfcRefreshButton('statsRefreshBtn');
+  wireUfcRefreshButton('statsRefreshBtnOld');
+  initMatchupModal('');
+  initMatchupModal('Old');
+  initModalTabSwitcher('statsUfcSection');
+  initUfcBackfillButton();
+  refreshAndRenderUfc();
+}
