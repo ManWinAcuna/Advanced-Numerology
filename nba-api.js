@@ -134,6 +134,38 @@ function parseEspnRosterDob(dateOfBirth) {
   return m ? m[1] : null;
 }
 
+/* ---------- Venue state ---------- */
+// ESPN reports a venue's state as a two-letter code ("MI"), while US_STATES in
+// us-states-data.js is keyed by full name - MLB's own API happens to give the
+// full name, so nothing needed translating until now.
+//
+// Note what is deliberately absent: DC. The Wizards' arena reports state "DC",
+// and US_STATES holds the 50 states only. Mapping DC onto Washington state
+// would attach the wrong founding date to a different entity, so a DC game
+// simply resolves to no state and computeFighterScore falls back to its
+// day-only read - the same thing an international game does.
+const NBA_STATE_CODE_TO_NAME = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi',
+  MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire',
+  NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina',
+  ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee',
+  TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
+  WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+};
+
+// The US_STATES entry ({ name, founded }) for an ESPN state code, or null when
+// there isn't one - never a substitute.
+function nbaVenueStateInfo(stateCode) {
+  const name = NBA_STATE_CODE_TO_NAME[String(stateCode || '').toUpperCase()];
+  if (!name) return null;
+  return US_STATES.find((s) => s.name === name) || null;
+}
+
 /* ---------- Polymarket market parsing ---------- */
 // Flattens one two-outcome market (a moneyline's team pair, a totals line's
 // Over/Under, a prop's Yes/No) into the fields the tracking needs. Mirrors

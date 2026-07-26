@@ -49,12 +49,11 @@
       <div class="mode-title">MLB</div>
       <div class="mode-desc">Win-rate track record for the MLB team &amp; pitcher numerology edge, plus historical backfill.</div>
     </a>
-    <div class="mode-card disabled">
+    <a class="mode-card" href="#" data-sport="nba">
       <div class="mode-icon">🏀</div>
       <div class="mode-title">NBA</div>
-      <div class="mode-desc">Win-rate tracking for NBA games.</div>
-      <span class="coming-soon-tag">Coming Soon</span>
-    </div>
+      <div class="mode-desc">Win-rate track record for the NBA rotation numerology edge, plus historical backfill.</div>
+    </a>
     <div class="mode-card disabled">
       <div class="mode-icon">🏈</div>
       <div class="mode-title">NFL</div>
@@ -1049,6 +1048,386 @@
     </div>
    </div>
   </div>
+
+  <div id="statsNbaSection" style="display:none;">
+   <div class="pm-modal-tabs" id="nbaScopeTabs">
+     <button class="pm-modal-tab active" data-tab="today" type="button">📅 Today</button>
+     <button class="pm-modal-tab" data-tab="old" type="button">📊 Old Data</button>
+   </div>
+
+   <div class="pm-modal-page" data-page="today">
+    <div class="box stats-sport-box">
+      <div class="box-label">NBA View</div>
+      <select id="nbaViewSelect">
+        <option value="game">🎯 Game Picks</option>
+        <option value="totals">↕️ Game Totals (O/U)</option>
+      </select>
+    </div>
+
+    <div id="nbaGameSection">
+    <div class="pm-last-updated-row">
+      <span id="nbaStatsLastUpdated"></span>
+      <button class="btn-link" id="nbaStatsRefreshBtn" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="nbaStatsHero"></div>
+
+    <div class="breakdown-section" id="nbaStatsBreakdown"></div>
+
+    <div class="box stats-sport-box">
+      <div class="box-label">📊 Show Breakdown</div>
+      <select id="nbaBreakdownToggle">
+        <option value="nbaStatsEdgeTiersBox">Win Rate by Edge Strength</option>
+        <option value="nbaStatsPriceBucketsBox">Win Rate by Market Price</option>
+        <option value="nbaUniversalDayBox">Win Rate by Universal Day</option>
+        <option value="nbaDayEnergyBox">Win Rate by Day Energy</option>
+        <option value="nbaDayComboBox">Win Rate by Universal Day + Day Energy Combo</option>
+        <option value="nbaComponentSignalBox">Which Component Predicts Best</option>
+        <option value="nbaDimensionEdgeBox">Which Compatibility Dimension Predicts Best</option>
+      </select>
+    </div>
+
+    <div class="box" id="nbaStatsEdgeTiersBox">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsEdgeTiersTable">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsEdgeTiers"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="nbaStatsPriceBucketsBox">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsPriceBucketsTable">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsPriceBuckets"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="nbaUniversalDayBox">
+      <div class="box-label">Win Rate by Universal Day</div>
+      <div class="mode-desc">The game date's own life path (full date reduced), independent of either team's own numerology &mdash; some days simply run hotter or colder for the edge than others.</div>
+      <div class="pm-table-scroll" id="nbaUniversalDay"></div>
+    </div>
+
+    <div class="box" id="nbaDayEnergyBox">
+      <div class="box-label">Win Rate by Day Energy</div>
+      <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+      <div class="pm-table-scroll" id="nbaDayEnergy"></div>
+    </div>
+
+    <div class="box" id="nbaDayComboBox">
+      <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+      <div class="mode-desc">Crosses the two instead of testing them one at a time &mdash; the actual best energy combo to bet on. Only combos that have actually come up are listed.</div>
+      <div class="pm-table-scroll" id="nbaDayCombo"></div>
+    </div>
+
+    <div class="box" id="nbaComponentSignalBox">
+      <div class="box-label">Which Component Predicts Best</div>
+      <div class="mode-desc">The team score is a minutes-weighted average, so this asks where the signal actually lives: the heavy-minutes core, or the back of the rotation? A positive <b>Edge</b> (in points) means that group beats the market on its own. &#127919; Full Composite is the current blended model, shown as the baseline to beat.</div>
+      <div class="pm-table-scroll" id="nbaComponentSignal"></div>
+    </div>
+
+    <div class="box" id="nbaDimensionEdgeBox">
+      <div class="box-label">Which Compatibility Dimension Predicts Best</div>
+      <div class="mode-desc">One level deeper than components: the score itself is a blend of date anchors (birth vs. <b>game day</b>, <b>state/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone here &mdash; a positive <b>Edge</b> means that dimension beats the market, ~0 or negative means it&rsquo;s dead weight diluting the score. &#127919; Full Score is the current blend, the baseline to beat.</div>
+      <div class="pm-table-scroll" id="nbaDimensionEdge"></div>
+    </div>
+
+    <div class="box" id="nbaStatsTableBox">
+      <div class="box-label">Tracked Games &mdash; Today</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pm-table-pagination" id="nbaStatsTablePagination"></div>
+    </div>
+
+    <div class="modal-overlay" id="nbaStatsMatchupOverlay">
+      <div class="modal-box">
+        <button class="modal-close" id="nbaStatsMatchupClose" title="Close">&times;</button>
+        <div id="nbaStatsMatchupBody"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="nbaTotalsSection" style="display:none;">
+      <div class="score-hero" id="nbaTotalsHero"></div>
+
+      <div class="box stats-sport-box">
+        <div class="box-label">📊 Show Breakdown</div>
+        <select id="nbaTotalsBreakdownToggle">
+          <option value="nbaTotalsTierBox">Win Rate by Pace Strength</option>
+          <option value="nbaTotalsComponentBox">Which Signal Predicts Best</option>
+          <option value="nbaTotalsUniversalDayBox">Win Rate by Universal Day</option>
+          <option value="nbaTotalsDayEnergyBox">Win Rate by Day Energy</option>
+          <option value="nbaTotalsDayComboBox">Win Rate by Universal Day + Day Energy Combo</option>
+        </select>
+      </div>
+
+      <div class="box" id="nbaTotalsTierBox">
+        <div class="box-label">Win Rate by Pace Strength</div>
+        <div class="mode-desc">How far the pace score sits from neutral &mdash; if the signal means anything, the win rate should climb from Slight to Strong.</div>
+        <div class="pm-table-scroll" id="nbaTotalsTier"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsComponentBox">
+        <div class="box-label">Which Signal Predicts Best</div>
+        <div class="mode-desc">Each group averaged across both teams, then scored alone against the market &mdash; so the data picks the signal instead of us assuming the full pace score is the right read. Needs a Backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="nbaTotalsComponentSignal"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsUniversalDayBox">
+        <div class="box-label">Win Rate by Universal Day</div>
+        <div class="mode-desc">The game date's own life path, independent of either team &mdash; some days run hotter for the edge than others.</div>
+        <div class="pm-table-scroll" id="nbaTotalsUniversalDay"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsDayEnergyBox">
+        <div class="box-label">Win Rate by Day Energy</div>
+        <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+        <div class="pm-table-scroll" id="nbaTotalsDayEnergy"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsDayComboBox">
+        <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+        <div class="mode-desc">Crosses the two instead of testing them one at a time. Only combos that have actually come up are listed.</div>
+        <div class="pm-table-scroll" id="nbaTotalsDayCombo"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsTableBox">
+        <div class="box-label">↕️ Game Totals &mdash; Main Line Over/Under</div>
+        <div class="mode-desc">Full-game points total against the main line (the one priced closest to even). The read is that more energy on the floor means more scoring, so a high pace score picks Over &mdash; the opposite direction from MLB's pitcher duel. If that's backwards, this table will say so by sitting under 50%.</div>
+        <div id="nbaTotalsBody"></div>
+        <div class="pm-table-pagination" id="nbaTotalsPagination"></div>
+      </div>
+    </div>
+   </div>
+
+   <div class="pm-modal-page" data-page="old" style="display:none;">
+    <div class="box stats-sport-box">
+      <div class="box-label">NBA View</div>
+      <select id="nbaViewSelectOld">
+        <option value="game">🎯 Game Picks</option>
+        <option value="totals">↕️ Game Totals (O/U)</option>
+      </select>
+    </div>
+
+    <div class="box" id="nbaBackfillBox">
+      <div class="box-label">🕰️ Historical Backfill</div>
+      <div class="mode-desc">Pull already-played NBA games straight from ESPN's and Polymarket's own historical data, instead of waiting for the live tracker to build a track record one game at a time. Polymarket has no NBA markets before 2024-10-21, so that is as far back as a priced pick can go.</div>
+      <button class="btn-link" id="nbaBackfillBtn" type="button">🔄 Backfill Data</button>
+      <div class="mode-desc" id="nbaBackfillStatus"></div>
+      <div class="betting-day-filter-group" style="margin-top:8px;">
+        <span class="betting-day-filter-label">📅 Window</span>
+        <select id="nbaBackfillWindowSelect">
+          <option value="91">13 weeks</option>
+          <option value="182">26 weeks</option>
+          <option value="364">52 weeks</option>
+          <option value="730">2 seasons (max)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="nbaGameSectionOld">
+    <div class="pm-last-updated-row">
+      <span id="nbaStatsLastUpdatedOld"></span>
+      <button class="btn-link" id="nbaStatsRefreshBtnOld" type="button">🔄 Check Results</button>
+    </div>
+
+    <div class="score-hero" id="nbaStatsHeroOld"></div>
+
+    <div class="breakdown-section" id="nbaStatsBreakdownOld"></div>
+
+    <div class="box stats-sport-box">
+      <div class="box-label">📊 Show Breakdown</div>
+      <select id="nbaBreakdownToggleOld">
+        <option value="nbaStatsEdgeTiersBoxOld">Win Rate by Edge Strength</option>
+        <option value="nbaStatsPriceBucketsBoxOld">Win Rate by Market Price</option>
+        <option value="nbaUniversalDayBoxOld">Win Rate by Universal Day</option>
+        <option value="nbaDayEnergyBoxOld">Win Rate by Day Energy</option>
+        <option value="nbaDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
+        <option value="nbaComponentSignalBoxOld">Which Component Predicts Best</option>
+        <option value="nbaDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+      </select>
+    </div>
+
+    <div class="box" id="nbaStatsEdgeTiersBoxOld">
+      <div class="box-label">Win Rate by Edge Strength</div>
+      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsEdgeTiersTableOld">
+          <thead>
+            <tr>
+              <th>Edge Strength</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsEdgeTiersOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="nbaStatsPriceBucketsBoxOld">
+      <div class="box-label">Win Rate by Market Price</div>
+      <div class="mode-desc">The same track record as above, split by the actual odds numerology's pick was at &mdash; a 45% underdog and a 10% longshot aren't the same bet.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsPriceBucketsTableOld">
+          <thead>
+            <tr>
+              <th>Pick's Market Price</th>
+              <th>Picks</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsPriceBucketsOld"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" id="nbaUniversalDayBoxOld">
+      <div class="box-label">Win Rate by Universal Day</div>
+      <div class="mode-desc">The game date's own life path (full date reduced), independent of either team's own numerology &mdash; some days simply run hotter or colder for the edge than others.</div>
+      <div class="pm-table-scroll" id="nbaUniversalDayOld"></div>
+    </div>
+
+    <div class="box" id="nbaDayEnergyBoxOld">
+      <div class="box-label">Win Rate by Day Energy</div>
+      <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+      <div class="pm-table-scroll" id="nbaDayEnergyOld"></div>
+    </div>
+
+    <div class="box" id="nbaDayComboBoxOld">
+      <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+      <div class="mode-desc">Crosses the two instead of testing them one at a time &mdash; the actual best energy combo to bet on. Only combos that have actually come up are listed.</div>
+      <div class="pm-table-scroll" id="nbaDayComboOld"></div>
+    </div>
+
+    <div class="box" id="nbaComponentSignalBoxOld">
+      <div class="box-label">Which Component Predicts Best</div>
+      <div class="mode-desc">The team score is a minutes-weighted average, so this asks where the signal actually lives: the heavy-minutes core, or the back of the rotation? A positive <b>Edge</b> (in points) means that group beats the market on its own. &#127919; Full Composite is the current blended model, shown as the baseline to beat.</div>
+      <div class="pm-table-scroll" id="nbaComponentSignalOld"></div>
+    </div>
+
+    <div class="box" id="nbaDimensionEdgeBoxOld">
+      <div class="box-label">Which Compatibility Dimension Predicts Best</div>
+      <div class="mode-desc">One level deeper than components: the score itself is a blend of date anchors (birth vs. <b>game day</b>, <b>state/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone here &mdash; a positive <b>Edge</b> means that dimension beats the market, ~0 or negative means it&rsquo;s dead weight diluting the score. &#127919; Full Score is the current blend, the baseline to beat.</div>
+      <div class="pm-table-scroll" id="nbaDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="nbaStatsTableBoxOld">
+      <div class="box-label">Tracked Games &mdash; All Tracked</div>
+      <div class="mode-desc">Tap any row for the numerology score and market odds at the time.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table" id="nbaStatsTableOld">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Matchup</th>
+              <th>Numerology Pick</th>
+              <th>Edge</th>
+              <th>Type</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="nbaStatsTableBodyOld"></tbody>
+        </table>
+      </div>
+      <div class="pm-table-pagination" id="nbaStatsTablePaginationOld"></div>
+    </div>
+
+    <div class="modal-overlay" id="nbaStatsMatchupOverlayOld">
+      <div class="modal-box">
+        <button class="modal-close" id="nbaStatsMatchupCloseOld" title="Close">&times;</button>
+        <div id="nbaStatsMatchupBodyOld"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="nbaTotalsSectionOld" style="display:none;">
+      <div class="score-hero" id="nbaTotalsHeroOld"></div>
+
+      <div class="box stats-sport-box">
+        <div class="box-label">📊 Show Breakdown</div>
+        <select id="nbaTotalsBreakdownToggleOld">
+          <option value="nbaTotalsTierBoxOld">Win Rate by Pace Strength</option>
+          <option value="nbaTotalsComponentBoxOld">Which Signal Predicts Best</option>
+          <option value="nbaTotalsUniversalDayBoxOld">Win Rate by Universal Day</option>
+          <option value="nbaTotalsDayEnergyBoxOld">Win Rate by Day Energy</option>
+          <option value="nbaTotalsDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
+        </select>
+      </div>
+
+      <div class="box" id="nbaTotalsTierBoxOld">
+        <div class="box-label">Win Rate by Pace Strength</div>
+        <div class="mode-desc">How far the pace score sits from neutral &mdash; if the signal means anything, the win rate should climb from Slight to Strong.</div>
+        <div class="pm-table-scroll" id="nbaTotalsTierOld"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsComponentBoxOld">
+        <div class="box-label">Which Signal Predicts Best</div>
+        <div class="mode-desc">Each group averaged across both teams, then scored alone against the market &mdash; so the data picks the signal instead of us assuming the full pace score is the right read. Needs a Backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="nbaTotalsComponentSignalOld"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsUniversalDayBoxOld">
+        <div class="box-label">Win Rate by Universal Day</div>
+        <div class="mode-desc">The game date's own life path, independent of either team &mdash; some days run hotter for the edge than others.</div>
+        <div class="pm-table-scroll" id="nbaTotalsUniversalDayOld"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsDayEnergyBoxOld">
+        <div class="box-label">Win Rate by Day Energy</div>
+        <div class="mode-desc">Just the day-of-month digits reduced &mdash; a narrower, faster-cycling read than Universal Day.</div>
+        <div class="pm-table-scroll" id="nbaTotalsDayEnergyOld"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsDayComboBoxOld">
+        <div class="box-label">Win Rate by Universal Day + Day Energy Combo</div>
+        <div class="mode-desc">Crosses the two instead of testing them one at a time. Only combos that have actually come up are listed.</div>
+        <div class="pm-table-scroll" id="nbaTotalsDayComboOld"></div>
+      </div>
+
+      <div class="box" id="nbaTotalsTableBoxOld">
+        <div class="box-label">↕️ Game Totals &mdash; Main Line Over/Under</div>
+        <div class="mode-desc">Full-game points total against the main line (the one priced closest to even). The read is that more energy on the floor means more scoring, so a high pace score picks Over &mdash; the opposite direction from MLB's pitcher duel. If that's backwards, this table will say so by sitting under 50%.</div>
+        <div id="nbaTotalsBodyOld"></div>
+        <div class="pm-table-pagination" id="nbaTotalsPaginationOld"></div>
+      </div>
+    </div>
+   </div>
+  </div>
+
   </div>
 
 </div>
@@ -1066,9 +1445,11 @@
 <script src="tennis-data.js"></script>
 <script src="us-states-data.js"></script>
 <script src="mlb-api.js"></script>
+<script src="nba-api.js"></script>
 <script src="stats-ufc.js"></script>
 <script src="stats-tennis.js"></script>
 <script src="stats-mlb.js"></script>
+<script src="stats-nba.js"></script>
 <script>
 function applyMlbView(selectId, suffix) {
   const view = document.getElementById(selectId).value;
@@ -1079,15 +1460,27 @@ function applyMlbView(selectId, suffix) {
   show('mlbTotalsSection', 'totals');
 }
 
+function applyNbaView(selectId, suffix) {
+  const view = document.getElementById(selectId).value;
+  const show = (id, when) => { document.getElementById(id + suffix).style.display = view === when ? '' : 'none'; };
+  show('nbaGameSection', 'game');
+  show('nbaTotalsSection', 'totals');
+}
+
 function showSport(sport) {
   document.getElementById('statsSportPicker').style.display = 'none';
   document.getElementById('statsSportContent').style.display = '';
   document.getElementById('statsUfcSection').style.display = sport === 'ufc' ? '' : 'none';
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
   document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
+  document.getElementById('statsNbaSection').style.display = sport === 'nba' ? '' : 'none';
   if (sport === 'mlb') {
     applyMlbView('mlbViewSelect', '');
     applyMlbView('mlbViewSelectOld', 'Old');
+  }
+  if (sport === 'nba') {
+    applyNbaView('nbaViewSelect', '');
+    applyNbaView('nbaViewSelectOld', 'Old');
   }
 }
 
@@ -1106,6 +1499,8 @@ document.getElementById('statsChooseSportLink').addEventListener('click', (e) =>
 
 document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', ''));
 document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'Old'));
+document.getElementById('nbaViewSelect').addEventListener('change', () => applyNbaView('nbaViewSelect', ''));
+document.getElementById('nbaViewSelectOld').addEventListener('change', () => applyNbaView('nbaViewSelectOld', 'Old'));
 </script>
 </body>
 </html>

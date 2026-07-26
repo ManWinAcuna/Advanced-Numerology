@@ -9,6 +9,8 @@ async function refreshBetLogAndRender() {
     checkTennisResults(),
     checkMlbResults(),
     checkMlbDuelResults(),
+    checkNbaResults(),
+    checkNbaTotalsResults(),
   ]);
   document.getElementById('betLogLastUpdated').textContent = `Results checked ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   renderBettingLog();

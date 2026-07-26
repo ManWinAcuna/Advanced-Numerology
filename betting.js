@@ -439,6 +439,11 @@ async function checkBettingResults(scope) {
     // the Betting page fills its own slate without a Stats-page visit first.
     jobs.push(recordTodaysMlbGames());
   }
+  if (scope === 'all' || scope === 'nba') {
+    jobs.push(checkNbaResults());
+    jobs.push(checkNbaTotalsResults());
+    jobs.push(recordTodaysNbaGames());
+  }
   await Promise.allSettled(jobs);
 }
 
@@ -559,21 +564,37 @@ function renderBettingMixedChips() {
   document.getElementById('bettingMixedRow').style.display = loadBettingMode() === 'mixed' ? '' : 'none';
 }
 
-// Market toggles - which MLB market kinds feed the MLB / All Sports slates.
-// Every one of these markets is MLB-only (NRFI and run totals don't exist for
-// a fight or a tennis match, and the Moneyline toggle gates MLB's moneyline
-// alone - UFC and Tennis have no market switch at all). So the labels say MLB
-// and the whole row hides on scopes it can't affect.
-const BETTING_MARKET_LABELS = { moneyline: '⚾ MLB Moneyline', nrfi: '1️⃣ MLB NRFI', totals: '↕️ MLB Totals' };
+// Market toggles. Every market kind belongs to exactly one sport - NRFI and
+// run totals don't exist for a fight or a tennis match, and NBA's own
+// moneyline/totals are separate keys so an MLB toggle can't gate them. UFC and
+// Tennis have no market switch at all.
+//
+// Each chip therefore declares its owning scope, and the row only shows the
+// chips that can actually affect the scope being viewed - hiding entirely on
+// scopes it can't touch. Previously the MLB chips rendered on the UFC and
+// Tennis scopes where they did nothing, which read as NRFI existing for boxing.
+const BETTING_MARKET_LABELS = {
+  moneyline: '⚾ MLB Moneyline',
+  nrfi: '1️⃣ MLB NRFI',
+  totals: '↕️ MLB Totals',
+  nbaMoneyline: '🏀 NBA Moneyline',
+  nbaTotals: '↕️ NBA Totals',
+};
+
+const BETTING_MARKET_SCOPE = {
+  moneyline: 'mlb', nrfi: 'mlb', totals: 'mlb',
+  nbaMoneyline: 'nba', nbaTotals: 'nba',
+};
 
 function renderBettingMarketChips() {
   const row = document.getElementById('bettingMarketsRow');
-  const appliesToScope = currentBettingScope === 'mlb' || currentBettingScope === 'all';
-  row.style.display = appliesToScope ? '' : 'none';
-  if (!appliesToScope) return;
+  const visible = BETTING_MARKET_OPTIONS.filter((m) =>
+    currentBettingScope === 'all' || BETTING_MARKET_SCOPE[m] === currentBettingScope);
+  row.style.display = visible.length ? '' : 'none';
+  if (!visible.length) return;
 
   const markets = loadBettingMarkets();
-  document.getElementById('bettingMarketsChips').innerHTML = BETTING_MARKET_OPTIONS.map((m) =>
+  document.getElementById('bettingMarketsChips').innerHTML = visible.map((m) =>
     `<button type="button" class="betting-day-chip${markets.includes(m) ? ' active' : ''}" data-market="${m}">${BETTING_MARKET_LABELS[m]}</button>`).join('');
 }
 

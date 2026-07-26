@@ -6,6 +6,7 @@
 const BETTING_SCOPE_META = {
   all: { label: 'All Sports', icon: '🌐' },
   mlb: { label: 'MLB', icon: '⚾' },
+  nba: { label: 'NBA', icon: '🏀' },
   tennis: { label: 'Tennis', icon: '🎾' },
   ufc: { label: 'UFC', icon: '🥊' },
 };

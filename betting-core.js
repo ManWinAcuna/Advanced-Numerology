@@ -222,19 +222,42 @@ const BETTING_SPORTS = {
   mlb: { label: 'MLB', icon: '⚾', load: () => loadMlbPredictions(), timeField: 'gameTime', minGap: MLB_REAL_EDGE_MIN_GAP, tiers: MLB_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName', market: 'moneyline', scopeSport: 'mlb' },
   mlbNrfi: { label: 'MLB NRFI', icon: '1️⃣', load: () => loadMlbNrfiPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'nrfi', scopeSport: 'mlb' },
   mlbTotals: { label: 'MLB Totals', icon: '↕️', load: () => loadMlbTotalsPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'totals', scopeSport: 'mlb' },
+  nba: { label: 'NBA', icon: '🏀', load: () => loadNbaPredictions(), timeField: 'gameTime', minGap: NBA_REAL_EDGE_MIN_GAP, tiers: NBA_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName', market: 'nbaMoneyline', scopeSport: 'nba', eventIdField: 'eventId' },
+  nbaTotals: { label: 'NBA Totals', icon: '↕️', load: () => loadNbaTotalsPredictions(), timeField: 'gameTime', minGap: NBA_TOTALS_MIN_GAP, tiers: NBA_TOTALS_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'nbaTotals', scopeSport: 'nba', eventIdField: 'eventId' },
   tennis: { label: 'Tennis', icon: '🎾', load: () => loadTennisPredictions(), timeField: 'matchTime', minGap: REAL_EDGE_MIN_GAP, tiers: EDGE_TIERS, nameA: 'playerAName', nameB: 'playerBName' },
   ufc: { label: 'UFC', icon: '🥊', load: () => loadUfcPredictions(), timeField: 'fightTime', minGap: REAL_EDGE_MIN_GAP, tiers: EDGE_TIERS, nameA: 'fighterAName', nameB: 'fighterBName' },
 };
 
-// Which MLB market kinds are enabled on the Betting page.
+// Which per-sport market kinds are enabled on the Betting page. Each key is
+// owned by exactly one scope (see BETTING_MARKET_SCOPE in betting.js) so an
+// NBA toggle can never gate an MLB market or vice versa.
 const BETTING_MARKETS_KEY = 'numerology_betting_markets';
-const BETTING_MARKET_OPTIONS = ['moneyline', 'nrfi', 'totals'];
+const BETTING_MARKET_OPTIONS = ['moneyline', 'nrfi', 'totals', 'nbaMoneyline', 'nbaTotals'];
+
+// Bumped whenever new market keys are introduced. Without this, a saved list
+// from before NBA existed would filter down to the three MLB keys and the new
+// NBA markets would silently default to OFF - which reads as "NBA is broken"
+// rather than "a toggle is off". On a version bump the newly-added keys are
+// unioned in once and the version recorded, so a later deliberate toggle-off
+// stays off.
+const BETTING_MARKETS_VERSION_KEY = 'numerology_betting_markets_version';
+const BETTING_MARKETS_VERSION = 2;
 
 function loadBettingMarkets() {
   try {
     const v = JSON.parse(localStorage.getItem(BETTING_MARKETS_KEY));
-    const list = Array.isArray(v) ? v.filter((m) => BETTING_MARKET_OPTIONS.includes(m)) : [];
-    return list.length ? list : [...BETTING_MARKET_OPTIONS];
+    let list = Array.isArray(v) ? v.filter((m) => BETTING_MARKET_OPTIONS.includes(m)) : [];
+    if (!list.length) return [...BETTING_MARKET_OPTIONS];
+
+    if (Number(localStorage.getItem(BETTING_MARKETS_VERSION_KEY)) !== BETTING_MARKETS_VERSION) {
+      const added = BETTING_MARKET_OPTIONS.filter((m) => !list.includes(m));
+      if (added.length) {
+        list = [...list, ...added];
+        localStorage.setItem(BETTING_MARKETS_KEY, JSON.stringify(list));
+      }
+      localStorage.setItem(BETTING_MARKETS_VERSION_KEY, String(BETTING_MARKETS_VERSION));
+    }
+    return list;
   } catch (e) {
     return [...BETTING_MARKET_OPTIONS];
   }
@@ -272,10 +295,14 @@ function normalizeBettingPick(p, sportKey) {
     // same outcome the pick was made on.
     outcomeIndex: normalizeName(p.numerologyFavorite) === normalizeName(nameA) ? 0 : 1,
     // Identifies the underlying event across markets - MLB's moneyline, NRFI
-    // and totals records for one game all share its gamePk, which is what
-    // lets the parlay builder see that three "different" legs are really
-    // three reads on the same game.
-    gameKey: p.gamePk != null ? `mlb#${p.gamePk}` : `${sportKey}#${p.conditionId || timeISO}`,
+    // and totals records for one game all share its gamePk, and NBA's
+    // moneyline and totals share ESPN's eventId, which is what lets the parlay
+    // builder see that several "different" legs are really several reads on the
+    // same game. cfg.eventIdField names whichever field carries that id; the
+    // resulting key is prefixed by scope so two sports can never collide.
+    gameKey: (cfg.eventIdField && p[cfg.eventIdField] != null)
+      ? `${cfg.scopeSport || sportKey}#${p[cfg.eventIdField]}`
+      : `${sportKey}#${p.conditionId || timeISO}`,
     matchup: cfg.matchupField && p[cfg.matchupField] ? p[cfg.matchupField] : `${p[cfg.nameA]} vs ${p[cfg.nameB]}`,
     pickName: p.numerologyFavorite,
     price,
