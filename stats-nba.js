@@ -536,12 +536,15 @@ function renderNbaPropHero(signals, suffix = '') {
     return;
   }
 
-  // The single most extreme band across every stat, by sigma.
+  // The single most extreme band across every stat, judged on the magnitude
+  // test - it uses how MUCH a player beat his average by rather than only
+  // whether he did, and measured about 40% more sensitive on a known small
+  // effect (+4.78 sigma vs +3.38 for the same +0.15 assists).
   let best = null;
   NBA_PROP_STATS.forEach((stat) => {
     computeNbaPropBandStats(signals, stat).forEach((b) => {
-      if (b.sigma == null || !b.count) return;
-      if (!best || Math.abs(b.sigma) > Math.abs(best.sigma)) best = { ...b, stat };
+      if (b.diffSigma == null || !b.samples) return;
+      if (!best || Math.abs(b.diffSigma) > Math.abs(best.diffSigma)) best = { ...b, stat };
     });
   });
 
@@ -553,19 +556,21 @@ function renderNbaPropHero(signals, suffix = '') {
     return;
   }
 
-  const passes = Math.abs(best.sigma) >= NBA_PROP_SIGMA_BAR;
+  const passes = Math.abs(best.diffSigma) >= NBA_PROP_SIGMA_BAR;
+  const diffTxt = `${best.meanDiff > 0 ? '+' : ''}${best.meanDiff.toFixed(2)}`;
   hero.innerHTML = `
     <div class="score-names">Strongest Prop Signal</div>
-    <div class="score-big ${passes ? (best.sigma > 0 ? 'good' : 'bad') : ''}">${best.overPct}<span class="score-out-of">% over</span></div>
+    <div class="score-big ${passes ? (best.diffSigma > 0 ? 'good' : 'bad') : ''}">${diffTxt}<span class="score-out-of"> vs own avg</span></div>
     <div class="pm-breakdown-hint">
       ${escapeHtml(NBA_PROP_STAT_LABELS[best.stat])} on ${escapeHtml(best.label)} days &middot;
-      ${best.count.toLocaleString()} player-games &middot;
-      <b>${best.sigma > 0 ? '+' : ''}${best.sigma.toFixed(2)} sigma</b> from the 50% coin flip
+      ${best.samples.toLocaleString()} player-games &middot;
+      <b>${best.diffSigma > 0 ? '+' : ''}${best.diffSigma.toFixed(2)} sigma</b> against every other band
     </div>
     <div class="mode-desc">${passes
-      ? `That clears the ${NBA_PROP_SIGMA_BAR} sigma bar this table is held to, which is a real effect rather than a lucky band.`
-      : `Below the ${NBA_PROP_SIGMA_BAR} sigma bar. ${NBA_PROP_TEST_COUNT} bands are tested at once here, so about one would reach 2 sigma by chance alone every time you look &mdash; treat anything under ${NBA_PROP_SIGMA_BAR} sigma as noise, however good the percentage looks.`}
-    <br>Baseline is each player's own trailing ${NBA_FORM_WINDOW}-game average, so talent cancels out and the honest null is exactly 50%. ${total.toLocaleString()} player-games recorded.</div>`;
+      ? `That clears the ${NBA_PROP_SIGMA_BAR} sigma bar this table is held to &mdash; a real effect rather than a lucky band.`
+      : `Below the ${NBA_PROP_SIGMA_BAR} sigma bar, so read it as nothing. ${NBA_PROP_TEST_COUNT} bands are tested at once here, and about one reaches 2 sigma by chance every time you look.`}
+    <br><b>Read the sigma, not the percentage.</b> Beating your own trailing <i>mean</i> is a sub-50% proposition for any counting stat &mdash; a few big games drag the mean above the median, so with zero numerology effect at all these rates sit near 45-48%. A raw rate below 50% therefore means nothing on its own. What matters is whether one band differs from the others, which is exactly what the sigma columns test.
+    <br>Baseline is each player's own trailing ${NBA_FORM_WINDOW}-game average, so talent cancels out entirely. ${total.toLocaleString()} player-games recorded.</div>`;
 }
 
 function renderNbaPropStatTable(signals, stat, elId) {
@@ -577,24 +582,35 @@ function renderNbaPropStatTable(signals, stat, elId) {
     el.innerHTML = '<div class="empty-state">No player-games collected for this stat yet.</div>';
     return;
   }
-  const body = rows.map((r) => {
-    const sig = r.sigma == null ? null : Math.abs(r.sigma) >= NBA_PROP_SIGMA_BAR;
-    return `
+  const overallPct = (rows.find((r) => r.overallPct != null) || {}).overallPct;
+  const cell = (sigma, text) => (sigma == null
+    ? '<span class="empty-state">—</span>'
+    : `<span class="score-inline ${Math.abs(sigma) >= NBA_PROP_SIGMA_BAR ? (sigma > 0 ? 'good' : 'bad') : ''}">${text}</span>`);
+
+  const body = rows.map((r) => `
       <tr>
         <td>${escapeHtml(r.label)}</td>
         <td>${r.count.toLocaleString()}</td>
         <td>${r.overPct != null ? `${r.overPct}%` : '—'}</td>
-        <td>${r.sigma != null
-          ? `<span class="score-inline ${sig ? (r.sigma > 0 ? 'good' : 'bad') : ''}">${r.sigma > 0 ? '+' : ''}${r.sigma.toFixed(2)}</span>`
-          : '<span class="empty-state">—</span>'}</td>
-      </tr>`;
-  }).join('');
+        <td>${cell(r.sigma, `${r.sigma > 0 ? '+' : ''}${r.sigma == null ? '' : r.sigma.toFixed(2)}`)}</td>
+        <td>${r.meanDiff != null ? `${r.meanDiff > 0 ? '+' : ''}${r.meanDiff.toFixed(2)}` : '—'}</td>
+        <td>${cell(r.diffSigma, `${r.diffSigma > 0 ? '+' : ''}${r.diffSigma == null ? '' : r.diffSigma.toFixed(2)}`)}</td>
+      </tr>`).join('');
+
   el.innerHTML = `
-    <div class="pm-table-total">Player-games: ${total.toLocaleString()}</div>
+    <div class="pm-table-total">Player-games: ${total.toLocaleString()}${overallPct != null ? ` &middot; overall rate ${overallPct}% (this stat's true null, not 50%)` : ''}</div>
     <table class="astro-table">
-      <thead><tr><th>Day Energy Band</th><th>Player-games</th><th>Beat own avg</th><th>Sigma</th></tr></thead>
+      <thead><tr>
+        <th>Day Energy Band</th>
+        <th>Player-games</th>
+        <th>Beat own avg</th>
+        <th>&sigma; vs overall</th>
+        <th>Avg diff</th>
+        <th>&sigma; magnitude</th>
+      </tr></thead>
       <tbody>${body}</tbody>
-    </table>`;
+    </table>
+    <div class="mode-desc">The last column is the one to trust: it compares how much this band beat its baseline by against every other band, so it uses magnitude rather than a yes/no, and skew cancels out. Measured about 40% more sensitive than the rate test on a known small effect.</div>`;
 }
 
 function renderNbaPropSignals(signals, suffix = '') {

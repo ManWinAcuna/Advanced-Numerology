@@ -3076,34 +3076,105 @@ function buildNbaPropSignal(gameId, playerId, teamAbbr, dateISO, dayScore, actua
   return any ? rec : null;
 }
 
-// Win rate by day-score band for one stat: of the player-games in this band,
-// how often did the player exceed his own trailing average? The null is 50%
-// by construction, which is what makes this readable without a market.
-// A game exactly on the baseline is a push and is excluded rather than counted
-// either way.
+// Per-band performance for one stat, tested TWO ways.
+//
+// The null here is emphatically NOT 50%, and assuming it was produced a table
+// that screamed -6.5 sigma at pure noise. Beating your own trailing MEAN is a
+// sub-50% proposition for any right-skewed counting stat, because a handful of
+// big games drag the mean above the median: simulated with zero effect, assists
+// land at 47.1%, rebounds 47.4%, points 48.3% - and real NBA assists are more
+// skewed than that simulation, which is why every band read ~45%. Uniformly.
+//
+// So the honest baseline is the rate this stat actually shows across ALL bands.
+// The question worth asking was never "is this above a coin flip", it is "does a
+// hot day differ from an ordinary one", and that is what comparing each band to
+// the overall rate measures.
+//
+// The second test is strictly better than the first: instead of throwing away
+// magnitude and counting over/under, it averages (actual - baseline) and asks
+// whether a band's average differs from the rest of the sample, via Welch's t.
+// A day that adds half an assist shows up here and is invisible to a rate test.
+// Skew cancels out of a difference of means entirely.
 function computeNbaPropBandStats(signals, stat) {
-  return NBA_PROP_DAY_BANDS.map((band) => {
-    let over = 0;
-    let under = 0;
-    (signals || []).forEach((r) => {
-      const pair = r[stat];
-      if (!pair) return;
-      if (r.s < band.min || r.s >= band.max) return;
-      if (pair[0] > pair[1]) over += 1;
-      else if (pair[0] < pair[1]) under += 1;
-    });
-    const n = over + under;
+  const rows = NBA_PROP_DAY_BANDS.map((band) => ({
+    key: band.key, label: band.label, band, over: 0, under: 0, diffs: [],
+  }));
+
+  let allOver = 0;
+  let allUnder = 0;
+  const allDiffs = [];
+
+  (signals || []).forEach((r) => {
+    const pair = r[stat];
+    if (!pair) return;
+    const row = rows.find((x) => r.s >= x.band.min && r.s < x.band.max);
+    if (!row) return;
+    const diff = pair[0] - pair[1];
+    row.diffs.push(diff);
+    allDiffs.push(diff);
+    // A game landing exactly on the baseline is a push - excluded from the rate
+    // rather than scored either way. It still counts in the magnitude test,
+    // where a difference of zero is real information.
+    if (diff > 0) { row.over += 1; allOver += 1; } else if (diff < 0) { row.under += 1; allUnder += 1; }
+  });
+
+  const allN = allOver + allUnder;
+  const overallRate = allN ? allOver / allN : null;
+
+  const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
+  const variance = (a, m) => (a.length > 1 ? a.reduce((s, v) => s + (v - m) * (v - m), 0) / (a.length - 1) : null);
+  const overallDiffMean = mean(allDiffs);
+
+  return rows.map((row) => {
+    const n = row.over + row.under;
+    const rate = n ? row.over / n : null;
+
+    // Rate test: this band against the overall rate for the stat.
+    const rateSigma = (n && overallRate != null && overallRate > 0 && overallRate < 1)
+      ? (rate - overallRate) / Math.sqrt((overallRate * (1 - overallRate)) / n)
+      : null;
+
+    // Magnitude test: this band's mean (actual - baseline) against every OTHER
+    // band's, using Welch's t so unequal sizes and spreads are handled properly.
+    // Compared against the rest of the sample rather than the whole of it,
+    // since a band is part of the whole and would otherwise be tested against
+    // itself.
+    const bandMean = mean(row.diffs);
+    let diffSigma = null;
+    let restMean = null;
+    if (row.diffs.length > 1) {
+      // Built directly rather than derived from the pooled variance identity.
+      // Five bands over ~42,000 values is a couple of hundred thousand
+      // operations, which is nothing, and the algebraic shortcut is easy to get
+      // subtly wrong in a way no test would obviously catch.
+      const restDiffs = [];
+      rows.forEach((other) => {
+        if (other.key === row.key) return;
+        other.diffs.forEach((v) => restDiffs.push(v));
+      });
+      if (restDiffs.length > 1) {
+        restMean = mean(restDiffs);
+        const bandVar = variance(row.diffs, bandMean);
+        const restVar = variance(restDiffs, restMean);
+        if (bandVar != null && restVar != null) {
+          const se = Math.sqrt(bandVar / row.diffs.length + restVar / restDiffs.length);
+          if (se > 0) diffSigma = (bandMean - restMean) / se;
+        }
+      }
+    }
+
     return {
-      key: band.key,
-      label: band.label,
+      key: row.key,
+      label: row.label,
       count: n,
-      overs: over,
-      overPct: n ? Math.round((over / n) * 100) : null,
-      // How many standard errors the observed rate sits from the 50% null -
-      // the number that decides whether a band means anything. Reported rather
-      // than left for the reader to eyeball, because at these sample sizes a
-      // 52% can be strong and at small sizes a 65% can be nothing.
-      sigma: n ? ((over / n) - 0.5) / Math.sqrt(0.25 / n) : null,
+      samples: row.diffs.length,
+      overs: row.over,
+      overPct: rate != null ? Math.round(rate * 100) : null,
+      overallPct: overallRate != null ? Math.round(overallRate * 100) : null,
+      sigma: rateSigma,
+      meanDiff: bandMean,
+      restMeanDiff: restMean,
+      diffSigma,
     };
   });
 }
