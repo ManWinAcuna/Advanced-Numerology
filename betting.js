@@ -410,6 +410,10 @@ function runStrategyLab() {
   document.getElementById('bettingLabResults').innerHTML =
     bettingLabTableHtml(`Bet types &middot; ${BETTING_SCOPE_META[scope].label}, current day filter`, betTypeRows)
     + bettingLabTableHtml(`Day numbers &middot; ${BETTING_SCOPE_META[scope].label}, ${bettingModeLabel(curMode, mixedTypes)}`, dayRows);
+
+  const details = document.getElementById('bettingLabDetails');
+  details.style.display = '';
+  details.open = true;
 }
 
 document.getElementById('bettingLabBtn').addEventListener('click', () => {

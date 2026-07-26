@@ -146,7 +146,10 @@
       <div class="box-label">🧪 Strategy Lab</div>
       <div class="box-hint">Runs the full simulation for every bet type (under your current day filter), and for every single day number (under your current bet type) &mdash; ranked by where the bankroll ends. <strong>Best-in-hindsight isn't a guarantee going forward</strong>, especially on day rows with few betting days. Tap "use" to apply a setting.</div>
       <button class="btn" id="bettingLabBtn" type="button">🧪 Run Strategy Lab</button>
-      <div id="bettingLabResults"></div>
+      <details class="collapsible betting-day-details" id="bettingLabDetails" style="display:none;">
+        <summary>📋 Lab results &mdash; tap to collapse</summary>
+        <div id="bettingLabResults"></div>
+      </details>
     </div>
 
     <div class="box" id="bettingLedgerBox">
