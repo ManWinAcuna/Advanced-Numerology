@@ -46,6 +46,21 @@
     <div class="pm-table-pagination" id="bettingLogPagination"></div>
   </div>
 
+  <div class="box" id="bettingBackupBox">
+    <div class="box-label">💾 Backup &amp; Restore</div>
+    <div class="box-hint">All tracking data lives only in this browser &mdash; clearing site data or losing the device loses it. Download a file you keep, and/or push a copy to your signed-in cloud account. Nothing restores automatically; both directions are manual on purpose.</div>
+    <div class="bet-lock-row">
+      <button class="btn" id="bettingBackupDownloadBtn" type="button">⬇️ Download Backup</button>
+      <button class="btn" id="bettingBackupRestoreBtn" type="button">⬆️ Restore from File</button>
+      <input type="file" id="bettingBackupFile" accept="application/json,.json" style="display:none;">
+    </div>
+    <div class="bet-lock-row">
+      <button class="btn" id="bettingCloudBackupBtn" type="button">☁️ Back Up to Cloud</button>
+      <button class="btn" id="bettingCloudRestoreBtn" type="button">☁️ Restore from Cloud</button>
+    </div>
+    <div class="mode-desc" id="bettingBackupStatus"></div>
+  </div>
+
 </div>
 
 <script src="astronomy.browser.min.js"></script>
@@ -65,6 +80,7 @@
 <script src="stats-mlb.js"></script>
 <script src="betting-core.js"></script>
 <script src="betting-render.js"></script>
+<script src="betting-backup.js"></script>
 <script src="bet-log.js"></script>
 </body>
 </html>

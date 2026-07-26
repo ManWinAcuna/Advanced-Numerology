@@ -266,6 +266,11 @@ function normalizeBettingPick(p, sportKey) {
     sport: sportKey,
     timeISO,
     dateKey,
+    // Identifies the underlying event across markets - MLB's moneyline, NRFI
+    // and totals records for one game all share its gamePk, which is what
+    // lets the parlay builder see that three "different" legs are really
+    // three reads on the same game.
+    gameKey: p.gamePk != null ? `mlb#${p.gamePk}` : `${sportKey}#${p.conditionId || timeISO}`,
     matchup: cfg.matchupField && p[cfg.matchupField] ? p[cfg.matchupField] : `${p[cfg.nameA]} vs ${p[cfg.nameB]}`,
     pickName: p.numerologyFavorite,
     price,
@@ -358,6 +363,9 @@ const BETTING_MAX_SINGLE_FRACTION = 0.05; // one single can never exceed 5% of r
 const BETTING_MAX_DAY_SINGLES_FRACTION = 0.20; // all singles in a day cap at 20%
 const BETTING_MAX_DAY_PARLAY_FRACTION = 0.10; // all parlay tickets in a day cap at 10%
 const BETTING_MIN_STAKE = 0.5; // a stake that rounds to $0 isn't worth listing
+// Stake multiplier applied per extra leg that repeats a game already on the
+// ticket - a concentration discount, not an EV correction (see makeParlays).
+const BETTING_SAME_GAME_STAKE_FACTOR = 0.6;
 
 function bettingKellyFraction(prob, price) {
   const b = 1 / price - 1; // net odds a winning $1 returns
@@ -431,8 +439,18 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes, kellyF
     return bettingCombinations(pool, legCount).map((legs, i) => {
       const estProb = legs.reduce((p, l) => p * l.estProb, 1);
       const prodPrice = legs.reduce((p, l) => p * l.price, 1);
-      const f = bettingKellyFraction(estProb, prodPrice) * kellyFraction;
-      return { legs, stake: bankroll * f, prodPrice, estProb, headline: i === 0 };
+      // Legs drawn from the same game (an NRFI and an Under both read off one
+      // pitching duel) are not independent. They're positively correlated, so
+      // multiplying their probabilities actually UNDER-states the ticket's
+      // true win chance - the problem isn't the EV, it's concentration: one
+      // game can sink every leg at once, so a ticket like this carries far
+      // more risk than its leg count suggests. The stake is discounted per
+      // duplicated game to keep that concentration in check.
+      const distinctGames = new Set(legs.map((l) => l.gameKey)).size;
+      const concentration = legs.length - distinctGames;
+      const concentrationFactor = Math.pow(BETTING_SAME_GAME_STAKE_FACTOR, concentration);
+      const f = bettingKellyFraction(estProb, prodPrice) * kellyFraction * concentrationFactor;
+      return { legs, stake: bankroll * f, prodPrice, estProb, headline: i === 0, sameGameLegs: concentration };
     }).filter((t) => t.stake > 0);
   };
 

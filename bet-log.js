@@ -25,6 +25,84 @@ document.getElementById('bettingLog').addEventListener('click', (e) => {
   }
 });
 
+/* ===================== Backup & restore ===================== */
+
+const betLogBackupStatus = document.getElementById('bettingBackupStatus');
+
+function betLogSummaryText(s) {
+  return `${s.mlbGames} MLB games, ${s.nrfi} NRFI, ${s.totals} totals, ${s.kSignals} K-signals, ${s.ufc} UFC, ${s.tennis} tennis, ${s.lockedSlates} locked slates`;
+}
+
+document.getElementById('bettingBackupDownloadBtn').addEventListener('click', () => {
+  try {
+    const summary = downloadBettingBackup();
+    betLogBackupStatus.textContent = `Downloaded - ${betLogSummaryText(summary)}.`;
+  } catch (e) {
+    betLogBackupStatus.textContent = 'Could not build the backup file.';
+  }
+});
+
+document.getElementById('bettingBackupRestoreBtn').addEventListener('click', () => {
+  document.getElementById('bettingBackupFile').click();
+});
+
+document.getElementById('bettingBackupFile').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const backup = JSON.parse(await file.text());
+    const summary = summarizeBettingBackup(backup);
+    // Restoring replaces stores wholesale, so it asks first and says exactly
+    // what is about to land.
+    if (!confirm(`Restore this backup?\n\nFrom ${summary.createdAt}\n${betLogSummaryText(summary)}\n\nThis replaces the matching data in this browser.`)) {
+      betLogBackupStatus.textContent = 'Restore cancelled.';
+      return;
+    }
+    const restored = restoreBettingBackup(backup);
+    betLogBackupStatus.textContent = `Restored ${restored} stores - ${betLogSummaryText(summary)}. Reloading…`;
+    setTimeout(() => window.location.reload(), 900);
+  } catch (err) {
+    betLogBackupStatus.textContent = "That file doesn't look like a backup.";
+  } finally {
+    e.target.value = ''; // let the same file be picked again
+  }
+});
+
+document.getElementById('bettingCloudBackupBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('bettingCloudBackupBtn');
+  btn.disabled = true;
+  betLogBackupStatus.textContent = 'Backing up to cloud…';
+  try {
+    const res = await cloudBackupBetting();
+    betLogBackupStatus.textContent = `Cloud backup saved - ${Math.round(res.bytes / 1024)} KB across ${res.parts} part${res.parts === 1 ? '' : 's'}.`;
+  } catch (err) {
+    betLogBackupStatus.textContent = `Cloud backup failed: ${err.message}`;
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('bettingCloudRestoreBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('bettingCloudRestoreBtn');
+  btn.disabled = true;
+  betLogBackupStatus.textContent = 'Fetching cloud backup…';
+  try {
+    const col = bettingCloudDoc();
+    const manifest = await col.doc('manifest').get();
+    if (!manifest.exists) throw new Error('no cloud backup found');
+    if (!confirm(`Restore the cloud backup from ${manifest.data().createdAt}?\n\nThis replaces the matching data in this browser.`)) {
+      betLogBackupStatus.textContent = 'Restore cancelled.';
+      btn.disabled = false;
+      return;
+    }
+    const res = await cloudRestoreBetting();
+    betLogBackupStatus.textContent = `Restored ${res.restored} stores - ${betLogSummaryText(res.summary)}. Reloading…`;
+    setTimeout(() => window.location.reload(), 900);
+  } catch (err) {
+    betLogBackupStatus.textContent = `Cloud restore failed: ${err.message}`;
+  }
+  btn.disabled = false;
+});
+
 document.getElementById('betLogRefreshBtn').addEventListener('click', async () => {
   const btn = document.getElementById('betLogRefreshBtn');
   btn.disabled = true;

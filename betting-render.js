@@ -90,6 +90,7 @@ function bettingTicketHtml(ticket, comboIndex) {
         <span class="bet-ticket-status ${meta.cls}">${meta.icon} ${meta.label}</span>
       </div>
       ${ticket.legs.map(bettingLegHtml).join('')}
+      ${ticket.sameGameLegs ? `<div class="bet-same-game">🔗 ${ticket.sameGameLegs + 1} legs from one game &mdash; stake reduced for concentration</div>` : ''}
       <div class="bet-ticket-foot">
         <span>Stake: <strong>${bettingFmtMoney(ticket.stake)}</strong></span>
         <span>${resultLine}</span>
