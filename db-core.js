@@ -2670,6 +2670,7 @@ function nbaExpectedRotation(form, teamAbbr, asOfISO) {
       id: String(id),
       name: rec.name || null,
       birthDate: rec.birthDate || null,
+      position: rec.pos || null,
       expectedMinutes,
       priorGames: prior.length,
     });
@@ -2693,6 +2694,7 @@ function nbaUpdatePlayerForm(form, teamAbbr, dateISO, players, birthdates) {
     if (bd && bd.birthDate) rec.birthDate = bd.birthDate;
     // Idempotent: re-running a backfill over the same game must not double it.
     if (rec.recent.some((g) => g.d === dateISO && g.team === teamAbbr)) return;
+    if (p.position) rec.pos = p.position;
     rec.recent.push({
       d: dateISO,
       team: teamAbbr,
@@ -2805,11 +2807,20 @@ function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, te
   const playerShare = foundingISO ? 1 - NBA_FRANCHISE_WEIGHT : 1;
 
   const parts = players.map((p, index) => ({
-    // Rank within the rotation, not a listed position: 'top5' is the five
-    // players expected to play the most, which is the closest honest pre-game
-    // stand-in for a starting five.
-    key: index < 5 ? 'top5' : 'rotation',
-    role: `${p.name || 'Player'} (${p.expectedMinutes.toFixed(1)} min)`,
+    // Grouped by ROLE, not by minutes rank. Roles are what made the MLB
+    // analysis informative - the manager mattered because a manager is a job,
+    // where "the fifth-most-used batter" is not.
+    //
+    // ESPN gives NBA only three positions, G / F / C, checked against 243
+    // player-games across both the boxscore and the athlete endpoint. There is
+    // no PG/SG/SF/PF available; a retired player like Redick reports SG only
+    // because his historical record is finer than a current player's. So three
+    // buckets is the honest ceiling, not a simplification chosen here.
+    //
+    // A player with no position still carries full weight in the composite; he
+    // just lands in no bucket, rather than being guessed into one.
+    key: NBA_POSITION_KEYS.includes(p.position) ? p.position : 'unknown',
+    role: `${p.name || 'Player'} ${p.position ? `(${p.position}, ` : '('}${p.expectedMinutes.toFixed(1)} min)`,
     // Weights are shares of the whole side, not raw minutes, so the franchise
     // part below sits on the same scale - extractTeamDimensions weights its
     // per-dimension averages by exactly this field.
@@ -2836,25 +2847,43 @@ function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, te
 // work role-weights were doing there. The question this leaves the component
 // table is the one worth asking: does the heavy-minutes core carry the signal,
 // or the back of the rotation?
-const NBA_COMPONENT_KEYS = ['top5', 'rotation', 'franchise'];
+// The three positions ESPN actually reports for NBA.
+const NBA_POSITION_KEYS = ['G', 'F', 'C'];
+
+// 'star' is derived rather than assigned: it is whichever player carries the
+// most expected minutes, so he also appears inside his own position bucket.
+// Components are reported values, not weights, so that overlap costs nothing -
+// and it finally puts a SINGLE person on the table. Every NBA component so far
+// has been an average of several players, and averaging is exactly what buried
+// the signal in MLB until the manager was isolated. Centre comes closest among
+// the positions at about 1.4 players a team; star is exactly one.
+const NBA_COMPONENT_KEYS = ['star', 'G', 'F', 'C', 'franchise'];
 
 const NBA_COMPONENT_LABELS = {
-  top5: 'Top 5 by Minutes',
-  rotation: 'Rest of Rotation',
+  star: '⭐ Star (most minutes)',
+  G: 'Guards',
+  F: 'Forwards',
+  C: 'Center',
   franchise: 'Franchise',
 };
 
 function extractNbaComponents(parts) {
-  const buckets = { top5: [], rotation: [], franchise: [] };
+  const buckets = { G: [], F: [], C: [], franchise: [] };
+  let star = null;
   (parts || []).forEach((p) => {
     const s = p.score && p.score.combined;
-    if (s == null || !(p.key in buckets)) return;
-    buckets[p.key].push(s);
+    if (s == null) return;
+    if (p.key in buckets) buckets[p.key].push(s);
+    // Heaviest-weighted player part, franchise excluded - its weight is a fixed
+    // 10% and would outrank a real player in a thin rotation.
+    if (p.key !== 'franchise' && (!star || p.weight > star.weight)) star = { weight: p.weight, score: s };
   });
   const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
   return {
-    top5: avg(buckets.top5),
-    rotation: avg(buckets.rotation),
+    star: star ? star.score : null,
+    G: avg(buckets.G),
+    F: avg(buckets.F),
+    C: avg(buckets.C),
     // Only ever one franchise part, so this is that score rather than a mean.
     franchise: avg(buckets.franchise),
   };
@@ -2924,11 +2953,13 @@ function nbaPaceSideForScore(score, outcomeA, outcomeB) {
 // Game-level components: each side's group averaged across both teams, so the
 // "which signal predicts best" test works on totals the same way it does on
 // game picks.
-const NBA_PACE_COMPONENT_KEYS = ['top5s', 'rotations', 'franchises'];
+const NBA_PACE_COMPONENT_KEYS = ['stars', 'Gs', 'Fs', 'Cs', 'franchises'];
 
 const NBA_PACE_COMPONENT_LABELS = {
-  top5s: 'Both Top 5s',
-  rotations: 'Both Rotations',
+  stars: '⭐ Both Stars',
+  Gs: 'Both Guard Groups',
+  Fs: 'Both Forward Groups',
+  Cs: 'Both Centers',
   franchises: 'Both Franchises',
   pace: '🏃 Pace Score (live)',
 };
@@ -2941,7 +2972,13 @@ function nbaPaceComponentsFromSides(compHome, compAway) {
     if (a == null || b == null) return null;
     return Math.round(((a + b) / 2) * 10) / 10;
   };
-  return { top5s: pair('top5'), rotations: pair('rotation'), franchises: pair('franchise') };
+  return {
+    stars: pair('star'),
+    Gs: pair('G'),
+    Fs: pair('F'),
+    Cs: pair('C'),
+    franchises: pair('franchise'),
+  };
 }
 
 // market is a parseNbaSideMarket() shape whose priceA/priceB must already be

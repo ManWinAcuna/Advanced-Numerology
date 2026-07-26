@@ -960,6 +960,130 @@ async function backfillNbaHistory(onProgress) {
   };
 }
 
+/* ---------- Component re-grouping (no price refetch) ---------- */
+// Regrouping the components by position does NOT change any composite score -
+// the same players carry the same minutes weights and the franchise keeps its
+// 10%. Only the labels the parts are filed under change. So forcing a schema
+// bump and a full re-walk would spend two hours re-fetching Polymarket slugs
+// and CLOB price history to arrive at prices we already hold.
+//
+// This walks ESPN only, one boxscore per game, and patches `components`,
+// `dims` and `paceComponents` on the records already stored, matched by event
+// id. Prices, results and pick types are never touched.
+//
+// It also checks itself: the recomputed composite must equal the stored one,
+// since the maths is unchanged. Any mismatch is reported rather than written,
+// because a difference would mean the rebuild diverged from the original walk
+// and the patched components would describe a different game than the score does.
+async function patchNbaComponents(onProgress) {
+  const windowDays = loadNbaBackfillWindowDays();
+  const today = nbaEasternDateISO(new Date());
+  const endDate = nbaAddDaysISO(today, -1);
+  const windowStart = nbaAddDaysISO(today, -windowDays);
+  const startDate = windowStart < NBA_POLYMARKET_FIRST_DATE ? NBA_POLYMARKET_FIRST_DATE : windowStart;
+  if (startDate > endDate) return { alreadyCurrent: true };
+
+  const predictions = loadNbaPredictions();
+  const totalsRecords = loadNbaTotalsPredictions();
+  const birthdates = loadNbaBirthdates();
+  const byEvent = new Map(predictions.filter((p) => p.eventId != null).map((p) => [String(p.eventId), p]));
+  const totalsByEvent = new Map(totalsRecords.filter((p) => p.eventId != null).map((p) => [String(p.eventId), p]));
+  const form = {}; // rebuilt in step with the walk, exactly as the original did
+
+  let patched = 0;
+  let scoreMismatch = 0;
+  let noRecord = 0;
+  const totalDays = Math.max(1, Math.round((new Date(`${endDate}T12:00:00Z`) - new Date(`${startDate}T12:00:00Z`)) / 86400000) + 1);
+  let dayIndex = 0;
+
+  for (let date = startDate; date <= endDate; date = nbaAddDaysISO(date, 1)) {
+    dayIndex += 1;
+    if (onProgress) onProgress(dayIndex, totalDays, patched);
+
+    const games = await fetchNbaScoreboard(date);
+    for (const game of games) {
+      if (!game.final || !game.home.abbr || !game.away.abbr) continue;
+      if (NBA_EXHIBITION_SLUG_CODES.has(String(game.home.abbr).toLowerCase())
+        || NBA_EXHIBITION_SLUG_CODES.has(String(game.away.abbr).toLowerCase())) continue;
+
+      const matchDate = parseDateInput(date);
+      const stateInfo = nbaVenueStateInfo(game.venueState);
+      const stateDate = stateInfo && stateInfo.founded ? parseDateInput(stateInfo.founded) : null;
+      const withDobs = (list) => list.map((p) => ({ ...p, birthDate: p.birthDate || (birthdates[p.id] ? birthdates[p.id].birthDate : null) }));
+      const compAway = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, game.away.abbr, date)), matchDate, null, stateDate, game.away.abbr);
+      const compHome = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, game.home.abbr, date)), matchDate, null, stateDate, game.home.abbr);
+
+      const rec = byEvent.get(String(game.eventId));
+      if (compAway && compHome && rec) {
+        const aIsHome = normalizeName(rec.teamAName) === normalizeName(game.home.nickname);
+        const scoreA = aIsHome ? compHome.combined : compAway.combined;
+        const scoreB = aIsHome ? compAway.combined : compHome.combined;
+        if (scoreA !== rec.numerologyScoreA || scoreB !== rec.numerologyScoreB) {
+          scoreMismatch += 1;
+        } else {
+          rec.components = {
+            A: aIsHome ? extractNbaComponents(compHome.parts) : extractNbaComponents(compAway.parts),
+            B: aIsHome ? extractNbaComponents(compAway.parts) : extractNbaComponents(compHome.parts),
+          };
+          rec.dims = {
+            A: aIsHome ? extractTeamDimensions(compHome.parts) : extractTeamDimensions(compAway.parts),
+            B: aIsHome ? extractTeamDimensions(compAway.parts) : extractTeamDimensions(compHome.parts),
+          };
+          patched += 1;
+        }
+        const totalsRec = totalsByEvent.get(String(game.eventId));
+        if (totalsRec) {
+          totalsRec.paceComponents = nbaPaceComponentsFromSides(
+            extractNbaComponents(compHome.parts), extractNbaComponents(compAway.parts),
+          );
+        }
+      } else if (compAway && compHome && !rec) {
+        noRecord += 1;
+      }
+
+      const box = await fetchNbaGameBoxscore(game.eventId);
+      if (!box) continue;
+      for (const abbr of Object.keys(box)) nbaUpdatePlayerForm(form, abbr, date, box[abbr], birthdates);
+    }
+
+    if (dayIndex % NBA_BACKFILL_CHECKPOINT_DAYS === 0) {
+      saveNbaPredictions(predictions);
+      saveNbaTotalsPredictions(totalsRecords);
+    }
+  }
+
+  saveNbaPredictions(predictions);
+  saveNbaTotalsPredictions(totalsRecords);
+  return { patched, scoreMismatch, noRecord };
+}
+
+function initNbaRegroupButton() {
+  const btn = document.getElementById('nbaRegroupBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const status = document.getElementById('nbaRegroupStatus');
+    btn.disabled = true;
+    const original = btn.textContent;
+    status.textContent = 'Starting…';
+    try {
+      const result = await patchNbaComponents((day, totalDays, patched) => {
+        status.textContent = `Regrouping… day ${day}/${totalDays} · ${patched} games updated`;
+      });
+      status.textContent = result.alreadyCurrent
+        ? 'Nothing in range to regroup.'
+        : `Done - regrouped ${result.patched} games by position.`
+          + `${result.scoreMismatch ? ` ⚠️ ${result.scoreMismatch} skipped because the recomputed score didn't match the stored one - those keep their old components.` : ''}`
+          + `${result.noRecord ? ` ${result.noRecord} games had no stored pick.` : ''}`;
+      await refreshAndRenderNba();
+    } catch (e) {
+      status.textContent = `Regroup failed: ${e && e.message ? e.message : e}`;
+      console.error('NBA component regroup failed', e);
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
+
 /* ---------- Player prop signal collection ---------- */
 const NBA_PROP_BACKFILL_SCHEMA = 1;
 
@@ -1279,6 +1403,7 @@ nbaStoreReady.then(() => {
   initNbaMatchupModal('Old');
   initModalTabSwitcher('statsNbaSection');
   initNbaBackfillButton();
+  initNbaRegroupButton();
   initNbaPropBackfillButton();
   initNbaStorageControls();
   wireNbaRefreshButton('nbaStatsRefreshBtn');
