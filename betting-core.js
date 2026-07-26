@@ -195,11 +195,36 @@ function bettingDayMatchesFilter(dateKey, filter) {
 // one-on-one UFC/Tennis gaps, so tier tallies are never pooled across sports
 // even in All Sports mode.
 
+// scopeSport maps a pseudo-sport onto the scope tab it belongs to (the MLB
+// duel markets live under the MLB scope); market names the toggle that turns
+// it on/off (entries without one are always on). Each pseudo-sport keeps its
+// own tier calibration and its own tallies, so an NRFI record never pollutes
+// a moneyline record.
 const BETTING_SPORTS = {
-  mlb: { label: 'MLB', icon: '⚾', load: () => loadMlbPredictions(), timeField: 'gameTime', minGap: MLB_REAL_EDGE_MIN_GAP, tiers: MLB_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName' },
+  mlb: { label: 'MLB', icon: '⚾', load: () => loadMlbPredictions(), timeField: 'gameTime', minGap: MLB_REAL_EDGE_MIN_GAP, tiers: MLB_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName', market: 'moneyline', scopeSport: 'mlb' },
+  mlbNrfi: { label: 'MLB NRFI', icon: '1️⃣', load: () => loadMlbNrfiPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'nrfi', scopeSport: 'mlb' },
+  mlbTotals: { label: 'MLB Totals', icon: '↕️', load: () => loadMlbTotalsPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'totals', scopeSport: 'mlb' },
   tennis: { label: 'Tennis', icon: '🎾', load: () => loadTennisPredictions(), timeField: 'matchTime', minGap: REAL_EDGE_MIN_GAP, tiers: EDGE_TIERS, nameA: 'playerAName', nameB: 'playerBName' },
   ufc: { label: 'UFC', icon: '🥊', load: () => loadUfcPredictions(), timeField: 'fightTime', minGap: REAL_EDGE_MIN_GAP, tiers: EDGE_TIERS, nameA: 'fighterAName', nameB: 'fighterBName' },
 };
+
+// Which MLB market kinds are enabled on the Betting page.
+const BETTING_MARKETS_KEY = 'numerology_betting_markets';
+const BETTING_MARKET_OPTIONS = ['moneyline', 'nrfi', 'totals'];
+
+function loadBettingMarkets() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BETTING_MARKETS_KEY));
+    const list = Array.isArray(v) ? v.filter((m) => BETTING_MARKET_OPTIONS.includes(m)) : [];
+    return list.length ? list : [...BETTING_MARKET_OPTIONS];
+  } catch (e) {
+    return [...BETTING_MARKET_OPTIONS];
+  }
+}
+
+function saveBettingMarkets(list) {
+  localStorage.setItem(BETTING_MARKETS_KEY, JSON.stringify(list));
+}
 
 // Local calendar date of an event time - one betting "day" is a local day,
 // matching how isTodayLocal (db-core.js) splits Today from Old Data.
@@ -223,7 +248,7 @@ function normalizeBettingPick(p, sportKey) {
     sport: sportKey,
     timeISO,
     dateKey,
-    matchup: `${p[cfg.nameA]} vs ${p[cfg.nameB]}`,
+    matchup: cfg.matchupField && p[cfg.matchupField] ? p[cfg.matchupField] : `${p[cfg.nameA]} vs ${p[cfg.nameB]}`,
     pickName: p.numerologyFavorite,
     price,
     gap,
@@ -237,7 +262,13 @@ function normalizeBettingPick(p, sportKey) {
 }
 
 function collectBettingPicks(scope) {
-  const sports = scope === 'all' ? Object.keys(BETTING_SPORTS) : [scope];
+  const enabledMarkets = loadBettingMarkets();
+  const sports = Object.keys(BETTING_SPORTS).filter((sportKey) => {
+    const cfg = BETTING_SPORTS[sportKey];
+    const inScope = scope === 'all' || (cfg.scopeSport || sportKey) === scope;
+    const marketOn = !cfg.market || enabledMarkets.includes(cfg.market);
+    return inScope && marketOn;
+  });
   const picks = [];
   sports.forEach((sportKey) => {
     BETTING_SPORTS[sportKey].load().forEach((p) => {

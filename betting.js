@@ -477,7 +477,13 @@ async function checkBettingResults(scope) {
   const jobs = [];
   if (scope === 'all' || scope === 'ufc') jobs.push(checkResults());
   if (scope === 'all' || scope === 'tennis') jobs.push(checkTennisResults());
-  if (scope === 'all' || scope === 'mlb') jobs.push(checkMlbResults());
+  if (scope === 'all' || scope === 'mlb') {
+    jobs.push(checkMlbResults());
+    jobs.push(checkMlbDuelResults());
+    // Also record today's not-yet-stored games (moneyline + NRFI + totals) so
+    // the Betting page fills its own slate without a Stats-page visit first.
+    jobs.push(recordTodaysMlbGames());
+  }
   await Promise.allSettled(jobs);
 }
 
@@ -576,6 +582,28 @@ function renderBettingMixedChips() {
   document.getElementById('bettingMixedRow').style.display = loadBettingMode() === 'mixed' ? '' : 'none';
 }
 
+// Market toggles - which MLB market kinds feed the MLB / All Sports slates.
+const BETTING_MARKET_LABELS = { moneyline: '⚾ Moneyline', nrfi: '1️⃣ NRFI', totals: '↕️ Totals' };
+
+function renderBettingMarketChips() {
+  const markets = loadBettingMarkets();
+  document.getElementById('bettingMarketsChips').innerHTML = BETTING_MARKET_OPTIONS.map((m) =>
+    `<button type="button" class="betting-day-chip${markets.includes(m) ? ' active' : ''}" data-market="${m}">${BETTING_MARKET_LABELS[m]}</button>`).join('');
+}
+
+document.getElementById('bettingMarketsRow').addEventListener('click', (e) => {
+  const chipEl = e.target.closest('.betting-day-chip');
+  if (!chipEl) return;
+  const markets = loadBettingMarkets();
+  const m = chipEl.dataset.market;
+  const idx = markets.indexOf(m);
+  if (idx >= 0) markets.splice(idx, 1); else markets.push(m);
+  saveBettingMarkets(markets);
+  renderBettingMarketChips();
+  resetPagination('bettingLedger');
+  renderBetting();
+});
+
 document.getElementById('bettingMixedRow').addEventListener('click', (e) => {
   const chipEl = e.target.closest('.betting-day-chip');
   if (!chipEl) return;
@@ -607,6 +635,7 @@ document.getElementById('bettingDayFilter').addEventListener('click', (e) => {
 
 renderBettingDayChips();
 renderBettingMixedChips();
+renderBettingMarketChips();
 
 const bettingBankrollInputEl = document.getElementById('bettingBankrollInput');
 bettingBankrollInputEl.value = loadBettingBankroll();

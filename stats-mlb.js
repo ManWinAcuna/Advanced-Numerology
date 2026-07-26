@@ -54,6 +54,36 @@ async function checkMlbResults() {
   return predictions;
 }
 
+// Resolves pending NRFI/totals picks straight from their own Polymarket
+// markets (fetchMarketsByConditionIds + determineResult, the same pair the
+// UFC tracker resolves with) - these markets settle mechanically to 1/0, so
+// the market IS the ground truth. Called by the Betting page's result check.
+async function checkMlbDuelResults() {
+  const stores = [
+    { load: loadMlbNrfiPredictions, save: saveMlbNrfiPredictions },
+    { load: loadMlbTotalsPredictions, save: saveMlbTotalsPredictions },
+  ];
+  for (const store of stores) {
+    const predictions = store.load();
+    const pending = predictions.filter((p) => !p.result);
+    if (!pending.length) continue;
+    const markets = await fetchMarketsByConditionIds(pending.map((p) => p.conditionId));
+    const byId = new Map(markets.map((m) => [m.conditionId, m]));
+    let changed = false;
+    predictions.forEach((p) => {
+      if (p.result) return;
+      const market = byId.get(p.conditionId);
+      if (!market) return;
+      const result = determineResult(market);
+      if (result) {
+        p.result = result;
+        changed = true;
+      }
+    });
+    if (changed) store.save(predictions);
+  }
+}
+
 // isCorrectPick, PRICE_BUCKETS, computeBucketStats, edgeGap live in db-core.js,
 // shared across all three sports. The edge-tier calls here use the MLB-tuned
 // variants (hasRealEdgeMlb / edgeTierForGapMlb / computeEdgeTierStatsMlb,
@@ -805,15 +835,26 @@ async function recordTodaysMlbGames() {
 
   const existing = loadMlbPredictions();
   const existingCond = new Set(existing.map((p) => p.conditionId));
+  const existingNrfi = loadMlbNrfiPredictions();
+  const existingNrfiCond = new Set(existingNrfi.map((p) => p.conditionId));
+  const existingTotals = loadMlbTotalsPredictions();
+  // One totals pick per game per day (the main line can drift intra-day;
+  // whichever line was main when the game got recorded is THE pick).
+  const existingTotalsGamePks = new Set(existingTotals.filter((p) => isMlbTodayLocal(p.gameTime)).map((p) => p.gamePk));
   const teamInfoCache = new Map();
   const managerCache = new Map();
   const regionCache = new Map();
   const stadiumCache = new Map();
   const newPreds = [];
+  const newNrfiPreds = [];
+  const newTotalsPreds = [];
   const pending = [];
 
   await Promise.all(todays.map(async (m) => {
-    if (existingCond.has(m.conditionId)) return; // already a stored pick
+    const mlNeeded = !existingCond.has(m.conditionId);
+    const nrfiNeeded = !!(m.nrfiMarket && !m.nrfiMarket.closed && !existingNrfiCond.has(m.nrfiMarket.conditionId));
+    const totalsMaybeNeeded = !!(m.totalsMarkets && m.totalsMarkets.length);
+    if (!mlNeeded && !nrfiNeeded && !totalsMaybeNeeded) return; // everything already stored
 
     const sched = findScheduleGameForMarket(scheduleGames, m.teamAName, m.teamBName, m.gameStartTime);
     if (!sched) { pending.push({ ...m, status: 'pending' }); return; }
@@ -832,7 +873,8 @@ async function recordTodaysMlbGames() {
     let stadiumFounded = stadiumCache.get(venueId);
     if (stadiumFounded === undefined) { stadiumFounded = await resolveMlbStadiumFoundedForBackfill(venueId, venueName); stadiumCache.set(venueId, stadiumFounded); }
 
-    if (!currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: m.gameStartTime })) { pending.push({ ...m, status: 'venue' }); return; }
+    const todayMatchDateISO = currentMlbMatchDateISO({ regionMode: regionInfo.regionMode, region: regionInfo.region, gameStartTime: m.gameStartTime });
+    if (!todayMatchDateISO) { pending.push({ ...m, status: 'venue' }); return; }
 
     const season = now.getFullYear();
     await Promise.all([feed.home.teamId, feed.away.teamId].map(async (id) => {
@@ -858,30 +900,61 @@ async function recordTodaysMlbGames() {
     const scoreB = computeTeamComposite(gObj, 'B');
     if (!scoreA || !scoreB || m.priceA == null || m.priceB == null) { pending.push({ ...m, status: 'pending' }); return; }
 
-    const marketFavName = m.priceA >= m.priceB ? m.teamAName : m.teamBName;
-    const numFavName = scoreA.combined >= scoreB.combined ? m.teamAName : m.teamBName;
-    const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-    const rA = sideForName(m.teamAName).runs;
-    const rB = sideForName(m.teamBName).runs;
-    const result = (feed.abstractGameState === 'Final' && Number.isFinite(rA) && Number.isFinite(rB))
-      ? (rA === rB ? { winner: null, draw: true, resolvedAt: Date.now() } : { winner: rA > rB ? m.teamAName : m.teamBName, draw: false, resolvedAt: Date.now() })
-      : null;
+    if (mlNeeded) {
+      const marketFavName = m.priceA >= m.priceB ? m.teamAName : m.teamBName;
+      const numFavName = scoreA.combined >= scoreB.combined ? m.teamAName : m.teamBName;
+      const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+      const rA = sideForName(m.teamAName).runs;
+      const rB = sideForName(m.teamBName).runs;
+      const result = (feed.abstractGameState === 'Final' && Number.isFinite(rA) && Number.isFinite(rB))
+        ? (rA === rB ? { winner: null, draw: true, resolvedAt: Date.now() } : { winner: rA > rB ? m.teamAName : m.teamBName, draw: false, resolvedAt: Date.now() })
+        : null;
 
-    newPreds.push({
-      conditionId: m.conditionId, gamePk,
-      teamAName: m.teamAName, teamBName: m.teamBName,
-      numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
-      components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
-      dims: { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) },
-      marketFavorite: marketFavName, marketPriceA: m.priceA, marketPriceB: m.priceB,
-      pickType: agree ? 'favorite' : 'underdog',
-      eventTitle: m.eventTitle, gameTime: m.gameStartTime.toISOString(),
-      recordedAt: Date.now(), result,
-    });
-    existingCond.add(m.conditionId);
+      newPreds.push({
+        conditionId: m.conditionId, gamePk,
+        teamAName: m.teamAName, teamBName: m.teamBName,
+        numerologyFavorite: numFavName, numerologyScoreA: scoreA.combined, numerologyScoreB: scoreB.combined,
+        components: { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) },
+        dims: { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) },
+        marketFavorite: marketFavName, marketPriceA: m.priceA, marketPriceB: m.priceB,
+        pickType: agree ? 'favorite' : 'underdog',
+        eventTitle: m.eventTitle, gameTime: m.gameStartTime.toISOString(),
+        recordedAt: Date.now(), result,
+      });
+      existingCond.add(m.conditionId);
+    }
+
+    // ---- Pitcher-duel picks (NRFI + main-line totals) for the same game ----
+    const bdHomeP = birthdates.get(feed.home.startingPitcherId);
+    const bdAwayP = birthdates.get(feed.away.startingPitcherId);
+    const totalsNeeded = totalsMaybeNeeded && !existingTotalsGamePks.has(gamePk);
+    if ((nrfiNeeded || totalsNeeded) && bdHomeP && bdHomeP.birthDate && bdAwayP && bdAwayP.birthDate) {
+      const duelMatchDate = parseDateInput(todayMatchDateISO);
+      const duelScore = (
+        computeCompatibility(parseDateInput(bdHomeP.birthDate), duelMatchDate, sportsNumerologyCompat).finalScore +
+        computeCompatibility(parseDateInput(bdAwayP.birthDate), duelMatchDate, sportsNumerologyCompat).finalScore
+      ) / 2;
+      const gameLabelBase = `${m.teamAName} vs ${m.teamBName}`;
+      const gameTimeISO = m.gameStartTime.toISOString();
+
+      if (nrfiNeeded && m.nrfiMarket.priceA != null && m.nrfiMarket.priceB != null) {
+        newNrfiPreds.push(buildMlbDuelRecord('nrfi', m.nrfiMarket, duelScore, `${gameLabelBase} · 1st-inning run?`, gameTimeISO, null, gamePk));
+        existingNrfiCond.add(m.nrfiMarket.conditionId);
+      }
+      if (totalsNeeded) {
+        const open = m.totalsMarkets.filter((t) => !t.closed && t.line != null && t.priceA != null && t.priceB != null);
+        open.sort((x, y) => Math.abs(x.priceA - 0.5) - Math.abs(y.priceA - 0.5));
+        if (open[0]) {
+          newTotalsPreds.push(buildMlbDuelRecord('totals', open[0], duelScore, `${gameLabelBase} · O/U ${open[0].line}`, gameTimeISO, null, gamePk));
+          existingTotalsGamePks.add(gamePk);
+        }
+      }
+    }
   }));
 
   if (newPreds.length) saveMlbPredictions([...existing, ...newPreds]);
+  if (newNrfiPreds.length) saveMlbNrfiPredictions([...existingNrfi, ...newNrfiPreds]);
+  if (newTotalsPreds.length) saveMlbTotalsPredictions([...existingTotals, ...newTotalsPreds]);
   // Sort pending soonest-first for display.
   todaysMlbSlatePending = pending.sort((a, b) => a.gameStartTime - b.gameStartTime);
 }
@@ -1130,7 +1203,32 @@ const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // real limits now are just how long one run takes (hundreds more games) and
 // whether Polymarket's own price history still reaches back that far - a gap
 // in old data is their retention, not a bug here.
-const MLB_BACKFILL_SCHEMA = 6; // bump when the stored prediction shape changes,
+// Polymarket lists ~7 totals lines per game; the system bets only the MAIN
+// line - the one whose pre-game price sat closest to 50/50, which is the
+// market's true expected total (and matches the main total a sportsbook
+// shows). Historical closed markets' listed prices are the resolved 1/0
+// finals, so "closest to even" has to come from each line's own CLOB
+// pre-game price history.
+async function pickMainTotalsLine(totalsMarkets, targetTs) {
+  const candidates = totalsMarkets.filter((t) => t.line != null && t.clobTokenIdA && t.clobTokenIdB);
+  if (!candidates.length) return null;
+  const priced = await Promise.all(candidates.map(async (t) => ({ t, pA: await fetchClobPriceNear(t.clobTokenIdA, targetTs) })));
+  let best = null;
+  priced.forEach(({ t, pA }) => {
+    if (pA == null) return;
+    const dist = Math.abs(pA - 0.5);
+    if (!best || dist < best.dist) best = { t, pA, dist };
+  });
+  if (!best) return null;
+  const pB = await fetchClobPriceNear(best.t.clobTokenIdB, targetTs);
+  if (pB == null) return null;
+  return { market: best.t, priceA: best.pA, priceB: pB };
+}
+
+const MLB_BACKFILL_SCHEMA = 7; // bump when the stored prediction shape changes,
+// v7: the walk now also collects NRFI + main-line totals pitcher-duel
+// records per game (whole new stores, so the full window must be re-walked
+// to build their history).
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk
@@ -1251,6 +1349,10 @@ async function backfillMlbHistory(onProgress) {
   const existingByGamePk = new Map(existingPredictions.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
   const existingSignals = loadMlbPitcherKSignals();
   const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
+  const existingNrfi = loadMlbNrfiPredictions();
+  const existingNrfiGamePks = new Set(existingNrfi.map((p) => p.gamePk));
+  const existingTotals = loadMlbTotalsPredictions();
+  const existingTotalsGamePks = new Set(existingTotals.map((p) => p.gamePk));
 
   const teamInfoCache = new Map();
   const managerCache = new Map();
@@ -1259,6 +1361,8 @@ async function backfillMlbHistory(onProgress) {
 
   const newPredictions = [];
   const newSignals = [];
+  const newNrfi = [];
+  const newTotals = [];
   let patchedCount = 0; // existing records that got their components back-filled in place
 
   const allGames = [...byDate.entries()].flatMap(([date, games]) => games.map((g) => ({ date, g })));
@@ -1271,6 +1375,8 @@ async function backfillMlbHistory(onProgress) {
     // it whenever there's either a new prediction OR an in-place patch.
     if (newPredictions.length || patchedCount) saveMlbPredictions([...existingPredictions, ...newPredictions]);
     if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
+    if (newNrfi.length) saveMlbNrfiPredictions([...existingNrfi, ...newNrfi]);
+    if (newTotals.length) saveMlbTotalsPredictions([...existingTotals, ...newTotals]);
   };
 
   async function processGame({ date, g }) {
@@ -1336,10 +1442,10 @@ async function backfillMlbHistory(onProgress) {
     // back-fill them in place; if it isn't stored at all, we create it.
     const dhKey = `${date}|${[feed.home.teamId, feed.away.teamId].sort().join('-')}`;
     const existingPred = existingByGamePk.get(gamePk);
+    let event = null; // hoisted so the pitcher-duel half below can reuse one fetch
     if (!existingPred || !existingPred.components || !existingPred.dims) {
       let teamAName = null;
       let teamBName = null;
-      let event = null;
       if (existingPred) {
         // Patching: keep the record's own A/B naming so components line up.
         teamAName = existingPred.teamAName;
@@ -1404,6 +1510,49 @@ async function backfillMlbHistory(onProgress) {
       }
     }
 
+    // ---- Pitcher-duel markets half (NRFI + main-line totals) ----
+    // Needs only the two starters' birthdates, not the full lineup scoring.
+    // Results come straight from each market's own final 1/0 prices.
+    const needNrfi = !existingNrfiGamePks.has(gamePk);
+    const needTotals = !existingTotalsGamePks.has(gamePk);
+    if ((needNrfi || needTotals) && !doubleheaderKeys.has(dhKey) && feed.home.startingPitcherId && feed.away.startingPitcherId) {
+      const bdHome = birthdates.get(feed.home.startingPitcherId);
+      const bdAway = birthdates.get(feed.away.startingPitcherId);
+      if (bdHome && bdHome.birthDate && bdAway && bdAway.birthDate) {
+        const duelScore = (
+          computeCompatibility(parseDateInput(bdHome.birthDate), matchDate, sportsNumerologyCompat).finalScore +
+          computeCompatibility(parseDateInput(bdAway.birthDate), matchDate, sportsNumerologyCompat).finalScore
+        ) / 2;
+        if (!event) event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
+        if (event) {
+          const gameLabelBase = `${event.teamAName} vs ${event.teamBName}`;
+          const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
+          const gameTimeISO = event.gameStartTime.toISOString();
+
+          if (needNrfi && event.nrfiMarket && event.nrfiMarket.clobTokenIdA && event.nrfiMarket.clobTokenIdB) {
+            const nrfiResult = mlbDuelResultFromFinalPrices(event.nrfiMarket);
+            const [pA, pB] = await Promise.all([
+              fetchClobPriceNear(event.nrfiMarket.clobTokenIdA, targetTs),
+              fetchClobPriceNear(event.nrfiMarket.clobTokenIdB, targetTs),
+            ]);
+            if (pA != null && pB != null) {
+              newNrfi.push(buildMlbDuelRecord('nrfi', { ...event.nrfiMarket, priceA: pA, priceB: pB }, duelScore, `${gameLabelBase} · 1st-inning run?`, gameTimeISO, nrfiResult, gamePk));
+              existingNrfiGamePks.add(gamePk);
+            }
+          }
+
+          if (needTotals && event.totalsMarkets && event.totalsMarkets.length) {
+            const main = await pickMainTotalsLine(event.totalsMarkets, targetTs);
+            if (main) {
+              const totalsResult = mlbDuelResultFromFinalPrices(main.market);
+              newTotals.push(buildMlbDuelRecord('totals', { ...main.market, priceA: main.priceA, priceB: main.priceB }, duelScore, `${gameLabelBase} · O/U ${main.market.line}`, gameTimeISO, totalsResult, gamePk));
+              existingTotalsGamePks.add(gamePk);
+            }
+          }
+        }
+      }
+    }
+
     // ---- Strikeout Signal half - independent of any market match ----
     for (const side of [feed.home, feed.away]) {
       if (!side.startingPitcherId) continue;
@@ -1454,7 +1603,7 @@ async function backfillMlbHistory(onProgress) {
   saveProgress();
   saveMlbBackfillState({ throughDateISO: endISO, schemaVersion: MLB_BACKFILL_SCHEMA });
 
-  return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, alreadyCurrent: false };
+  return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, newNrfiCount: newNrfi.length, newTotalsCount: newTotals.length, alreadyCurrent: false };
 }
 
 function initMlbBackfillButton() {
@@ -1470,7 +1619,7 @@ function initMlbBackfillButton() {
       });
       status.textContent = result.alreadyCurrent
         ? 'Already caught up to yesterday - nothing new to backfill.'
-        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}.`;
+        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks, ${result.newSignalsCount} strikeout signals, ${result.newNrfiCount || 0} NRFI picks, and ${result.newTotalsCount || 0} totals picks${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}.`;
       await refreshAndRenderMlb();
     } catch (e) {
       status.textContent = 'Something went wrong during backfill - try again.';

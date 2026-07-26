@@ -893,6 +893,98 @@ function saveMlbPredictions(predictions) {
 // first and only falls back to the Wikipedia/Wikidata lookup (already built
 // for UFC/Tennis venues) on a cache miss, then saves the result here so it's
 // a one-time lookup per ballpark rather than once per game.
+/* ===================== MLB pitcher-duel markets (NRFI / totals) ===================== */
+// Local-only, like the other MLB prediction stores - deliberately NOT in
+// CLOUD_SYNC_FIELDS (see the comment there for the Firestore-size lesson).
+
+const MLB_NRFI_PREDICTIONS_KEY = 'numerology_mlb_nrfi_predictions';
+const MLB_TOTALS_PREDICTIONS_KEY = 'numerology_mlb_totals_predictions';
+
+function loadMlbNrfiPredictions() {
+  try {
+    const raw = localStorage.getItem(MLB_NRFI_PREDICTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMlbNrfiPredictions(predictions) {
+  localStorage.setItem(MLB_NRFI_PREDICTIONS_KEY, JSON.stringify(predictions));
+}
+
+function loadMlbTotalsPredictions() {
+  try {
+    const raw = localStorage.getItem(MLB_TOTALS_PREDICTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMlbTotalsPredictions(predictions) {
+  localStorage.setItem(MLB_TOTALS_PREDICTIONS_KEY, JSON.stringify(predictions));
+}
+
+// The pitcher-duel signal: both starting pitchers' day scores averaged. A
+// high duel means both starters are "on" - quiet bats, so No run in the 1st
+// and Under; a low duel means runs. Scores are mirrored around
+// MLB_DUEL_NEUTRAL (the observed center of pitcher day scores - see the
+// MLB_K_SIGNAL_TIERS calibration note) so the record carries a scoreA/scoreB
+// pair shaped exactly like every other prediction: edgeGap, the edge tiers,
+// numerologyPickPrice, and the whole betting engine work on it unchanged.
+const MLB_DUEL_NEUTRAL = 63;
+
+const MLB_DUEL_MIN_GAP = 5;
+
+const MLB_DUEL_TIERS = [
+  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 22, max: Infinity },
+  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 12, max: 22 },
+  { key: 'slight', label: 'Slight Edge', icon: '📈', min: MLB_DUEL_MIN_GAP, max: 12 },
+  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: MLB_DUEL_MIN_GAP },
+];
+
+// kind is 'nrfi' or 'totals'; market is a parseMlbSideMarket() shape whose
+// priceA/priceB must already be the PRE-GAME prices (the backfill swaps the
+// resolved 1/0 finals out for CLOB history prices before calling this).
+// The quiet side (No / Under) gets the duel score itself; the loud side gets
+// its mirror, so the favorite flips at the neutral point.
+function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, result, gamePk) {
+  const quietIsA = ['no', 'under'].includes(normalizeName(market.outcomeA));
+  const d = Math.round(duelScore * 10) / 10;
+  const mirrored = Math.round((2 * MLB_DUEL_NEUTRAL - duelScore) * 10) / 10;
+  const quietName = quietIsA ? market.outcomeA : market.outcomeB;
+  const loudName = quietIsA ? market.outcomeB : market.outcomeA;
+  return {
+    conditionId: market.conditionId,
+    gamePk,
+    kind,
+    line: market.line != null ? market.line : undefined,
+    teamAName: market.outcomeA,
+    teamBName: market.outcomeB,
+    gameLabel,
+    duelScore: d,
+    numerologyFavorite: duelScore >= MLB_DUEL_NEUTRAL ? quietName : loudName,
+    numerologyScoreA: quietIsA ? d : mirrored,
+    numerologyScoreB: quietIsA ? mirrored : d,
+    marketPriceA: market.priceA,
+    marketPriceB: market.priceB,
+    gameTime: gameTimeISO,
+    recordedAt: Date.now(),
+    result: result || null,
+  };
+}
+
+// Resolves a backfilled duel market straight from its own final outcome
+// prices - a settled Polymarket market collapses to an exact 1/0 split, so
+// the market itself is the ground truth. Null when it never settled cleanly.
+function mlbDuelResultFromFinalPrices(market) {
+  if (!Number.isFinite(market.priceA) || !Number.isFinite(market.priceB)) return null;
+  const max = Math.max(market.priceA, market.priceB);
+  if (max < 0.9) return null;
+  return { winner: market.priceA === max ? market.outcomeA : market.outcomeB, draw: false, resolvedAt: Date.now() };
+}
+
 const MLB_VENUES_KEY = 'numerology_mlb_venues';
 
 function loadMlbVenues() {
