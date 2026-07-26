@@ -298,6 +298,133 @@ function renderBettingLog() {
   renderPaginationControls('bettingLogPagination', 'bettingLog', page, totalPages, renderBettingLog);
 }
 
+/* ===================== Strategy Lab ===================== */
+// Ranks strategies by replaying the full walk-forward sim for each one:
+// every bet type under the current day filter, then every single day number
+// under the current bet type. One picks collection feeds all runs.
+
+function bettingLabRowHtml(row) {
+  const sim = row.sim;
+  if (!sim.dayCount) {
+    return `
+      <tr>
+        <td>${row.active ? '⭐ ' : ''}${escapeHtml(row.label)}</td>
+        <td colspan="5" class="bet-lab-empty">no qualifying betting days</td>
+        <td>${row.applyAttr ? `<button type="button" class="btn-link" ${row.applyAttr}>use</button>` : ''}</td>
+      </tr>`;
+  }
+  const delta = Math.round((sim.finalBankroll - sim.startBankroll) * 100) / 100;
+  const plCls = delta > 0 ? 'good' : delta < 0 ? 'bad' : '';
+  const roi = sim.totals.staked > 0 ? Math.round((sim.totals.profit / sim.totals.staked) * 100) : 0;
+  return `
+    <tr>
+      <td>${row.active ? '⭐ ' : ''}${escapeHtml(row.label)}</td>
+      <td>${bettingFmtMoney(sim.finalBankroll)}</td>
+      <td><span class="score-inline ${plCls}">${bettingFmtSignedMoney(delta)}</span></td>
+      <td>${roi}%</td>
+      <td>${sim.maxDrawdown > 0 ? `-${bettingFmtMoney(sim.maxDrawdown)} (${sim.maxDrawdownPct}%)` : '&mdash;'}</td>
+      <td>${sim.totals.won}W-${sim.totals.lost}L &middot; ${sim.dayCount}d</td>
+      <td>${row.applyAttr ? `<button type="button" class="btn-link" ${row.applyAttr}>use</button>` : ''}</td>
+    </tr>`;
+}
+
+function bettingLabTableHtml(title, rows) {
+  const sorted = [...rows].sort((a, b) => {
+    if (!a.sim.dayCount && !b.sim.dayCount) return 0;
+    if (!a.sim.dayCount) return 1;
+    if (!b.sim.dayCount) return -1;
+    return b.sim.finalBankroll - a.sim.finalBankroll;
+  });
+  return `
+    <div class="bet-lab-title">${title}</div>
+    <div class="pm-table-scroll">
+      <table class="astro-table">
+        <thead><tr><th>Strategy</th><th>Final</th><th>P/L</th><th>ROI</th><th>Max DD</th><th>Record</th><th></th></tr></thead>
+        <tbody>${sorted.map(bettingLabRowHtml).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function runStrategyLab() {
+  const scope = currentBettingScope;
+  const start = loadBettingSimStart();
+  const picks = collectBettingPicks(scope);
+  const curMode = loadBettingMode();
+  const curFilter = loadBettingDayFilter();
+  const mixedTypes = loadBettingMixedTypes();
+  const noFilter = { universal: [], energy: [] };
+
+  const betTypeRows = ['singles', '2', '3', '4', 'mixed'].map((m) => ({
+    label: bettingModeLabel(m, mixedTypes),
+    applyAttr: `data-apply-mode="${m}"`,
+    active: m === curMode,
+    sim: runBettingSimulation(scope, m, start, curFilter, mixedTypes, picks),
+  }));
+
+  const dayRows = [];
+  DAY_FILTER_UNIVERSAL_OPTIONS.forEach((n) => {
+    dayRows.push({
+      label: `Universal Day ${n}`,
+      applyAttr: `data-apply-universal="${n}"`,
+      active: curFilter.universal.length === 1 && curFilter.universal[0] === n && !curFilter.energy.length,
+      sim: runBettingSimulation(scope, curMode, start, { universal: [n], energy: [] }, mixedTypes, picks),
+    });
+  });
+  DAY_FILTER_ENERGY_OPTIONS.forEach((n) => {
+    dayRows.push({
+      label: `Day Energy ${n}`,
+      applyAttr: `data-apply-energy="${n}"`,
+      active: curFilter.energy.length === 1 && curFilter.energy[0] === n && !curFilter.universal.length,
+      sim: runBettingSimulation(scope, curMode, start, { universal: [], energy: [n] }, mixedTypes, picks),
+    });
+  });
+  dayRows.unshift({
+    label: 'Every day (no filter)',
+    applyAttr: 'data-apply-universal="0"',
+    active: !curFilter.universal.length && !curFilter.energy.length,
+    sim: runBettingSimulation(scope, curMode, start, noFilter, mixedTypes, picks),
+  });
+
+  document.getElementById('bettingLabResults').innerHTML =
+    bettingLabTableHtml(`Bet types &middot; ${BETTING_SCOPE_META[scope].label}, current day filter`, betTypeRows)
+    + bettingLabTableHtml(`Day numbers &middot; ${BETTING_SCOPE_META[scope].label}, ${bettingModeLabel(curMode, mixedTypes)}`, dayRows);
+}
+
+document.getElementById('bettingLabBtn').addEventListener('click', () => {
+  const btn = document.getElementById('bettingLabBtn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  // let the button repaint before the synchronous sim burst
+  setTimeout(() => {
+    try {
+      runStrategyLab();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🧪 Run Strategy Lab';
+    }
+  }, 20);
+});
+
+document.getElementById('bettingLabResults').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy]');
+  if (!btn) return;
+  if (btn.dataset.applyMode) {
+    saveBettingMode(btn.dataset.applyMode);
+    bettingModeSelectEl.value = btn.dataset.applyMode;
+    renderBettingMixedChips();
+  } else if (btn.dataset.applyUniversal !== undefined) {
+    const n = Number(btn.dataset.applyUniversal);
+    saveBettingDayFilter(n ? { universal: [n], energy: [] } : { universal: [], energy: [] });
+    renderBettingDayChips();
+  } else if (btn.dataset.applyEnergy !== undefined) {
+    saveBettingDayFilter({ universal: [], energy: [Number(btn.dataset.applyEnergy)] });
+    renderBettingDayChips();
+  }
+  resetPagination('bettingLedger');
+  renderBetting();
+  runStrategyLab(); // refresh the lab's active markers under the new setting
+});
+
 /* ===================== Main render + result refresh ===================== */
 
 function renderBetting() {

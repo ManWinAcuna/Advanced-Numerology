@@ -4598,3 +4598,15 @@ body {
   padding: 8px 10px;
   border-top: 1px solid var(--border);
 }
+
+.bet-lab-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--yellow);
+  margin: 12px 0 6px;
+}
+
+.bet-lab-empty {
+  color: var(--muted);
+  font-size: 0.74rem;
+}

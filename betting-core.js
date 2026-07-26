@@ -362,8 +362,11 @@ function settleBettingTicket(ticket) {
 // live: its picks can still be pending, so its ledger row keeps updating as
 // results land - which is exactly the end-of-day "how did today do" view.
 
-function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes) {
-  const picks = collectBettingPicks(scope);
+// prePicks lets the Strategy Lab run many sims off one collectBettingPicks
+// pass instead of re-reading/re-parsing storage per run. Picks are never
+// mutated by a simulation, so sharing the array across runs is safe.
+function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes, prePicks) {
+  const picks = prePicks || collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
 
   const byDay = new Map();
