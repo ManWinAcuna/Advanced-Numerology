@@ -417,6 +417,7 @@ function renderBetting() {
   const mode = loadBettingMode();
   const dayFilter = loadBettingDayFilter();
   const mixedTypes = loadBettingMixedTypes();
+  renderBettingMarketChips(); // scope-dependent: hidden for UFC/Tennis
   currentTodaySlate = buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes);
   renderBettingToday(currentTodaySlate);
   renderBettingReadiness();
@@ -559,9 +560,18 @@ function renderBettingMixedChips() {
 }
 
 // Market toggles - which MLB market kinds feed the MLB / All Sports slates.
-const BETTING_MARKET_LABELS = { moneyline: '⚾ Moneyline', nrfi: '1️⃣ NRFI', totals: '↕️ Totals' };
+// Every one of these markets is MLB-only (NRFI and run totals don't exist for
+// a fight or a tennis match, and the Moneyline toggle gates MLB's moneyline
+// alone - UFC and Tennis have no market switch at all). So the labels say MLB
+// and the whole row hides on scopes it can't affect.
+const BETTING_MARKET_LABELS = { moneyline: '⚾ MLB Moneyline', nrfi: '1️⃣ MLB NRFI', totals: '↕️ MLB Totals' };
 
 function renderBettingMarketChips() {
+  const row = document.getElementById('bettingMarketsRow');
+  const appliesToScope = currentBettingScope === 'mlb' || currentBettingScope === 'all';
+  row.style.display = appliesToScope ? '' : 'none';
+  if (!appliesToScope) return;
+
   const markets = loadBettingMarkets();
   document.getElementById('bettingMarketsChips').innerHTML = BETTING_MARKET_OPTIONS.map((m) =>
     `<button type="button" class="betting-day-chip${markets.includes(m) ? ' active' : ''}" data-market="${m}">${BETTING_MARKET_LABELS[m]}</button>`).join('');
