@@ -450,7 +450,7 @@ async function refreshBettingAndRender() {
 
 /* ===================== Wiring ===================== */
 
-document.getElementById('bettingSportPicker').addEventListener('click', (e) => {
+document.getElementById('bettingSportPicker').addEventListener('click', async (e) => {
   const card = e.target.closest('.mode-card[data-sport]');
   if (!card) return;
   e.preventDefault();
@@ -458,6 +458,9 @@ document.getElementById('bettingSportPicker').addEventListener('click', (e) => {
   document.getElementById('bettingSportPicker').style.display = 'none';
   document.getElementById('bettingSportContent').style.display = '';
   resetPagination('bettingLedger');
+  // The prediction stores are IndexedDB-backed now - wait for them before the
+  // first read so a fast tap can't render off an empty cache.
+  await bigStoreReadyPromise;
   refreshBettingAndRender();
 });
 

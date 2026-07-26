@@ -29,7 +29,9 @@ const BETTING_BACKUP_VERSION = 1;
 function buildBettingBackup() {
   const data = {};
   BETTING_BACKUP_KEYS.forEach((key) => {
-    const raw = localStorage.getItem(key);
+    // bigStoreGetItem transparently covers both homes, so a backup captures
+    // the IndexedDB stores and the localStorage settings alike.
+    const raw = BIG_STORE_KEYS.includes(key) ? bigStoreGetItem(key) : localStorage.getItem(key);
     if (raw != null) data[key] = raw; // stored as raw strings - no reparse, no reshape
   });
   return { version: BETTING_BACKUP_VERSION, createdAt: new Date().toISOString(), data };
@@ -79,7 +81,10 @@ function restoreBettingBackup(backup) {
   let restored = 0;
   Object.keys(backup.data).forEach((key) => {
     if (!BETTING_BACKUP_KEYS.includes(key)) return; // ignore unknown keys
-    localStorage.setItem(key, backup.data[key]);
+    // Routed through the big store so the large prediction stores land in
+    // IndexedDB, not into a localStorage key the app no longer reads.
+    if (BIG_STORE_KEYS.includes(key)) bigStoreSetItem(key, backup.data[key]);
+    else localStorage.setItem(key, backup.data[key]);
     restored += 1;
   });
   return restored;

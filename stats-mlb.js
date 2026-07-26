@@ -8,10 +8,11 @@
 // panel below for the pitcher-strikeout research signal (not a bet - see
 // MLB_PITCHER_K_SIGNALS_KEY in db-core.js).
 
-// Runs before anything reads the store, and outside the page-DOM guard at the
-// bottom of this file, so Stats, Betting and Bet Log all see one consistently
-// scored history after a weight change (see rescoreMlbPredictionsForWeights).
-const mlbWeightsRescore = rescoreMlbPredictionsForWeights();
+// The weight rescore must run before anything reads the store, and on every
+// page that reads it (Stats, Betting, Bet Log) - hence outside the page-DOM
+// guard at the bottom of this file. It waits on bigStoreReadyPromise so it
+// operates on the IndexedDB-backed data rather than a pre-init snapshot.
+const mlbStoreReady = bigStoreReadyPromise.then(() => rescoreMlbPredictionsForWeights());
 
 let currentMlbPredictions = [];
 let currentMlbKSignals = [];
@@ -1824,16 +1825,20 @@ async function backfillMlbHistory(onProgress) {
 function renderMlbStorageUsage() {
   const el = document.getElementById('mlbStorageUsage');
   if (!el) return;
-  const size = (key) => ((localStorage.getItem(key) || '').length / (1024 * 1024));
+  const size = (key) => (bigStoreKeyBytes(key) / (1024 * 1024));
   const parts = [
     ['Game picks', MLB_PREDICTIONS_KEY],
     ['Strikeout signals', MLB_PITCHER_K_SIGNALS_KEY],
     ['NRFI', MLB_NRFI_PREDICTIONS_KEY],
     ['Run totals', MLB_TOTALS_PREDICTIONS_KEY],
   ].map(([label, key]) => `${label} ${size(key).toFixed(2)} MB`);
-  const used = Number(numerologyStorageMB());
-  const cls = used >= 4.5 ? 'bad' : used >= 3.5 ? 'mid' : 'good';
-  el.innerHTML = `Using <span class="score-inline ${cls}">${used.toFixed(2)} MB</span> of ~5 MB &middot; ${parts.join(' &middot; ')}`;
+  const dbMB = bigStoreBytes() / (1024 * 1024);
+  // The prediction stores moved to IndexedDB, whose quota is a share of free
+  // disk rather than localStorage's ~5MB - so this is informational now, not
+  // a ceiling to manage.
+  el.innerHTML = bigStoreAvailable()
+    ? `Prediction data: <span class="score-inline good">${dbMB.toFixed(2)} MB</span> in IndexedDB (no practical limit) &middot; ${parts.join(' &middot; ')} &middot; settings in localStorage: ${numerologyStorageMB()} MB`
+    : `Using <span class="score-inline ${Number(numerologyStorageMB()) >= 4.5 ? 'bad' : 'mid'}">${numerologyStorageMB()} MB</span> of ~5 MB (IndexedDB unavailable - still on localStorage) &middot; ${parts.join(' &middot; ')}`;
 }
 
 function initMlbStorageControls() {
@@ -1897,7 +1902,8 @@ function initMlbBackfillButton() {
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkMlbResults() and the shared prediction
 // helpers, so the Betting page settles results through the same code path.
-if (document.getElementById('statsMlbSection')) {
+mlbStoreReady.then(() => {
+ if (document.getElementById('statsMlbSection')) {
   document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
   document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
   initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); resetPagination('mlbNrfi'); resetPagination('mlbTotals'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
@@ -1919,4 +1925,5 @@ if (document.getElementById('statsMlbSection')) {
   initMlbBackfillButton();
   initMlbStorageControls();
   refreshAndRenderMlb();
-}
+ }
+});

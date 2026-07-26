@@ -669,7 +669,8 @@ function initTennisBackfillButton() {
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkTennisResults() and the shared prediction
 // helpers, so the Betting page settles results through the same code path.
-if (document.getElementById('statsTennisSection')) {
+bigStoreReadyPromise.then(() => {
+ if (document.getElementById('statsTennisSection')) {
   document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
   document.getElementById('tennisStatsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('tennisOld'));
   initDayFilter('tennis', () => { resetPagination('tennisStatsTable'); renderTennisScope('', currentTennisPredictions); });
@@ -685,4 +686,5 @@ if (document.getElementById('statsTennisSection')) {
   initModalTabSwitcher('statsTennisSection');
   initTennisBackfillButton();
   refreshTennisAndRender();
-}
+ }
+});

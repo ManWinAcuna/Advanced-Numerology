@@ -812,7 +812,7 @@ const UFC_PREDICTIONS_KEY = 'numerology_ufc_predictions';
 
 function loadUfcPredictions() {
   try {
-    const raw = localStorage.getItem(UFC_PREDICTIONS_KEY);
+    const raw = bigStoreGetItem(UFC_PREDICTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
@@ -821,7 +821,7 @@ function loadUfcPredictions() {
 }
 
 function saveUfcPredictions(predictions) {
-  localStorage.setItem(UFC_PREDICTIONS_KEY, JSON.stringify(predictions));
+  saveJsonGuarded(UFC_PREDICTIONS_KEY, predictions);
   cloudPushKey(UFC_PREDICTIONS_KEY);
 }
 
@@ -849,7 +849,7 @@ const TENNIS_PREDICTIONS_KEY = 'numerology_tennis_predictions';
 
 function loadTennisPredictions() {
   try {
-    const raw = localStorage.getItem(TENNIS_PREDICTIONS_KEY);
+    const raw = bigStoreGetItem(TENNIS_PREDICTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
@@ -858,7 +858,7 @@ function loadTennisPredictions() {
 }
 
 function saveTennisPredictions(predictions) {
-  localStorage.setItem(TENNIS_PREDICTIONS_KEY, JSON.stringify(predictions));
+  saveJsonGuarded(TENNIS_PREDICTIONS_KEY, predictions);
   cloudPushKey(TENNIS_PREDICTIONS_KEY);
 }
 
@@ -874,7 +874,7 @@ const MLB_PREDICTIONS_KEY = 'numerology_mlb_predictions';
 
 function loadMlbPredictions() {
   try {
-    const raw = localStorage.getItem(MLB_PREDICTIONS_KEY);
+    const raw = bigStoreGetItem(MLB_PREDICTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
@@ -921,7 +921,11 @@ function isQuotaError(e) {
 
 function saveJsonGuarded(key, value) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    // Big stores go to IndexedDB (via the cache); everything else stays in
+    // localStorage. bigStoreSetItem only throws if it had to fall back to
+    // localStorage and that hit the quota too.
+    if (BIG_STORE_KEYS.includes(key)) bigStoreSetItem(key, JSON.stringify(value));
+    else localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     if (isQuotaError(e)) {
       throw new Error(`Browser storage is full (~${numerologyStorageMB()} MB used, limit is about 5 MB). Download a backup from the Bet Log page first, then free space - see the Storage box on Old Data.`);
@@ -939,7 +943,7 @@ const MLB_TOTALS_PREDICTIONS_KEY = 'numerology_mlb_totals_predictions';
 
 function loadMlbNrfiPredictions() {
   try {
-    const raw = localStorage.getItem(MLB_NRFI_PREDICTIONS_KEY);
+    const raw = bigStoreGetItem(MLB_NRFI_PREDICTIONS_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
@@ -952,7 +956,7 @@ function saveMlbNrfiPredictions(predictions) {
 
 function loadMlbTotalsPredictions() {
   try {
-    const raw = localStorage.getItem(MLB_TOTALS_PREDICTIONS_KEY);
+    const raw = bigStoreGetItem(MLB_TOTALS_PREDICTIONS_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
@@ -1119,7 +1123,7 @@ const MLB_PITCHER_K_SIGNALS_KEY = 'numerology_mlb_pitcher_k_signals';
 
 function loadMlbPitcherKSignals() {
   try {
-    const raw = localStorage.getItem(MLB_PITCHER_K_SIGNALS_KEY);
+    const raw = bigStoreGetItem(MLB_PITCHER_K_SIGNALS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {

@@ -704,7 +704,7 @@ const BETTING_LOCKED_SLATES_KEY = 'numerology_betting_locked_slates';
 
 function loadBettingLockedSlates() {
   try {
-    const v = JSON.parse(localStorage.getItem(BETTING_LOCKED_SLATES_KEY));
+    const v = JSON.parse(bigStoreGetItem(BETTING_LOCKED_SLATES_KEY));
     return Array.isArray(v) ? v : [];
   } catch (e) {
     return [];
@@ -712,7 +712,7 @@ function loadBettingLockedSlates() {
 }
 
 function saveBettingLockedSlates(list) {
-  localStorage.setItem(BETTING_LOCKED_SLATES_KEY, JSON.stringify(list));
+  saveJsonGuarded(BETTING_LOCKED_SLATES_KEY, list);
 }
 
 // Identity of a slate's content - used to stop the same slate being locked

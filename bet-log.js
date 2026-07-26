@@ -113,4 +113,4 @@ document.getElementById('betLogRefreshBtn').addEventListener('click', async () =
   }
 });
 
-refreshBetLogAndRender();
+bigStoreReadyPromise.then(refreshBetLogAndRender);

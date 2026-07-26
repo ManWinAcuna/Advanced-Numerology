@@ -750,6 +750,10 @@ function startPolling() {
 }
 
 (async function init() {
+  // The prediction stores live in IndexedDB now (big-store.js); wait for
+  // them before any read, or a pre-init read could serve a stale
+  // localStorage copy and a later save would clobber newer records.
+  await bigStoreReadyPromise;
   initRefreshButton();
   initBreakdownModal();
   initFeedToggles();

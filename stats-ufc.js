@@ -671,7 +671,8 @@ function initUfcBackfillButton() {
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkResults() and the shared prediction helpers,
 // so the Betting page settles results through the exact same code path.
-if (document.getElementById('statsUfcSection')) {
+bigStoreReadyPromise.then(() => {
+ if (document.getElementById('statsUfcSection')) {
   document.getElementById('statsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('ufc'));
   document.getElementById('statsHeroOld').insertAdjacentHTML('beforebegin', dayFilterHtml('ufcOld'));
   initDayFilter('ufc', () => { resetPagination('statsTable'); renderUfcScope('', currentPredictions); });
@@ -687,4 +688,5 @@ if (document.getElementById('statsUfcSection')) {
   initModalTabSwitcher('statsUfcSection');
   initUfcBackfillButton();
   refreshAndRenderUfc();
-}
+ }
+});
