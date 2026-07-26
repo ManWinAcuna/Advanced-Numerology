@@ -28,6 +28,16 @@ function bettingFmtCents(price) {
   return `${Math.round(price * 100)}¢`;
 }
 
+// American-odds equivalent of a share price - for taking these picks to a
+// sportsbook (DraftKings); Kalshi quotes in cents like Polymarket already.
+function bettingAmericanOdds(price) {
+  if (price <= 0 || price >= 1) return '';
+  const odds = price <= 0.5
+    ? Math.round((100 * (1 - price)) / price)
+    : -Math.round((100 * price) / (1 - price));
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
 function bettingFmtDate(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -45,11 +55,14 @@ const BETTING_STATUS_META = {
 function bettingLegHtml(leg) {
   const legStatus = !leg.resolved ? '🕒' : leg.draw ? '↩️' : leg.won ? '✅' : '❌';
   const pct = Math.round(leg.estProb * 100);
+  // The worst price at which this pick still clears the qualification edge -
+  // the shopping limit when taking it to another book (DK/Kalshi).
+  const maxPrice = leg.estProb - BETTING_MIN_EV_EDGE;
   return `
     <div class="bet-leg">
       <span class="bet-leg-status">${legStatus}</span>
       <span class="bet-leg-main">${BETTING_SPORTS[leg.sport].icon} ${escapeHtml(leg.matchup)} &rarr; <strong>${escapeHtml(leg.pickName)}</strong></span>
-      <span class="bet-leg-nums">@ ${bettingFmtCents(leg.price)} &middot; est <span class="score-inline ${winRateClass(pct)}">${pct}%</span></span>
+      <span class="bet-leg-nums">@ ${bettingFmtCents(leg.price)} (${bettingAmericanOdds(leg.price)}) &middot; est <span class="score-inline ${winRateClass(pct)}">${pct}%</span> &middot; max ${bettingFmtCents(maxPrice)} (${bettingAmericanOdds(maxPrice)})</span>
     </div>`;
 }
 
@@ -153,6 +166,42 @@ function renderBettingSummary(sim) {
     <div class="pm-breakdown-hint" style="text-align:center;">Tickets: ${bits.join(' &middot; ')} &middot; ${sim.dayCount} betting day${sim.dayCount === 1 ? '' : 's'}</div>`;
 }
 
+// Bankroll curve - inline SVG line of the simulated balance across every
+// betting day, peak dotted in gold, baseline dashed at the starting bankroll.
+function renderBettingCurve(sim) {
+  const box = document.getElementById('bettingCurveBox');
+  const days = [...sim.ledger].reverse(); // ledger is newest-first; plot chronologically
+  if (days.length < 2) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
+
+  const values = [sim.startBankroll, ...days.map((d) => d.bankrollAfter)];
+  const W = 600, H = 170, padL = 8, padR = 8, padT = 16, padB = 18;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const x = (i) => padL + (i / (values.length - 1)) * (W - padL - padR);
+  const y = (v) => padT + (1 - (v - min) / span) * (H - padT - padB);
+  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const peakIdx = values.indexOf(max);
+  const endUp = values[values.length - 1] >= values[0];
+  const lineColor = endUp ? 'var(--good)' : 'var(--bad)';
+
+  document.getElementById('bettingCurve').innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+      <line x1="${padL}" y1="${y(values[0]).toFixed(1)}" x2="${W - padR}" y2="${y(values[0]).toFixed(1)}" stroke="var(--border)" stroke-dasharray="4 4" />
+      <polygon points="${x(0).toFixed(1)},${(H - padB)} ${pts} ${x(values.length - 1).toFixed(1)},${(H - padB)}" fill="${endUp ? 'rgba(139, 195, 74, 0.08)' : 'rgba(229, 57, 63, 0.08)'}" />
+      <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" />
+      <circle cx="${x(peakIdx).toFixed(1)}" cy="${y(values[peakIdx]).toFixed(1)}" r="3.5" fill="var(--yellow)" />
+      <text x="${padL}" y="11" fill="var(--muted)" font-size="10">start ${bettingFmtMoney(sim.startBankroll)}</text>
+      <text x="${W - padR}" y="11" fill="var(--yellow)" font-size="10" text-anchor="end">peak ${bettingFmtMoney(sim.peakBankroll)}</text>
+      <text x="${padL}" y="${H - 5}" fill="var(--muted)" font-size="10">${days.length} betting days</text>
+      <text x="${W - padR}" y="${H - 5}" fill="${lineColor}" font-size="10" text-anchor="end">now ${bettingFmtMoney(sim.finalBankroll)}</text>
+    </svg>`;
+}
+
 function renderBettingLedger(sim) {
   const container = document.getElementById('bettingLedger');
 
@@ -201,6 +250,7 @@ function renderBetting() {
   renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes));
   currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter, mixedTypes);
   renderBettingSummary(currentBettingSim);
+  renderBettingCurve(currentBettingSim);
   renderBettingLedger(currentBettingSim);
 }
 
