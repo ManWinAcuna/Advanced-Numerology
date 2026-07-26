@@ -128,10 +128,11 @@ function renderBettingStability(sim) {
   const byMonth = new Map();
   days.forEach((d) => {
     const key = d.dateKey.slice(0, 7);
-    if (!byMonth.has(key)) byMonth.set(key, { staked: 0, profit: 0 });
+    if (!byMonth.has(key)) byMonth.set(key, { staked: 0, profit: 0, tickets: 0 });
     const m = byMonth.get(key);
     m.staked += d.staked;
     m.profit += d.profit;
+    m.tickets += d.tickets.length;
   });
   const months = [...byMonth.entries()];
   if (months.length < 2) {
@@ -140,7 +141,9 @@ function renderBettingStability(sim) {
   }
   box.style.display = '';
 
-  const W = 600, H = 170, padT = 18, padB = 24;
+  // padB fits two label lines under the axis: the month, then its ticket
+  // count - a month's ROI is unreadable without knowing if it's 4 bets or 90.
+  const W = 600, H = 190, padT = 18, padB = 38;
   const slot = (W - 20) / months.length;
   const barW = Math.min(56, slot - 10);
   const rois = months.map(([, m]) => (m.staked > 0 ? m.profit / m.staked : 0));
@@ -148,6 +151,7 @@ function renderBettingStability(sim) {
   const zeroY = padT + (H - padT - padB) / 2;
   const scale = (H - padT - padB) / 2 / maxAbs;
   const currentKey = bettingLocalDateKey(new Date()).slice(0, 7);
+  const multiYear = new Set(months.map(([k]) => k.slice(0, 4))).size > 1;
 
   const bars = months.map(([key, m], i) => {
     const roi = rois[i];
@@ -155,14 +159,18 @@ function renderBettingStability(sim) {
     const h = Math.max(1, Math.abs(roi) * scale);
     const y = roi >= 0 ? zeroY - h : zeroY;
     const color = roi > 0 ? 'var(--good)' : roi < 0 ? 'var(--bad)' : 'var(--border)';
-    const monthLabel = new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1)
-      .toLocaleDateString(undefined, { month: 'short' }) + (key === currentKey ? '*' : '');
+    // Year included once the record spans more than one - Sep and Mar sitting
+    // side by side are two different seasons, which the month alone hides.
+    const monthDate = new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1);
+    const monthLabel = monthDate.toLocaleDateString(undefined, multiYear ? { month: 'short', year: '2-digit' } : { month: 'short' })
+      + (key === currentKey ? '*' : '');
     const roiLabel = `${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%`;
     const labelY = roi >= 0 ? y - 4 : y + h + 11;
     return `
       <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85" rx="2" />
       <text x="${(x + barW / 2).toFixed(1)}" y="${labelY.toFixed(1)}" fill="${color}" font-size="10" text-anchor="middle">${roiLabel}</text>
-      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" fill="var(--muted)" font-size="10" text-anchor="middle">${monthLabel}</text>`;
+      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 20}" fill="var(--muted)" font-size="10" text-anchor="middle">${monthLabel}</text>
+      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 7}" fill="var(--muted)" font-size="9" text-anchor="middle" opacity="0.75">${m.tickets} bet${m.tickets === 1 ? '' : 's'}</text>`;
   }).join('');
 
   document.getElementById('bettingStability').innerHTML = `
