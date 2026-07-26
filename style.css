@@ -4610,3 +4610,10 @@ body {
   color: var(--muted);
   font-size: 0.74rem;
 }
+
+.bet-readiness-row {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 5px;
+  line-height: 1.45;
+}

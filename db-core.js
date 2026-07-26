@@ -975,14 +975,33 @@ function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, res
   };
 }
 
-// Resolves a backfilled duel market straight from its own final outcome
-// prices - a settled Polymarket market collapses to an exact 1/0 split, so
-// the market itself is the ground truth. Null when it never settled cleanly.
-function mlbDuelResultFromFinalPrices(market) {
-  if (!Number.isFinite(market.priceA) || !Number.isFinite(market.priceB)) return null;
-  const max = Math.max(market.priceA, market.priceB);
-  if (max < 0.9) return null;
-  return { winner: market.priceA === max ? market.outcomeA : market.outcomeB, draw: false, resolvedAt: Date.now() };
+// Duel markets resolve from MLB's own final linescore, never from
+// Polymarket's outcomePrices: confirmed live that a closed MLB per-game
+// market reports a flat ["1","0"] on every market of the event (moneyline,
+// nrfi, and all seven totals lines alike) no matter the actual result, so
+// trusting it would mark every NRFI "Yes" and every total "Over". The
+// linescore is unambiguous and matches how the game picks already resolve.
+// outcomeA/outcomeB are the market's own labels ("Yes"/"No", "Over"/"Under")
+// so the returned winner always matches what the record stored.
+
+function mlbNrfiResultFromFeed(feed, outcomeA, outcomeB) {
+  if (!feed || feed.abstractGameState !== 'Final' || !Number.isFinite(feed.firstInningRuns)) return null;
+  const yesIsA = normalizeName(outcomeA) === 'yes';
+  const scored = feed.firstInningRuns > 0;
+  const yesName = yesIsA ? outcomeA : outcomeB;
+  const noName = yesIsA ? outcomeB : outcomeA;
+  return { winner: scored ? yesName : noName, draw: false, resolvedAt: Date.now() };
+}
+
+function mlbTotalsResultFromFeed(feed, outcomeA, outcomeB, line) {
+  if (!feed || feed.abstractGameState !== 'Final' || !Number.isFinite(feed.totalRuns) || !Number.isFinite(line)) return null;
+  // Polymarket's lines are always .5 (no push possible), but a whole-number
+  // line landing exactly on the total would be a push - treated as a void.
+  if (feed.totalRuns === line) return { winner: null, draw: true, resolvedAt: Date.now() };
+  const overIsA = normalizeName(outcomeA) === 'over';
+  const overName = overIsA ? outcomeA : outcomeB;
+  const underName = overIsA ? outcomeB : outcomeA;
+  return { winner: feed.totalRuns > line ? overName : underName, draw: false, resolvedAt: Date.now() };
 }
 
 const MLB_VENUES_KEY = 'numerology_mlb_venues';

@@ -54,27 +54,34 @@ async function checkMlbResults() {
   return predictions;
 }
 
-// Resolves pending NRFI/totals picks straight from their own Polymarket
-// markets (fetchMarketsByConditionIds + determineResult, the same pair the
-// UFC tracker resolves with) - these markets settle mechanically to 1/0, so
-// the market IS the ground truth. Called by the Betting page's result check.
+// Resolves pending NRFI/totals picks from MLB's own final linescore (by
+// gamePk), the same ground truth the game picks use - NOT from Polymarket's
+// outcomePrices, which are unusable for these markets (see the comment on
+// mlbNrfiResultFromFeed in db-core.js). Called by the Betting and Bet Log
+// pages' result checks.
 async function checkMlbDuelResults() {
   const stores = [
-    { load: loadMlbNrfiPredictions, save: saveMlbNrfiPredictions },
-    { load: loadMlbTotalsPredictions, save: saveMlbTotalsPredictions },
+    { load: loadMlbNrfiPredictions, save: saveMlbNrfiPredictions, kind: 'nrfi' },
+    { load: loadMlbTotalsPredictions, save: saveMlbTotalsPredictions, kind: 'totals' },
   ];
   for (const store of stores) {
     const predictions = store.load();
-    const pending = predictions.filter((p) => !p.result);
+    const pending = predictions.filter((p) => !p.result && p.gamePk);
     if (!pending.length) continue;
-    const markets = await fetchMarketsByConditionIds(pending.map((p) => p.conditionId));
-    const byId = new Map(markets.map((m) => [m.conditionId, m]));
+
+    const feeds = new Map();
+    await Promise.all([...new Set(pending.map((p) => p.gamePk))].map(async (gamePk) => {
+      feeds.set(gamePk, await fetchGameLiveFeed(gamePk));
+    }));
+
     let changed = false;
     predictions.forEach((p) => {
-      if (p.result) return;
-      const market = byId.get(p.conditionId);
-      if (!market) return;
-      const result = determineResult(market);
+      if (p.result || !p.gamePk) return;
+      const feed = feeds.get(p.gamePk);
+      if (!feed) return;
+      const result = store.kind === 'nrfi'
+        ? mlbNrfiResultFromFeed(feed, p.teamAName, p.teamBName)
+        : mlbTotalsResultFromFeed(feed, p.teamAName, p.teamBName, p.line);
       if (result) {
         p.result = result;
         changed = true;
@@ -1530,7 +1537,7 @@ async function backfillMlbHistory(onProgress) {
           const gameTimeISO = event.gameStartTime.toISOString();
 
           if (needNrfi && event.nrfiMarket && event.nrfiMarket.clobTokenIdA && event.nrfiMarket.clobTokenIdB) {
-            const nrfiResult = mlbDuelResultFromFinalPrices(event.nrfiMarket);
+            const nrfiResult = mlbNrfiResultFromFeed(feed, event.nrfiMarket.outcomeA, event.nrfiMarket.outcomeB);
             const [pA, pB] = await Promise.all([
               fetchClobPriceNear(event.nrfiMarket.clobTokenIdA, targetTs),
               fetchClobPriceNear(event.nrfiMarket.clobTokenIdB, targetTs),
@@ -1544,7 +1551,7 @@ async function backfillMlbHistory(onProgress) {
           if (needTotals && event.totalsMarkets && event.totalsMarkets.length) {
             const main = await pickMainTotalsLine(event.totalsMarkets, targetTs);
             if (main) {
-              const totalsResult = mlbDuelResultFromFinalPrices(main.market);
+              const totalsResult = mlbTotalsResultFromFeed(feed, main.market.outcomeA, main.market.outcomeB, main.market.line);
               newTotals.push(buildMlbDuelRecord('totals', { ...main.market, priceA: main.priceA, priceB: main.priceB }, duelScore, `${gameLabelBase} · O/U ${main.market.line}`, gameTimeISO, totalsResult, gamePk));
               existingTotalsGamePks.add(gamePk);
             }

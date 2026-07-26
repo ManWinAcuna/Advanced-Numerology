@@ -207,6 +207,27 @@ function renderBettingLedger(sim) {
   renderPaginationControls('bettingLedgerPagination', 'bettingLedger', page, totalPages, () => renderBettingLedger(currentBettingSim));
 }
 
+// Per-market readiness - makes "no bets" self-explaining: no data, still
+// warming up, or enough history but no edge worth betting.
+function renderBettingReadiness() {
+  const el = document.getElementById('bettingReadiness');
+  const rows = bettingMarketReadiness(currentBettingScope).map((r) => {
+    let state;
+    if (!r.tracked) {
+      state = '<span class="score-inline bad">no data yet</span> &mdash; run Backfill on the Stats page';
+    } else if (!r.ready) {
+      state = `<span class="score-inline mid">warming up ${r.bestTierCount}/${BETTING_MIN_TIER_SAMPLE}</span> in its best edge tier`;
+    } else {
+      state = `<span class="score-inline good">ready</span> &mdash; bets when a bucket beats its price`;
+    }
+    const record = r.realEdge
+      ? ` &middot; ${r.realEdge} real-edge picks at <span class="score-inline ${winRateClass(r.winPct)}">${r.winPct}%</span>`
+      : '';
+    return `<div class="bet-readiness-row">${r.icon} <strong>${escapeHtml(r.label)}</strong>: ${r.tracked} tracked, ${r.resolved} resolved${record} &middot; ${state}</div>`;
+  }).join('');
+  el.innerHTML = rows;
+}
+
 /* ===================== Strategy Lab ===================== */
 // Ranks strategies by replaying the full walk-forward sim for each one:
 // every bet type under the current day filter, then every single day number
@@ -388,6 +409,7 @@ function renderBetting() {
   const mixedTypes = loadBettingMixedTypes();
   currentTodaySlate = buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes);
   renderBettingToday(currentTodaySlate);
+  renderBettingReadiness();
   currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter, mixedTypes);
   renderBettingSummary(currentBettingSim);
   renderBettingCurve(currentBettingSim);

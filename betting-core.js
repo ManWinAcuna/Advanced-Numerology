@@ -576,6 +576,49 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
   };
 }
 
+/* ===================== Market readiness ===================== */
+// Answers "is this market actually working?" - the thing that's otherwise
+// invisible, because a market with no qualifying bets and a market with no
+// data at all both render as an empty slate. Per pseudo-sport in scope:
+// how much is stored, how much resolved, how the real-edge picks have done,
+// and the best tier's progress toward BETTING_MIN_TIER_SAMPLE (the warmup
+// every tier must clear before the engine will stake anything on it).
+
+function bettingMarketReadiness(scope) {
+  const enabled = loadBettingMarkets();
+  return Object.keys(BETTING_SPORTS).filter((sportKey) => {
+    const cfg = BETTING_SPORTS[sportKey];
+    const inScope = scope === 'all' || (cfg.scopeSport || sportKey) === scope;
+    return inScope && (!cfg.market || enabled.includes(cfg.market));
+  }).map((sportKey) => {
+    const cfg = BETTING_SPORTS[sportKey];
+    const picks = cfg.load().map((p) => normalizeBettingPick(p, sportKey)).filter(Boolean);
+    const resolved = picks.filter((p) => p.resolved && !p.draw);
+    const realEdge = resolved.filter((p) => p.realEdge);
+    const wins = realEdge.filter((p) => p.won).length;
+
+    // Best tier by resolved count - the one closest to being bettable.
+    const tierCounts = new Map();
+    realEdge.forEach((p) => tierCounts.set(p.tierKey, (tierCounts.get(p.tierKey) || 0) + 1));
+    let bestTier = null;
+    tierCounts.forEach((count, key) => {
+      if (!bestTier || count > bestTier.count) bestTier = { key, count };
+    });
+
+    return {
+      sportKey,
+      label: cfg.label,
+      icon: cfg.icon,
+      tracked: picks.length,
+      resolved: resolved.length,
+      realEdge: realEdge.length,
+      winPct: realEdge.length ? Math.round((wins / realEdge.length) * 100) : null,
+      bestTierCount: bestTier ? bestTier.count : 0,
+      ready: !!bestTier && bestTier.count >= BETTING_MIN_TIER_SAMPLE,
+    };
+  });
+}
+
 /* ===================== Locked Bet Log ===================== */
 // Receipts. Locking freezes the currently-suggested slate - tickets, stakes,
 // prices, settings, timestamp - permanently (local-only storage, never

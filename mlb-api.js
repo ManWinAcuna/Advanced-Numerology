@@ -174,12 +174,29 @@ async function fetchGameLiveFeed(gamePk) {
       };
     }
 
+    // First-inning and full-game run totals - the ground truth for resolving
+    // the NRFI and totals markets. Polymarket's own outcomePrices can NOT be
+    // used for these: confirmed live that every closed MLB per-game market
+    // (moneyline, nrfi, and all seven totals lines) reports a flat ["1","0"]
+    // regardless of what actually happened, which would resolve every NRFI
+    // as Yes and every total as Over.
+    const innings = (linescore && linescore.innings) || [];
+    const first = innings[0];
+    const firstInningRuns = first
+      ? (Number(first.home && first.home.runs) || 0) + (Number(first.away && first.away.runs) || 0)
+      : null;
+    const awayRuns = linescore && linescore.teams && linescore.teams.away ? linescore.teams.away.runs : null;
+    const homeRuns = linescore && linescore.teams && linescore.teams.home ? linescore.teams.home.runs : null;
+    const totalRuns = (Number.isFinite(awayRuns) && Number.isFinite(homeRuns)) ? awayRuns + homeRuns : null;
+
     return {
       gamePk,
       venue: data.gameData.venue || null,
       officialDate: data.gameData.datetime ? data.gameData.datetime.officialDate : null,
       abstractGameState: status.abstractGameState || null, // 'Preview' | 'Live' | 'Final'
       detailedState: status.detailedState || null,
+      firstInningRuns,
+      totalRuns,
       away: sideInfo('away'),
       home: sideInfo('home'),
     };
