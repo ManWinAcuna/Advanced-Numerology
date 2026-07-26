@@ -791,6 +791,91 @@ function renderMlbComponentSignal(predictions, suffix = '') {
 // Today/Old each keep their own day-filter state ('mlb' + suffix, see
 // db-core.js's dayFilterPredicate) since they're independent tabs a user
 // might want sliced differently.
+// One renderer for both duel markets (NRFI and totals) - they share a record
+// shape, so they share a panel: headline hit rate on real-edge picks, a
+// per-tier breakdown, and the paginated pick list. paginationPrefix keys the
+// page state per market per scope.
+function renderMlbDuelPanel(records, bodyId, paginationId, paginationPrefix, emptyMsg, onPageChange) {
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+
+  const resolvedAll = records.filter((p) => p.result && !p.result.draw);
+  const resolved = resolvedAll.filter((p) => edgeGap(p) >= MLB_DUEL_MIN_GAP);
+  const wins = resolved.filter(isCorrectPick);
+  const pct = resolved.length ? Math.round((wins.length / resolved.length) * 100) : null;
+
+  const headline = resolved.length
+    ? `
+      <div class="score-hero">
+        <div class="score-names">Duel Pick Win Rate</div>
+        <div class="score-big ${winRateClass(pct)}">${pct}<span class="score-out-of">%</span></div>
+        <div class="pm-breakdown-hint">${wins.length} of ${resolved.length} real-edge picks correct &middot; ${resolvedAll.length - resolved.length} tossups excluded &middot; ${records.filter((p) => !p.result).length} pending</div>
+      </div>`
+    : `<div class="empty-state">${records.length
+      ? `${records.length} tracked, none resolved with a real edge yet.`
+      : emptyMsg}</div>`;
+
+  const tierRows = computeEdgeTierStats(records, MLB_DUEL_TIERS).map((t) => `
+    <tr>
+      <td>${t.icon} ${t.label}</td>
+      <td>${t.count}</td>
+      <td>${t.winPct != null && t.count >= MIN_BUCKET_SAMPLE
+        ? `<span class="score-inline ${winRateClass(t.winPct)}">${t.winPct}%</span>`
+        : `<span class="empty-state">${t.count ? `${t.wins}/${t.count} so far` : 'No data yet'}</span>`}</td>
+    </tr>`).join('');
+  const tierTable = resolved.length ? `
+    <div class="box" style="margin-top:16px;">
+      <div class="box-label">Win Rate by Duel Strength</div>
+      <div class="mode-desc">How far the duel score sits from neutral (${MLB_DUEL_NEUTRAL}) &mdash; if the duel signal means anything, the win rate should climb from Slight to Strong.</div>
+      <div class="pm-table-scroll">
+        <table class="astro-table">
+          <thead><tr><th>Duel Strength</th><th>Picks</th><th>Win Rate</th></tr></thead>
+          <tbody>${tierRows}</tbody>
+        </table>
+      </div>
+    </div>` : '';
+
+  let listTable = '';
+  if (records.length) {
+    const sorted = [...records].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
+    const { rows, page, totalPages } = paginationSlice(paginationPrefix, sorted);
+    const bodyRows = rows.map((p) => {
+      const status = !p.result
+        ? '<span class="empty-state">Pending</span>'
+        : p.result.draw
+          ? '↩️ Push'
+          : isCorrectPick(p) ? '✅ Hit' : '❌ Miss';
+      const price = numerologyPickPrice(p);
+      return `
+        <tr>
+          <td>${formatMlbGameDate(p.gameTime)}</td>
+          <td>${escapeHtml(p.gameLabel || '')}</td>
+          <td>${escapeHtml(p.numerologyFavorite)}</td>
+          <td>${p.duelScore != null ? p.duelScore : ''}</td>
+          <td>${Number.isFinite(price) ? `${Math.round(price * 100)}¢` : ''}</td>
+          <td>${status}</td>
+        </tr>`;
+    }).join('');
+    listTable = `
+      <div class="box" style="margin-top:16px;">
+        <div class="box-label">Tracked Picks</div>
+        <div class="pm-table-total">Total picks: ${records.length}</div>
+        <div class="pm-table-scroll">
+          <table class="astro-table">
+            <thead><tr><th>Date</th><th>Game</th><th>Pick</th><th>Duel</th><th>Price</th><th>Result</th></tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    body.innerHTML = headline + tierTable + listTable;
+    renderPaginationControls(paginationId, paginationPrefix, page, totalPages, onPageChange);
+    return;
+  }
+
+  body.innerHTML = headline + tierTable;
+  renderPaginationControls(paginationId, paginationPrefix, 1, 1, () => {});
+}
+
 function renderMlbScope(suffix, predictions, signals) {
   const isOld = suffix === 'Old';
   const todayOrOldPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
@@ -814,6 +899,17 @@ function renderMlbScope(suffix, predictions, signals) {
 
   const scopedSignals = signals.filter((s) => isMlbTodayLocal(s.gameTime) === !isOld && matchesDay(s.gameTime));
   renderMlbKSignalPanel(scopedSignals, suffix);
+
+  const scopeDuel = (list) => list.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
+  const rerender = () => renderMlbScope(suffix, predictions, signals);
+  renderMlbDuelPanel(
+    scopeDuel(loadMlbNrfiPredictions()), 'mlbNrfiBody' + suffix, 'mlbNrfiPagination' + suffix, 'mlbNrfi' + suffix,
+    'No NRFI picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
+  );
+  renderMlbDuelPanel(
+    scopeDuel(loadMlbTotalsPredictions()), 'mlbTotalsBody' + suffix, 'mlbTotalsPagination' + suffix, 'mlbTotals' + suffix,
+    'No totals picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
+  );
 }
 
 // Today's games the Stats page has fetched but can't score into a pick yet
@@ -1642,8 +1738,8 @@ function initMlbBackfillButton() {
 if (document.getElementById('statsMlbSection')) {
   document.getElementById('mlbGameSection').insertAdjacentHTML('beforebegin', dayFilterHtml('mlb'));
   document.getElementById('mlbGameSectionOld').insertAdjacentHTML('beforebegin', dayFilterHtml('mlbOld'));
-  initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
-  initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
+  initDayFilter('mlb', () => { resetPagination('mlbStatsTable'); resetPagination('mlbKSignal'); resetPagination('mlbNrfi'); resetPagination('mlbTotals'); renderMlbScope('', currentMlbPredictions, currentMlbKSignals); });
+  initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); resetPagination('mlbNrfiOld'); resetPagination('mlbTotalsOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
 
   initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
   initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);

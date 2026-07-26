@@ -544,6 +544,7 @@
       <select id="mlbViewSelect">
         <option value="game">🎯 Game Picks</option>
         <option value="strikeout">🔥 Strikeout Signal</option>
+        <option value="duel">⚔️ Duel Markets (NRFI / Totals)</option>
       </select>
     </div>
 
@@ -677,6 +678,23 @@
       </div>
     </div>
     </div>
+
+    <div id="mlbDuelSection" style="display:none;">
+      <div class="box">
+        <div class="box-label">⚔️ Pitcher Duel Markets</div>
+        <div class="mode-desc">Both starters' day scores averaged into one duel score. A high duel means both pitchers are on &mdash; quiet bats, so No run in the 1st and Under; a low duel means runs. Scored against Polymarket's NRFI market and the game's main total, resolved from MLB's own linescore.</div>
+      </div>
+      <div class="box" id="mlbNrfiBox">
+        <div class="box-label">1️⃣ NRFI &mdash; Run in the 1st Inning?</div>
+        <div id="mlbNrfiBody"></div>
+        <div class="pm-table-pagination" id="mlbNrfiPagination"></div>
+      </div>
+      <div class="box" id="mlbTotalsBox">
+        <div class="box-label">↕️ Totals &mdash; Main Line Over/Under</div>
+        <div id="mlbTotalsBody"></div>
+        <div class="pm-table-pagination" id="mlbTotalsPagination"></div>
+      </div>
+    </div>
    </div>
 
    <div class="pm-modal-page" data-page="old" style="display:none;">
@@ -685,6 +703,7 @@
       <select id="mlbViewSelectOld">
         <option value="game">🎯 Game Picks</option>
         <option value="strikeout">🔥 Strikeout Signal</option>
+        <option value="duel">⚔️ Duel Markets (NRFI / Totals)</option>
       </select>
     </div>
 
@@ -825,6 +844,23 @@
       </div>
     </div>
     </div>
+
+    <div id="mlbDuelSectionOld" style="display:none;">
+      <div class="box">
+        <div class="box-label">⚔️ Pitcher Duel Markets</div>
+        <div class="mode-desc">Both starters' day scores averaged into one duel score. A high duel means both pitchers are on &mdash; quiet bats, so No run in the 1st and Under; a low duel means runs. Scored against Polymarket's NRFI market and the game's main total, resolved from MLB's own linescore.</div>
+      </div>
+      <div class="box" id="mlbNrfiBoxOld">
+        <div class="box-label">1️⃣ NRFI &mdash; Run in the 1st Inning?</div>
+        <div id="mlbNrfiBodyOld"></div>
+        <div class="pm-table-pagination" id="mlbNrfiPaginationOld"></div>
+      </div>
+      <div class="box" id="mlbTotalsBoxOld">
+        <div class="box-label">↕️ Totals &mdash; Main Line Over/Under</div>
+        <div id="mlbTotalsBodyOld"></div>
+        <div class="pm-table-pagination" id="mlbTotalsPaginationOld"></div>
+      </div>
+    </div>
    </div>
   </div>
   </div>
@@ -847,10 +883,11 @@
 <script src="stats-tennis.js"></script>
 <script src="stats-mlb.js"></script>
 <script>
-function applyMlbView(selectId, gameSectionId, strikeoutSectionId) {
+function applyMlbView(selectId, gameSectionId, strikeoutSectionId, duelSectionId) {
   const view = document.getElementById(selectId).value;
   document.getElementById(gameSectionId).style.display = view === 'game' ? '' : 'none';
   document.getElementById(strikeoutSectionId).style.display = view === 'strikeout' ? '' : 'none';
+  document.getElementById(duelSectionId).style.display = view === 'duel' ? '' : 'none';
 }
 
 function showSport(sport) {
@@ -860,8 +897,8 @@ function showSport(sport) {
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
   document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
   if (sport === 'mlb') {
-    applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection');
-    applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld');
+    applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection', 'mlbDuelSection');
+    applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld', 'mlbDuelSectionOld');
   }
 }
 
@@ -878,8 +915,8 @@ document.getElementById('statsChooseSportLink').addEventListener('click', (e) =>
   document.getElementById('statsSportPicker').style.display = '';
 });
 
-document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection'));
-document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld'));
+document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection', 'mlbDuelSection'));
+document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld', 'mlbDuelSectionOld'));
 </script>
 </body>
 </html>
