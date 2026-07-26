@@ -883,7 +883,7 @@ function loadMlbPredictions() {
 }
 
 function saveMlbPredictions(predictions) {
-  localStorage.setItem(MLB_PREDICTIONS_KEY, JSON.stringify(predictions));
+  saveJsonGuarded(MLB_PREDICTIONS_KEY, predictions);
   cloudPushKey(MLB_PREDICTIONS_KEY);
 }
 
@@ -893,6 +893,43 @@ function saveMlbPredictions(predictions) {
 // first and only falls back to the Wikipedia/Wikidata lookup (already built
 // for UFC/Tennis venues) on a cache miss, then saves the result here so it's
 // a one-time lookup per ballpark rather than once per game.
+/* ===================== Storage size guard ===================== */
+// localStorage is only ~5MB per origin (less on iOS Safari), and the MLB
+// stores outgrew it: measured against real records, a full 52-week window
+// projects to ~6.6MB (game picks 2.3 + K signals 1.6 + NRFI 1.4 + totals
+// 1.5). Past the cap setItem throws QuotaExceededError, which surfaced as an
+// opaque "something went wrong" halfway through a long backfill. Big stores
+// save through here so the failure names itself and points at the fix.
+
+function numerologyStorageBytes() {
+  let bytes = 0;
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    bytes += k.length + (localStorage.getItem(k) || '').length;
+  }
+  return bytes;
+}
+
+function numerologyStorageMB() {
+  return (numerologyStorageBytes() / (1024 * 1024)).toFixed(2);
+}
+
+function isQuotaError(e) {
+  return !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || /quota/i.test(e.message || ''));
+}
+
+function saveJsonGuarded(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    if (isQuotaError(e)) {
+      throw new Error(`Browser storage is full (~${numerologyStorageMB()} MB used, limit is about 5 MB). Download a backup from the Bet Log page first, then free space - see the Storage box on Old Data.`);
+    }
+    throw e;
+  }
+}
+
 /* ===================== MLB pitcher-duel markets (NRFI / totals) ===================== */
 // Local-only, like the other MLB prediction stores - deliberately NOT in
 // CLOUD_SYNC_FIELDS (see the comment there for the Firestore-size lesson).
@@ -910,7 +947,7 @@ function loadMlbNrfiPredictions() {
 }
 
 function saveMlbNrfiPredictions(predictions) {
-  localStorage.setItem(MLB_NRFI_PREDICTIONS_KEY, JSON.stringify(predictions));
+  saveJsonGuarded(MLB_NRFI_PREDICTIONS_KEY, predictions);
 }
 
 function loadMlbTotalsPredictions() {
@@ -923,7 +960,7 @@ function loadMlbTotalsPredictions() {
 }
 
 function saveMlbTotalsPredictions(predictions) {
-  localStorage.setItem(MLB_TOTALS_PREDICTIONS_KEY, JSON.stringify(predictions));
+  saveJsonGuarded(MLB_TOTALS_PREDICTIONS_KEY, predictions);
 }
 
 // The pitcher-duel signal: both starting pitchers' day scores averaged. A
@@ -1091,13 +1128,29 @@ function loadMlbPitcherKSignals() {
 }
 
 function saveMlbPitcherKSignals(signals) {
-  localStorage.setItem(MLB_PITCHER_K_SIGNALS_KEY, JSON.stringify(signals));
+  saveJsonGuarded(MLB_PITCHER_K_SIGNALS_KEY, signals);
   cloudPushKey(MLB_PITCHER_K_SIGNALS_KEY);
 }
 
 // Marks how far the Stats page's historical backfill has already caught up,
 // so a later click tops up only the new gap instead of re-walking (and
 // re-fetching schedules/box scores/prices for) the full window every time.
+// How far back a backfill walks. Adjustable because a full 52 weeks of all
+// four MLB stores exceeds the localStorage cap - halving the window is the
+// fastest way back under it without losing the recent history that matters
+// most. Changing it clears the progress marker so the next run re-walks.
+const MLB_BACKFILL_WINDOW_KEY = 'numerology_mlb_backfill_window_days';
+const MLB_BACKFILL_WINDOW_OPTIONS = [91, 182, 273, 364];
+
+function loadMlbBackfillWindowDays() {
+  const v = Number(localStorage.getItem(MLB_BACKFILL_WINDOW_KEY));
+  return MLB_BACKFILL_WINDOW_OPTIONS.includes(v) ? v : 364;
+}
+
+function saveMlbBackfillWindowDays(days) {
+  localStorage.setItem(MLB_BACKFILL_WINDOW_KEY, String(days));
+}
+
 const MLB_BACKFILL_STATE_KEY = 'numerology_mlb_backfill_state';
 
 function loadMlbBackfillState() {

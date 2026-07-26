@@ -801,6 +801,22 @@
       <div class="mode-desc">Pull already-played MLB games straight from MLB's and Polymarket's own historical data, instead of waiting for the live tracker to build a track record one game at a time. Old Data keeps growing forever &mdash; this just seeds it.</div>
       <button class="btn-link" id="mlbBackfillBtn" type="button">🔄 Backfill Data</button>
       <div class="mode-desc" id="mlbBackfillStatus"></div>
+      <div class="betting-day-filter-group" style="margin-top:8px;">
+        <span class="betting-day-filter-label">📅 Window</span>
+        <select id="mlbBackfillWindowSelect">
+          <option value="91">13 weeks</option>
+          <option value="182">26 weeks</option>
+          <option value="273">39 weeks</option>
+          <option value="364">52 weeks</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="box" id="mlbStorageBox">
+      <div class="box-label">💾 Browser Storage</div>
+      <div class="mode-desc">All tracking data lives in this browser, which caps at about 5 MB. A full 52-week window of all four MLB stores runs past that, and a backfill that hits the cap fails partway. Shorten the window above, or drop the strikeout signals &mdash; they're research only and never used for bets.</div>
+      <div class="mode-desc" id="mlbStorageUsage"></div>
+      <button class="btn-link" id="mlbClearKSignalsBtn" type="button">🗑️ Clear Strikeout Signals</button>
     </div>
 
     <div id="mlbGameSectionOld">

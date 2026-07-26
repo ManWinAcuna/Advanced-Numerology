@@ -1373,6 +1373,9 @@ wireMlbRefreshButton('mlbStatsRefreshBtnOld');
 // (dedup by gamePk for predictions, by gamePk+pitcherId for K-signals) - it's
 // purely a gap-filler, triggered manually since it's a genuinely heavy job.
 
+// Superseded by loadMlbBackfillWindowDays() (db-core.js), which makes this
+// adjustable because all four MLB stores at 52 weeks exceed the ~5MB
+// localStorage cap. Kept as the default that function falls back to.
 const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // that MLB predictions are local-only (db-core.js's CLOUD_SYNC_FIELDS), the
 // old ~1MB Firebase sync cap that kept this at 6 weeks no longer applies. The
@@ -1496,7 +1499,7 @@ async function backfillMlbHistory(onProgress) {
   const schemaCurrent = state && state.schemaVersion === MLB_BACKFILL_SCHEMA;
   const startISO = (schemaCurrent && state.throughDateISO)
     ? addDaysISO(state.throughDateISO, 1)
-    : addDaysISO(todayISO, -MLB_BACKFILL_LOOKBACK_DAYS);
+    : addDaysISO(todayISO, -loadMlbBackfillWindowDays());
   const endISO = addDaysISO(todayISO, -1); // yesterday - today is live-tracked, not backfilled
 
   if (startISO > endISO) return { gamesProcessed: 0, newPredictionsCount: 0, patchedCount: 0, newSignalsCount: 0, alreadyCurrent: true };
@@ -1816,6 +1819,53 @@ async function backfillMlbHistory(onProgress) {
   return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, newNrfiCount: newNrfi.length, newTotalsCount: newTotals.length, duelPatchedCount, alreadyCurrent: false };
 }
 
+// Storage readout + the two levers that free space. Sizes come from the
+// stores themselves rather than an estimate, so the number matches reality.
+function renderMlbStorageUsage() {
+  const el = document.getElementById('mlbStorageUsage');
+  if (!el) return;
+  const size = (key) => ((localStorage.getItem(key) || '').length / (1024 * 1024));
+  const parts = [
+    ['Game picks', MLB_PREDICTIONS_KEY],
+    ['Strikeout signals', MLB_PITCHER_K_SIGNALS_KEY],
+    ['NRFI', MLB_NRFI_PREDICTIONS_KEY],
+    ['Run totals', MLB_TOTALS_PREDICTIONS_KEY],
+  ].map(([label, key]) => `${label} ${size(key).toFixed(2)} MB`);
+  const used = Number(numerologyStorageMB());
+  const cls = used >= 4.5 ? 'bad' : used >= 3.5 ? 'mid' : 'good';
+  el.innerHTML = `Using <span class="score-inline ${cls}">${used.toFixed(2)} MB</span> of ~5 MB &middot; ${parts.join(' &middot; ')}`;
+}
+
+function initMlbStorageControls() {
+  const windowSel = document.getElementById('mlbBackfillWindowSelect');
+  if (windowSel) {
+    windowSel.value = String(loadMlbBackfillWindowDays());
+    windowSel.addEventListener('change', () => {
+      saveMlbBackfillWindowDays(Number(windowSel.value));
+      // The progress marker records how far the LAST window reached, so it
+      // has to be dropped or the next run would skip the new range.
+      saveMlbBackfillState({});
+      document.getElementById('mlbBackfillStatus').textContent = `Window set to ${Math.round(Number(windowSel.value) / 7)} weeks - press Backfill Data to re-walk it.`;
+    });
+  }
+
+  const clearBtn = document.getElementById('mlbClearKSignalsBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const n = loadMlbPitcherKSignals().length;
+      if (!n) { document.getElementById('mlbStorageUsage').textContent = 'No strikeout signals stored.'; return; }
+      if (!confirm(`Delete all ${n} strikeout signals?\n\nThey are research only - never used for bets - and a backfill can rebuild them. This frees space now.`)) return;
+      saveMlbPitcherKSignals([]);
+      currentMlbKSignals = [];
+      renderMlbStorageUsage();
+      renderMlbScope('', currentMlbPredictions, currentMlbKSignals);
+      renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals);
+    });
+  }
+
+  renderMlbStorageUsage();
+}
+
 function initMlbBackfillButton() {
   document.getElementById('mlbBackfillBtn').addEventListener('click', async () => {
     const btn = document.getElementById('mlbBackfillBtn');
@@ -1831,8 +1881,13 @@ function initMlbBackfillButton() {
         ? 'Already caught up to yesterday - nothing new to backfill.'
         : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks, ${result.newSignalsCount} strikeout signals, ${result.newNrfiCount || 0} NRFI picks, and ${result.newTotalsCount || 0} totals picks${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}${result.duelPatchedCount ? `, added component data to ${result.duelPatchedCount} existing NRFI/totals picks` : ''}.`;
       await refreshAndRenderMlb();
+      renderMlbStorageUsage();
     } catch (e) {
-      status.textContent = 'Something went wrong during backfill - try again.';
+      // Surface the actual failure - a bare "try again" hides the one piece of
+      // information needed to fix it, and a backfill run is too long to debug
+      // by guesswork.
+      status.textContent = `Backfill failed: ${e && e.message ? e.message : e}`;
+      console.error('MLB backfill failed', e);
     }
     btn.textContent = original;
     btn.disabled = false;
@@ -1862,5 +1917,6 @@ if (document.getElementById('statsMlbSection')) {
   initMlbKSignalModal('Old');
   initModalTabSwitcher('statsMlbSection');
   initMlbBackfillButton();
+  initMlbStorageControls();
   refreshAndRenderMlb();
 }
