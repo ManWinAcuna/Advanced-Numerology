@@ -441,6 +441,86 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes)
   };
 }
 
+/* ===================== Locked Bet Log ===================== */
+// Receipts. Locking freezes the currently-suggested slate - tickets, stakes,
+// prices, settings, timestamp - permanently (local-only storage, never
+// cloud-synced, no edit path). Settlement re-derives each leg's result from
+// the live prediction stores at render time, so a locked slate settles
+// exactly when the Stats page would settle the same games.
+
+const BETTING_LOCKED_SLATES_KEY = 'numerology_betting_locked_slates';
+
+function loadBettingLockedSlates() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BETTING_LOCKED_SLATES_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveBettingLockedSlates(list) {
+  localStorage.setItem(BETTING_LOCKED_SLATES_KEY, JSON.stringify(list));
+}
+
+// Identity of a slate's content - used to stop the same slate being locked
+// twice. A later slate the same day (games dropped out / new games tracked)
+// has a different signature and locks as its own receipt.
+function bettingSlateSignature(scope, mode, dateKey, tickets) {
+  const body = tickets.map((t) => `${t.stake.toFixed(2)}:${t.legs.map((l) => `${l.sport}~${l.matchup}~${l.pickName}`).join('+')}`).join('|');
+  return `${scope}#${mode}#${dateKey}#${body}`;
+}
+
+function lockBettingSlate(scope, mode, mixedTypes, bankroll, tickets) {
+  if (!tickets.length) return null;
+  const list = loadBettingLockedSlates();
+  const dateKey = bettingLocalDateKey(new Date());
+  const signature = bettingSlateSignature(scope, mode, dateKey, tickets);
+  if (list.some((s) => s.signature === signature)) return null;
+
+  const record = {
+    id: uid(),
+    lockedAt: new Date().toISOString(),
+    dateKey,
+    scope,
+    mode,
+    mixedTypes: mode === 'mixed' ? mixedTypes : null,
+    bankroll,
+    signature,
+    tickets: tickets.map((t) => ({
+      stake: t.stake,
+      prodPrice: t.prodPrice,
+      estProb: t.estProb,
+      headline: !!t.headline,
+      legs: t.legs.map((l) => ({ sport: l.sport, timeISO: l.timeISO, matchup: l.matchup, pickName: l.pickName, price: l.price, estProb: l.estProb })),
+    })),
+  };
+  list.push(record);
+  saveBettingLockedSlates(list);
+  return record;
+}
+
+// Returns the locked slates hydrated with current results - never mutates
+// the stored records themselves.
+function settleLockedSlates(lockedList) {
+  const idx = new Map();
+  collectBettingPicks('all').forEach((p) => idx.set(`${p.sport}|${p.timeISO}|${normalizeName(p.matchup)}`, p));
+
+  return lockedList.map((s) => {
+    const tickets = s.tickets.map((t) => {
+      const legs = t.legs.map((l) => {
+        const cur = idx.get(`${l.sport}|${l.timeISO}|${normalizeName(l.matchup)}`);
+        return { ...l, resolved: !!(cur && cur.resolved), draw: !!(cur && cur.draw), won: !!(cur && cur.won) };
+      });
+      const hydrated = { ...t, legs };
+      return { ...hydrated, ...settleBettingTicket(hydrated) };
+    });
+    const staked = Math.round(tickets.reduce((sum, t) => sum + t.stake, 0) * 100) / 100;
+    const profit = Math.round(tickets.reduce((sum, t) => sum + t.profit, 0) * 100) / 100;
+    return { ...s, tickets, staked, profit, inProgress: tickets.some((t) => t.status === 'pending') };
+  });
+}
+
 /* ===================== Today's real-money slate ===================== */
 // Same qualification as the simulation's today row, but staked from the
 // user's actual entered bankroll (the sim's compounded balance is a

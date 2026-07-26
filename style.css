@@ -4561,3 +4561,40 @@ body {
   color: var(--yellow);
   font-weight: 600;
 }
+
+.bet-lock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.bet-log-entry {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+
+.bet-log-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.bet-log-head:hover {
+  background: rgba(245, 197, 66, 0.05);
+}
+
+.bet-log-body {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}

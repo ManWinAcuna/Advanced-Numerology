@@ -6,6 +6,7 @@
 
 let currentBettingScope = null;
 let currentBettingSim = null;
+let currentTodaySlate = null;
 
 const BETTING_SCOPE_META = {
   all: { label: 'All Sports', icon: '🌐' },
@@ -131,9 +132,14 @@ function renderBettingToday(slate) {
 
   const totalStake = slate.tickets.reduce((s, t) => s + t.stake, 0);
   const totalPayout = slate.tickets.reduce((s, t) => s + t.stake / t.prodPrice, 0);
+  const alreadyLocked = loadBettingLockedSlates().some((s) => s.signature === bettingSlateSignature(currentBettingScope, loadBettingMode(), bettingLocalDateKey(new Date()), slate.tickets));
   el.innerHTML = `
     <div class="bet-day-summary">Total staked: <strong>${bettingFmtMoney(totalStake)}</strong> &middot; If everything hits: <strong>${bettingFmtMoney(totalPayout)}</strong> &middot; ${slate.qualifiedCount} qualifying pick${slate.qualifiedCount === 1 ? '' : 's'}</div>
-    ${bettingTicketsHtml(slate.tickets)}`;
+    ${bettingTicketsHtml(slate.tickets)}
+    <div class="bet-lock-row">
+      <button class="btn" id="bettingLockBtn" type="button"${alreadyLocked ? ' disabled' : ''}>${alreadyLocked ? '✓ Locked' : '🔒 Lock these bets'}</button>
+      <span class="box-hint" style="margin-top:0;">Locking freezes this exact slate into the Bet Log permanently &mdash; do it when you're taking the bets.</span>
+    </div>`;
 }
 
 /* ===================== Simulation summary + ledger ===================== */
@@ -237,6 +243,61 @@ function renderBettingLedger(sim) {
   renderPaginationControls('bettingLedgerPagination', 'bettingLedger', page, totalPages, () => renderBettingLedger(currentBettingSim));
 }
 
+/* ===================== Locked Bet Log ===================== */
+
+function bettingModeLabel(mode, mixedTypes) {
+  if (mode === 'singles') return 'Singles';
+  if (mode === 'mixed') return `Mixed (${(mixedTypes || ['singles']).map((t) => BETTING_MIXED_TYPE_LABELS[t]).join(' + ')})`;
+  return `${mode}-Leg Parlay`;
+}
+
+function renderBettingLog() {
+  const summaryEl = document.getElementById('bettingLogSummary');
+  const listEl = document.getElementById('bettingLog');
+  const locked = loadBettingLockedSlates();
+
+  if (!locked.length) {
+    summaryEl.innerHTML = '';
+    listEl.innerHTML = '<div class="empty-state">Nothing locked yet &mdash; lock a slate from Today\'s Bets when you actually take it.</div>';
+    renderPaginationControls('bettingLogPagination', 'bettingLog', 1, 1, () => {});
+    return;
+  }
+
+  const settled = settleLockedSlates(locked).sort((a, b) => new Date(b.lockedAt) - new Date(a.lockedAt));
+
+  let won = 0, lost = 0, pending = 0, voided = 0, staked = 0, profit = 0;
+  settled.forEach((s) => s.tickets.forEach((t) => {
+    staked += t.stake;
+    profit += t.profit;
+    if (t.status === 'won') won += 1;
+    else if (t.status === 'lost') lost += 1;
+    else if (t.status === 'pending') pending += 1;
+    else voided += 1;
+  }));
+  profit = Math.round(profit * 100) / 100;
+  const plCls = profit > 0 ? 'good' : profit < 0 ? 'bad' : '';
+  summaryEl.innerHTML = `<div class="bet-day-summary">Locked record: <strong>${won}W-${lost}L</strong>${pending ? ` (${pending} pending)` : ''}${voided ? ` (${voided} void)` : ''} &middot; Staked <strong>${bettingFmtMoney(staked)}</strong> &middot; P/L <span class="score-inline ${plCls}">${bettingFmtSignedMoney(profit)}</span></div>`;
+
+  const { rows, page, totalPages } = paginationSlice('bettingLog', settled);
+  listEl.innerHTML = rows.map((s) => {
+    const meta = BETTING_SCOPE_META[s.scope] || { icon: '', label: s.scope };
+    const timeStr = new Date(s.lockedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const right = s.inProgress
+      ? `${bettingFmtMoney(s.staked)} staked &middot; pending`
+      : `${bettingFmtMoney(s.staked)} staked &middot; <span class="score-inline ${s.profit > 0 ? 'good' : s.profit < 0 ? 'bad' : ''}">${bettingFmtSignedMoney(s.profit)}</span>`;
+    return `
+      <div class="bet-log-entry">
+        <div class="bet-log-head">
+          <span>${bettingFmtDate(s.dateKey)} &middot; ${meta.icon} ${meta.label} &middot; ${bettingModeLabel(s.mode, s.mixedTypes)} &middot; 🔒 ${timeStr}</span>
+          <span>${right}</span>
+        </div>
+        <div class="bet-log-body" style="display:none;">${bettingTicketsHtml(s.tickets)}</div>
+      </div>`;
+  }).join('');
+
+  renderPaginationControls('bettingLogPagination', 'bettingLog', page, totalPages, renderBettingLog);
+}
+
 /* ===================== Main render + result refresh ===================== */
 
 function renderBetting() {
@@ -247,11 +308,13 @@ function renderBetting() {
   const mode = loadBettingMode();
   const dayFilter = loadBettingDayFilter();
   const mixedTypes = loadBettingMixedTypes();
-  renderBettingToday(buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes));
+  currentTodaySlate = buildTodayBettingSlate(currentBettingScope, mode, loadBettingBankroll(), dayFilter, mixedTypes);
+  renderBettingToday(currentTodaySlate);
   currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter, mixedTypes);
   renderBettingSummary(currentBettingSim);
   renderBettingCurve(currentBettingSim);
   renderBettingLedger(currentBettingSim);
+  renderBettingLog();
 }
 
 async function checkBettingResults(scope) {
@@ -286,6 +349,25 @@ document.getElementById('bettingChooseSportLink').addEventListener('click', (e) 
   e.preventDefault();
   document.getElementById('bettingSportContent').style.display = 'none';
   document.getElementById('bettingSportPicker').style.display = '';
+});
+
+// Lock button - delegated since Today's Bets re-renders its own markup
+document.getElementById('bettingTodayContent').addEventListener('click', (e) => {
+  if (!e.target.closest('#bettingLockBtn')) return;
+  if (!currentTodaySlate || !currentTodaySlate.tickets || !currentTodaySlate.tickets.length) return;
+  lockBettingSlate(currentBettingScope, loadBettingMode(), loadBettingMixedTypes(), loadBettingBankroll(), currentTodaySlate.tickets);
+  renderBettingToday(currentTodaySlate); // flips the button to "Locked"
+  renderBettingLog();
+});
+
+// Expanding a locked slate's tickets
+document.getElementById('bettingLog').addEventListener('click', (e) => {
+  const head = e.target.closest('.bet-log-head');
+  if (!head) return;
+  const body = head.nextElementSibling;
+  if (body && body.classList.contains('bet-log-body')) {
+    body.style.display = body.style.display === 'none' ? '' : 'none';
+  }
 });
 
 // Expanding a ledger day - delegated so pagination re-renders don't need rewiring
