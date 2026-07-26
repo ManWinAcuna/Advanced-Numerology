@@ -944,12 +944,50 @@ const MLB_DUEL_TIERS = [
   { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: MLB_DUEL_MIN_GAP },
 ];
 
+// Run scoring is a property of the whole game, not of one side, so a duel
+// record's components are each role averaged ACROSS both teams: both
+// starters, both managers, both lineups, and so on. That gives the same
+// "which single signal predicts best" test the game picks get, just aimed at
+// quiet-vs-loud instead of who wins. pitchers is the existing duel score.
+const MLB_DUEL_COMPONENT_KEYS = ['pitchers', 'managers', 'batters', 'catchers', 'pitcherMatchups', 'franchises'];
+
+const MLB_DUEL_COMPONENT_LABELS = {
+  pitchers: 'Both Starters (duel)',
+  managers: 'Both Managers',
+  batters: 'Both Lineups',
+  catchers: 'Both Catchers',
+  pitcherMatchups: 'Pitcher vs Lineup (both)',
+  franchises: 'Both Franchises',
+  duel: '⚔️ Duel Score (live)',
+};
+
+// Averages the two sides' stored component sets (extractComponents shapes)
+// into the game-level set above. A role missing on either side is skipped
+// rather than half-counted.
+function mlbDuelComponentsFromSides(compHome, compAway) {
+  if (!compHome || !compAway) return null;
+  const pair = (key) => {
+    const a = compHome[key];
+    const b = compAway[key];
+    if (a == null || b == null) return null;
+    return Math.round(((a + b) / 2) * 10) / 10;
+  };
+  return {
+    pitchers: pair('pitcher'),
+    managers: pair('manager'),
+    batters: pair('batters'),
+    catchers: pair('catcher'),
+    pitcherMatchups: pair('pitcherMatchup'),
+    franchises: pair('franchise'),
+  };
+}
+
 // kind is 'nrfi' or 'totals'; market is a parseMlbSideMarket() shape whose
 // priceA/priceB must already be the PRE-GAME prices (the backfill swaps the
 // resolved 1/0 finals out for CLOB history prices before calling this).
 // The quiet side (No / Under) gets the duel score itself; the loud side gets
 // its mirror, so the favorite flips at the neutral point.
-function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, result, gamePk) {
+function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, result, gamePk, duelComponents) {
   const quietIsA = ['no', 'under'].includes(normalizeName(market.outcomeA));
   const d = Math.round(duelScore * 10) / 10;
   const mirrored = Math.round((2 * MLB_DUEL_NEUTRAL - duelScore) * 10) / 10;
@@ -969,10 +1007,21 @@ function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, res
     numerologyScoreB: quietIsA ? mirrored : d,
     marketPriceA: market.priceA,
     marketPriceB: market.priceB,
+    duelComponents: duelComponents || undefined,
     gameTime: gameTimeISO,
     recordedAt: Date.now(),
     result: result || null,
   };
+}
+
+// Which side of a duel market a given component score favors, mirrored around
+// MLB_DUEL_NEUTRAL exactly like the duel score itself: at or above neutral is
+// the quiet side (No run / Under), below it the loud side (Yes / Over).
+function mlbDuelSideForScore(score, outcomeA, outcomeB) {
+  const quietIsA = ['no', 'under'].includes(normalizeName(outcomeA));
+  const quietName = quietIsA ? outcomeA : outcomeB;
+  const loudName = quietIsA ? outcomeB : outcomeA;
+  return score >= MLB_DUEL_NEUTRAL ? quietName : loudName;
 }
 
 // Duel markets resolve from MLB's own final linescore, never from

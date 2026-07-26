@@ -544,7 +544,8 @@
       <select id="mlbViewSelect">
         <option value="game">🎯 Game Picks</option>
         <option value="strikeout">🔥 Strikeout Signal</option>
-        <option value="duel">⚔️ Duel Markets (NRFI / Totals)</option>
+        <option value="nrfi">1️⃣ NRFI (1st-inning run)</option>
+        <option value="totals">↕️ Run Totals (O/U)</option>
       </select>
     </div>
 
@@ -679,20 +680,31 @@
     </div>
     </div>
 
-    <div id="mlbDuelSection" style="display:none;">
-      <div class="box">
-        <div class="box-label">⚔️ Pitcher Duel Markets</div>
-        <div class="mode-desc">Both starters' day scores averaged into one duel score. A high duel means both pitchers are on &mdash; quiet bats, so No run in the 1st and Under; a low duel means runs. Scored against Polymarket's NRFI market and the game's main total, resolved from MLB's own linescore.</div>
-      </div>
+    <div id="mlbNrfiSection" style="display:none;">
       <div class="box" id="mlbNrfiBox">
         <div class="box-label">1️⃣ NRFI &mdash; Run in the 1st Inning?</div>
+        <div class="mode-desc">The first inning is purely the two starters against the top of each order &mdash; no bullpen, no pinch hitters. A high pitcher-duel score means both are on, so No run; a low one means runs. Resolved from MLB's own linescore.</div>
         <div id="mlbNrfiBody"></div>
         <div class="pm-table-pagination" id="mlbNrfiPagination"></div>
       </div>
+      <div class="box" id="mlbNrfiComponentBox">
+        <div class="box-label">Which Signal Predicts NRFI Best</div>
+        <div class="mode-desc">Same test as the game picks: each signal scored alone against the market, so the data picks the weighting instead of assuming the pitcher duel is right. Needs a backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="mlbNrfiComponentSignal"></div>
+      </div>
+    </div>
+
+    <div id="mlbTotalsSection" style="display:none;">
       <div class="box" id="mlbTotalsBox">
-        <div class="box-label">↕️ Totals &mdash; Main Line Over/Under</div>
+        <div class="box-label">↕️ Run Totals &mdash; Main Line Over/Under</div>
+        <div class="mode-desc">Full-game run total against the main line (the one priced closest to even). Bullpens and benches matter here, so the same pitcher-duel read may or may not hold &mdash; the signal table below is what settles it.</div>
         <div id="mlbTotalsBody"></div>
         <div class="pm-table-pagination" id="mlbTotalsPagination"></div>
+      </div>
+      <div class="box" id="mlbTotalsComponentBox">
+        <div class="box-label">Which Signal Predicts Run Totals Best</div>
+        <div class="mode-desc">Each signal scored alone against the market. Needs a backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="mlbTotalsComponentSignal"></div>
       </div>
     </div>
    </div>
@@ -703,7 +715,8 @@
       <select id="mlbViewSelectOld">
         <option value="game">🎯 Game Picks</option>
         <option value="strikeout">🔥 Strikeout Signal</option>
-        <option value="duel">⚔️ Duel Markets (NRFI / Totals)</option>
+        <option value="nrfi">1️⃣ NRFI (1st-inning run)</option>
+        <option value="totals">↕️ Run Totals (O/U)</option>
       </select>
     </div>
 
@@ -845,20 +858,31 @@
     </div>
     </div>
 
-    <div id="mlbDuelSectionOld" style="display:none;">
-      <div class="box">
-        <div class="box-label">⚔️ Pitcher Duel Markets</div>
-        <div class="mode-desc">Both starters' day scores averaged into one duel score. A high duel means both pitchers are on &mdash; quiet bats, so No run in the 1st and Under; a low duel means runs. Scored against Polymarket's NRFI market and the game's main total, resolved from MLB's own linescore.</div>
-      </div>
+    <div id="mlbNrfiSectionOld" style="display:none;">
       <div class="box" id="mlbNrfiBoxOld">
         <div class="box-label">1️⃣ NRFI &mdash; Run in the 1st Inning?</div>
+        <div class="mode-desc">The first inning is purely the two starters against the top of each order &mdash; no bullpen, no pinch hitters. A high pitcher-duel score means both are on, so No run; a low one means runs. Resolved from MLB's own linescore.</div>
         <div id="mlbNrfiBodyOld"></div>
         <div class="pm-table-pagination" id="mlbNrfiPaginationOld"></div>
       </div>
+      <div class="box" id="mlbNrfiComponentBoxOld">
+        <div class="box-label">Which Signal Predicts NRFI Best</div>
+        <div class="mode-desc">Same test as the game picks: each signal scored alone against the market, so the data picks the weighting instead of assuming the pitcher duel is right. Needs a backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="mlbNrfiComponentSignalOld"></div>
+      </div>
+    </div>
+
+    <div id="mlbTotalsSectionOld" style="display:none;">
       <div class="box" id="mlbTotalsBoxOld">
-        <div class="box-label">↕️ Totals &mdash; Main Line Over/Under</div>
+        <div class="box-label">↕️ Run Totals &mdash; Main Line Over/Under</div>
+        <div class="mode-desc">Full-game run total against the main line (the one priced closest to even). Bullpens and benches matter here, so the same pitcher-duel read may or may not hold &mdash; the signal table below is what settles it.</div>
         <div id="mlbTotalsBodyOld"></div>
         <div class="pm-table-pagination" id="mlbTotalsPaginationOld"></div>
+      </div>
+      <div class="box" id="mlbTotalsComponentBoxOld">
+        <div class="box-label">Which Signal Predicts Run Totals Best</div>
+        <div class="mode-desc">Each signal scored alone against the market. Needs a backfill run to collect component data.</div>
+        <div class="pm-table-scroll" id="mlbTotalsComponentSignalOld"></div>
       </div>
     </div>
    </div>
@@ -883,11 +907,13 @@
 <script src="stats-tennis.js"></script>
 <script src="stats-mlb.js"></script>
 <script>
-function applyMlbView(selectId, gameSectionId, strikeoutSectionId, duelSectionId) {
+function applyMlbView(selectId, suffix) {
   const view = document.getElementById(selectId).value;
-  document.getElementById(gameSectionId).style.display = view === 'game' ? '' : 'none';
-  document.getElementById(strikeoutSectionId).style.display = view === 'strikeout' ? '' : 'none';
-  document.getElementById(duelSectionId).style.display = view === 'duel' ? '' : 'none';
+  const show = (id, when) => { document.getElementById(id + suffix).style.display = view === when ? '' : 'none'; };
+  show('mlbGameSection', 'game');
+  show('mlbStrikeoutSection', 'strikeout');
+  show('mlbNrfiSection', 'nrfi');
+  show('mlbTotalsSection', 'totals');
 }
 
 function showSport(sport) {
@@ -897,8 +923,8 @@ function showSport(sport) {
   document.getElementById('statsTennisSection').style.display = sport === 'tennis' ? '' : 'none';
   document.getElementById('statsMlbSection').style.display = sport === 'mlb' ? '' : 'none';
   if (sport === 'mlb') {
-    applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection', 'mlbDuelSection');
-    applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld', 'mlbDuelSectionOld');
+    applyMlbView('mlbViewSelect', '');
+    applyMlbView('mlbViewSelectOld', 'Old');
   }
 }
 
@@ -915,8 +941,8 @@ document.getElementById('statsChooseSportLink').addEventListener('click', (e) =>
   document.getElementById('statsSportPicker').style.display = '';
 });
 
-document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', 'mlbGameSection', 'mlbStrikeoutSection', 'mlbDuelSection'));
-document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'mlbGameSectionOld', 'mlbStrikeoutSectionOld', 'mlbDuelSectionOld'));
+document.getElementById('mlbViewSelect').addEventListener('change', () => applyMlbView('mlbViewSelect', ''));
+document.getElementById('mlbViewSelectOld').addEventListener('change', () => applyMlbView('mlbViewSelectOld', 'Old'));
 </script>
 </body>
 </html>

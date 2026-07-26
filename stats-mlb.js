@@ -885,6 +885,69 @@ function renderMlbDuelPanel(records, bodyId, paginationId, paginationPrefix, emp
   renderPaginationControls(paginationId, paginationPrefix, 1, 1, () => {});
 }
 
+// Which single signal predicts a duel market best - the same test the game
+// picks get, aimed at quiet-vs-loud instead of who wins. Each component picks
+// a side on its own (mirrored around MLB_DUEL_NEUTRAL) and is scored against
+// what the market implied for that same side.
+function renderMlbDuelComponentSignal(records, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const withComps = records.filter((p) => p.duelComponents && p.result && !p.result.draw);
+  if (!withComps.length) {
+    el.innerHTML = '<div class="empty-state">No component data yet &mdash; run Backfill on the Old Data tab to collect it for these markets.</div>';
+    return;
+  }
+
+  const statFor = (scoreOf) => {
+    const picks = withComps.map((p) => {
+      const score = scoreOf(p);
+      if (score == null) return null;
+      const side = mlbDuelSideForScore(score, p.teamAName, p.teamBName);
+      const isA = normalizeName(side) === normalizeName(p.teamAName);
+      const implied = isA ? p.marketPriceA : p.marketPriceB;
+      if (!Number.isFinite(implied)) return null;
+      return { won: normalizeName(p.result.winner) === normalizeName(side), implied };
+    }).filter(Boolean);
+    const n = picks.length;
+    if (!n) return { count: 0 };
+    const wins = picks.filter((x) => x.won).length;
+    const winPct = Math.round((wins / n) * 100);
+    const marketPct = Math.round((picks.reduce((s, x) => s + x.implied, 0) / n) * 100);
+    return { count: n, wins, winPct, marketPct, edge: winPct - marketPct };
+  };
+
+  const rows = MLB_DUEL_COMPONENT_KEYS.map((key) => ({
+    key,
+    label: MLB_DUEL_COMPONENT_LABELS[key],
+    ...statFor((p) => p.duelComponents[key]),
+  }));
+  // The live signal, for reference - identical to the pitchers row by
+  // construction, kept so the table always shows what is actually betting.
+  rows.push({ key: 'duel', label: MLB_DUEL_COMPONENT_LABELS.duel, ...statFor((p) => p.duelScore) });
+  rows.sort((a, b) => (b.edge == null ? -Infinity : b.edge) - (a.edge == null ? -Infinity : a.edge));
+
+  const body = rows.map((r) => {
+    const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
+      ? `<span class="score-inline ${r.edge > 0 ? 'good' : (r.edge < 0 ? 'bad' : '')}">${r.edge > 0 ? '+' : ''}${r.edge}</span>`
+      : `<span class="empty-state">${r.count ? 'thin' : '—'}</span>`;
+    return `
+      <tr${r.key === 'duel' ? ' style="border-top:2px solid var(--border);"' : ''}>
+        <td>${escapeHtml(r.label)}</td>
+        <td>${r.count}</td>
+        <td>${r.winPct != null ? `${r.winPct}%` : '—'}</td>
+        <td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td>
+        <td>${edgeCell}</td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="pm-table-total">Total picks: ${withComps.length}</div>
+    <table class="astro-table">
+      <thead><tr><th>Signal</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
 function renderMlbScope(suffix, predictions, signals) {
   const isOld = suffix === 'Old';
   const todayOrOldPredictions = predictions.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld);
@@ -911,14 +974,18 @@ function renderMlbScope(suffix, predictions, signals) {
 
   const scopeDuel = (list) => list.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
   const rerender = () => renderMlbScope(suffix, predictions, signals);
+  const scopedNrfi = scopeDuel(loadMlbNrfiPredictions());
+  const scopedTotals = scopeDuel(loadMlbTotalsPredictions());
   renderMlbDuelPanel(
-    scopeDuel(loadMlbNrfiPredictions()), 'mlbNrfiBody' + suffix, 'mlbNrfiPagination' + suffix, 'mlbNrfi' + suffix,
+    scopedNrfi, 'mlbNrfiBody' + suffix, 'mlbNrfiPagination' + suffix, 'mlbNrfi' + suffix,
     'No NRFI picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
   renderMlbDuelPanel(
-    scopeDuel(loadMlbTotalsPredictions()), 'mlbTotalsBody' + suffix, 'mlbTotalsPagination' + suffix, 'mlbTotals' + suffix,
+    scopedTotals, 'mlbTotalsBody' + suffix, 'mlbTotalsPagination' + suffix, 'mlbTotals' + suffix,
     'No totals picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
+  renderMlbDuelComponentSignal(scopedNrfi, 'mlbNrfiComponentSignal' + suffix);
+  renderMlbDuelComponentSignal(scopedTotals, 'mlbTotalsComponentSignal' + suffix);
 }
 
 // Today's games the Stats page has fetched but can't score into a pick yet
@@ -1337,10 +1404,14 @@ async function pickMainTotalsLine(totalsMarkets, targetTs) {
   return { market: best.t, priceA: best.pA, priceB: pB };
 }
 
-const MLB_BACKFILL_SCHEMA = 7; // bump when the stored prediction shape changes,
+const MLB_BACKFILL_SCHEMA = 8; // bump when the stored prediction shape changes,
 // v7: the walk now also collects NRFI + main-line totals pitcher-duel
 // records per game (whole new stores, so the full window must be re-walked
 // to build their history).
+// v8: duel records now store a game-level component set (every role averaged
+// across both teams) so NRFI and Run Totals get the same "which signal
+// predicts best" table the game picks have. Existing duel records are patched
+// in place with their components rather than discarded.
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk
@@ -1463,8 +1534,11 @@ async function backfillMlbHistory(onProgress) {
   const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
   const existingNrfi = loadMlbNrfiPredictions();
   const existingNrfiGamePks = new Set(existingNrfi.map((p) => p.gamePk));
+  const existingNrfiByGamePk = new Map(existingNrfi.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
   const existingTotals = loadMlbTotalsPredictions();
   const existingTotalsGamePks = new Set(existingTotals.map((p) => p.gamePk));
+  const existingTotalsByGamePk = new Map(existingTotals.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
+  let duelPatchedCount = 0; // existing duel records that gained component data
 
   const teamInfoCache = new Map();
   const managerCache = new Map();
@@ -1487,8 +1561,10 @@ async function backfillMlbHistory(onProgress) {
     // it whenever there's either a new prediction OR an in-place patch.
     if (newPredictions.length || patchedCount) saveMlbPredictions([...existingPredictions, ...newPredictions]);
     if (newSignals.length) saveMlbPitcherKSignals([...existingSignals, ...newSignals]);
-    if (newNrfi.length) saveMlbNrfiPredictions([...existingNrfi, ...newNrfi]);
-    if (newTotals.length) saveMlbTotalsPredictions([...existingTotals, ...newTotals]);
+    // existingNrfi/existingTotals hold patched records in place (mutated), so
+    // spread them whenever there's either a new record OR an in-place patch.
+    if (newNrfi.length || duelPatchedCount) saveMlbNrfiPredictions([...existingNrfi, ...newNrfi]);
+    if (newTotals.length || duelPatchedCount) saveMlbTotalsPredictions([...existingTotals, ...newTotals]);
   };
 
   async function processGame({ date, g }) {
@@ -1625,8 +1701,13 @@ async function backfillMlbHistory(onProgress) {
     // ---- Pitcher-duel markets half (NRFI + main-line totals) ----
     // Needs only the two starters' birthdates, not the full lineup scoring.
     // Results come straight from each market's own final 1/0 prices.
-    const needNrfi = !existingNrfiGamePks.has(gamePk);
-    const needTotals = !existingTotalsGamePks.has(gamePk);
+    // Existing duel records from before component storage get patched in
+    // place rather than discarded, so the signal table fills in without
+    // losing a run's worth of collection.
+    const nrfiToPatch = existingNrfiByGamePk.get(gamePk);
+    const totalsToPatch = existingTotalsByGamePk.get(gamePk);
+    const needNrfi = !existingNrfiGamePks.has(gamePk) || (nrfiToPatch && !nrfiToPatch.duelComponents);
+    const needTotals = !existingTotalsGamePks.has(gamePk) || (totalsToPatch && !totalsToPatch.duelComponents);
     if ((needNrfi || needTotals) && !doubleheaderKeys.has(dhKey) && feed.home.startingPitcherId && feed.away.startingPitcherId) {
       const bdHome = birthdates.get(feed.home.startingPitcherId);
       const bdAway = birthdates.get(feed.away.startingPitcherId);
@@ -1635,6 +1716,17 @@ async function backfillMlbHistory(onProgress) {
           computeCompatibility(parseDateInput(bdHome.birthDate), matchDate, sportsNumerologyCompat).finalScore +
           computeCompatibility(parseDateInput(bdAway.birthDate), matchDate, sportsNumerologyCompat).finalScore
         ) / 2;
+        // Game-level component set: every role averaged across both teams, so
+        // the duel markets get the same "which signal predicts best" test the
+        // game picks get. Composites are recomputed here (cheap, no network)
+        // because the moneyline half above skips them for already-stored picks.
+        let duelComponents = null;
+        const gObjDuel = buildGObj(feed.home.teamName, feed.away.teamName);
+        const compHomeScore = computeTeamComposite(gObjDuel, 'A');
+        const compAwayScore = computeTeamComposite(gObjDuel, 'B');
+        if (compHomeScore && compAwayScore) {
+          duelComponents = mlbDuelComponentsFromSides(extractComponents(compHomeScore.parts), extractComponents(compAwayScore.parts));
+        }
         if (!event) event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
         if (event) {
           const gameLabelBase = `${event.teamAName} vs ${event.teamBName}`;
@@ -1642,23 +1734,32 @@ async function backfillMlbHistory(onProgress) {
           const gameTimeISO = event.gameStartTime.toISOString();
 
           if (needNrfi && event.nrfiMarket && event.nrfiMarket.clobTokenIdA && event.nrfiMarket.clobTokenIdB) {
-            const nrfiResult = mlbNrfiResultFromFeed(feed, event.nrfiMarket.outcomeA, event.nrfiMarket.outcomeB);
-            const [pA, pB] = await Promise.all([
-              fetchClobPriceNear(event.nrfiMarket.clobTokenIdA, targetTs),
-              fetchClobPriceNear(event.nrfiMarket.clobTokenIdB, targetTs),
-            ]);
-            if (pA != null && pB != null) {
-              newNrfi.push(buildMlbDuelRecord('nrfi', { ...event.nrfiMarket, priceA: pA, priceB: pB }, duelScore, `${gameLabelBase} · 1st-inning run?`, gameTimeISO, nrfiResult, gamePk));
-              existingNrfiGamePks.add(gamePk);
+            if (nrfiToPatch) {
+              // Already collected - just add what it was missing.
+              if (duelComponents) { nrfiToPatch.duelComponents = duelComponents; duelPatchedCount += 1; }
+            } else {
+              const nrfiResult = mlbNrfiResultFromFeed(feed, event.nrfiMarket.outcomeA, event.nrfiMarket.outcomeB);
+              const [pA, pB] = await Promise.all([
+                fetchClobPriceNear(event.nrfiMarket.clobTokenIdA, targetTs),
+                fetchClobPriceNear(event.nrfiMarket.clobTokenIdB, targetTs),
+              ]);
+              if (pA != null && pB != null) {
+                newNrfi.push(buildMlbDuelRecord('nrfi', { ...event.nrfiMarket, priceA: pA, priceB: pB }, duelScore, `${gameLabelBase} · 1st-inning run?`, gameTimeISO, nrfiResult, gamePk, duelComponents));
+                existingNrfiGamePks.add(gamePk);
+              }
             }
           }
 
           if (needTotals && event.totalsMarkets && event.totalsMarkets.length) {
-            const main = await pickMainTotalsLine(event.totalsMarkets, targetTs);
-            if (main) {
-              const totalsResult = mlbTotalsResultFromFeed(feed, main.market.outcomeA, main.market.outcomeB, main.market.line);
-              newTotals.push(buildMlbDuelRecord('totals', { ...main.market, priceA: main.priceA, priceB: main.priceB }, duelScore, `${gameLabelBase} · O/U ${main.market.line}`, gameTimeISO, totalsResult, gamePk));
-              existingTotalsGamePks.add(gamePk);
+            if (totalsToPatch) {
+              if (duelComponents) { totalsToPatch.duelComponents = duelComponents; duelPatchedCount += 1; }
+            } else {
+              const main = await pickMainTotalsLine(event.totalsMarkets, targetTs);
+              if (main) {
+                const totalsResult = mlbTotalsResultFromFeed(feed, main.market.outcomeA, main.market.outcomeB, main.market.line);
+                newTotals.push(buildMlbDuelRecord('totals', { ...main.market, priceA: main.priceA, priceB: main.priceB }, duelScore, `${gameLabelBase} · O/U ${main.market.line}`, gameTimeISO, totalsResult, gamePk, duelComponents));
+                existingTotalsGamePks.add(gamePk);
+              }
             }
           }
         }
@@ -1715,7 +1816,7 @@ async function backfillMlbHistory(onProgress) {
   saveProgress();
   saveMlbBackfillState({ throughDateISO: endISO, schemaVersion: MLB_BACKFILL_SCHEMA });
 
-  return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, newNrfiCount: newNrfi.length, newTotalsCount: newTotals.length, alreadyCurrent: false };
+  return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, newNrfiCount: newNrfi.length, newTotalsCount: newTotals.length, duelPatchedCount, alreadyCurrent: false };
 }
 
 function initMlbBackfillButton() {
@@ -1731,7 +1832,7 @@ function initMlbBackfillButton() {
       });
       status.textContent = result.alreadyCurrent
         ? 'Already caught up to yesterday - nothing new to backfill.'
-        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks, ${result.newSignalsCount} strikeout signals, ${result.newNrfiCount || 0} NRFI picks, and ${result.newTotalsCount || 0} totals picks${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}.`;
+        : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks, ${result.newSignalsCount} strikeout signals, ${result.newNrfiCount || 0} NRFI picks, and ${result.newTotalsCount || 0} totals picks${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}${result.duelPatchedCount ? `, added component data to ${result.duelPatchedCount} existing NRFI/totals picks` : ''}.`;
       await refreshAndRenderMlb();
     } catch (e) {
       status.textContent = 'Something went wrong during backfill - try again.';
