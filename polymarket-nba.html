@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>NBA Polymarket Tracker - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Owner-only gate for the Sports Betting section - must run before content renders -->
+<script src="sports-gate.js"></script>
+<div class="page ufc-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+
+  <div class="topbar">
+    <a href="polymarket.html" class="back-link">&larr; Polymarket</a>
+  </div>
+
+  <h1 class="page-title">🏀 NBA &mdash; Live Polymarket Tracker</h1>
+
+  <div class="pm-last-updated-row">
+    <span id="pmNbaLastUpdated"></span>
+    <button class="btn-link" id="pmNbaRefreshBtn" type="button">🔄 Refresh</button>
+  </div>
+
+  <div class="box pm-stake-box">
+    <div class="box-label">🧮 Risk Manager</div>
+    <div class="mode-desc">Enter what you'd actually stake per bet - each game below shows the payout at current odds and whether the track record backs it.</div>
+    <div class="inline-form">
+      <label for="pmNbaStakeInput" class="pm-stake-label">Stake per bet ($)</label>
+      <input type="number" id="pmNbaStakeInput" min="1" step="1" value="10">
+    </div>
+  </div>
+
+  <div class="mode-desc pm-tournament-hint">Venue, state and every player's numerology come live from ESPN &mdash; nothing here is entered by hand. A team is scored on its expected rotation, weighted by each player's trailing minutes, so a side only scores once enough recent games are on record. Run the Backfill on the Stats page first if a game shows as awaiting rotation form.</div>
+
+  <div id="pmNbaGamesContainer">
+    <div class="box pm-fight-card">
+      <div class="pm-skeleton-bar" style="width:55%"></div>
+      <div class="pm-skeleton-bar" style="width:100%;height:38px"></div>
+      <div class="pm-skeleton-bar" style="width:80%"></div>
+    </div>
+    <div class="box pm-fight-card">
+      <div class="pm-skeleton-bar" style="width:65%"></div>
+      <div class="pm-skeleton-bar" style="width:100%;height:38px"></div>
+      <div class="pm-skeleton-bar" style="width:70%"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmNbaBreakdownOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="pmNbaBreakdownClose" title="Close">&times;</button>
+      <div id="pmNbaBreakdownBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="big-store.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="us-states-data.js"></script>
+<script src="nba-api.js"></script>
+<script src="stats-nba.js"></script>
+<script src="polymarket-nba.js"></script>
+</body>
+</html>
