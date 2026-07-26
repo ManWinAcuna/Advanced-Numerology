@@ -1355,28 +1355,39 @@ const MLB_TEAM_FOUNDING_DATES = {
   158: '1969-04-07', // Milwaukee Brewers
 };
 
-// MLB team-composite role weights - a starting guess, not doctrine, same
-// spirit as REAL_EDGE_MIN_GAP/EDGE_TIERS below: once enough games resolve on
-// the Stats page, that per-tier breakdown is what should actually move these
-// numbers, not intuition. Batters beyond the catcher are weighted flat
-// (decided against batting-order weighting - the real plate-appearance gap
-// top-to-bottom is modest, not worth the extra complexity yet).
+// MLB team-composite role weights. Batters beyond the catcher are weighted
+// flat (decided against batting-order weighting - the real plate-appearance
+// gap top-to-bottom is modest, not worth the extra complexity).
+//
+// Weights v3 - data-chosen, not guessed. The per-component signal table over
+// ~1,700 resolved games was unambiguous: the Manager score beat the market by
+// +4 points (3.3 standard errors - the only component with real statistical
+// support), the Starting Pitcher by +2 (1.7 se, marginal), and every other
+// component sat at 0 or below (Batters -1, Catcher 0, Pitcher-vs-Lineup 0,
+// Franchise 0 - all inside one standard error of noise). The tell that the
+// old weighting was actively wrong: Manager ALONE (+4) beat the Full
+// Composite (+1), because 40% of the weight sat on the batter average, a
+// noise signal that drowned the one component that works. So Manager leads
+// here, Pitcher second, and the unproven components keep only token weight -
+// enough that they'd still show up if they ever start predicting, too little
+// to dilute. See MLB_WEIGHTS_SINCE for the honest out-of-sample test: these
+// numbers were fit to games already played, so their in-sample edge is
+// optimistic by construction.
 const MLB_ROLE_WEIGHTS = {
-  pitcher: 0.24,
-  pitcherMatchup: 0.15, // pitcher's life path vs. the opposing lineup's,
+  manager: 0.45,
+  pitcher: 0.28,
+  pitcherMatchup: 0.10, // pitcher's life path vs. the opposing lineup's,
   // averaged across all 9 batters (pitcherVsLineupScore below) - the one
   // place the two teams' numerology actually meets head-to-head, instead of
   // each side only ever being scored against the day/venue.
-  catcher: 0.11,
-  batter: 0.05, // each of the 8 non-catcher batters
-  franchise: 0.17, // Now backed by a real founding date (MLB_TEAM_FOUNDING_DATES
+  catcher: 0.03,
+  batter: 0.005, // each of the 8 non-catcher batters (0.04 combined)
+  franchise: 0.10, // Backed by a real founding date (MLB_TEAM_FOUNDING_DATES
   // above) for every current team, so it gets the full person-style
-  // day/stadium/state blend like everything else - back to its full weight
-  // now that the "we only have the year" limitation is gone. A team missing
-  // from that table falls back to a thinner zodiac-year-only score, weighted
-  // down instead (franchiseZodiacOnly below) - see computeTeamComposite below.
-  franchiseZodiacOnly: 0.05,
-  manager: 0.08,
+  // day/stadium/state blend like everything else. A team missing from that
+  // table falls back to a thinner zodiac-year-only score, weighted down
+  // instead (franchiseZodiacOnly below) - see computeTeamComposite below.
+  franchiseZodiacOnly: 0.03,
 };
 
 // The calendar date a game falls on at the venue - same pattern as
@@ -1514,7 +1525,7 @@ const MLB_COMPONENT_LABELS = {
   franchise: 'Franchise',
   manager: 'Manager',
   composite: 'Full Composite',
-  reweighted: 'Reweighted V2',
+  reweighted: 'Old Weights (pre-v3)',
 };
 
 // Collapses a computeTeamComposite() parts array into one score per component,
@@ -1541,6 +1552,19 @@ function extractComponents(parts) {
 // batters at 0.40 exactly reproduces the eight individual 0.05 batter weights
 // (0.05 x 8 = 0.40 x their average).
 const MLB_ROLE_WEIGHTS_CURRENT = {
+  manager: 0.45,
+  pitcher: 0.28,
+  pitcherMatchup: 0.10,
+  franchise: 0.10,
+  catcher: 0.03,
+  batters: 0.04, // 0.005 x 8 batters
+};
+
+// The weighting that was live before v3 - an up-front guess with nothing
+// behind it, kept only so the component table can show what the move away
+// from it actually bought. Its 40% on the batter average is the dilution v3
+// exists to fix.
+const MLB_ROLE_WEIGHTS_LEGACY = {
   pitcher: 0.24,
   pitcherMatchup: 0.15,
   catcher: 0.11,
@@ -1569,9 +1593,61 @@ const MLB_ROLE_WEIGHTS_V2 = {
   catcher: 0.05,
 };
 
-// The date the V2 weights were fixed. A resolved game on or after this was NOT
-// used to choose the weights, so it's a fair out-of-sample test of them.
+// The date the v3 weights went live. A resolved game on or after this had no
+// hand in choosing them, so it's a fair out-of-sample test of the model that
+// is now actually placing bets.
+const MLB_WEIGHTS_SINCE = '2026-07-26';
+
+// Superseded by MLB_WEIGHTS_SINCE - kept because older stored state and the
+// component table's history still reference the v2 cutoff.
 const MLB_V2_SINCE = '2026-07-19';
+
+/* ===================== Rescore on a weight change ===================== */
+// Changing the role weights would otherwise split the stored history across
+// two models: games recorded before the change keep their old
+// numerologyScoreA/B while new ones use the new weighting. That silently
+// corrupts everything downstream - the edge gap and its tiers, the price
+// buckets, and the betting engine's win-probability tallies - because two
+// different scoring systems would be pooled as if they were one. Every
+// prediction stores its per-component scores, so the composite can be
+// rebuilt exactly without refetching anything: this rescores the whole store
+// under the current weights, runs once per weight version, and also
+// re-derives numerologyFavorite and pickType since a reweighting can flip
+// which side the model prefers.
+
+const MLB_WEIGHTS_VERSION_KEY = 'numerology_mlb_weights_version';
+const MLB_WEIGHTS_VERSION = 3;
+
+function rescoreMlbPredictionsForWeights() {
+  if (Number(localStorage.getItem(MLB_WEIGHTS_VERSION_KEY)) === MLB_WEIGHTS_VERSION) {
+    return { alreadyCurrent: true, rescored: 0, skipped: 0, flipped: 0 };
+  }
+  const predictions = loadMlbPredictions();
+  let rescored = 0;
+  let skipped = 0;
+  let flipped = 0;
+
+  predictions.forEach((p) => {
+    if (!p.components || !p.components.A || !p.components.B) { skipped += 1; return; }
+    const a = mlbCompositeFromComponents(p.components.A, MLB_ROLE_WEIGHTS_CURRENT);
+    const b = mlbCompositeFromComponents(p.components.B, MLB_ROLE_WEIGHTS_CURRENT);
+    if (a == null || b == null) { skipped += 1; return; }
+
+    const wasFavorite = p.numerologyFavorite;
+    p.numerologyScoreA = a;
+    p.numerologyScoreB = b;
+    p.numerologyFavorite = a >= b ? p.teamAName : p.teamBName;
+    if (p.marketFavorite) {
+      p.pickType = normalizeName(p.marketFavorite) === normalizeName(p.numerologyFavorite) ? 'favorite' : 'underdog';
+    }
+    if (wasFavorite && normalizeName(wasFavorite) !== normalizeName(p.numerologyFavorite)) flipped += 1;
+    rescored += 1;
+  });
+
+  if (rescored) saveMlbPredictions(predictions);
+  localStorage.setItem(MLB_WEIGHTS_VERSION_KEY, String(MLB_WEIGHTS_VERSION));
+  return { alreadyCurrent: false, rescored, skipped, flipped };
+}
 
 // Re-derives a team's composite from its stored per-component scores under an
 // arbitrary weight map - the whole reason components are stored. Skips any

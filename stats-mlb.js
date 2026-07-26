@@ -8,6 +8,11 @@
 // panel below for the pitcher-strikeout research signal (not a bet - see
 // MLB_PITCHER_K_SIGNALS_KEY in db-core.js).
 
+// Runs before anything reads the store, and outside the page-DOM guard at the
+// bottom of this file, so Stats, Betting and Bet Log all see one consistently
+// scored history after a weight change (see rescoreMlbPredictionsForWeights).
+const mlbWeightsRescore = rescoreMlbPredictionsForWeights();
+
 let currentMlbPredictions = [];
 let currentMlbKSignals = [];
 
@@ -705,8 +710,10 @@ function computeComponentSignalStats(predictions) {
     return { count: n, wins, winPct, marketPct, edge };
   };
   const statFor = (scoreAOf, scoreBOf) => statOver(resolved, scoreAOf, scoreBOf);
-  const v2A = (p) => mlbCompositeFromComponents(p.components.A, MLB_ROLE_WEIGHTS_V2);
-  const v2B = (p) => mlbCompositeFromComponents(p.components.B, MLB_ROLE_WEIGHTS_V2);
+  // The comparison row is now the weighting v3 replaced, so the table shows
+  // what the reweighting actually bought rather than re-testing a candidate.
+  const v2A = (p) => mlbCompositeFromComponents(p.components.A, MLB_ROLE_WEIGHTS_LEGACY);
+  const v2B = (p) => mlbCompositeFromComponents(p.components.B, MLB_ROLE_WEIGHTS_LEGACY);
 
   const rows = MLB_COMPONENT_KEYS.map((key) => ({
     key,
@@ -733,9 +740,11 @@ function computeComponentSignalStats(predictions) {
   // into the next UTC day - no MLB game starts between ~04:00 and ~17:00 UTC,
   // so noon cleanly separates one day's night games from the next day's,
   // keeping yesterday's late games in-sample where they belong.
-  const oosCutoff = MLB_V2_SINCE + 'T12:00:00.000Z';
+  const oosCutoff = MLB_WEIGHTS_SINCE + 'T12:00:00.000Z';
   const oosList = resolved.filter((p) => p.gameTime >= oosCutoff);
-  const v2OutOfSample = statOver(oosList, v2A, v2B);
+  // Out-of-sample is measured on the LIVE model (the composite actually
+  // placing bets), not on a candidate weighting.
+  const v2OutOfSample = statOver(oosList, (p) => p.numerologyScoreA, (p) => p.numerologyScoreB);
 
   return { rows, v2OutOfSample };
 }
@@ -775,8 +784,8 @@ function renderMlbComponentSignal(predictions, suffix = '') {
   // matters - V2 measured only on games played since the weights were fixed.
   const oos = v2OutOfSample;
   const oosLine = oos.count >= MIN_BUCKET_SAMPLE
-    ? `⚡ <b>Reweighted V2, out-of-sample</b> (games since ${MLB_V2_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the in-sample edge above was fit to the past.`
-    : `⚡ <b>Reweighted V2</b> leans on the components above (Manager &amp; Pitcher up, Catcher &amp; Batters down). Its edge in the table is <b>in-sample</b> &mdash; those weights were picked from this same data, so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> played since ${MLB_V2_SINCE} so far. Watch that number as new games resolve.`;
+    ? `🎯 <b>Live model (v3), out-of-sample</b> (games since ${MLB_WEIGHTS_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the Full Composite edge above was fit to these same games.`
+    : `🎯 <b>Live model (v3)</b> weights Manager 45% / Pitcher 28%, because Manager was the only component beating the market with real statistical support (+4, 3.3 se) while Batters, Catcher and Pitcher-vs-Lineup measured as noise &mdash; and 40% on Batters was diluting the signal badly enough that Manager alone outperformed the whole composite. The Full Composite edge in the table is <b>in-sample</b> (these weights were chosen from these games), so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> since ${MLB_WEIGHTS_SINCE}. Watch that number as new games resolve.`;
 
   el.innerHTML = `
     <div class="pm-table-total">Total picks: ${total}</div>
