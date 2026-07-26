@@ -2521,6 +2521,409 @@ function cloudPullAll() {
   });
 }
 
+/* ===================== NBA Predictions (Stats tracker) ===================== */
+// Same record shape as the MLB game picks (teamAName/teamBName, a favorite vs.
+// the market, resolved later), so numerologyPickPrice, isCorrectPick, the edge
+// tiers, the price buckets and the whole betting engine work on NBA records
+// with no changes. What differs is how a side's composite is built.
+//
+// MLB scores ~13 fixed roles per side at fixed weights. NBA can't: there is no
+// pre-game equivalent of a probable pitcher, and a 17-man roster contains
+// players who will not touch the floor. Flat-weighting all of them is exactly
+// the mistake the MLB component analysis exposed - 40% spread across nine
+// batters diluted the signal so badly that the manager alone outperformed the
+// full composite. So NBA weights each player by EXPECTED MINUTES instead of by
+// role, taken from that player's own trailing form.
+//
+// No coach component, deliberately. ESPN gives NBA coach names without birth
+// dates, and the id only resolves to a DOB for the coaches who used to play -
+// 10 of 30 when checked live. Rather than hand-fit a table and then measure it
+// on the same games it was fit to, the coach is simply absent here; if it is
+// ever added it gets measured forward from the day it ships.
+
+const NBA_PREDICTIONS_KEY = 'numerology_nba_predictions';
+const NBA_TOTALS_PREDICTIONS_KEY = 'numerology_nba_totals_predictions';
+// Rolling per-player form: the trailing window of games that produces both the
+// expected-minutes weighting above and the prop baselines. Persisted so a live
+// slate can be scored without re-walking two seasons.
+const NBA_PLAYER_FORM_KEY = 'numerology_nba_player_form';
+// Birth dates by ESPN athlete id. A backfill spans players who are on no
+// current roster, and each lookup is its own request, so caching turns "once
+// per game" into "once per player, ever".
+const NBA_BIRTHDATES_KEY = 'numerology_nba_birthdates';
+
+function loadNbaPredictions() {
+  try {
+    const raw = bigStoreGetItem(NBA_PREDICTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveNbaPredictions(predictions) {
+  saveJsonGuarded(NBA_PREDICTIONS_KEY, predictions);
+}
+
+function loadNbaTotalsPredictions() {
+  try {
+    const raw = bigStoreGetItem(NBA_TOTALS_PREDICTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveNbaTotalsPredictions(predictions) {
+  saveJsonGuarded(NBA_TOTALS_PREDICTIONS_KEY, predictions);
+}
+
+function loadNbaPlayerForm() {
+  try {
+    const raw = bigStoreGetItem(NBA_PLAYER_FORM_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveNbaPlayerForm(form) {
+  saveJsonGuarded(NBA_PLAYER_FORM_KEY, form);
+}
+
+function loadNbaBirthdates() {
+  try {
+    const raw = bigStoreGetItem(NBA_BIRTHDATES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveNbaBirthdates(map) {
+  saveJsonGuarded(NBA_BIRTHDATES_KEY, map);
+}
+
+/* ---------- Player form (trailing window) ---------- */
+// How many games back the trailing window reaches. Ten is long enough to
+// smooth a single blowout or a foul-plagued night, short enough to follow a
+// role change (a starter lost to injury, a rookie handed minutes).
+const NBA_FORM_WINDOW = 10;
+// Players scored per side, ranked by expected minutes. Ten covers a real NBA
+// rotation; beyond that a player's minutes are noise and their score would
+// only dilute.
+const NBA_ROTATION_SIZE = 10;
+// Below this many players with usable form, the side is not scored at all
+// rather than scored on a fragment - the same "don't predict on partial data"
+// stance the MLB tracker takes with unposted lineups.
+const NBA_MIN_ROTATION = 5;
+// A player who hasn't appeared in this long isn't part of the rotation any
+// more (injury, trade, G-League). Keeps a stale name from holding a weight.
+const NBA_FORM_STALE_DAYS = 30;
+
+function nbaFormEntry(form, playerId) {
+  const rec = form[String(playerId)];
+  return (rec && Array.isArray(rec.recent)) ? rec : null;
+}
+
+// Average of a stat across the trailing window. Returns null with no games,
+// never 0 - a player with no history is unknown, not a zero-minute player.
+function nbaTrailingAvg(form, playerId, stat) {
+  const rec = nbaFormEntry(form, playerId);
+  if (!rec || !rec.recent.length) return null;
+  const vals = rec.recent.map((g) => g[stat]).filter((v) => Number.isFinite(v));
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// The rotation a team is expected to play, derived purely from games ALREADY
+// in the form store. Nothing about the game being predicted is consulted -
+// not the boxscore, not who was active - because that would be lookahead: a
+// backfilled pick built from the participant list would silently "know" a star
+// was out, and every measured edge would be inflated by information no bettor
+// had. The cost is that a trade or a same-day injury takes a few games to show
+// up here, which is the honest version of the problem a real bettor has.
+function nbaExpectedRotation(form, teamAbbr, asOfISO) {
+  const cutoff = new Date(`${asOfISO}T12:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - NBA_FORM_STALE_DAYS);
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+
+  const candidates = [];
+  Object.keys(form).forEach((id) => {
+    const rec = nbaFormEntry(form, id);
+    if (!rec || !rec.recent.length) return;
+    // Only games strictly before the one being predicted count.
+    const prior = rec.recent.filter((g) => g.d && g.d < asOfISO);
+    if (!prior.length) return;
+    const last = prior[prior.length - 1];
+    if (last.team !== teamAbbr) return;          // has moved on / different team
+    if (last.d < cutoffISO) return;              // hasn't played recently enough
+    const mins = prior.map((g) => g.min).filter((v) => Number.isFinite(v));
+    if (!mins.length) return;
+    const expectedMinutes = mins.reduce((a, b) => a + b, 0) / mins.length;
+    if (expectedMinutes <= 0) return;
+    candidates.push({
+      id: String(id),
+      name: rec.name || null,
+      birthDate: rec.birthDate || null,
+      expectedMinutes,
+      priorGames: prior.length,
+    });
+  });
+
+  candidates.sort((a, b) => b.expectedMinutes - a.expectedMinutes);
+  return candidates.slice(0, NBA_ROTATION_SIZE);
+}
+
+// Folds one finished game's boxscore into the form store. Called only AFTER a
+// game has been scored, so the walk-forward order is what keeps the store
+// free of lookahead.
+function nbaUpdatePlayerForm(form, teamAbbr, dateISO, players, birthdates) {
+  (players || []).forEach((p) => {
+    if (!p.id || !p.played) return;
+    const key = String(p.id);
+    if (!form[key]) form[key] = { name: p.name || null, birthDate: null, recent: [] };
+    const rec = form[key];
+    if (p.name) rec.name = p.name;
+    const bd = birthdates ? birthdates[key] : null;
+    if (bd && bd.birthDate) rec.birthDate = bd.birthDate;
+    // Idempotent: re-running a backfill over the same game must not double it.
+    if (rec.recent.some((g) => g.d === dateISO && g.team === teamAbbr)) return;
+    rec.recent.push({
+      d: dateISO,
+      team: teamAbbr,
+      min: Number.isFinite(p.minutes) ? p.minutes : 0,
+      pts: Number.isFinite(p.points) ? p.points : null,
+      reb: Number.isFinite(p.rebounds) ? p.rebounds : null,
+      ast: Number.isFinite(p.assists) ? p.assists : null,
+    });
+    rec.recent.sort((a, b) => (a.d < b.d ? -1 : (a.d > b.d ? 1 : 0)));
+    if (rec.recent.length > NBA_FORM_WINDOW) rec.recent = rec.recent.slice(-NBA_FORM_WINDOW);
+  });
+  return form;
+}
+
+/* ---------- The side composite ---------- */
+// Deliberately a different signature from computeTeamComposite: MLB needs the
+// whole game object because its pitcherMatchup component scores one side
+// against the other's lineup, and NBA has no cross-side component at all. So
+// this takes just the one side's rotation plus the date/place context, and
+// every player runs through the same computeFighterScore the other three
+// sports use.
+//
+// stadiumDate is always null for now - NBA arena founding dates are not in any
+// API here, and inventing one is not on the table, so computeFighterScore
+// degrades to its day+state blend. stateDate comes from the venue's US state
+// when there is one; an international game (Berlin, Paris, Mexico City) has no
+// state and correctly falls back to day-only rather than borrowing a state.
+function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate) {
+  const scored = (rotation || [])
+    .filter((p) => p.birthDate && Number.isFinite(p.expectedMinutes) && p.expectedMinutes > 0)
+    .map((p, index) => ({
+      // Rank within the rotation, not a listed position: 'top5' is the five
+      // players expected to play the most, which is the closest honest
+      // pre-game stand-in for a starting five.
+      key: index < 5 ? 'top5' : 'rotation',
+      role: `${p.name || 'Player'} (${p.expectedMinutes.toFixed(1)} min)`,
+      weight: p.expectedMinutes,
+      score: computeFighterScore(parseDateInput(p.birthDate), matchDate, stadiumDate, stateDate),
+    }));
+
+  if (scored.length < NBA_MIN_ROTATION) return null;
+  const totalWeight = scored.reduce((s, p) => s + p.weight, 0);
+  if (!totalWeight) return null;
+  const combined = Math.round(scored.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
+  return { combined, parts: scored };
+}
+
+// Two groups rather than MLB's six, because minutes-weighting already does the
+// work role-weights were doing there. The question this leaves the component
+// table is the one worth asking: does the heavy-minutes core carry the signal,
+// or the back of the rotation?
+const NBA_COMPONENT_KEYS = ['top5', 'rotation'];
+
+const NBA_COMPONENT_LABELS = {
+  top5: 'Top 5 by Minutes',
+  rotation: 'Rest of Rotation',
+};
+
+function extractNbaComponents(parts) {
+  const buckets = { top5: [], rotation: [] };
+  (parts || []).forEach((p) => {
+    const s = p.score && p.score.combined;
+    if (s == null || !(p.key in buckets)) return;
+    buckets[p.key].push(s);
+  });
+  const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
+  return { top5: avg(buckets.top5), rotation: avg(buckets.rotation) };
+}
+
+/* ---------- Edge tiers ---------- */
+// A minutes-weighted average over ten players concentrates toward the middle
+// the same way MLB's team composite does, so the one-on-one UFC/Tennis bands
+// (15/30) would sit permanently empty. These start at the MLB spacing, which
+// was itself calibrated against a real ~2.8 std-dev composite spread. They are
+// a starting guess, not doctrine - once the per-tier table on the Stats page
+// fills in, move them to where the data says signal actually begins.
+const NBA_REAL_EDGE_MIN_GAP = 3;
+
+const NBA_EDGE_TIERS = [
+  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 8, max: Infinity },
+  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 5, max: 8 },
+  { key: 'slight', label: 'Slight Edge', icon: '📈', min: NBA_REAL_EDGE_MIN_GAP, max: 5 },
+  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: NBA_REAL_EDGE_MIN_GAP },
+];
+
+function edgeTierForGapNba(gap) {
+  return edgeTierForGap(gap, NBA_EDGE_TIERS);
+}
+
+function hasRealEdgeNba(p) {
+  return edgeGap(p) >= NBA_REAL_EDGE_MIN_GAP;
+}
+
+function computeEdgeTierStatsNba(predictions) {
+  return computeEdgeTierStats(predictions, NBA_EDGE_TIERS);
+}
+
+/* ---------- Totals (game pace) ---------- */
+// The game-level analogue of MLB's pitcher duel, and note the direction is
+// INVERTED relative to it: a high MLB duel means both starters are on, so
+// runs stay down and the pick is Under. Here both teams' composites averaged
+// is read as how much energy is on the floor, so a high pace score points
+// OVER. That inversion is a hypothesis, not an established fact - and it is
+// a falsifiable one, because a systematically backwards direction shows up in
+// the tier table as a win rate consistently below 50% rather than as noise.
+//
+// NBA_PACE_NEUTRAL is the pivot where the favorite flips. 63 is where this
+// compat engine's day scores actually center (the same value the MLB duel was
+// calibrated to, and it is the same engine producing the numbers), so it is a
+// principled starting point rather than a fitted one - recalibrate it off the
+// observed NBA distribution once the backfill has run.
+const NBA_PACE_NEUTRAL = 63;
+
+const NBA_TOTALS_MIN_GAP = 5;
+
+const NBA_TOTALS_TIERS = [
+  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 22, max: Infinity },
+  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 12, max: 22 },
+  { key: 'slight', label: 'Slight Edge', icon: '📈', min: NBA_TOTALS_MIN_GAP, max: 12 },
+  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: NBA_TOTALS_MIN_GAP },
+];
+
+// Which side of a totals market a score favors: at or above neutral is Over.
+function nbaPaceSideForScore(score, outcomeA, outcomeB) {
+  const overIsA = normalizeName(outcomeA) === 'over';
+  const overName = overIsA ? outcomeA : outcomeB;
+  const underName = overIsA ? outcomeB : outcomeA;
+  return score >= NBA_PACE_NEUTRAL ? overName : underName;
+}
+
+// Game-level components: each side's group averaged across both teams, so the
+// "which signal predicts best" test works on totals the same way it does on
+// game picks.
+const NBA_PACE_COMPONENT_KEYS = ['top5s', 'rotations'];
+
+const NBA_PACE_COMPONENT_LABELS = {
+  top5s: 'Both Top 5s',
+  rotations: 'Both Rotations',
+  pace: '🏃 Pace Score (live)',
+};
+
+function nbaPaceComponentsFromSides(compHome, compAway) {
+  if (!compHome || !compAway) return null;
+  const pair = (key) => {
+    const a = compHome[key];
+    const b = compAway[key];
+    if (a == null || b == null) return null;
+    return Math.round(((a + b) / 2) * 10) / 10;
+  };
+  return { top5s: pair('top5'), rotations: pair('rotation') };
+}
+
+// market is a parseNbaSideMarket() shape whose priceA/priceB must already be
+// PRE-GAME prices - the backfill swaps the resolved 1/0 finals out for CLOB
+// history prices before calling this, for the same reason MLB does.
+function buildNbaTotalsRecord(market, paceScore, gameLabel, gameTimeISO, result, eventId, paceComponents) {
+  const overIsA = normalizeName(market.outcomeA) === 'over';
+  const p = Math.round(paceScore * 10) / 10;
+  const mirrored = Math.round((2 * NBA_PACE_NEUTRAL - paceScore) * 10) / 10;
+  const overName = overIsA ? market.outcomeA : market.outcomeB;
+  const underName = overIsA ? market.outcomeB : market.outcomeA;
+  return {
+    conditionId: market.conditionId,
+    eventId,
+    kind: 'totals',
+    line: market.line != null ? market.line : undefined,
+    teamAName: market.outcomeA,
+    teamBName: market.outcomeB,
+    gameLabel,
+    paceScore: p,
+    numerologyFavorite: paceScore >= NBA_PACE_NEUTRAL ? overName : underName,
+    // The Over side carries the pace score itself; Under carries its mirror,
+    // so the stored pair is shaped like every other prediction and edgeGap,
+    // the tiers and the betting engine all work on it untouched.
+    numerologyScoreA: overIsA ? p : mirrored,
+    numerologyScoreB: overIsA ? mirrored : p,
+    marketPriceA: market.priceA,
+    marketPriceB: market.priceB,
+    paceComponents: paceComponents || undefined,
+    gameTime: gameTimeISO,
+    recordedAt: Date.now(),
+    result: result || null,
+  };
+}
+
+// Totals resolve from ESPN's own final scores, never from Polymarket's
+// outcomePrices - a closed market's prices collapse to the 1/0 result on every
+// market of the event at once, which would mark every total the same way.
+function nbaTotalsResultFromScores(homeScore, awayScore, outcomeA, outcomeB, line) {
+  if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore) || !Number.isFinite(line)) return null;
+  const total = homeScore + awayScore;
+  // Polymarket's lines are .5 in practice, so a push shouldn't occur - but a
+  // whole-number line landing exactly on the total is a void, not a loss.
+  if (total === line) return { winner: null, draw: true, resolvedAt: Date.now() };
+  const overIsA = normalizeName(outcomeA) === 'over';
+  const overName = overIsA ? outcomeA : outcomeB;
+  const underName = overIsA ? outcomeB : outcomeA;
+  return { winner: total > line ? overName : underName, draw: false, resolvedAt: Date.now() };
+}
+
+/* ---------- Backfill settings ---------- */
+// Two seasons is the whole priced history (Polymarket's NBA markets start on
+// 2024-10-21), so 730 days is the useful maximum rather than an arbitrary cap.
+const NBA_BACKFILL_WINDOW_KEY = 'numerology_nba_backfill_window_days';
+const NBA_BACKFILL_WINDOW_OPTIONS = [91, 182, 364, 730];
+
+function loadNbaBackfillWindowDays() {
+  const raw = Number(localStorage.getItem(NBA_BACKFILL_WINDOW_KEY));
+  return NBA_BACKFILL_WINDOW_OPTIONS.includes(raw) ? raw : 364;
+}
+
+function saveNbaBackfillWindowDays(days) {
+  localStorage.setItem(NBA_BACKFILL_WINDOW_KEY, String(days));
+}
+
+const NBA_BACKFILL_STATE_KEY = 'numerology_nba_backfill_state';
+
+function loadNbaBackfillState() {
+  try {
+    const raw = localStorage.getItem(NBA_BACKFILL_STATE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveNbaBackfillState(state) {
+  localStorage.setItem(NBA_BACKFILL_STATE_KEY, JSON.stringify(state));
+}
+
 /* ===================== Suppress saved-password autofill (non-auth fields) ===================== */
 // The sign-in modal (auth-widget.js) and the Sports Betting gate both inject a
 // real password field, and once one is on the page Chrome's Google Password

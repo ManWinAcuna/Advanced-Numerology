@@ -12,6 +12,15 @@ const BETTING_BACKUP_KEYS = [
   MLB_BACKFILL_STATE_KEY,
   MLB_NRFI_PREDICTIONS_KEY,
   MLB_TOTALS_PREDICTIONS_KEY,
+  NBA_PREDICTIONS_KEY,
+  NBA_TOTALS_PREDICTIONS_KEY,
+  // The form store is not just a cache: a rebuild means re-walking two seasons
+  // of boxscores, and without it a live slate cannot be scored at all (the
+  // expected-minutes weighting has nothing to weight by). It belongs in the
+  // backup for the same reason the picks do.
+  NBA_PLAYER_FORM_KEY,
+  NBA_BIRTHDATES_KEY,
+  NBA_BACKFILL_STATE_KEY,
   UFC_PREDICTIONS_KEY,
   TENNIS_PREDICTIONS_KEY,
   BETTING_LOCKED_SLATES_KEY,
@@ -39,10 +48,15 @@ function buildBettingBackup() {
 
 // Human-readable summary so a restore can be sanity-checked before it lands.
 function summarizeBettingBackup(backup) {
+  // Most stores are arrays of records, but the NBA form and birthdate caches
+  // are keyed objects - counting only arrays would report those as 0 and make
+  // a perfectly good backup look half empty.
   const count = (key) => {
     try {
       const v = JSON.parse(backup.data[key] || '[]');
-      return Array.isArray(v) ? v.length : 0;
+      if (Array.isArray(v)) return v.length;
+      if (v && typeof v === 'object') return Object.keys(v).length;
+      return 0;
     } catch (e) {
       return 0;
     }
@@ -53,6 +67,9 @@ function summarizeBettingBackup(backup) {
     kSignals: count(MLB_PITCHER_K_SIGNALS_KEY),
     nrfi: count(MLB_NRFI_PREDICTIONS_KEY),
     totals: count(MLB_TOTALS_PREDICTIONS_KEY),
+    nbaGames: count(NBA_PREDICTIONS_KEY),
+    nbaTotals: count(NBA_TOTALS_PREDICTIONS_KEY),
+    nbaPlayers: count(NBA_PLAYER_FORM_KEY),
     ufc: count(UFC_PREDICTIONS_KEY),
     tennis: count(TENNIS_PREDICTIONS_KEY),
     lockedSlates: count(BETTING_LOCKED_SLATES_KEY),

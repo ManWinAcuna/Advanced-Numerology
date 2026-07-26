@@ -30,6 +30,16 @@ const BIG_STORE_KEYS = [
   'numerology_ufc_predictions',
   'numerology_tennis_predictions',
   'numerology_betting_locked_slates',
+  // NBA. Measured against the real record shapes over two priced seasons
+  // (~2,630 games): picks 1.72MB + totals 1.30MB + player form 0.41MB +
+  // birthdates 0.04MB = ~3.5MB, which on top of MLB's ~6.6MB puts the app at
+  // ~10MB. That is a third of the way through a 5MB localStorage budget on its
+  // own, so these belong here from the start rather than after a failed
+  // backfill teaches us again.
+  'numerology_nba_predictions',
+  'numerology_nba_totals_predictions',
+  'numerology_nba_player_form',
+  'numerology_nba_birthdates',
 ];
 
 const BIG_STORE_MIGRATED_FLAG = 'numerology_big_store_migrated';
