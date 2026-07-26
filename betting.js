@@ -119,6 +119,59 @@ function renderBettingCurve(sim) {
     </svg>`;
 }
 
+// Edge Stability - profit per dollar staked, month by month, as bars around
+// a zero line. One tall bar carrying the whole total is the luck signature;
+// steady green is the edge signature.
+function renderBettingStability(sim) {
+  const box = document.getElementById('bettingStabilityBox');
+  const days = [...sim.ledger].reverse(); // chronological
+  const byMonth = new Map();
+  days.forEach((d) => {
+    const key = d.dateKey.slice(0, 7);
+    if (!byMonth.has(key)) byMonth.set(key, { staked: 0, profit: 0 });
+    const m = byMonth.get(key);
+    m.staked += d.staked;
+    m.profit += d.profit;
+  });
+  const months = [...byMonth.entries()];
+  if (months.length < 2) {
+    box.style.display = 'none'; // one month has no stability story to tell
+    return;
+  }
+  box.style.display = '';
+
+  const W = 600, H = 170, padT = 18, padB = 24;
+  const slot = (W - 20) / months.length;
+  const barW = Math.min(56, slot - 10);
+  const rois = months.map(([, m]) => (m.staked > 0 ? m.profit / m.staked : 0));
+  const maxAbs = Math.max(0.05, ...rois.map(Math.abs));
+  const zeroY = padT + (H - padT - padB) / 2;
+  const scale = (H - padT - padB) / 2 / maxAbs;
+  const currentKey = bettingLocalDateKey(new Date()).slice(0, 7);
+
+  const bars = months.map(([key, m], i) => {
+    const roi = rois[i];
+    const x = 10 + i * slot + (slot - barW) / 2;
+    const h = Math.max(1, Math.abs(roi) * scale);
+    const y = roi >= 0 ? zeroY - h : zeroY;
+    const color = roi > 0 ? 'var(--good)' : roi < 0 ? 'var(--bad)' : 'var(--border)';
+    const monthLabel = new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1)
+      .toLocaleDateString(undefined, { month: 'short' }) + (key === currentKey ? '*' : '');
+    const roiLabel = `${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%`;
+    const labelY = roi >= 0 ? y - 4 : y + h + 11;
+    return `
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85" rx="2" />
+      <text x="${(x + barW / 2).toFixed(1)}" y="${labelY.toFixed(1)}" fill="${color}" font-size="10" text-anchor="middle">${roiLabel}</text>
+      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" fill="var(--muted)" font-size="10" text-anchor="middle">${monthLabel}</text>`;
+  }).join('');
+
+  document.getElementById('bettingStability').innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+      <line x1="10" y1="${zeroY}" x2="${W - 10}" y2="${zeroY}" stroke="var(--border)" />
+      ${bars}
+    </svg>`;
+}
+
 function renderBettingLedger(sim) {
   const container = document.getElementById('bettingLedger');
 
@@ -261,8 +314,16 @@ function runStrategyLab() {
     sim: runBettingSimulation(scope, curMode, start, noFilter, mixedTypes, picks),
   });
 
+  const kellyRows = BETTING_KELLY_OPTIONS.map((f) => ({
+    label: f === 0.25 ? 'Quarter Kelly' : f === 0.5 ? 'Half Kelly' : 'Full Kelly',
+    applyAttr: `data-apply-kelly="${f}"`,
+    active: f === loadBettingKellyFraction(),
+    sim: runBettingSimulation(scope, curMode, start, curFilter, mixedTypes, picks, f),
+  }));
+
   document.getElementById('bettingLabResults').innerHTML =
     bettingLabTableHtml(`Bet types &middot; ${BETTING_SCOPE_META[scope].label}, current day filter`, betTypeRows)
+    + bettingLabTableHtml(`Kelly dial &middot; ${BETTING_SCOPE_META[scope].label}, current settings`, kellyRows)
     + bettingLabTableHtml(`Day numbers &middot; ${BETTING_SCOPE_META[scope].label}, ${bettingModeLabel(curMode, mixedTypes)}`, dayRows);
 
   const details = document.getElementById('bettingLabDetails');
@@ -286,7 +347,7 @@ document.getElementById('bettingLabBtn').addEventListener('click', () => {
 });
 
 document.getElementById('bettingLabResults').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy], button[data-apply-personal], button[data-apply-compat]');
+  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy], button[data-apply-personal], button[data-apply-compat], button[data-apply-kelly]');
   if (!btn) return;
   const emptyFilter = { universal: [], energy: [], personal: [], compat: [] };
   if (btn.dataset.applyMode) {
@@ -306,6 +367,9 @@ document.getElementById('bettingLabResults').addEventListener('click', (e) => {
   } else if (btn.dataset.applyCompat !== undefined) {
     saveBettingDayFilter({ ...emptyFilter, compat: [btn.dataset.applyCompat] });
     renderBettingDayChips();
+  } else if (btn.dataset.applyKelly !== undefined) {
+    saveBettingKellyFraction(Number(btn.dataset.applyKelly));
+    document.getElementById('bettingKellySelect').value = btn.dataset.applyKelly;
   }
   resetPagination('bettingLedger');
   renderBetting();
@@ -327,6 +391,7 @@ function renderBetting() {
   currentBettingSim = runBettingSimulation(currentBettingScope, mode, loadBettingSimStart(), dayFilter, mixedTypes);
   renderBettingSummary(currentBettingSim);
   renderBettingCurve(currentBettingSim);
+  renderBettingStability(currentBettingSim);
   renderBettingLedger(currentBettingSim);
 }
 
@@ -498,6 +563,14 @@ bettingSimStartInputEl.addEventListener('change', () => {
   const v = Number(bettingSimStartInputEl.value);
   if (Number.isFinite(v) && v > 0) saveBettingSimStart(v);
   bettingSimStartInputEl.value = loadBettingSimStart();
+  renderBetting();
+});
+
+const bettingKellySelectEl = document.getElementById('bettingKellySelect');
+bettingKellySelectEl.value = String(loadBettingKellyFraction());
+bettingKellySelectEl.addEventListener('change', () => {
+  saveBettingKellyFraction(Number(bettingKellySelectEl.value));
+  bettingKellySelectEl.value = String(loadBettingKellyFraction());
   renderBetting();
 });
 

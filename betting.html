@@ -75,6 +75,14 @@
           <input type="number" id="bettingSimStartInput" min="1" step="1" inputmode="decimal">
         </label>
         <label class="betting-control">
+          <span>⚖️ Kelly Dial</span>
+          <select id="bettingKellySelect">
+            <option value="0.25">Quarter (cautious)</option>
+            <option value="0.5">Half (balanced)</option>
+            <option value="1">Full (aggressive)</option>
+          </select>
+        </label>
+        <label class="betting-control">
           <span>🎟️ Bet Type</span>
           <select id="bettingModeSelect">
             <option value="singles">Singles</option>
@@ -114,7 +122,7 @@
           </div>
         </div>
       </details>
-      <div class="box-hint">Current Bankroll sizes today's stakes &mdash; update it to your real balance each day so the half-Kelly sizing tracks your roll. Sim Starting Bankroll only anchors the Betting Stats ledger below and stays put. Mixed runs the bet kinds you toggle on together, with singles and parlays each keeping their own daily budget. Open the Day Filter to only bet matching days &mdash; several numbers in one row means any of them counts, and picking from both rows requires the combo. Only picks whose own historical bucket beats the market price qualify &mdash; if the data isn't there yet, no bet is suggested.</div>
+      <div class="box-hint">Current Bankroll sizes today's stakes &mdash; update it to your real balance each day so the Kelly sizing tracks your roll (whole-dollar stakes, fraction set by the Kelly Dial). Sim Starting Bankroll only anchors the Betting Stats ledger below and stays put. Mixed runs the bet kinds you toggle on together, with singles and parlays each keeping their own daily budget. Open the Day Filter to only bet matching days &mdash; several numbers in one row means any of them counts, and picking from both rows requires the combo. Only picks whose own historical bucket beats the market price qualify &mdash; if the data isn't there yet, no bet is suggested.</div>
     </div>
 
     <div class="pm-last-updated-row">
@@ -133,6 +141,12 @@
     <div class="box" id="bettingCurveBox" style="display:none;">
       <div class="box-label">📈 Bankroll Curve</div>
       <div id="bettingCurve"></div>
+    </div>
+
+    <div class="box" id="bettingStabilityBox" style="display:none;">
+      <div class="box-label">📆 Edge Stability &mdash; Monthly ROI</div>
+      <div class="box-hint">Profit per dollar staked, month by month. A real edge earns steadily; one tall bar carrying everything means the total is luck-heavy. The current month is marked * while still in progress.</div>
+      <div id="bettingStability"></div>
     </div>
 
     <div class="box" id="bettingLabBox">

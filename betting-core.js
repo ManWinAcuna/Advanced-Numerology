@@ -44,6 +44,20 @@ function saveBettingSimStart(value) {
   localStorage.setItem(BETTING_SIM_START_KEY, String(value));
 }
 
+// Kelly dial: fraction of full Kelly the stakes use. Quarter is the
+// cautious end, half the balanced default, full the aggressive ceiling.
+const BETTING_KELLY_KEY = 'numerology_betting_kelly';
+const BETTING_KELLY_OPTIONS = [0.25, 0.5, 1];
+
+function loadBettingKellyFraction() {
+  const v = Number(localStorage.getItem(BETTING_KELLY_KEY));
+  return BETTING_KELLY_OPTIONS.includes(v) ? v : 0.5;
+}
+
+function saveBettingKellyFraction(value) {
+  localStorage.setItem(BETTING_KELLY_KEY, String(value));
+}
+
 function loadBettingMode() {
   const v = localStorage.getItem(BETTING_MODE_KEY);
   return ['singles', '2', '3', '4', 'mixed'].includes(v) ? v : 'singles';
@@ -340,11 +354,10 @@ function bettingQualify(tallies, pick) {
 
 /* ===================== Stake sizing (fractional Kelly) ===================== */
 
-const BETTING_HALF_KELLY = 0.5;
 const BETTING_MAX_SINGLE_FRACTION = 0.05; // one single can never exceed 5% of roll
 const BETTING_MAX_DAY_SINGLES_FRACTION = 0.20; // all singles in a day cap at 20%
 const BETTING_MAX_DAY_PARLAY_FRACTION = 0.10; // all parlay tickets in a day cap at 10%
-const BETTING_MIN_STAKE = 0.5; // below 50 cents a ticket isn't worth listing
+const BETTING_MIN_STAKE = 0.5; // a stake that rounds to $0 isn't worth listing
 
 function bettingKellyFraction(prob, price) {
   const b = 1 / price - 1; // net odds a winning $1 returns
@@ -376,7 +389,9 @@ function bettingCapDayStakes(tickets, bankroll, maxDayFraction) {
     const scale = budget / total;
     tickets.forEach((t) => { t.stake *= scale; });
   }
-  tickets.forEach((t) => { t.stake = Math.round(t.stake * 100) / 100; });
+  // Whole-dollar stakes - that's how the bets actually get placed, and Kelly
+  // is insensitive to sub-dollar precision anyway.
+  tickets.forEach((t) => { t.stake = Math.round(t.stake); });
   return tickets.filter((t) => t.stake >= BETTING_MIN_STAKE);
 }
 
@@ -387,7 +402,10 @@ function bettingCapDayStakes(tickets, bankroll, maxDayFraction) {
 // alternates, so one bad leg doesn't sink the whole day. The day's budget is
 // split across all tickets via the cap above.
 
-function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes) {
+// kellyFractionOverride lets the Strategy Lab compare Kelly dials; everything
+// else sizes off the saved setting.
+function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes, kellyFractionOverride) {
+  const kellyFraction = kellyFractionOverride || loadBettingKellyFraction();
   const seen = new Set();
   const qualified = dayPicks
     .map((p) => bettingQualify(tallies, p))
@@ -403,7 +421,7 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes) {
     .sort((a, b) => b.evEdge - a.evEdge);
 
   const makeSingles = () => qualified.map((q) => {
-    const f = Math.min(bettingKellyFraction(q.estProb, q.price) * BETTING_HALF_KELLY, BETTING_MAX_SINGLE_FRACTION);
+    const f = Math.min(bettingKellyFraction(q.estProb, q.price) * kellyFraction, BETTING_MAX_SINGLE_FRACTION);
     return { legs: [q], stake: bankroll * f, prodPrice: q.price, estProb: q.estProb, headline: false };
   }).filter((t) => t.stake > 0);
 
@@ -413,7 +431,7 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes) {
     return bettingCombinations(pool, legCount).map((legs, i) => {
       const estProb = legs.reduce((p, l) => p * l.estProb, 1);
       const prodPrice = legs.reduce((p, l) => p * l.price, 1);
-      const f = bettingKellyFraction(estProb, prodPrice) * BETTING_HALF_KELLY;
+      const f = bettingKellyFraction(estProb, prodPrice) * kellyFraction;
       return { legs, stake: bankroll * f, prodPrice, estProb, headline: i === 0 };
     }).filter((t) => t.stake > 0);
   };
@@ -479,7 +497,7 @@ function settleBettingTicket(ticket) {
 // prePicks lets the Strategy Lab run many sims off one collectBettingPicks
 // pass instead of re-reading/re-parsing storage per run. Picks are never
 // mutated by a simulation, so sharing the array across runs is safe.
-function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes, prePicks) {
+function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes, prePicks, kellyFractionOverride) {
   const picks = prePicks || collectBettingPicks(scope);
   const todayKey = bettingLocalDateKey(new Date());
 
@@ -510,7 +528,7 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
     const dayAllowed = bettingDayMatchesFilter(dateKey, dayFilter);
     const bettable = isToday ? dayPicks : dayPicks.filter((p) => p.resolved && !p.draw);
 
-    const slate = dayAllowed ? buildBettingSlate(bettable, mode, tallies, bankroll, mixedTypes) : { tickets: [] };
+    const slate = dayAllowed ? buildBettingSlate(bettable, mode, tallies, bankroll, mixedTypes, kellyFractionOverride) : { tickets: [] };
     const tickets = slate.tickets.map((t) => ({ ...t, ...settleBettingTicket(t) }));
 
     if (tickets.length) {
