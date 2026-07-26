@@ -809,8 +809,13 @@ function renderMlbComponentSignal(predictions, suffix = '') {
 // rate up top, breakdown boxes swapped by the Show Breakdown dropdown, then
 // the tracked-picks table. prefix is 'mlbNrfi' or 'mlbTotals' plus the scope
 // suffix, which is also the element-id stem for every piece.
-function renderMlbDuelMarket(records, prefix, emptyMsg, onPageChange) {
-  const hero = document.getElementById(prefix + 'Hero');
+// base is 'mlbNrfi' or 'mlbTotals', suffix is '' or 'Old'. Element ids are
+// base + part + suffix (e.g. mlbNrfiHeroOld) - the suffix always goes LAST,
+// which is why these are separate parameters rather than one prefix string.
+function renderMlbDuelMarket(records, base, suffix, emptyMsg, onPageChange) {
+  const id = (part) => `${base}${part}${suffix}`;
+  const prefix = base + suffix; // pagination state key, unique per market+scope
+  const hero = document.getElementById(id('Hero'));
   if (!hero) return;
 
   const resolvedAll = records.filter((p) => p.result && !p.result.draw);
@@ -827,7 +832,7 @@ function renderMlbDuelMarket(records, prefix, emptyMsg, onPageChange) {
        <div class="empty-state">${records.length ? `${records.length} tracked, none resolved with a real edge yet.` : emptyMsg}</div>`;
 
   // Breakdown: duel-strength tiers
-  const tierEl = document.getElementById(prefix + 'Tier');
+  const tierEl = document.getElementById(id('Tier'));
   if (tierEl) {
     const tierRows = computeEdgeTierStats(records, MLB_DUEL_TIERS).map((t) => `
       <tr>
@@ -844,17 +849,17 @@ function renderMlbDuelMarket(records, prefix, emptyMsg, onPageChange) {
 
   // Breakdowns shared with the rest of the Stats page - duel records carry
   // gameTime and a score pair, so these work on them unchanged.
-  renderMlbDuelComponentSignal(records, prefix + 'ComponentSignal');
-  renderDayNumberTable(prefix + 'UniversalDay', records, 'gameTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_DUEL_MIN_GAP);
-  renderDayNumberTable(prefix + 'DayEnergy', records, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_DUEL_MIN_GAP);
-  renderDayComboTable(prefix + 'DayCombo', records, 'gameTime', MLB_DUEL_MIN_GAP);
+  renderMlbDuelComponentSignal(records, id('ComponentSignal'));
+  renderDayNumberTable(id('UniversalDay'), records, 'gameTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_DUEL_MIN_GAP);
+  renderDayNumberTable(id('DayEnergy'), records, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_DUEL_MIN_GAP);
+  renderDayComboTable(id('DayCombo'), records, 'gameTime', MLB_DUEL_MIN_GAP);
 
   // Tracked picks
-  const body = document.getElementById(prefix + 'Body');
+  const body = document.getElementById(id('Body'));
   if (!body) return;
   if (!records.length) {
     body.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
-    renderPaginationControls(prefix + 'Pagination', prefix, 1, 1, () => {});
+    renderPaginationControls(id('Pagination'), prefix, 1, 1, () => {});
     return;
   }
   const sorted = [...records].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
@@ -884,7 +889,7 @@ function renderMlbDuelMarket(records, prefix, emptyMsg, onPageChange) {
         <tbody>${bodyRows}</tbody>
       </table>
     </div>`;
-  renderPaginationControls(prefix + 'Pagination', prefix, page, totalPages, onPageChange);
+  renderPaginationControls(id('Pagination'), prefix, page, totalPages, onPageChange);
 }
 
 // Which single signal predicts a duel market best - the same test the game
@@ -977,11 +982,11 @@ function renderMlbScope(suffix, predictions, signals) {
   const scopeDuel = (list) => list.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
   const rerender = () => renderMlbScope(suffix, predictions, signals);
   renderMlbDuelMarket(
-    scopeDuel(loadMlbNrfiPredictions()), 'mlbNrfi' + suffix,
+    scopeDuel(loadMlbNrfiPredictions()), 'mlbNrfi', suffix,
     'No NRFI picks yet - run Backfill on the Old Data tab to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
   renderMlbDuelMarket(
-    scopeDuel(loadMlbTotalsPredictions()), 'mlbTotals' + suffix,
+    scopeDuel(loadMlbTotalsPredictions()), 'mlbTotals', suffix,
     'No run-totals picks yet - run Backfill on the Old Data tab to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
 }
@@ -1820,55 +1825,20 @@ async function backfillMlbHistory(onProgress) {
   return { gamesProcessed: total, newPredictionsCount: newPredictions.length, patchedCount, newSignalsCount: newSignals.length, newNrfiCount: newNrfi.length, newTotalsCount: newTotals.length, duelPatchedCount, alreadyCurrent: false };
 }
 
-// Storage readout + the two levers that free space. Sizes come from the
-// stores themselves rather than an estimate, so the number matches reality.
-function renderMlbStorageUsage() {
-  const el = document.getElementById('mlbStorageUsage');
-  if (!el) return;
-  const size = (key) => (bigStoreKeyBytes(key) / (1024 * 1024));
-  const parts = [
-    ['Game picks', MLB_PREDICTIONS_KEY],
-    ['Strikeout signals', MLB_PITCHER_K_SIGNALS_KEY],
-    ['NRFI', MLB_NRFI_PREDICTIONS_KEY],
-    ['Run totals', MLB_TOTALS_PREDICTIONS_KEY],
-  ].map(([label, key]) => `${label} ${size(key).toFixed(2)} MB`);
-  const dbMB = bigStoreBytes() / (1024 * 1024);
-  // The prediction stores moved to IndexedDB, whose quota is a share of free
-  // disk rather than localStorage's ~5MB - so this is informational now, not
-  // a ceiling to manage.
-  el.innerHTML = bigStoreAvailable()
-    ? `Prediction data: <span class="score-inline good">${dbMB.toFixed(2)} MB</span> in IndexedDB (no practical limit) &middot; ${parts.join(' &middot; ')} &middot; settings in localStorage: ${numerologyStorageMB()} MB`
-    : `Using <span class="score-inline ${Number(numerologyStorageMB()) >= 4.5 ? 'bad' : 'mid'}">${numerologyStorageMB()} MB</span> of ~5 MB (IndexedDB unavailable - still on localStorage) &middot; ${parts.join(' &middot; ')}`;
-}
-
+// The storage readout and its clear button are gone - with the prediction
+// stores in IndexedDB there's no cap left to manage, so it was just clutter.
+// The backfill window stays: a shorter window is still a much faster run.
 function initMlbStorageControls() {
   const windowSel = document.getElementById('mlbBackfillWindowSelect');
-  if (windowSel) {
-    windowSel.value = String(loadMlbBackfillWindowDays());
-    windowSel.addEventListener('change', () => {
-      saveMlbBackfillWindowDays(Number(windowSel.value));
-      // The progress marker records how far the LAST window reached, so it
-      // has to be dropped or the next run would skip the new range.
-      saveMlbBackfillState({});
-      document.getElementById('mlbBackfillStatus').textContent = `Window set to ${Math.round(Number(windowSel.value) / 7)} weeks - press Backfill Data to re-walk it.`;
-    });
-  }
-
-  const clearBtn = document.getElementById('mlbClearKSignalsBtn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      const n = loadMlbPitcherKSignals().length;
-      if (!n) { document.getElementById('mlbStorageUsage').textContent = 'No strikeout signals stored.'; return; }
-      if (!confirm(`Delete all ${n} strikeout signals?\n\nThey are research only - never used for bets - and a backfill can rebuild them. This frees space now.`)) return;
-      saveMlbPitcherKSignals([]);
-      currentMlbKSignals = [];
-      renderMlbStorageUsage();
-      renderMlbScope('', currentMlbPredictions, currentMlbKSignals);
-      renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals);
-    });
-  }
-
-  renderMlbStorageUsage();
+  if (!windowSel) return;
+  windowSel.value = String(loadMlbBackfillWindowDays());
+  windowSel.addEventListener('change', () => {
+    saveMlbBackfillWindowDays(Number(windowSel.value));
+    // The progress marker records how far the LAST window reached, so it has
+    // to be dropped or the next run would skip the new range.
+    saveMlbBackfillState({});
+    document.getElementById('mlbBackfillStatus').textContent = `Window set to ${Math.round(Number(windowSel.value) / 7)} weeks - press Backfill Data to re-walk it.`;
+  });
 }
 
 function initMlbBackfillButton() {
@@ -1886,7 +1856,6 @@ function initMlbBackfillButton() {
         ? 'Already caught up to yesterday - nothing new to backfill.'
         : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks, ${result.newSignalsCount} strikeout signals, ${result.newNrfiCount || 0} NRFI picks, and ${result.newTotalsCount || 0} totals picks${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}${result.duelPatchedCount ? `, added component data to ${result.duelPatchedCount} existing NRFI/totals picks` : ''}.`;
       await refreshAndRenderMlb();
-      renderMlbStorageUsage();
     } catch (e) {
       // Surface the actual failure - a bare "try again" hides the one piece of
       // information needed to fix it, and a backfill run is too long to debug

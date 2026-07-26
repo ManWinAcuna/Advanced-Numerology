@@ -812,52 +812,6 @@
       </div>
     </div>
 
-    <div class="box" id="mlbStorageBox">
-      <div class="box-label">💾 Browser Storage</div>
-      <div class="mode-desc">All tracking data lives in this browser, which caps at about 5 MB. A full 52-week window of all four MLB stores runs past that, and a backfill that hits the cap fails partway. Shorten the window above, or drop the strikeout signals &mdash; they're research only and never used for bets.</div>
-      <div class="mode-desc" id="mlbStorageUsage"></div>
-      <button class="btn-link" id="mlbClearKSignalsBtn" type="button">🗑️ Clear Strikeout Signals</button>
-    </div>
-
-    <div id="mlbGameSectionOld">
-    <div class="pm-last-updated-row">
-      <span id="mlbStatsLastUpdatedOld"></span>
-      <button class="btn-link" id="mlbStatsRefreshBtnOld" type="button">🔄 Check Results</button>
-    </div>
-
-    <div class="score-hero" id="mlbStatsHeroOld"></div>
-
-    <div class="breakdown-section" id="mlbStatsBreakdownOld"></div>
-
-    <div class="box stats-sport-box">
-      <div class="box-label">📊 Show Breakdown</div>
-      <select id="mlbBreakdownToggleOld">
-        <option value="mlbStatsEdgeTiersBoxOld">Win Rate by Edge Strength</option>
-        <option value="mlbStatsPriceBucketsBoxOld">Win Rate by Market Price</option>
-        <option value="mlbUniversalDayBoxOld">Win Rate by Universal Day</option>
-        <option value="mlbDayEnergyBoxOld">Win Rate by Day Energy</option>
-        <option value="mlbDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
-        <option value="mlbComponentSignalBoxOld">Which Component Predicts Best</option>
-        <option value="mlbDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
-      </select>
-    </div>
-
-    <div class="box" id="mlbStatsEdgeTiersBoxOld">
-      <div class="box-label">Win Rate by Edge Strength</div>
-      <div class="mode-desc">A 76-vs-41 isn't the same pick as a 62-vs-55 &mdash; if numerology works, the win rate should climb as the score gap widens, and tossups should sit near 50%.</div>
-      <div class="pm-table-scroll">
-        <table class="astro-table" id="mlbStatsEdgeTiersTableOld">
-          <thead>
-            <tr>
-              <th>Edge Strength</th>
-              <th>Picks</th>
-              <th>Win Rate</th>
-            </tr>
-          </thead>
-          <tbody id="mlbStatsEdgeTiersOld"></tbody>
-        </table>
-      </div>
-    </div>
 
     <div class="box" id="mlbStatsPriceBucketsBoxOld">
       <div class="box-label">Win Rate by Market Price</div>

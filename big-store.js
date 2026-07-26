@@ -133,7 +133,30 @@ async function initBigStore() {
   _bigStoreReady = true;
   _bigStoreDirty.clear();
   if (!alreadyMigrated) localStorage.setItem(BIG_STORE_MIGRATED_FLAG, '1');
-  return { ok: true, migrated, keys: _bigStoreCache.size };
+
+  // Release the localStorage copies now that IndexedDB is confirmed to hold
+  // the same data. They were kept as a rollback net through the migration,
+  // but leaving them pins localStorage at its ~5MB cap - which then makes
+  // ordinary setting writes (bankroll, filters, the weights marker) fail.
+  // Each key is only dropped after reading it back out of IndexedDB and
+  // confirming it matches, so this can never delete the sole copy.
+  const freed = await releaseMigratedLocalCopies();
+
+  return { ok: true, migrated, keys: _bigStoreCache.size, freedKeys: freed };
+}
+
+async function releaseMigratedLocalCopies() {
+  let freed = 0;
+  for (const key of BIG_STORE_KEYS) {
+    const local = localStorage.getItem(key);
+    if (local == null) continue;
+    const stored = await bigStoreGet(key);
+    if (stored !== undefined && stored === _bigStoreCache.get(key)) {
+      localStorage.removeItem(key);
+      freed += 1;
+    }
+  }
+  return freed;
 }
 
 // Synchronous read - the whole point of the cache. Returns the raw JSON
