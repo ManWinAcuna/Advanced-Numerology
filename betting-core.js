@@ -86,9 +86,10 @@ function loadBettingDayFilter() {
     return {
       universal: Array.isArray(f && f.universal) ? f.universal.map(Number) : [],
       energy: Array.isArray(f && f.energy) ? f.energy.map(Number) : [],
+      personal: Array.isArray(f && f.personal) ? f.personal.map(Number) : [],
     };
   } catch (e) {
-    return { universal: [], energy: [] };
+    return { universal: [], energy: [], personal: [] };
   }
 }
 
@@ -99,14 +100,49 @@ function saveBettingDayFilter(filter) {
 function bettingDayNumbers(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   const date = new Date(y, m - 1, d, 12);
-  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date) };
+  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date), personal: bettingPersonalDayFor(dateKey) };
+}
+
+// The user's own Personal Day for a calendar date - same
+// personal-month -> personal-day chain the profile's Energy Flow uses, off
+// the My Profile birthday. Memoized per date (and invalidated if the
+// profile changes) since sims ask for the same ~380 dates repeatedly.
+// Returns null when no profile birthday is set.
+let _bettingPersonalDayMemo = { profileRaw: null, days: new Map() };
+
+function bettingPersonalDayFor(dateKey) {
+  const raw = localStorage.getItem(PROFILE_KEY) || '';
+  if (_bettingPersonalDayMemo.profileRaw !== raw) {
+    _bettingPersonalDayMemo = { profileRaw: raw, days: new Map() };
+  }
+  if (_bettingPersonalDayMemo.days.has(dateKey)) return _bettingPersonalDayMemo.days.get(dateKey);
+
+  let result = null;
+  const profile = loadProfile();
+  if (profile && profile.date) {
+    const [by, bm, bd] = profile.date.split('-').map(Number);
+    const birthDate = new Date(by, (bm || 1) - 1, bd || 1);
+    if (by && !Number.isNaN(birthDate.getTime())) {
+      const [y, m, d] = dateKey.split('-').map(Number);
+      const date = new Date(y, m - 1, d, 12);
+      const personalMonth = reduceNumber(getPersonalMonthRaw(birthDate, date));
+      result = reduceNumber(getPersonalDayRaw(personalMonth, date));
+    }
+  }
+  _bettingPersonalDayMemo.days.set(dateKey, result);
+  return result;
 }
 
 function bettingDayMatchesFilter(dateKey, filter) {
-  if (!filter || (!filter.universal.length && !filter.energy.length)) return true;
+  if (!filter) return true;
+  const hasPersonal = filter.personal && filter.personal.length;
+  if (!filter.universal.length && !filter.energy.length && !hasPersonal) return true;
   const nums = bettingDayNumbers(dateKey);
   if (filter.universal.length && !filter.universal.includes(nums.universal)) return false;
   if (filter.energy.length && !filter.energy.includes(nums.energy)) return false;
+  // No profile birthday means the personal dimension can't be computed -
+  // it's skipped rather than silently blocking every bet.
+  if (hasPersonal && nums.personal != null && !filter.personal.includes(nums.personal)) return false;
   return true;
 }
 

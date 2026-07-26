@@ -109,7 +109,8 @@ function renderBettingToday(slate) {
   const el = document.getElementById('bettingTodayContent');
 
   if (slate.dayFiltered) {
-    el.innerHTML = `<div class="empty-state">Today is Universal Day ${slate.todayNums.universal} / Day Energy ${slate.todayNums.energy} &mdash; outside your day filter, so no bets today.</div>`;
+    const personalBit = slate.todayNums.personal != null ? ` / your Personal Day ${slate.todayNums.personal}` : '';
+    el.innerHTML = `<div class="empty-state">Today is Universal Day ${slate.todayNums.universal} / Day Energy ${slate.todayNums.energy}${personalBit} &mdash; outside your day filter, so no bets today.</div>`;
     return;
   }
   if (!slate.totalTodayPicks) {
@@ -352,7 +353,9 @@ function runStrategyLab() {
   const curMode = loadBettingMode();
   const curFilter = loadBettingDayFilter();
   const mixedTypes = loadBettingMixedTypes();
-  const noFilter = { universal: [], energy: [] };
+  const noFilter = { universal: [], energy: [], personal: [] };
+  const only = (part) => ({ ...noFilter, ...part });
+  const soloActive = (list, n, others) => list.length === 1 && list[0] === n && others.every((o) => !o.length);
 
   const betTypeRows = ['singles', '2', '3', '4', 'mixed'].map((m) => ({
     label: bettingModeLabel(m, mixedTypes),
@@ -366,22 +369,32 @@ function runStrategyLab() {
     dayRows.push({
       label: `Universal Day ${n}`,
       applyAttr: `data-apply-universal="${n}"`,
-      active: curFilter.universal.length === 1 && curFilter.universal[0] === n && !curFilter.energy.length,
-      sim: runBettingSimulation(scope, curMode, start, { universal: [n], energy: [] }, mixedTypes, picks),
+      active: soloActive(curFilter.universal, n, [curFilter.energy, curFilter.personal]),
+      sim: runBettingSimulation(scope, curMode, start, only({ universal: [n] }), mixedTypes, picks),
     });
   });
   DAY_FILTER_ENERGY_OPTIONS.forEach((n) => {
     dayRows.push({
       label: `Day Energy ${n}`,
       applyAttr: `data-apply-energy="${n}"`,
-      active: curFilter.energy.length === 1 && curFilter.energy[0] === n && !curFilter.universal.length,
-      sim: runBettingSimulation(scope, curMode, start, { universal: [], energy: [n] }, mixedTypes, picks),
+      active: soloActive(curFilter.energy, n, [curFilter.universal, curFilter.personal]),
+      sim: runBettingSimulation(scope, curMode, start, only({ energy: [n] }), mixedTypes, picks),
     });
   });
+  if (bettingPersonalDayFor(bettingLocalDateKey(new Date())) != null) {
+    BETTING_PERSONAL_DAY_OPTIONS.forEach((n) => {
+      dayRows.push({
+        label: `My Personal Day ${n}`,
+        applyAttr: `data-apply-personal="${n}"`,
+        active: soloActive(curFilter.personal, n, [curFilter.universal, curFilter.energy]),
+        sim: runBettingSimulation(scope, curMode, start, only({ personal: [n] }), mixedTypes, picks),
+      });
+    });
+  }
   dayRows.unshift({
     label: 'Every day (no filter)',
     applyAttr: 'data-apply-universal="0"',
-    active: !curFilter.universal.length && !curFilter.energy.length,
+    active: !curFilter.universal.length && !curFilter.energy.length && !curFilter.personal.length,
     sim: runBettingSimulation(scope, curMode, start, noFilter, mixedTypes, picks),
   });
 
@@ -406,18 +419,22 @@ document.getElementById('bettingLabBtn').addEventListener('click', () => {
 });
 
 document.getElementById('bettingLabResults').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy]');
+  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy], button[data-apply-personal]');
   if (!btn) return;
+  const emptyFilter = { universal: [], energy: [], personal: [] };
   if (btn.dataset.applyMode) {
     saveBettingMode(btn.dataset.applyMode);
     bettingModeSelectEl.value = btn.dataset.applyMode;
     renderBettingMixedChips();
   } else if (btn.dataset.applyUniversal !== undefined) {
     const n = Number(btn.dataset.applyUniversal);
-    saveBettingDayFilter(n ? { universal: [n], energy: [] } : { universal: [], energy: [] });
+    saveBettingDayFilter(n ? { ...emptyFilter, universal: [n] } : emptyFilter);
     renderBettingDayChips();
   } else if (btn.dataset.applyEnergy !== undefined) {
-    saveBettingDayFilter({ universal: [], energy: [Number(btn.dataset.applyEnergy)] });
+    saveBettingDayFilter({ ...emptyFilter, energy: [Number(btn.dataset.applyEnergy)] });
+    renderBettingDayChips();
+  } else if (btn.dataset.applyPersonal !== undefined) {
+    saveBettingDayFilter({ ...emptyFilter, personal: [Number(btn.dataset.applyPersonal)] });
     renderBettingDayChips();
   }
   resetPagination('bettingLedger');
@@ -509,16 +526,24 @@ document.getElementById('bettingLedger').addEventListener('click', (e) => {
 
 // Day-filter chips - multi-select toggles for Universal Day / Day Energy,
 // collapsed behind a summary line that always shows the active filter.
+const BETTING_PERSONAL_DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33];
+
 function renderBettingDayChips() {
   const filter = loadBettingDayFilter();
   const chip = (n, group, selected) => `<button type="button" class="betting-day-chip${selected ? ' active' : ''}" data-group="${group}" data-num="${n}">${n}</button>`;
   document.getElementById('bettingUniversalChips').innerHTML = DAY_FILTER_UNIVERSAL_OPTIONS.map((n) => chip(n, 'universal', filter.universal.includes(n))).join('');
   document.getElementById('bettingEnergyChips').innerHTML = DAY_FILTER_ENERGY_OPTIONS.map((n) => chip(n, 'energy', filter.energy.includes(n))).join('');
 
+  const hasProfile = bettingPersonalDayFor(bettingLocalDateKey(new Date())) != null;
+  document.getElementById('bettingPersonalChips').innerHTML = hasProfile
+    ? BETTING_PERSONAL_DAY_OPTIONS.map((n) => chip(n, 'personal', filter.personal.includes(n))).join('')
+    : '<span class="box-hint" style="margin-top:0;">Set your birthday in My Profile to unlock</span>';
+
   const summary = document.getElementById('bettingDayFilterSummary');
   const parts = [];
   if (filter.universal.length) parts.push(`Universal Day ${filter.universal.join(', ')}`);
   if (filter.energy.length) parts.push(`Day Energy ${filter.energy.join(', ')}`);
+  if (filter.personal.length) parts.push(`My Personal Day ${filter.personal.join(', ')}`);
   summary.textContent = parts.length ? `only ${parts.join(' + ')}` : 'off (betting every day)';
   summary.classList.toggle('active', parts.length > 0);
 }
