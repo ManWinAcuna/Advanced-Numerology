@@ -804,85 +804,86 @@ function renderMlbComponentSignal(predictions, suffix = '') {
 // shape, so they share a panel: headline hit rate on real-edge picks, a
 // per-tier breakdown, and the paginated pick list. paginationPrefix keys the
 // page state per market per scope.
-function renderMlbDuelPanel(records, bodyId, paginationId, paginationPrefix, emptyMsg, onPageChange) {
-  const body = document.getElementById(bodyId);
-  if (!body) return;
+// One duel market's view, laid out exactly like the Game Picks view: hero win
+// rate up top, breakdown boxes swapped by the Show Breakdown dropdown, then
+// the tracked-picks table. prefix is 'mlbNrfi' or 'mlbTotals' plus the scope
+// suffix, which is also the element-id stem for every piece.
+function renderMlbDuelMarket(records, prefix, emptyMsg, onPageChange) {
+  const hero = document.getElementById(prefix + 'Hero');
+  if (!hero) return;
 
   const resolvedAll = records.filter((p) => p.result && !p.result.draw);
   const resolved = resolvedAll.filter((p) => edgeGap(p) >= MLB_DUEL_MIN_GAP);
   const wins = resolved.filter(isCorrectPick);
   const pct = resolved.length ? Math.round((wins.length / resolved.length) * 100) : null;
 
-  const headline = resolved.length
+  hero.innerHTML = resolved.length
     ? `
-      <div class="score-hero">
-        <div class="score-names">Duel Pick Win Rate</div>
-        <div class="score-big ${winRateClass(pct)}">${pct}<span class="score-out-of">%</span></div>
-        <div class="pm-breakdown-hint">${wins.length} of ${resolved.length} real-edge picks correct &middot; ${resolvedAll.length - resolved.length} tossups excluded &middot; ${records.filter((p) => !p.result).length} pending</div>
-      </div>`
-    : `<div class="empty-state">${records.length
-      ? `${records.length} tracked, none resolved with a real edge yet.`
-      : emptyMsg}</div>`;
+      <div class="score-names">Duel Pick Win Rate</div>
+      <div class="score-big ${winRateClass(pct)}">${pct}<span class="score-out-of">%</span></div>
+      <div class="pm-breakdown-hint">${wins.length} of ${resolved.length} real-edge picks correct &middot; ${resolvedAll.length - resolved.length} tossups excluded &middot; ${records.filter((p) => !p.result).length} pending</div>`
+    : `<div class="score-names">Duel Pick Win Rate</div>
+       <div class="empty-state">${records.length ? `${records.length} tracked, none resolved with a real edge yet.` : emptyMsg}</div>`;
 
-  const tierRows = computeEdgeTierStats(records, MLB_DUEL_TIERS).map((t) => `
-    <tr>
-      <td>${t.icon} ${t.label}</td>
-      <td>${t.count}</td>
-      <td>${t.winPct != null && t.count >= MIN_BUCKET_SAMPLE
-        ? `<span class="score-inline ${winRateClass(t.winPct)}">${t.winPct}%</span>`
-        : `<span class="empty-state">${t.count ? `${t.wins}/${t.count} so far` : 'No data yet'}</span>`}</td>
-    </tr>`).join('');
-  const tierTable = resolved.length ? `
-    <div class="box" style="margin-top:16px;">
-      <div class="box-label">Win Rate by Duel Strength</div>
-      <div class="mode-desc">How far the duel score sits from neutral (${MLB_DUEL_NEUTRAL}) &mdash; if the duel signal means anything, the win rate should climb from Slight to Strong.</div>
-      <div class="pm-table-scroll">
-        <table class="astro-table">
-          <thead><tr><th>Duel Strength</th><th>Picks</th><th>Win Rate</th></tr></thead>
-          <tbody>${tierRows}</tbody>
-        </table>
-      </div>
-    </div>` : '';
-
-  let listTable = '';
-  if (records.length) {
-    const sorted = [...records].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
-    const { rows, page, totalPages } = paginationSlice(paginationPrefix, sorted);
-    const bodyRows = rows.map((p) => {
-      const status = !p.result
-        ? '<span class="empty-state">Pending</span>'
-        : p.result.draw
-          ? '↩️ Push'
-          : isCorrectPick(p) ? '✅ Hit' : '❌ Miss';
-      const price = numerologyPickPrice(p);
-      return `
-        <tr>
-          <td>${formatMlbGameDate(p.gameTime)}</td>
-          <td>${escapeHtml(p.gameLabel || '')}</td>
-          <td>${escapeHtml(p.numerologyFavorite)}</td>
-          <td>${p.duelScore != null ? p.duelScore : ''}</td>
-          <td>${Number.isFinite(price) ? `${Math.round(price * 100)}¢` : ''}</td>
-          <td>${status}</td>
-        </tr>`;
-    }).join('');
-    listTable = `
-      <div class="box" style="margin-top:16px;">
-        <div class="box-label">Tracked Picks</div>
-        <div class="pm-table-total">Total picks: ${records.length}</div>
-        <div class="pm-table-scroll">
-          <table class="astro-table">
-            <thead><tr><th>Date</th><th>Game</th><th>Pick</th><th>Duel</th><th>Price</th><th>Result</th></tr></thead>
-            <tbody>${bodyRows}</tbody>
-          </table>
-        </div>
-      </div>`;
-    body.innerHTML = headline + tierTable + listTable;
-    renderPaginationControls(paginationId, paginationPrefix, page, totalPages, onPageChange);
-    return;
+  // Breakdown: duel-strength tiers
+  const tierEl = document.getElementById(prefix + 'Tier');
+  if (tierEl) {
+    const tierRows = computeEdgeTierStats(records, MLB_DUEL_TIERS).map((t) => `
+      <tr>
+        <td>${t.icon} ${t.label}</td>
+        <td>${t.count}</td>
+        <td>${t.winPct != null && t.count >= MIN_BUCKET_SAMPLE
+          ? `<span class="score-inline ${winRateClass(t.winPct)}">${t.winPct}%</span>`
+          : `<span class="empty-state">${t.count ? `${t.wins}/${t.count} so far` : 'No data yet'}</span>`}</td>
+      </tr>`).join('');
+    tierEl.innerHTML = records.length
+      ? `<table class="astro-table"><thead><tr><th>Duel Strength</th><th>Picks</th><th>Win Rate</th></tr></thead><tbody>${tierRows}</tbody></table>`
+      : '<div class="empty-state">No picks tracked yet.</div>';
   }
 
-  body.innerHTML = headline + tierTable;
-  renderPaginationControls(paginationId, paginationPrefix, 1, 1, () => {});
+  // Breakdowns shared with the rest of the Stats page - duel records carry
+  // gameTime and a score pair, so these work on them unchanged.
+  renderMlbDuelComponentSignal(records, prefix + 'ComponentSignal');
+  renderDayNumberTable(prefix + 'UniversalDay', records, 'gameTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_DUEL_MIN_GAP);
+  renderDayNumberTable(prefix + 'DayEnergy', records, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_DUEL_MIN_GAP);
+  renderDayComboTable(prefix + 'DayCombo', records, 'gameTime', MLB_DUEL_MIN_GAP);
+
+  // Tracked picks
+  const body = document.getElementById(prefix + 'Body');
+  if (!body) return;
+  if (!records.length) {
+    body.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+    renderPaginationControls(prefix + 'Pagination', prefix, 1, 1, () => {});
+    return;
+  }
+  const sorted = [...records].sort((a, b) => new Date(b.gameTime) - new Date(a.gameTime));
+  const { rows, page, totalPages } = paginationSlice(prefix, sorted);
+  const bodyRows = rows.map((p) => {
+    const status = !p.result
+      ? '<span class="empty-state">Pending</span>'
+      : p.result.draw
+        ? '↩️ Push'
+        : isCorrectPick(p) ? '✅ Hit' : '❌ Miss';
+    const price = numerologyPickPrice(p);
+    return `
+      <tr>
+        <td>${formatMlbGameDate(p.gameTime)}</td>
+        <td>${escapeHtml(p.gameLabel || '')}</td>
+        <td>${escapeHtml(p.numerologyFavorite)}</td>
+        <td>${p.duelScore != null ? p.duelScore : ''}</td>
+        <td>${Number.isFinite(price) ? `${Math.round(price * 100)}¢` : ''}</td>
+        <td>${status}</td>
+      </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="pm-table-total">Total picks: ${records.length}</div>
+    <div class="pm-table-scroll">
+      <table class="astro-table">
+        <thead><tr><th>Date</th><th>Game</th><th>Pick</th><th>Duel</th><th>Price</th><th>Result</th></tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+  renderPaginationControls(prefix + 'Pagination', prefix, page, totalPages, onPageChange);
 }
 
 // Which single signal predicts a duel market best - the same test the game
@@ -974,18 +975,14 @@ function renderMlbScope(suffix, predictions, signals) {
 
   const scopeDuel = (list) => list.filter((p) => isMlbTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
   const rerender = () => renderMlbScope(suffix, predictions, signals);
-  const scopedNrfi = scopeDuel(loadMlbNrfiPredictions());
-  const scopedTotals = scopeDuel(loadMlbTotalsPredictions());
-  renderMlbDuelPanel(
-    scopedNrfi, 'mlbNrfiBody' + suffix, 'mlbNrfiPagination' + suffix, 'mlbNrfi' + suffix,
-    'No NRFI picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
+  renderMlbDuelMarket(
+    scopeDuel(loadMlbNrfiPredictions()), 'mlbNrfi' + suffix,
+    'No NRFI picks yet - run Backfill on the Old Data tab to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
-  renderMlbDuelPanel(
-    scopedTotals, 'mlbTotalsBody' + suffix, 'mlbTotalsPagination' + suffix, 'mlbTotals' + suffix,
-    'No totals picks yet - run Backfill below to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
+  renderMlbDuelMarket(
+    scopeDuel(loadMlbTotalsPredictions()), 'mlbTotals' + suffix,
+    'No run-totals picks yet - run Backfill on the Old Data tab to collect them, or open the MLB Polymarket tracker for today\'s slate.', rerender,
   );
-  renderMlbDuelComponentSignal(scopedNrfi, 'mlbNrfiComponentSignal' + suffix);
-  renderMlbDuelComponentSignal(scopedTotals, 'mlbTotalsComponentSignal' + suffix);
 }
 
 // Today's games the Stats page has fetched but can't score into a pick yet
@@ -1853,6 +1850,11 @@ if (document.getElementById('statsMlbSection')) {
 
   initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
   initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
+
+  // Same one-box-at-a-time dropdown for each duel market and scope.
+  ['mlbNrfi', 'mlbTotals'].forEach((m) => ['', 'Old'].forEach((s) => {
+    initBreakdownToggle(`${m}BreakdownToggle${s}`, ['TierBox', 'ComponentBox', 'UniversalDayBox', 'DayEnergyBox', 'DayComboBox'].map((b) => `${m}${b}${s}`));
+  }));
 
   initMlbMatchupModal('');
   initMlbMatchupModal('Old');
