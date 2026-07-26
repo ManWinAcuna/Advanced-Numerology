@@ -584,13 +584,25 @@ function wireNbaRefreshButton(btnId) {
 // rather than leaving old and new shapes mixed in one store.
 const NBA_BACKFILL_SCHEMA = 1;
 
-// Totals events carry several lines; the "main" one is whichever is priced
-// closest to even, matching how MLB picks its main run-total line. Prices come
-// from CLOB history because a closed market's own prices are the 1/0 result.
+// Totals events carry several lines (3-7 in the regular season, 25 on a
+// playoff game); the "main" one is whichever is priced closest to even,
+// matching how MLB picks its main run-total line. Prices come from CLOB history
+// because a closed market's own prices are the 1/0 result.
+//
+// Do NOT try to shortcut this by picking the highest-volume line. That was
+// measured against four real events and the highest-volume line was a
+// DIFFERENT line from the closest-to-even one every single time - volume
+// clusters on whichever number the crowd liked, not on the fair line.
+//
+// What is safe to skip is a line with zero volume: checked across those same
+// events, every zero-volume line has no CLOB history at all and returns null,
+// so pricing it is a guaranteed wasted request. On a 25-line playoff event
+// that is most of them.
 async function pickMainNbaTotalsLine(totalsMarkets, targetTs) {
   let best = null;
   for (const market of totalsMarkets) {
     if (!market.clobTokenIdA || !market.clobTokenIdB) continue;
+    if (Number(market.volume) === 0) continue;
     const priceA = await fetchNbaClobPriceNear(market.clobTokenIdA, targetTs);
     if (priceA == null) continue;
     const distance = Math.abs(priceA - 0.5);

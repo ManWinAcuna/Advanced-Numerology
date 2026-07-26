@@ -190,6 +190,11 @@ function parseNbaSideMarket(m) {
     clobTokenIdA: clobTokenIds[0] || null,
     clobTokenIdB: clobTokenIds[1] || null,
     line: m.line != null && Number.isFinite(Number(m.line)) ? Number(m.line) : null,
+    // Carried through so the totals main-line picker can skip untraded lines
+    // without spending a request to discover they have no price history. Kept
+    // as a number (0 when absent) rather than undefined, so a truthiness test
+    // on it can't quietly become a no-op.
+    volume: Number.isFinite(Number(m.volume)) ? Number(m.volume) : 0,
     closed: !!m.closed,
   };
 }
