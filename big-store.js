@@ -40,6 +40,11 @@ const BIG_STORE_KEYS = [
   'numerology_nba_totals_predictions',
   'numerology_nba_player_form',
   'numerology_nba_birthdates',
+  // Player prop signals. Measured at 109 bytes per record and ~16 records per
+  // game over two seasons, this is ~42,000 records / 4.4MB on its own - by far
+  // the largest single store, and the reason the IndexedDB migration had to
+  // happen before props were possible at all.
+  'numerology_nba_prop_signals',
 ];
 
 const BIG_STORE_MIGRATED_FLAG = 'numerology_big_store_migrated';

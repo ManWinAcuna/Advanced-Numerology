@@ -1061,6 +1061,7 @@
       <select id="nbaViewSelect">
         <option value="game">🎯 Game Picks</option>
         <option value="totals">↕️ Game Totals (O/U)</option>
+        <option value="props">🎯 Player Props (vs own average)</option>
       </select>
     </div>
 
@@ -1231,6 +1232,37 @@
         <div class="pm-table-pagination" id="nbaTotalsPagination"></div>
       </div>
     </div>
+
+    <div id="nbaPropSection" style="display:none;">
+      <div class="score-hero" id="nbaPropHero"></div>
+
+      <div class="box stats-sport-box">
+        <div class="box-label">📊 Show Breakdown</div>
+        <select id="nbaPropBreakdownToggle">
+          <option value="nbaPropPTSBox">Points vs Own Average</option>
+          <option value="nbaPropREBBox">Rebounds vs Own Average</option>
+          <option value="nbaPropASTBox">Assists vs Own Average</option>
+        </select>
+      </div>
+
+      <div class="box" id="nbaPropPTSBox">
+        <div class="box-label">Points vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game points average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropPTS"></div>
+      </div>
+
+      <div class="box" id="nbaPropREBBox">
+        <div class="box-label">Rebounds vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game rebounds average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropREB"></div>
+      </div>
+
+      <div class="box" id="nbaPropASTBox">
+        <div class="box-label">Assists vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game assists average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropAST"></div>
+      </div>
+    </div>
    </div>
 
    <div class="pm-modal-page" data-page="old" style="display:none;">
@@ -1239,6 +1271,7 @@
       <select id="nbaViewSelectOld">
         <option value="game">🎯 Game Picks</option>
         <option value="totals">↕️ Game Totals (O/U)</option>
+        <option value="props">🎯 Player Props (vs own average)</option>
       </select>
     </div>
 
@@ -1256,6 +1289,13 @@
           <option value="730">2 seasons (max)</option>
         </select>
       </div>
+    </div>
+
+    <div class="box" id="nbaPropBackfillBox">
+      <div class="box-label">🎯 Collect Prop Signals</div>
+      <div class="mode-desc">Walks the same dates as the game backfill but touches ESPN only &mdash; one boxscore per game, no Polymarket and no price history &mdash; so it runs in minutes rather than hours. Records each rotation player's actual points, rebounds and assists against his own trailing 10-game average, along with his numerology day score. No market is involved, so this measures the premise directly.</div>
+      <button class="btn-link" id="nbaPropBackfillBtn" type="button">🎯 Collect Prop Signals</button>
+      <div class="mode-desc" id="nbaPropBackfillStatus"></div>
     </div>
 
     <div id="nbaGameSectionOld">
@@ -1425,6 +1465,37 @@
         <div class="pm-table-pagination" id="nbaTotalsPaginationOld"></div>
       </div>
     </div>
+
+    <div id="nbaPropSectionOld" style="display:none;">
+      <div class="score-hero" id="nbaPropHeroOld"></div>
+
+      <div class="box stats-sport-box">
+        <div class="box-label">📊 Show Breakdown</div>
+        <select id="nbaPropBreakdownToggleOld">
+          <option value="nbaPropPTSBoxOld">Points vs Own Average</option>
+          <option value="nbaPropREBBoxOld">Rebounds vs Own Average</option>
+          <option value="nbaPropASTBoxOld">Assists vs Own Average</option>
+        </select>
+      </div>
+
+      <div class="box" id="nbaPropPTSBoxOld">
+        <div class="box-label">Points vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game points average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropPTSOld"></div>
+      </div>
+
+      <div class="box" id="nbaPropREBBoxOld">
+        <div class="box-label">Rebounds vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game rebounds average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropREBOld"></div>
+      </div>
+
+      <div class="box" id="nbaPropASTBoxOld">
+        <div class="box-label">Assists vs Own Average</div>
+        <div class="mode-desc">Of the player-games in each band, how often did the player beat his own trailing 10-game assists average? The null is exactly 50% &mdash; talent cancels out because every player is measured against himself.</div>
+        <div class="pm-table-scroll" id="nbaPropASTOld"></div>
+      </div>
+    </div>
    </div>
   </div>
 
@@ -1465,6 +1536,7 @@ function applyNbaView(selectId, suffix) {
   const show = (id, when) => { document.getElementById(id + suffix).style.display = view === when ? '' : 'none'; };
   show('nbaGameSection', 'game');
   show('nbaTotalsSection', 'totals');
+  show('nbaPropSection', 'props');
 }
 
 function showSport(sport) {

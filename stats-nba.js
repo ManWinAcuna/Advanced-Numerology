@@ -17,6 +17,7 @@ const nbaStoreReady = bigStoreReadyPromise;
 // refetching anything.
 let currentNbaPredictions = [];
 let currentNbaTotals = [];
+let currentNbaPropSignals = [];
 // Today's games fetched but not scoreable yet (no rotation form) - listed as
 // pending rows so the Today tab reflects the whole slate.
 let todaysNbaSlatePending = [];
@@ -513,6 +514,96 @@ function renderNbaTotalsComponentSignal(records, elId) {
     </table>`;
 }
 
+/* ---------- Player prop signal rendering ---------- */
+// Fifteen tests run here at once (five day bands across three stats). At that
+// many, roughly one will clear 2 sigma on pure chance every time you look, so
+// 2 sigma is NOT the bar - reading it as one is how a project talks itself into
+// betting noise. The hero applies a Bonferroni-style correction and reports the
+// threshold it is actually using.
+const NBA_PROP_TEST_COUNT = NBA_PROP_DAY_BANDS.length * NBA_PROP_STATS.length;
+// 3 sigma two-sided is about 1-in-370, which stays convincing even after 15
+// looks (15/370 is about a 4% chance of one false positive across the set).
+const NBA_PROP_SIGMA_BAR = 3;
+
+function renderNbaPropHero(signals, suffix = '') {
+  const hero = document.getElementById('nbaPropHero' + suffix);
+  if (!hero) return;
+
+  if (!signals.length) {
+    hero.innerHTML = `
+      <div class="score-names">Prop Signal</div>
+      <div class="empty-state">No prop signals collected yet &mdash; run Collect Prop Signals on the Old Data tab. It only needs ESPN boxscores, so it is far quicker than the game backfill.</div>`;
+    return;
+  }
+
+  // The single most extreme band across every stat, by sigma.
+  let best = null;
+  NBA_PROP_STATS.forEach((stat) => {
+    computeNbaPropBandStats(signals, stat).forEach((b) => {
+      if (b.sigma == null || !b.count) return;
+      if (!best || Math.abs(b.sigma) > Math.abs(best.sigma)) best = { ...b, stat };
+    });
+  });
+
+  const total = signals.length;
+  if (!best) {
+    hero.innerHTML = `
+      <div class="score-names">Prop Signal</div>
+      <div class="empty-state">${total} player-games collected, none resolvable yet.</div>`;
+    return;
+  }
+
+  const passes = Math.abs(best.sigma) >= NBA_PROP_SIGMA_BAR;
+  hero.innerHTML = `
+    <div class="score-names">Strongest Prop Signal</div>
+    <div class="score-big ${passes ? (best.sigma > 0 ? 'good' : 'bad') : ''}">${best.overPct}<span class="score-out-of">% over</span></div>
+    <div class="pm-breakdown-hint">
+      ${escapeHtml(NBA_PROP_STAT_LABELS[best.stat])} on ${escapeHtml(best.label)} days &middot;
+      ${best.count.toLocaleString()} player-games &middot;
+      <b>${best.sigma > 0 ? '+' : ''}${best.sigma.toFixed(2)} sigma</b> from the 50% coin flip
+    </div>
+    <div class="mode-desc">${passes
+      ? `That clears the ${NBA_PROP_SIGMA_BAR} sigma bar this table is held to, which is a real effect rather than a lucky band.`
+      : `Below the ${NBA_PROP_SIGMA_BAR} sigma bar. ${NBA_PROP_TEST_COUNT} bands are tested at once here, so about one would reach 2 sigma by chance alone every time you look &mdash; treat anything under ${NBA_PROP_SIGMA_BAR} sigma as noise, however good the percentage looks.`}
+    <br>Baseline is each player's own trailing ${NBA_FORM_WINDOW}-game average, so talent cancels out and the honest null is exactly 50%. ${total.toLocaleString()} player-games recorded.</div>`;
+}
+
+function renderNbaPropStatTable(signals, stat, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = computeNbaPropBandStats(signals, stat);
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  if (!total) {
+    el.innerHTML = '<div class="empty-state">No player-games collected for this stat yet.</div>';
+    return;
+  }
+  const body = rows.map((r) => {
+    const sig = r.sigma == null ? null : Math.abs(r.sigma) >= NBA_PROP_SIGMA_BAR;
+    return `
+      <tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td>${r.count.toLocaleString()}</td>
+        <td>${r.overPct != null ? `${r.overPct}%` : '—'}</td>
+        <td>${r.sigma != null
+          ? `<span class="score-inline ${sig ? (r.sigma > 0 ? 'good' : 'bad') : ''}">${r.sigma > 0 ? '+' : ''}${r.sigma.toFixed(2)}</span>`
+          : '<span class="empty-state">—</span>'}</td>
+      </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="pm-table-total">Player-games: ${total.toLocaleString()}</div>
+    <table class="astro-table">
+      <thead><tr><th>Day Energy Band</th><th>Player-games</th><th>Beat own avg</th><th>Sigma</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+function renderNbaPropSignals(signals, suffix = '') {
+  renderNbaPropHero(signals, suffix);
+  NBA_PROP_STATS.forEach((stat) => {
+    renderNbaPropStatTable(signals, stat, `nbaProp${stat.toUpperCase()}${suffix}`);
+  });
+}
+
 /* ---------- Scope rendering ---------- */
 function isNbaTodayLocal(iso) {
   if (!iso) return false;
@@ -545,6 +636,16 @@ function renderNbaScope(suffix, predictions, totals) {
   const lastUpdated = document.getElementById('nbaStatsLastUpdated' + suffix);
   if (lastUpdated) lastUpdated.textContent = `Last checked ${new Date().toLocaleTimeString()}`;
 
+  // Prop signals carry an ET date string rather than a timestamp. Noon is
+  // appended before the day filter reads it so a bare YYYY-MM-DD isn't parsed
+  // as UTC midnight and pulled back a day in western timezones.
+  const todayET = nbaEasternDateISO(new Date());
+  const scopedProps = currentNbaPropSignals.filter((r) => {
+    const isToday = r.d === todayET;
+    return isToday === !isOld && matchesDay(`${r.d}T12:00:00`);
+  });
+  renderNbaPropSignals(scopedProps, suffix);
+
   const scopedTotals = (totals || []).filter((p) => isNbaTodayLocal(p.gameTime) === !isOld && matchesDay(p.gameTime));
   renderNbaTotalsMarket(
     scopedTotals, 'nbaTotals', suffix,
@@ -558,6 +659,7 @@ async function refreshAndRenderNba() {
   await checkNbaTotalsResults();
   currentNbaPredictions = loadNbaPredictions();
   currentNbaTotals = loadNbaTotalsPredictions();
+  currentNbaPropSignals = loadNbaPropSignals();
   renderNbaScope('', currentNbaPredictions, currentNbaTotals);
   renderNbaScope('Old', currentNbaPredictions, currentNbaTotals);
 }
@@ -842,6 +944,129 @@ async function backfillNbaHistory(onProgress) {
   };
 }
 
+/* ---------- Player prop signal collection ---------- */
+const NBA_PROP_BACKFILL_SCHEMA = 1;
+
+// Walks the same dates as the game backfill but touches only ESPN: one
+// scoreboard call per date and one boxscore per game. No Polymarket, no CLOB
+// price history - which is why this runs in minutes where the game walk runs in
+// hours, and why it is a separate pass rather than a schema bump that would
+// have forced the whole price fetch to happen again.
+//
+// The trailing-average form used for baselines is rebuilt LOCALLY as the walk
+// proceeds, starting empty, and is never read from the persisted form store.
+// That store keeps only each player's most recent ten games, so reading it here
+// would compare an October game against the following April's average - a
+// lookahead that would manufacture signal out of nothing.
+async function backfillNbaPropSignals(onProgress) {
+  const windowDays = loadNbaBackfillWindowDays();
+  const state = loadNbaPropBackfillState();
+  const freshWalk = state.schema !== NBA_PROP_BACKFILL_SCHEMA;
+
+  const today = nbaEasternDateISO(new Date());
+  const endDate = nbaAddDaysISO(today, -1);
+  // Not bounded by NBA_POLYMARKET_FIRST_DATE: a prop signal needs no market at
+  // all, so it can reach back as far as ESPN has boxscores.
+  let startDate = nbaAddDaysISO(today, -windowDays);
+  if (!freshWalk && state.lastDate && state.lastDate >= startDate) {
+    startDate = nbaAddDaysISO(state.lastDate, 1);
+  }
+  if (startDate > endDate) return { alreadyCurrent: true };
+
+  const signals = freshWalk ? [] : loadNbaPropSignals();
+  const birthdates = loadNbaBirthdates();
+  const seen = new Set(signals.map((r) => `${r.g}|${r.p}`));
+  const form = {}; // local, rebuilt in step with the walk - see above
+
+  let gamesProcessed = 0;
+  let newSignals = 0;
+  let skippedThinBaseline = 0;
+  let dobFetched = 0;
+
+  const totalDays = Math.max(1, Math.round((new Date(`${endDate}T12:00:00Z`) - new Date(`${startDate}T12:00:00Z`)) / 86400000) + 1);
+  let dayIndex = 0;
+
+  function checkpoint(throughDate) {
+    saveNbaPropSignals(signals);
+    saveNbaBirthdates(birthdates);
+    saveNbaPropBackfillState({ schema: NBA_PROP_BACKFILL_SCHEMA, lastDate: throughDate });
+  }
+
+  for (let date = startDate; date <= endDate; date = nbaAddDaysISO(date, 1)) {
+    dayIndex += 1;
+    if (onProgress) onProgress(dayIndex, totalDays, gamesProcessed, newSignals);
+
+    const games = await fetchNbaScoreboard(date);
+    for (const game of games) {
+      if (!game.final || !game.home.abbr || !game.away.abbr) continue;
+      if (NBA_EXHIBITION_SLUG_CODES.has(String(game.home.abbr).toLowerCase())
+        || NBA_EXHIBITION_SLUG_CODES.has(String(game.away.abbr).toLowerCase())) continue;
+      gamesProcessed += 1;
+
+      const matchDate = parseDateInput(date);
+      const stateInfo = nbaVenueStateInfo(game.venueState);
+      const stateDate = stateInfo && stateInfo.founded ? parseDateInput(stateInfo.founded) : null;
+
+      // Record against the form as it stands BEFORE this game.
+      const preGameRotations = {};
+      [game.home.abbr, game.away.abbr].forEach((abbr) => {
+        preGameRotations[abbr] = nbaExpectedRotation(form, abbr, date).slice(0, NBA_PROP_PLAYERS_PER_TEAM);
+      });
+
+      const box = await fetchNbaGameBoxscore(game.eventId);
+      if (!box) continue;
+
+      for (const abbr of Object.keys(box)) {
+        const players = box[abbr];
+        for (const p of players) {
+          if (!p.id || !p.played) continue;
+          if (!birthdates[p.id]) {
+            const dob = await fetchNbaAthleteDob(p.id);
+            birthdates[p.id] = dob ? { name: dob.name, birthDate: dob.birthDate } : { name: p.name, birthDate: null };
+            if (dob) dobFetched += 1;
+          }
+        }
+
+        const rotation = preGameRotations[abbr] || [];
+        for (const rotPlayer of rotation) {
+          const actual = players.find((p) => String(p.id) === String(rotPlayer.id));
+          if (!actual || !actual.played) continue;             // rested or injured
+          if (seen.has(`${game.eventId}|${rotPlayer.id}`)) continue;
+
+          const bd = birthdates[rotPlayer.id];
+          if (!bd || !bd.birthDate) continue;
+          if (rotPlayer.priorGames < NBA_PROP_MIN_BASELINE_GAMES) { skippedThinBaseline += 1; continue; }
+
+          const baselines = {
+            pts: nbaTrailingAvg(form, rotPlayer.id, 'pts'),
+            reb: nbaTrailingAvg(form, rotPlayer.id, 'reb'),
+            ast: nbaTrailingAvg(form, rotPlayer.id, 'ast'),
+          };
+          const dayScore = computeFighterScore(parseDateInput(bd.birthDate), matchDate, null, stateDate).combined;
+          const rec = buildNbaPropSignal(
+            game.eventId, rotPlayer.id, abbr, date, dayScore,
+            { pts: actual.points, reb: actual.rebounds, ast: actual.assists },
+            baselines,
+          );
+          if (!rec) continue;
+          signals.push(rec);
+          seen.add(`${game.eventId}|${rotPlayer.id}`);
+          newSignals += 1;
+        }
+
+        // Fold this game in only after every player has been recorded against
+        // the pre-game baseline.
+        nbaUpdatePlayerForm(form, abbr, date, players, birthdates);
+      }
+    }
+
+    if (dayIndex % NBA_BACKFILL_CHECKPOINT_DAYS === 0) checkpoint(date);
+  }
+
+  checkpoint(endDate);
+  return { gamesProcessed, newSignalsCount: newSignals, skippedThinBaseline, dobFetched, total: signals.length };
+}
+
 /* ---------- Today's slate ---------- */
 // Pulls today's open Polymarket markets and scores any game not already
 // stored, so the Today tab reflects the slate without the live tracker open.
@@ -981,6 +1206,32 @@ function initNbaBackfillButton() {
   });
 }
 
+function initNbaPropBackfillButton() {
+  const btn = document.getElementById('nbaPropBackfillBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const status = document.getElementById('nbaPropBackfillStatus');
+    btn.disabled = true;
+    const original = btn.textContent;
+    status.textContent = 'Starting…';
+    try {
+      const result = await backfillNbaPropSignals((day, totalDays, games, added) => {
+        status.textContent = `Collecting… day ${day}/${totalDays} · ${games} games · ${added.toLocaleString()} player-games so far`;
+      });
+      status.textContent = result.alreadyCurrent
+        ? 'Already caught up to yesterday - nothing new to collect.'
+        : `Done - ${result.gamesProcessed} games, added ${result.newSignalsCount.toLocaleString()} player-games (${result.total.toLocaleString()} total).`
+          + `${result.skippedThinBaseline ? ` ${result.skippedThinBaseline.toLocaleString()} skipped for having under ${NBA_PROP_MIN_BASELINE_GAMES} prior games.` : ''}`;
+      await refreshAndRenderNba();
+    } catch (e) {
+      status.textContent = `Collection failed: ${e && e.message ? e.message : e}`;
+      console.error('NBA prop collection failed', e);
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+}
+
 /* ---------- Bootstrap ---------- */
 // Only wires the DOM when the NBA Stats section exists - this file also loads
 // on betting.html for checkNbaResults() and the shared prediction helpers.
@@ -1005,12 +1256,14 @@ nbaStoreReady.then(() => {
 
   ['', 'Old'].forEach((s) => {
     initBreakdownToggle(`nbaTotalsBreakdownToggle${s}`, ['TierBox', 'ComponentBox', 'UniversalDayBox', 'DayEnergyBox', 'DayComboBox'].map((b) => `nbaTotals${b}${s}`));
+    initBreakdownToggle(`nbaPropBreakdownToggle${s}`, NBA_PROP_STATS.map((stat) => `nbaProp${stat.toUpperCase()}Box${s}`));
   });
 
   initNbaMatchupModal('');
   initNbaMatchupModal('Old');
   initModalTabSwitcher('statsNbaSection');
   initNbaBackfillButton();
+  initNbaPropBackfillButton();
   initNbaStorageControls();
   wireNbaRefreshButton('nbaStatsRefreshBtn');
   wireNbaRefreshButton('nbaStatsRefreshBtnOld');

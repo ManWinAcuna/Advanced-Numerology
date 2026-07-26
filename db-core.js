@@ -2992,6 +2992,122 @@ function nbaTotalsResultFromScores(homeScore, awayScore, outcomeA, outcomeB, lin
   return { winner: total > line ? overName : underName, draw: false, resolvedAt: Date.now() };
 }
 
+/* ---------- Player prop signals ---------- */
+// The cleanest test of the premise this project has. Every other tracker asks
+// "can numerology beat a market that already prices team strength" - and on NBA
+// team moneylines the answer measured as a flat zero across 1,245 picks. A prop
+// signal asks something different: does a player beat HIS OWN trailing average
+// on days his numerology runs hot? The baseline is the player, so talent
+// cancels out entirely and no market has to be beaten for the signal to be
+// measurable.
+//
+// It is also vastly better powered. Team picks gave ~1,245 samples, where one
+// standard error is 1.42 points and nothing under +4.25 is visible at 3 sigma.
+// Sixteen players a game over two seasons gives ~42,000, where 1se is 0.24 and
+// +0.73 is visible. A null result here means something; a null at n=1,245 mostly
+// meant the test was underpowered.
+//
+// Deliberately NO predicted direction is stored. MLB's strikeout signal hardcodes
+// "day score >= 60 means over", which bakes in both a threshold and a direction
+// before any data exists - the same mistake as assuming a high pace score means
+// Over. Here the raw day score is stored and the analysis buckets it, so the
+// data answers whether hot days mean more production, less, or nothing at all.
+const NBA_PROP_SIGNALS_KEY = 'numerology_nba_prop_signals';
+
+// Which stats are tracked. These are exactly the three Polymarket prices as
+// player props, so a signal that works here is directly bettable later.
+const NBA_PROP_STATS = ['pts', 'reb', 'ast'];
+
+const NBA_PROP_STAT_LABELS = { pts: 'Points', reb: 'Rebounds', ast: 'Assists' };
+
+// Players per team recorded per game, ranked by trailing minutes. Eight covers
+// everyone Polymarket actually lists (about seven a game) and stops garbage-time
+// minutes from adding records whose baselines are pure noise.
+const NBA_PROP_PLAYERS_PER_TEAM = 8;
+
+// A baseline needs enough prior games to mean anything. Below this the player
+// is skipped for that game rather than compared against a one-game average.
+const NBA_PROP_MIN_BASELINE_GAMES = 5;
+
+// Day-score bands for the analysis. The compat engine centres around 63, so
+// these are spaced around that rather than around 50 - and they are reporting
+// buckets, not thresholds that decide a pick.
+const NBA_PROP_DAY_BANDS = [
+  { key: 'hot', label: '🔥 Hot (75+)', icon: '🔥', min: 75, max: Infinity },
+  { key: 'warm', label: '📈 Warm (66-74)', icon: '📈', min: 66, max: 75 },
+  { key: 'neutral', label: '➖ Neutral (56-65)', icon: '➖', min: 56, max: 66 },
+  { key: 'cool', label: '📉 Cool (45-55)', icon: '📉', min: 45, max: 56 },
+  { key: 'cold', label: '🧊 Cold (under 45)', icon: '🧊', min: -Infinity, max: 45 },
+];
+
+function nbaPropDayBand(dayScore) {
+  return NBA_PROP_DAY_BANDS.find((b) => dayScore >= b.min && dayScore < b.max)
+    || NBA_PROP_DAY_BANDS[NBA_PROP_DAY_BANDS.length - 1];
+}
+
+function loadNbaPropSignals() {
+  try {
+    const raw = bigStoreGetItem(NBA_PROP_SIGNALS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveNbaPropSignals(signals) {
+  saveJsonGuarded(NBA_PROP_SIGNALS_KEY, signals);
+}
+
+// Field names are short on purpose: at ~42,000 records the difference between
+// "playerId" and "p" is about a megabyte held in memory.
+//   g  game id      p  player id     t  team      d  ET date
+//   s  day score    pts/reb/ast  [actual, trailing baseline]
+function buildNbaPropSignal(gameId, playerId, teamAbbr, dateISO, dayScore, actuals, baselines) {
+  const rec = { g: String(gameId), p: String(playerId), t: teamAbbr, d: dateISO, s: Math.round(dayScore) };
+  let any = false;
+  NBA_PROP_STATS.forEach((stat) => {
+    const a = actuals[stat];
+    const b = baselines[stat];
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+    rec[stat] = [a, Math.round(b * 10) / 10];
+    any = true;
+  });
+  return any ? rec : null;
+}
+
+// Win rate by day-score band for one stat: of the player-games in this band,
+// how often did the player exceed his own trailing average? The null is 50%
+// by construction, which is what makes this readable without a market.
+// A game exactly on the baseline is a push and is excluded rather than counted
+// either way.
+function computeNbaPropBandStats(signals, stat) {
+  return NBA_PROP_DAY_BANDS.map((band) => {
+    let over = 0;
+    let under = 0;
+    (signals || []).forEach((r) => {
+      const pair = r[stat];
+      if (!pair) return;
+      if (r.s < band.min || r.s >= band.max) return;
+      if (pair[0] > pair[1]) over += 1;
+      else if (pair[0] < pair[1]) under += 1;
+    });
+    const n = over + under;
+    return {
+      key: band.key,
+      label: band.label,
+      count: n,
+      overs: over,
+      overPct: n ? Math.round((over / n) * 100) : null,
+      // How many standard errors the observed rate sits from the 50% null -
+      // the number that decides whether a band means anything. Reported rather
+      // than left for the reader to eyeball, because at these sample sizes a
+      // 52% can be strong and at small sizes a 65% can be nothing.
+      sigma: n ? ((over / n) - 0.5) / Math.sqrt(0.25 / n) : null,
+    };
+  });
+}
+
 /* ---------- Backfill settings ---------- */
 // Two seasons is the whole priced history (Polymarket's NBA markets start on
 // 2024-10-21), so 730 days is the useful maximum rather than an arbitrary cap.
@@ -3008,6 +3124,28 @@ function saveNbaBackfillWindowDays(days) {
 }
 
 const NBA_BACKFILL_STATE_KEY = 'numerology_nba_backfill_state';
+
+// Prop collection walks separately from the game backfill, and tracks its own
+// progress. Keeping them apart matters: the game walk spends ~6 requests per
+// game on Polymarket slugs and CLOB price history, while prop signals need only
+// ESPN's boxscore, which the walk fetches anyway. Folding props into the game
+// walk would have meant re-running the whole two-hour price fetch to collect
+// data that costs one request per game.
+const NBA_PROP_BACKFILL_STATE_KEY = 'numerology_nba_prop_backfill_state';
+
+function loadNbaPropBackfillState() {
+  try {
+    const raw = localStorage.getItem(NBA_PROP_BACKFILL_STATE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveNbaPropBackfillState(state) {
+  localStorage.setItem(NBA_PROP_BACKFILL_STATE_KEY, JSON.stringify(state));
+}
 
 function loadNbaBackfillState() {
   try {
