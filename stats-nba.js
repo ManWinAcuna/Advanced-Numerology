@@ -582,7 +582,14 @@ function wireNbaRefreshButton(btnId) {
 /* ---------- Historical backfill ---------- */
 // Bump when the stored record shape changes - a mismatch forces a full re-walk
 // rather than leaving old and new shapes mixed in one store.
-const NBA_BACKFILL_SCHEMA = 1;
+//   1 -> 2: added the franchise component to every side's composite, which
+//           changes both the stored components and the composite score itself.
+const NBA_BACKFILL_SCHEMA = 2;
+
+// How often a long walk writes its data and progress marker to storage. Seven
+// days of games is a small enough amount of work to redo after an interruption,
+// and infrequent enough that a two-season run does ~90 writes rather than ~640.
+const NBA_BACKFILL_CHECKPOINT_DAYS = 7;
 
 // Totals events carry several lines (3-7 in the regular season, 25 on a
 // playoff game); the "main" one is whichever is priced closest to even,
@@ -644,12 +651,39 @@ async function backfillNbaHistory(onProgress) {
   }
   if (startDate > endDate) return { alreadyCurrent: true };
 
-  const predictions = loadNbaPredictions();
-  const totalsRecords = loadNbaTotalsPredictions();
-  const form = loadNbaPlayerForm();
+  // A fresh walk has to start from genuinely empty state, for two separate
+  // reasons that both produce silently wrong output otherwise:
+  //
+  // 1. Records are deduped by conditionId, so any surviving record from an
+  //    older schema would be SKIPPED rather than rebuilt - leaving a store
+  //    with two different shapes in it and a component table quietly averaging
+  //    across both.
+  // 2. More subtly, the form store keeps only the most recent
+  //    NBA_FORM_WINDOW games per player. Re-walking from the start against a
+  //    form store already full of late-season games means every early date
+  //    finds no prior games at all, so nothing scores and the whole walk
+  //    produces almost nothing. The form store must be rebuilt in step with
+  //    the walk that populates it.
+  //
+  // Birth dates are deliberately kept - a date of birth doesn't change, and
+  // re-fetching ~750 of them one request at a time is the slowest part of a run.
+  const predictions = freshWalk ? [] : loadNbaPredictions();
+  const totalsRecords = freshWalk ? [] : loadNbaTotalsPredictions();
+  const form = freshWalk ? {} : loadNbaPlayerForm();
   const birthdates = loadNbaBirthdates();
   const seenConditionIds = new Set(predictions.map((p) => String(p.conditionId)));
   const seenTotalsIds = new Set(totalsRecords.map((p) => String(p.conditionId)));
+
+  // Writes everything gathered so far plus the marker saying how far the walk
+  // got, as one unit. lastDate is only ever advanced to a day whose records are
+  // already persisted.
+  function checkpoint(throughDate) {
+    saveNbaPredictions(predictions);
+    saveNbaTotalsPredictions(totalsRecords);
+    saveNbaPlayerForm(form);
+    saveNbaBirthdates(birthdates);
+    saveNbaBackfillState({ schema: NBA_BACKFILL_SCHEMA, lastDate: throughDate });
+  }
 
   let gamesProcessed = 0;
   let newPredictions = 0;
@@ -685,8 +719,8 @@ async function backfillNbaHistory(onProgress) {
         .map((p) => ({ ...p, birthDate: p.birthDate || (birthdates[p.id] ? birthdates[p.id].birthDate : null) }));
       const rotationHome = nbaExpectedRotation(form, game.home.abbr, date)
         .map((p) => ({ ...p, birthDate: p.birthDate || (birthdates[p.id] ? birthdates[p.id].birthDate : null) }));
-      const compAway = computeNbaSideComposite(rotationAway, matchDate, null, stateDate);
-      const compHome = computeNbaSideComposite(rotationHome, matchDate, null, stateDate);
+      const compAway = computeNbaSideComposite(rotationAway, matchDate, null, stateDate, game.away.abbr);
+      const compHome = computeNbaSideComposite(rotationHome, matchDate, null, stateDate, game.home.abbr);
 
       if (compAway && compHome) {
         const event = await fetchNbaEventForGame(game.away.abbr, game.home.abbr, date);
@@ -786,14 +820,17 @@ async function backfillNbaHistory(onProgress) {
       }
     }
 
-    // Persist per day so a long walk that gets interrupted keeps its progress.
-    saveNbaBackfillState({ schema: NBA_BACKFILL_SCHEMA, lastDate: date });
+    // Checkpoint the DATA and the progress marker together, never the marker
+    // alone. Saving only the marker each day (as this first did) meant an
+    // interrupted run recorded "reached day 100" while none of those 100 days'
+    // records had been written - so the resume skipped straight past them and
+    // the work was silently lost. Every NBA_BACKFILL_CHECKPOINT_DAYS the two
+    // are written as a pair, so a resume can only ever repeat work, never
+    // skip it.
+    if (dayIndex % NBA_BACKFILL_CHECKPOINT_DAYS === 0) checkpoint(date);
   }
 
-  saveNbaPredictions(predictions);
-  saveNbaTotalsPredictions(totalsRecords);
-  saveNbaPlayerForm(form);
-  saveNbaBirthdates(birthdates);
+  checkpoint(endDate);
 
   return {
     gamesProcessed,
@@ -836,8 +873,8 @@ async function recordTodaysNbaGames() {
     const stateInfo = nbaVenueStateInfo(espnGame.venueState);
     const stateDate = stateInfo && stateInfo.founded ? parseDateInput(stateInfo.founded) : null;
     const withDobs = (list) => list.map((p) => ({ ...p, birthDate: p.birthDate || (birthdates[p.id] ? birthdates[p.id].birthDate : null) }));
-    const compHome = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espnGame.home.abbr, today)), matchDate, null, stateDate);
-    const compAway = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espnGame.away.abbr, today)), matchDate, null, stateDate);
+    const compHome = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espnGame.home.abbr, today)), matchDate, null, stateDate, espnGame.home.abbr);
+    const compAway = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espnGame.away.abbr, today)), matchDate, null, stateDate, espnGame.away.abbr);
     if (!compHome || !compAway) { pending.push({ ...g, status: 'rotation' }); continue; }
 
     const aIsHome = normalizeName(g.teamAName) === normalizeName(espnGame.home.nickname);

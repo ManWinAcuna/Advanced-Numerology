@@ -206,8 +206,8 @@ async function loadPmNba() {
       const matchDate = parseDateInput(date);
       const stateInfo = nbaVenueStateInfo(espn.venueState);
       const stateDate = stateInfo && stateInfo.founded ? parseDateInput(stateInfo.founded) : null;
-      const compHome = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espn.home.abbr, date)), matchDate, null, stateDate);
-      const compAway = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espn.away.abbr, date)), matchDate, null, stateDate);
+      const compHome = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espn.home.abbr, date)), matchDate, null, stateDate, espn.home.abbr);
+      const compAway = computeNbaSideComposite(withDobs(nbaExpectedRotation(form, espn.away.abbr, date)), matchDate, null, stateDate, espn.away.abbr);
       if (compHome && compAway) {
         const aIsHome = normalizeName(game.teamAName) === normalizeName(espn.home.nickname);
         scores = {

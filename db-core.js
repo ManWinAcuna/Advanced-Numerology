@@ -2720,46 +2720,144 @@ function nbaUpdatePlayerForm(form, teamAbbr, dateISO, players, birthdates) {
 // degrades to its day+state blend. stateDate comes from the venue's US state
 // when there is one; an international game (Berlin, Paris, Mexico City) has no
 // state and correctly falls back to day-only rather than borrowing a state.
-function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate) {
-  const scored = (rotation || [])
-    .filter((p) => p.birthDate && Number.isFinite(p.expectedMinutes) && p.expectedMinutes > 0)
-    .map((p, index) => ({
-      // Rank within the rotation, not a listed position: 'top5' is the five
-      // players expected to play the most, which is the closest honest
-      // pre-game stand-in for a starting five.
-      key: index < 5 ? 'top5' : 'rotation',
-      role: `${p.name || 'Player'} (${p.expectedMinutes.toFixed(1)} min)`,
-      weight: p.expectedMinutes,
-      score: computeFighterScore(parseDateInput(p.birthDate), matchDate, stadiumDate, stateDate),
-    }));
+// Franchise founding dates, all 30, supplied by the user from their own
+// database rather than scraped - which matters, because no API here carries
+// them and Wikidata only holds year-level precision for several teams (the
+// Nuggets' inception is literally "+1967-00-00" at precision 9). A team absent
+// from this map is scored on its players alone; nothing is ever stood in for a
+// missing date.
+//
+// Two things about this data worth not "tidying up" later:
+//
+// 1. The convention is deliberately mixed. Eight teams use their ORIGINAL
+//    founding despite later moves (Pistons 1941 Fort Wayne, 76ers 1946
+//    Syracuse, Kings 1945 Rochester, Rockets 1967 San Diego, Spurs 1967
+//    Dallas, Jazz 1974 New Orleans, Hawks 1946 Tri-Cities, Lakers 1947
+//    Minneapolis), while seven use the date their CURRENT identity began
+//    (Thunder 2008, Nets 2012, Grizzlies 2001, Clippers 1984, Warriors 1971,
+//    Pelicans 2013, Hornets 2014). That is the owner's doctrine, not an
+//    inconsistency to normalise.
+// 2. Two pairs share an exact date and therefore always score identically on
+//    this component: Celtics/Knicks (1946-06-06, the BAA's founding) and
+//    Bucks/Suns (1968-01-22, expansion granted the same day). Real, not a
+//    typo - it means the franchise axis cannot separate those four teams.
+//
+// Keyed by ESPN's team abbreviation, since that is what the scoreboard returns.
+// Note ESPN's codes, not Polymarket's: GS not GSW, NY not NYK, SA not SAS,
+// NO not NOP, UTAH not UTA, WSH not WAS.
+const NBA_TEAM_FOUNDING_DATES = {
+  ATL: '1946-06-03',
+  BOS: '1946-06-06',
+  BKN: '2012-04-30',
+  CHA: '2014-05-20',
+  CHI: '1966-01-16',
+  CLE: '1970-06-22',
+  DAL: '1980-10-11',
+  // No full date exists in any authoritative source (Wikidata precision 9,
+  // Wikipedia infobox "1967"). Owner chose the day the franchise became a
+  // Denver team - it was awarded to Kansas City on 1967-02-02 and moved before
+  // playing a game - matching how the Rockets and Spurs use their original
+  // city's founding date.
+  DEN: '1967-04-01',
+  DET: '1941-06-22',
+  GS: '1971-07-17',
+  HOU: '1967-01-11',
+  IND: '1967-02-02',
+  LAC: '1984-05-16',
+  LAL: '1947-11-01',
+  MEM: '2001-03-26',
+  MIA: '1988-12-01',
+  MIL: '1968-01-22',
+  MIN: '1989-11-03',
+  NO: '2013-04-18',
+  NY: '1946-06-06',
+  OKC: '2008-09-03',
+  ORL: '1989-06-15',
+  PHI: '1946-05-14',
+  PHX: '1968-01-22',
+  POR: '1970-02-06',
+  SAC: '1945-05-10',
+  SA: '1967-06-18',
+  TOR: '1995-05-05',
+  UTAH: '1974-06-07',
+  WSH: '1997-12-02',
+};
 
-  if (scored.length < NBA_MIN_ROTATION) return null;
-  const totalWeight = scored.reduce((s, p) => s + p.weight, 0);
+// Share of a side's score the franchise carries, with the players splitting the
+// rest by minutes. 10% deliberately matches MLB's franchise weight rather than
+// being invented for NBA - it is a starting point to be MEASURED, not a claim.
+// The component-signal table on the Stats page reports how the franchise does
+// on its own, and that is what should move this number, the same way the MLB
+// manager weight was moved by measurement rather than by intuition.
+const NBA_FRANCHISE_WEIGHT = 0.10;
+
+function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, teamAbbr) {
+  const players = (rotation || [])
+    .filter((p) => p.birthDate && Number.isFinite(p.expectedMinutes) && p.expectedMinutes > 0);
+  if (players.length < NBA_MIN_ROTATION) return null;
+  const minutesTotal = players.reduce((s, p) => s + p.expectedMinutes, 0);
+  if (!minutesTotal) return null;
+
+  const foundingISO = teamAbbr ? NBA_TEAM_FOUNDING_DATES[teamAbbr] : null;
+  // With a founding date the players share 90%; without one they take the whole
+  // 100%, so a team missing from the map is still scored normally instead of
+  // quietly carrying a 10% hole that would drag its composite toward zero.
+  const playerShare = foundingISO ? 1 - NBA_FRANCHISE_WEIGHT : 1;
+
+  const parts = players.map((p, index) => ({
+    // Rank within the rotation, not a listed position: 'top5' is the five
+    // players expected to play the most, which is the closest honest pre-game
+    // stand-in for a starting five.
+    key: index < 5 ? 'top5' : 'rotation',
+    role: `${p.name || 'Player'} (${p.expectedMinutes.toFixed(1)} min)`,
+    // Weights are shares of the whole side, not raw minutes, so the franchise
+    // part below sits on the same scale - extractTeamDimensions weights its
+    // per-dimension averages by exactly this field.
+    weight: playerShare * (p.expectedMinutes / minutesTotal),
+    score: computeFighterScore(parseDateInput(p.birthDate), matchDate, stadiumDate, stateDate),
+  }));
+
+  if (foundingISO) {
+    parts.push({
+      key: 'franchise',
+      role: `Franchise (est. ${foundingISO})`,
+      weight: NBA_FRANCHISE_WEIGHT,
+      score: computeFighterScore(parseDateInput(foundingISO), matchDate, stadiumDate, stateDate),
+    });
+  }
+
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
   if (!totalWeight) return null;
-  const combined = Math.round(scored.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
-  return { combined, parts: scored };
+  const combined = Math.round(parts.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
+  return { combined, parts };
 }
 
 // Two groups rather than MLB's six, because minutes-weighting already does the
 // work role-weights were doing there. The question this leaves the component
 // table is the one worth asking: does the heavy-minutes core carry the signal,
 // or the back of the rotation?
-const NBA_COMPONENT_KEYS = ['top5', 'rotation'];
+const NBA_COMPONENT_KEYS = ['top5', 'rotation', 'franchise'];
 
 const NBA_COMPONENT_LABELS = {
   top5: 'Top 5 by Minutes',
   rotation: 'Rest of Rotation',
+  franchise: 'Franchise',
 };
 
 function extractNbaComponents(parts) {
-  const buckets = { top5: [], rotation: [] };
+  const buckets = { top5: [], rotation: [], franchise: [] };
   (parts || []).forEach((p) => {
     const s = p.score && p.score.combined;
     if (s == null || !(p.key in buckets)) return;
     buckets[p.key].push(s);
   });
   const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
-  return { top5: avg(buckets.top5), rotation: avg(buckets.rotation) };
+  return {
+    top5: avg(buckets.top5),
+    rotation: avg(buckets.rotation),
+    // Only ever one franchise part, so this is that score rather than a mean.
+    franchise: avg(buckets.franchise),
+  };
 }
 
 /* ---------- Edge tiers ---------- */
@@ -2826,11 +2924,12 @@ function nbaPaceSideForScore(score, outcomeA, outcomeB) {
 // Game-level components: each side's group averaged across both teams, so the
 // "which signal predicts best" test works on totals the same way it does on
 // game picks.
-const NBA_PACE_COMPONENT_KEYS = ['top5s', 'rotations'];
+const NBA_PACE_COMPONENT_KEYS = ['top5s', 'rotations', 'franchises'];
 
 const NBA_PACE_COMPONENT_LABELS = {
   top5s: 'Both Top 5s',
   rotations: 'Both Rotations',
+  franchises: 'Both Franchises',
   pace: '🏃 Pace Score (live)',
 };
 
@@ -2842,7 +2941,7 @@ function nbaPaceComponentsFromSides(compHome, compAway) {
     if (a == null || b == null) return null;
     return Math.round(((a + b) / 2) * 10) / 10;
   };
-  return { top5s: pair('top5'), rotations: pair('rotation') };
+  return { top5s: pair('top5'), rotations: pair('rotation'), franchises: pair('franchise') };
 }
 
 // market is a parseNbaSideMarket() shape whose priceA/priceB must already be
