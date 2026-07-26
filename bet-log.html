@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Bet Log - Sports Betting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Owner-only gate for the Sports Betting section - must run before content renders -->
+<script src="sports-gate.js"></script>
+<div class="page ufc-page">
+
+  <nav class="topnav">
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+
+  <div class="topbar">
+    <a href="sports-betting.html" class="back-link">&larr; Sports Betting</a>
+  </div>
+
+  <h1 class="page-title">🔒 Locked Bet Log</h1>
+
+  <div class="pm-last-updated-row">
+    <span id="betLogLastUpdated"></span>
+    <button class="btn-link" id="betLogRefreshBtn" type="button">🔄 Check Results</button>
+  </div>
+
+  <div class="box">
+    <div class="box-label">📒 Your Receipts</div>
+    <div class="box-hint">Slates locked in from the Betting page before the games, frozen permanently, settled as results land. This is the forward track record nobody can argue with.</div>
+    <div id="bettingLogSummary"></div>
+    <div id="bettingLog"></div>
+    <div class="pm-table-pagination" id="bettingLogPagination"></div>
+  </div>
+
+</div>
+
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="ufc-data.js"></script>
+<script src="tennis-data.js"></script>
+<script src="us-states-data.js"></script>
+<script src="mlb-api.js"></script>
+<script src="stats-ufc.js"></script>
+<script src="stats-tennis.js"></script>
+<script src="stats-mlb.js"></script>
+<script src="betting-core.js"></script>
+<script src="betting-render.js"></script>
+<script src="bet-log.js"></script>
+</body>
+</html>
