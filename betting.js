@@ -48,9 +48,11 @@ function renderBettingToday(slate) {
     ${bettingTicketsHtml(slate.tickets)}
     <div class="bet-lock-row">
       <button class="btn" id="bettingLockBtn" type="button"${alreadyLocked ? ' disabled' : ''}>${alreadyLocked ? '✓ Locked' : '🔒 Lock these bets'}</button>
+      <button class="btn-link" id="bettingCheckPricesBtn" type="button">💱 Check Live Prices</button>
       <a class="btn-link" href="bet-log.html">📒 View Bet Log &rarr;</a>
       <span class="box-hint" style="margin-top:0;">Locking freezes this exact slate into the Bet Log permanently &mdash; do it when you're taking the bets.</span>
-    </div>`;
+    </div>
+    <div class="box-hint" id="bettingPriceNote"></div>`;
 }
 
 /* ===================== Simulation summary + ledger ===================== */
@@ -465,12 +467,42 @@ document.getElementById('bettingChooseSportLink').addEventListener('click', (e) 
   document.getElementById('bettingSportPicker').style.display = '';
 });
 
-// Lock button - delegated since Today's Bets re-renders its own markup
-document.getElementById('bettingTodayContent').addEventListener('click', (e) => {
-  if (!e.target.closest('#bettingLockBtn')) return;
-  if (!currentTodaySlate || !currentTodaySlate.tickets || !currentTodaySlate.tickets.length) return;
-  lockBettingSlate(currentBettingScope, loadBettingMode(), loadBettingMixedTypes(), loadBettingBankroll(), currentTodaySlate.tickets);
-  renderBettingToday(currentTodaySlate); // flips the button to "Locked"
+// Lock and live-price buttons - delegated since Today's Bets re-renders its
+// own markup on every pass.
+document.getElementById('bettingTodayContent').addEventListener('click', async (e) => {
+  const hasSlate = currentTodaySlate && currentTodaySlate.tickets && currentTodaySlate.tickets.length;
+
+  if (e.target.closest('#bettingLockBtn')) {
+    if (!hasSlate) return;
+    lockBettingSlate(currentBettingScope, loadBettingMode(), loadBettingMixedTypes(), loadBettingBankroll(), currentTodaySlate.tickets);
+    renderBettingToday(currentTodaySlate); // flips the button to "Locked"
+    return;
+  }
+
+  if (e.target.closest('#bettingCheckPricesBtn')) {
+    if (!hasSlate) return;
+    const btn = e.target.closest('#bettingCheckPricesBtn');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const res = await markStaleBettingPrices(currentTodaySlate.tickets);
+      renderBettingToday(currentTodaySlate); // repaint with live prices on the legs
+      const note = document.getElementById('bettingPriceNote');
+      if (note) {
+        note.textContent = res.checked
+          ? (res.stale
+            ? `${res.stale} of ${res.checked} legs have moved past their max price — skip those.`
+            : `All ${res.checked} legs still price in — good to bet.`)
+          : 'No live prices available for these legs right now.';
+        note.className = res.stale ? 'box-hint bet-price-warn' : 'box-hint';
+      }
+    } catch (err) {
+      const note = document.getElementById('bettingPriceNote');
+      if (note) note.textContent = 'Could not reach the market for a live quote.';
+    }
+    btn.disabled = false;
+    btn.textContent = '💱 Check Live Prices';
+  }
 });
 
 // Expanding a ledger day - delegated so pagination re-renders don't need rewiring

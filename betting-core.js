@@ -262,10 +262,15 @@ function normalizeBettingPick(p, sportKey) {
   if (!Number.isFinite(price) || price <= 0 || price >= 1 || !dateKey) return null;
 
   const gap = edgeGap(p);
+  const nameA = p[cfg.nameA];
   return {
     sport: sportKey,
     timeISO,
     dateKey,
+    conditionId: p.conditionId || null,
+    // Which side of the market this pick is - so a live re-quote reads the
+    // same outcome the pick was made on.
+    outcomeIndex: normalizeName(p.numerologyFavorite) === normalizeName(nameA) ? 0 : 1,
     // Identifies the underlying event across markets - MLB's moneyline, NRFI
     // and totals records for one game all share its gamePk, which is what
     // lets the parlay builder see that three "different" legs are really
@@ -592,6 +597,57 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
     maxDrawdownPct: Math.round(maxDrawdownPct * 100),
     resolvedPickCount: picks.filter((p) => p.resolved && !p.draw && p.dateKey < todayKey).length,
   };
+}
+
+/* ===================== Stale-price guard ===================== */
+// A pick is tracked at the price that existed when the slate was built, but
+// the bet gets placed hours later - by then the market may have moved past
+// the point where the edge exists at all. This re-fetches the live price for
+// today's suggested legs and marks any whose edge has evaporated. Prices are
+// keyed by conditionId (the same id the Stats trackers resolve against).
+
+// Live prices for a set of Polymarket condition ids, as a Map of
+// conditionId -> [priceA, priceB]. Uses the same batched endpoint the
+// result-checkers use, so no new API surface.
+async function fetchLiveBettingPrices(conditionIds) {
+  const prices = new Map();
+  const unique = [...new Set(conditionIds.filter(Boolean))];
+  if (!unique.length) return prices;
+  const markets = await fetchMarketsByConditionIds(unique);
+  markets.forEach((m) => {
+    try {
+      const parsed = JSON.parse(m.outcomePrices).map(Number);
+      if (parsed.length >= 2 && parsed.every(Number.isFinite)) prices.set(m.conditionId, parsed);
+    } catch (e) { /* skip unparseable */ }
+  });
+  return prices;
+}
+
+// Annotates each leg of each ticket with livePrice/stale. A leg is stale
+// when its current price has risen past the point where the estimated win
+// probability still clears BETTING_MIN_EV_EDGE - i.e. the edge is gone at
+// today's price, even though the pick itself hasn't changed.
+async function markStaleBettingPrices(tickets) {
+  const legs = tickets.flatMap((t) => t.legs);
+  const prices = await fetchLiveBettingPrices(legs.map((l) => l.conditionId));
+  if (!prices.size) return { checked: 0, stale: 0 };
+
+  let checked = 0;
+  let stale = 0;
+  legs.forEach((leg) => {
+    const pair = prices.get(leg.conditionId);
+    if (!pair) return;
+    // outcomeIndex was stored when the pick was normalized, so the right
+    // side is read even when the market lists them in the other order.
+    const live = pair[leg.outcomeIndex];
+    if (!Number.isFinite(live) || live <= 0 || live >= 1) return;
+    checked += 1;
+    leg.livePrice = live;
+    leg.maxPrice = leg.estProb - BETTING_MIN_EV_EDGE;
+    leg.stale = live > leg.maxPrice;
+    if (leg.stale) stale += 1;
+  });
+  return { checked, stale };
 }
 
 /* ===================== Market readiness ===================== */

@@ -62,11 +62,17 @@ function bettingLegHtml(leg) {
   // The worst price at which this pick still clears the qualification edge -
   // the shopping limit when taking it to another book (DK/Kalshi).
   const maxPrice = leg.estProb - BETTING_MIN_EV_EDGE;
+  // Live re-quote, when the stale-price guard has run for this slate.
+  const liveBit = Number.isFinite(leg.livePrice)
+    ? (leg.stale
+      ? ` &middot; <span class="score-inline bad">now ${bettingFmtCents(leg.livePrice)} &mdash; edge gone</span>`
+      : ` &middot; <span class="score-inline good">now ${bettingFmtCents(leg.livePrice)}</span>`)
+    : '';
   return `
-    <div class="bet-leg">
+    <div class="bet-leg${leg.stale ? ' stale' : ''}">
       <span class="bet-leg-status">${legStatus}</span>
       <span class="bet-leg-main">${BETTING_SPORTS[leg.sport].icon} ${escapeHtml(leg.matchup)} &rarr; <strong>${escapeHtml(leg.pickName)}</strong></span>
-      <span class="bet-leg-nums">@ ${bettingFmtCents(leg.price)} (${bettingAmericanOdds(leg.price)}) &middot; est <span class="score-inline ${winRateClass(pct)}">${pct}%</span> &middot; max ${bettingFmtCents(maxPrice)} (${bettingAmericanOdds(maxPrice)})</span>
+      <span class="bet-leg-nums">@ ${bettingFmtCents(leg.price)} (${bettingAmericanOdds(leg.price)}) &middot; est <span class="score-inline ${winRateClass(pct)}">${pct}%</span> &middot; max ${bettingFmtCents(maxPrice)} (${bettingAmericanOdds(maxPrice)})${liveBit}</span>
     </div>`;
 }
 

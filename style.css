@@ -4617,3 +4617,19 @@ body {
   margin-top: 5px;
   line-height: 1.45;
 }
+
+.bet-leg.stale {
+  opacity: 0.75;
+  border-left: 2px solid var(--bad);
+  padding-left: 6px;
+}
+
+.bet-price-warn {
+  color: var(--bad);
+}
+
+.bet-same-game {
+  font-size: 0.7rem;
+  color: var(--orange);
+  margin-top: 4px;
+}
