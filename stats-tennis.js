@@ -377,7 +377,7 @@ function renderTennisScope(suffix, predictions) {
   renderTennisPriceBuckets(scopedPredictions, suffix);
   renderDimensionEdgeTable('tennisDimensionEdge' + suffix, scopedPredictions, (p) => [p.playerAName, p.playerBName]);
   renderTennisTable(scopedPredictions, suffix);
-  renderDayNumberTable('tennisUniversalDay' + suffix, todayOrOldPredictions, 'matchTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('tennisUniversalDay' + suffix, todayOrOldPredictions, 'matchTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
   renderDayNumberTable('tennisDayEnergy' + suffix, todayOrOldPredictions, 'matchTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
   renderDayComboTable('tennisDayCombo' + suffix, todayOrOldPredictions, 'matchTime');
   document.getElementById('tennisStatsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;

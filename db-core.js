@@ -1721,7 +1721,21 @@ function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
 // keyed by an arbitrary string prefix so UFC/Tennis/MLB (and MLB's separate
 // Today/Old scopes) can each keep their own filter independently while
 // sharing one implementation.
-const DAY_FILTER_UNIVERSAL_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 22, 28, 33];
+// A date's Universal Day for day-number contexts (filters, win-rate tables,
+// combos). The 20-exception impure-11 case carries lookupValue 2 for the
+// compat TABLE lookups, but as a day NUMBER a standalone 2 doesn't exist -
+// it IS an 11. The only real 2 in the day system is the literal 2nd of the
+// month, which lives in Day Energy (reduceNumber already maps a raw 20 to
+// 11, so energy 2 can only come from the 2nd). Everything that groups or
+// filters by Universal Day goes through this so an 11/2 day counts as 11
+// everywhere, consistently.
+function universalDayNumber(date) {
+  const v = compatLifePathInfo(date).lookupValue;
+  return v === 2 ? 11 : v;
+}
+
+// No 2: see universalDayNumber above - a universal 2 is an 11.
+const DAY_FILTER_UNIVERSAL_OPTIONS = [1, 3, 4, 5, 6, 7, 8, 9, 11, 13, 22, 28, 33];
 const DAY_FILTER_ENERGY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28];
 const _dayFilterState = new Map();
 
@@ -1789,7 +1803,7 @@ function matchDayFilter(dateValue, state) {
     return isoFromParts(d.getFullYear(), d.getMonth() + 1, d.getDate()) === state.exact;
   }
 
-  const universal = compatLifePathInfo(d).lookupValue;
+  const universal = universalDayNumber(d);
   const energy = getReducedDay(d);
   const universalOk = state.universal == null || universal === state.universal;
   const energyOk = state.energy == null || energy === state.energy;
@@ -2125,7 +2139,7 @@ function computeDayComboStats(predictions, dateField, minGap = REAL_EDGE_MIN_GAP
   resolved.forEach((p) => {
     const d = new Date(p[dateField]);
     if (isNaN(d)) return;
-    const universalDay = compatLifePathInfo(d).lookupValue;
+    const universalDay = universalDayNumber(d);
     const dayEnergy = getReducedDay(d);
     const key = `${universalDay}|${dayEnergy}`;
     if (!byKey.has(key)) byKey.set(key, { universalDay, dayEnergy, count: 0, wins: 0 });

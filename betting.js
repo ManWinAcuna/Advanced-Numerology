@@ -544,7 +544,8 @@ document.getElementById('bettingLedger').addEventListener('click', (e) => {
 
 // Day-filter chips - multi-select toggles for Universal Day / Day Energy,
 // collapsed behind a summary line that always shows the active filter.
-const BETTING_PERSONAL_DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33];
+// No 2: a summed personal day that lands on 2 is an 11 (see universalDayNumber).
+const BETTING_PERSONAL_DAY_OPTIONS = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33];
 
 function renderBettingDayChips() {
   const filter = loadBettingDayFilter();

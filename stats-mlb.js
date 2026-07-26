@@ -797,7 +797,7 @@ function renderMlbScope(suffix, predictions, signals) {
   // Always todayOrOldPredictions, not scopedPredictions - this table's whole
   // point is showing every day value side by side, which the day filter
   // itself can't (it stays scoped to the Today/Old tab, just not the filter).
-  renderDayNumberTable('mlbUniversalDay' + suffix, todayOrOldPredictions, 'gameTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_REAL_EDGE_MIN_GAP);
+  renderDayNumberTable('mlbUniversalDay' + suffix, todayOrOldPredictions, 'gameTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day', MLB_REAL_EDGE_MIN_GAP);
   renderDayNumberTable('mlbDayEnergy' + suffix, todayOrOldPredictions, 'gameTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy', MLB_REAL_EDGE_MIN_GAP);
   renderDayComboTable('mlbDayCombo' + suffix, todayOrOldPredictions, 'gameTime', MLB_REAL_EDGE_MIN_GAP);
   renderMlbComponentSignal(scopedPredictions, suffix);

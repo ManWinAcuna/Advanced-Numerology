@@ -403,7 +403,7 @@ function renderUfcScope(suffix, predictions) {
   renderPriceBuckets(scopedPredictions, suffix);
   renderDimensionEdgeTable('ufcDimensionEdge' + suffix, scopedPredictions, (p) => [p.fighterAName, p.fighterBName]);
   renderTable(scopedPredictions, suffix);
-  renderDayNumberTable('statsUniversalDay' + suffix, todayOrOldPredictions, 'fightTime', (d) => compatLifePathInfo(d).lookupValue, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
+  renderDayNumberTable('statsUniversalDay' + suffix, todayOrOldPredictions, 'fightTime', universalDayNumber, DAY_FILTER_UNIVERSAL_OPTIONS, 'Universal Day');
   renderDayNumberTable('statsDayEnergy' + suffix, todayOrOldPredictions, 'fightTime', getReducedDay, DAY_FILTER_ENERGY_OPTIONS, 'Day Energy');
   renderDayComboTable('statsDayCombo' + suffix, todayOrOldPredictions, 'fightTime');
   document.getElementById('statsLastUpdated' + suffix).textContent = `Last checked ${new Date().toLocaleTimeString()}`;

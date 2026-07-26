@@ -115,7 +115,7 @@ function saveBettingDayFilter(filter) {
 function bettingDayNumbers(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   const date = new Date(y, m - 1, d, 12);
-  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date), personal: bettingPersonalDayFor(dateKey), compatScore: bettingDayCompatFor(dateKey) };
+  return { universal: universalDayNumber(date), energy: getReducedDay(date), personal: bettingPersonalDayFor(dateKey), compatScore: bettingDayCompatFor(dateKey) };
 }
 
 // The user's own Personal Day for a calendar date - same
@@ -142,6 +142,10 @@ function bettingPersonalDayFor(dateKey) {
       const date = new Date(y, m - 1, d, 12);
       const personalMonth = reduceNumber(getPersonalMonthRaw(birthDate, date));
       result = reduceNumber(getPersonalDayRaw(personalMonth, date));
+      // A summed personal day has no standalone 2 - the one raw sum that
+      // lands on exactly 2 is 1+1, which IS an 11 (same doctrine as
+      // universalDayNumber; reduceNumber already maps a raw 20 to 11).
+      if (result === 2) result = 11;
     }
   }
   _bettingPersonalDayMemo.days.set(dateKey, result);
