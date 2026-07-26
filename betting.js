@@ -110,7 +110,8 @@ function renderBettingToday(slate) {
 
   if (slate.dayFiltered) {
     const personalBit = slate.todayNums.personal != null ? ` / your Personal Day ${slate.todayNums.personal}` : '';
-    el.innerHTML = `<div class="empty-state">Today is Universal Day ${slate.todayNums.universal} / Day Energy ${slate.todayNums.energy}${personalBit} &mdash; outside your day filter, so no bets today.</div>`;
+    const compatBit = slate.todayNums.compatScore != null ? ` / your day compatibility ${slate.todayNums.compatScore}` : '';
+    el.innerHTML = `<div class="empty-state">Today is Universal Day ${slate.todayNums.universal} / Day Energy ${slate.todayNums.energy}${personalBit}${compatBit} &mdash; outside your day filter, so no bets today.</div>`;
     return;
   }
   if (!slate.totalTodayPicks) {
@@ -353,7 +354,7 @@ function runStrategyLab() {
   const curMode = loadBettingMode();
   const curFilter = loadBettingDayFilter();
   const mixedTypes = loadBettingMixedTypes();
-  const noFilter = { universal: [], energy: [], personal: [] };
+  const noFilter = { universal: [], energy: [], personal: [], compat: [] };
   const only = (part) => ({ ...noFilter, ...part });
   const soloActive = (list, n, others) => list.length === 1 && list[0] === n && others.every((o) => !o.length);
 
@@ -369,7 +370,7 @@ function runStrategyLab() {
     dayRows.push({
       label: `Universal Day ${n}`,
       applyAttr: `data-apply-universal="${n}"`,
-      active: soloActive(curFilter.universal, n, [curFilter.energy, curFilter.personal]),
+      active: soloActive(curFilter.universal, n, [curFilter.energy, curFilter.personal, curFilter.compat]),
       sim: runBettingSimulation(scope, curMode, start, only({ universal: [n] }), mixedTypes, picks),
     });
   });
@@ -377,7 +378,7 @@ function runStrategyLab() {
     dayRows.push({
       label: `Day Energy ${n}`,
       applyAttr: `data-apply-energy="${n}"`,
-      active: soloActive(curFilter.energy, n, [curFilter.universal, curFilter.personal]),
+      active: soloActive(curFilter.energy, n, [curFilter.universal, curFilter.personal, curFilter.compat]),
       sim: runBettingSimulation(scope, curMode, start, only({ energy: [n] }), mixedTypes, picks),
     });
   });
@@ -386,15 +387,23 @@ function runStrategyLab() {
       dayRows.push({
         label: `My Personal Day ${n}`,
         applyAttr: `data-apply-personal="${n}"`,
-        active: soloActive(curFilter.personal, n, [curFilter.universal, curFilter.energy]),
+        active: soloActive(curFilter.personal, n, [curFilter.universal, curFilter.energy, curFilter.compat]),
         sim: runBettingSimulation(scope, curMode, start, only({ personal: [n] }), mixedTypes, picks),
+      });
+    });
+    BETTING_DAY_COMPAT_BANDS.forEach((b) => {
+      dayRows.push({
+        label: `My Day Compat ${b.label}`,
+        applyAttr: `data-apply-compat="${b.key}"`,
+        active: soloActive(curFilter.compat, b.key, [curFilter.universal, curFilter.energy, curFilter.personal]),
+        sim: runBettingSimulation(scope, curMode, start, only({ compat: [b.key] }), mixedTypes, picks),
       });
     });
   }
   dayRows.unshift({
     label: 'Every day (no filter)',
     applyAttr: 'data-apply-universal="0"',
-    active: !curFilter.universal.length && !curFilter.energy.length && !curFilter.personal.length,
+    active: !curFilter.universal.length && !curFilter.energy.length && !curFilter.personal.length && !curFilter.compat.length,
     sim: runBettingSimulation(scope, curMode, start, noFilter, mixedTypes, picks),
   });
 
@@ -419,9 +428,9 @@ document.getElementById('bettingLabBtn').addEventListener('click', () => {
 });
 
 document.getElementById('bettingLabResults').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy], button[data-apply-personal]');
+  const btn = e.target.closest('button[data-apply-mode], button[data-apply-universal], button[data-apply-energy], button[data-apply-personal], button[data-apply-compat]');
   if (!btn) return;
-  const emptyFilter = { universal: [], energy: [], personal: [] };
+  const emptyFilter = { universal: [], energy: [], personal: [], compat: [] };
   if (btn.dataset.applyMode) {
     saveBettingMode(btn.dataset.applyMode);
     bettingModeSelectEl.value = btn.dataset.applyMode;
@@ -435,6 +444,9 @@ document.getElementById('bettingLabResults').addEventListener('click', (e) => {
     renderBettingDayChips();
   } else if (btn.dataset.applyPersonal !== undefined) {
     saveBettingDayFilter({ ...emptyFilter, personal: [Number(btn.dataset.applyPersonal)] });
+    renderBettingDayChips();
+  } else if (btn.dataset.applyCompat !== undefined) {
+    saveBettingDayFilter({ ...emptyFilter, compat: [btn.dataset.applyCompat] });
     renderBettingDayChips();
   }
   resetPagination('bettingLedger');
@@ -534,16 +546,22 @@ function renderBettingDayChips() {
   document.getElementById('bettingUniversalChips').innerHTML = DAY_FILTER_UNIVERSAL_OPTIONS.map((n) => chip(n, 'universal', filter.universal.includes(n))).join('');
   document.getElementById('bettingEnergyChips').innerHTML = DAY_FILTER_ENERGY_OPTIONS.map((n) => chip(n, 'energy', filter.energy.includes(n))).join('');
 
+  const profileHint = '<span class="box-hint" style="margin-top:0;">Set your birthday in My Profile to unlock</span>';
   const hasProfile = bettingPersonalDayFor(bettingLocalDateKey(new Date())) != null;
   document.getElementById('bettingPersonalChips').innerHTML = hasProfile
     ? BETTING_PERSONAL_DAY_OPTIONS.map((n) => chip(n, 'personal', filter.personal.includes(n))).join('')
-    : '<span class="box-hint" style="margin-top:0;">Set your birthday in My Profile to unlock</span>';
+    : profileHint;
+  document.getElementById('bettingCompatChips').innerHTML = hasProfile
+    ? BETTING_DAY_COMPAT_BANDS.map((b) => `<button type="button" class="betting-day-chip${filter.compat.includes(b.key) ? ' active' : ''}" data-group="compat" data-num="${b.key}">${b.label}</button>`).join('')
+    : profileHint;
 
+  const compatLabels = filter.compat.map((k) => (BETTING_DAY_COMPAT_BANDS.find((b) => b.key === k) || { label: k }).label);
   const summary = document.getElementById('bettingDayFilterSummary');
   const parts = [];
   if (filter.universal.length) parts.push(`Universal Day ${filter.universal.join(', ')}`);
   if (filter.energy.length) parts.push(`Day Energy ${filter.energy.join(', ')}`);
   if (filter.personal.length) parts.push(`My Personal Day ${filter.personal.join(', ')}`);
+  if (filter.compat.length) parts.push(`My Day Compat ${compatLabels.join(', ')}`);
   summary.textContent = parts.length ? `only ${parts.join(' + ')}` : 'off (betting every day)';
   summary.classList.toggle('active', parts.length > 0);
 }
@@ -575,11 +593,12 @@ document.getElementById('bettingDayFilter').addEventListener('click', (e) => {
   const chipEl = e.target.closest('.betting-day-chip');
   if (!chipEl) return;
   const filter = loadBettingDayFilter();
-  const list = filter[chipEl.dataset.group];
-  const num = Number(chipEl.dataset.num);
-  const idx = list.indexOf(num);
-  if (idx >= 0) list.splice(idx, 1); else list.push(num);
-  list.sort((a, b) => a - b);
+  const group = chipEl.dataset.group;
+  const list = filter[group];
+  const value = group === 'compat' ? chipEl.dataset.num : Number(chipEl.dataset.num);
+  const idx = list.indexOf(value);
+  if (idx >= 0) list.splice(idx, 1); else list.push(value);
+  if (group !== 'compat') list.sort((a, b) => a - b);
   saveBettingDayFilter(filter);
   renderBettingDayChips();
   resetPagination('bettingLedger');

@@ -87,10 +87,25 @@ function loadBettingDayFilter() {
       universal: Array.isArray(f && f.universal) ? f.universal.map(Number) : [],
       energy: Array.isArray(f && f.energy) ? f.energy.map(Number) : [],
       personal: Array.isArray(f && f.personal) ? f.personal.map(Number) : [],
+      compat: Array.isArray(f && f.compat) ? f.compat.filter((k) => BETTING_DAY_COMPAT_BANDS.some((b) => b.key === k)) : [],
     };
   } catch (e) {
-    return { universal: [], energy: [], personal: [] };
+    return { universal: [], energy: [], personal: [], compat: [] };
   }
+}
+
+// Bands for "my compatibility with the day" - same 0-100 score the profile's
+// Compatibility with Today box computes (computeEnergyFlow), cut at the same
+// thresholds the app colors scores with (77+ good, below 49 rough).
+const BETTING_DAY_COMPAT_BANDS = [
+  { key: 'good', label: '77+', min: 77, max: 101 },
+  { key: 'mid', label: '49-76', min: 49, max: 77 },
+  { key: 'rough', label: 'Under 49', min: -1, max: 49 },
+];
+
+function bettingDayCompatBandKey(score) {
+  const band = BETTING_DAY_COMPAT_BANDS.find((b) => score >= b.min && score < b.max);
+  return band ? band.key : null;
 }
 
 function saveBettingDayFilter(filter) {
@@ -100,7 +115,7 @@ function saveBettingDayFilter(filter) {
 function bettingDayNumbers(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   const date = new Date(y, m - 1, d, 12);
-  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date), personal: bettingPersonalDayFor(dateKey) };
+  return { universal: compatLifePathInfo(date).lookupValue, energy: getReducedDay(date), personal: bettingPersonalDayFor(dateKey), compatScore: bettingDayCompatFor(dateKey) };
 }
 
 // The user's own Personal Day for a calendar date - same
@@ -133,16 +148,44 @@ function bettingPersonalDayFor(dateKey) {
   return result;
 }
 
+// My-compatibility-with-the-day score (0-100) for a calendar date - the
+// profile's Compatibility with Today engine pointed at any date. Memoized
+// the same way as the personal day above.
+let _bettingDayCompatMemo = { profileRaw: null, days: new Map() };
+
+function bettingDayCompatFor(dateKey) {
+  const raw = localStorage.getItem(PROFILE_KEY) || '';
+  if (_bettingDayCompatMemo.profileRaw !== raw) {
+    _bettingDayCompatMemo = { profileRaw: raw, days: new Map() };
+  }
+  if (_bettingDayCompatMemo.days.has(dateKey)) return _bettingDayCompatMemo.days.get(dateKey);
+
+  let result = null;
+  const profile = loadProfile();
+  if (profile && profile.date) {
+    const [by, bm, bd] = profile.date.split('-').map(Number);
+    const birthDate = new Date(by, (bm || 1) - 1, bd || 1);
+    if (by && !Number.isNaN(birthDate.getTime())) {
+      const [y, m, d] = dateKey.split('-').map(Number);
+      result = computeEnergyFlow(birthDate, new Date(y, m - 1, d, 12)).finalScore;
+    }
+  }
+  _bettingDayCompatMemo.days.set(dateKey, result);
+  return result;
+}
+
 function bettingDayMatchesFilter(dateKey, filter) {
   if (!filter) return true;
   const hasPersonal = filter.personal && filter.personal.length;
-  if (!filter.universal.length && !filter.energy.length && !hasPersonal) return true;
+  const hasCompat = filter.compat && filter.compat.length;
+  if (!filter.universal.length && !filter.energy.length && !hasPersonal && !hasCompat) return true;
   const nums = bettingDayNumbers(dateKey);
   if (filter.universal.length && !filter.universal.includes(nums.universal)) return false;
   if (filter.energy.length && !filter.energy.includes(nums.energy)) return false;
-  // No profile birthday means the personal dimension can't be computed -
-  // it's skipped rather than silently blocking every bet.
+  // No profile birthday means the personal dimensions can't be computed -
+  // they're skipped rather than silently blocking every bet.
   if (hasPersonal && nums.personal != null && !filter.personal.includes(nums.personal)) return false;
+  if (hasCompat && nums.compatScore != null && !filter.compat.includes(bettingDayCompatBandKey(nums.compatScore))) return false;
   return true;
 }
 
