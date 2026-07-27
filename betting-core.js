@@ -566,9 +566,21 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
   const totals = { staked: 0, profit: 0, won: 0, lost: 0, pending: 0, voided: 0, tickets: 0 };
   // Worst peak-to-trough slide of the simulated bankroll - the honest "how
   // bad did it get before it recovered" number next to the headline growth.
+  //
+  // Tracked as two SEPARATE maxima, because on a compounding curve the biggest
+  // dollar slide and the biggest percentage slide are almost never the same
+  // event, and only reporting the dollar one hides the risk. A bankroll that
+  // runs $50 -> $12,000 spends most of its life below the eventual dollar
+  // record, so an early wipeout - $80 down to $8, a 90% loss - is only $72 and
+  // can never win a dollar comparison. The dollar figure describes the richest
+  // stretch of the run by construction; the percentage is the one that says
+  // whether the slide was survivable at the size you were betting.
   let bankrollPeak = startBankroll;
-  let maxDrawdown = 0;
+  let maxDrawdown = 0; // largest slide in dollars, + the % that came with it
   let maxDrawdownPct = 0;
+  let worstSlidePct = 0; // largest slide in percent, + the $ that came with it
+  let worstSlideAmount = 0;
+  let worstSlideDateKey = null;
 
   dayKeys.forEach((dateKey) => {
     const dayPicks = byDay.get(dateKey);
@@ -591,9 +603,15 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
 
       if (bankroll > bankrollPeak) bankrollPeak = bankroll;
       const drawdown = bankrollPeak - bankroll;
+      const drawdownPct = bankrollPeak > 0 ? drawdown / bankrollPeak : 0;
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
-        maxDrawdownPct = bankrollPeak > 0 ? drawdown / bankrollPeak : 0;
+        maxDrawdownPct = drawdownPct;
+      }
+      if (drawdownPct > worstSlidePct) {
+        worstSlidePct = drawdownPct;
+        worstSlideAmount = drawdown;
+        worstSlideDateKey = dateKey;
       }
 
       totals.staked += staked;
@@ -623,6 +641,9 @@ function runBettingSimulation(scope, mode, startBankroll, dayFilter, mixedTypes,
     peakBankroll: Math.round(bankrollPeak * 100) / 100,
     maxDrawdown: Math.round(maxDrawdown * 100) / 100,
     maxDrawdownPct: Math.round(maxDrawdownPct * 100),
+    worstSlidePct: Math.round(worstSlidePct * 100),
+    worstSlideAmount: Math.round(worstSlideAmount * 100) / 100,
+    worstSlideDateKey,
     resolvedPickCount: picks.filter((p) => p.resolved && !p.draw && p.dateKey < todayKey).length,
   };
 }

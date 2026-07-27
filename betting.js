@@ -117,6 +117,13 @@ function renderBettingSummary(sim) {
   bits.push(sim.maxDrawdown > 0
     ? `Max drawdown <span class="score-inline bad">-${bettingFmtMoney(sim.maxDrawdown)} (${sim.maxDrawdownPct}%)</span>`
     : 'Max drawdown none');
+  // Only worth a line when it's a different event than the dollar record -
+  // otherwise it's the same number twice. On a compounding curve it usually IS
+  // different, and usually much worse: the dollar record can only be set once
+  // the bankroll is big, so early slides never win it however deep they cut.
+  if (sim.worstSlidePct > sim.maxDrawdownPct) {
+    bits.push(`Worst slide <span class="score-inline bad">${sim.worstSlidePct}%</span> (-${bettingFmtMoney(sim.worstSlideAmount)}${sim.worstSlideDateKey ? ` on ${bettingFmtDate(sim.worstSlideDateKey)}` : ''})`);
+  }
 
   hero.innerHTML = `
     <div class="score-names">Simulated Bankroll</div>
