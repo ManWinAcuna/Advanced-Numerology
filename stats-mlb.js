@@ -117,9 +117,37 @@ async function repairMlbFalseDraws(onProgress) {
     if (repaired) saveMlbPredictions(predictions); // checkpoint as we go
   }
 
-  if (repaired) saveMlbPredictions(predictions);
+  const stripped = stripMlbTwinComponents(predictions);
+  if (repaired || stripped) saveMlbPredictions(predictions);
   localStorage.setItem(MLB_DRAW_REPAIR_KEY, String(MLB_DRAW_REPAIR_VERSION));
-  return { checked, repaired, stillTied, unmatched };
+  return { checked, repaired, stillTied, unmatched, componentsCleared: stripped };
+}
+
+// Second half of the same corruption. When both team names resolved to the away
+// side, side A and side B were scored as the SAME team - so the record's two
+// component sets came out byte-identical and its two composites came out equal.
+// Such a game has no lean on any axis, so it contributes nothing to the win
+// rate, the component signal table or the edge tiers: it is invisible rather
+// than wrong, which is why the damage went unnoticed.
+//
+// Fixing the result is not enough; the scores themselves have to be rebuilt
+// from the real home/away sides. The backfill already does exactly that, but it
+// skips any record that HAS components - so clearing them is what lets it
+// recompute these in place on its next run.
+//
+// Identical components on both sides is a safe signature: it needs six separate
+// scores to coincide exactly, and it occurs in 0 of the 1,460 records written
+// after the naming conventions converged.
+function stripMlbTwinComponents(predictions) {
+  let cleared = 0;
+  predictions.forEach((p) => {
+    if (!p.components || !p.components.A || !p.components.B) return;
+    if (JSON.stringify(p.components.A) !== JSON.stringify(p.components.B)) return;
+    delete p.components;
+    delete p.dims;
+    cleared += 1;
+  });
+  return cleared;
 }
 
 // isCorrectPick, PRICE_BUCKETS, computeBucketStats, edgeGap live in db-core.js,
