@@ -80,29 +80,34 @@ function renderBettingToday(slate) {
     return;
   }
 
-  const totalStake = slate.tickets.reduce((s, t) => s + t.stake, 0);
-  const totalPayout = slate.tickets.reduce((s, t) => s + t.stake / t.prodPrice, 0);
-  // Ticket-level, not slate-level. A slate-wide signature call this "unlocked"
-  // whenever anything moved - a new game qualifying, but equally a bankroll
-  // edit or a price drift re-sizing an existing stake - and locking again then
-  // wrote the whole slate a second time. Counting the tickets that aren't on
-  // the record yet answers the only question the button needs: is there
-  // anything here I haven't already taken?
-  const freshCount = bettingUnlockedTickets(slate.tickets).length;
-  const alreadyLocked = freshCount === 0;
-  const lockLabel = alreadyLocked
-    ? '✓ Locked'
-    : (freshCount === slate.tickets.length
-      ? '🔒 Lock these bets'
-      : `🔒 Lock ${freshCount} new bet${freshCount === 1 ? '' : 's'}`);
+  // Locked bets leave the slip entirely. Keeping them on screen meant a newly
+  // qualified game arrived partway down a list already acted on, with nothing
+  // marking which was which. What's displayed is now exactly what pressing Lock
+  // would write - so a bet appearing here always means it needs taking.
+  const fresh = bettingUnlockedTickets(slate.tickets);
+  const lockedCount = slate.tickets.length - fresh.length;
+
+  if (!fresh.length) {
+    el.innerHTML = `
+      <div class="empty-state">All ${lockedCount} of today's bet${lockedCount === 1 ? ' is' : 's are'} locked &mdash; nothing left to take. If another game qualifies later, it appears here on its own.</div>
+      <div class="bet-lock-row">
+        <a class="btn-link" href="bet-log.html">📒 View Bet Log &rarr;</a>
+      </div>`;
+    return;
+  }
+
+  // Totals cover what's on the slip, not the whole day - this is the number
+  // you'd be staking right now if you took everything shown.
+  const totalStake = fresh.reduce((s, t) => s + t.stake, 0);
+  const totalPayout = fresh.reduce((s, t) => s + t.stake / t.prodPrice, 0);
   el.innerHTML = `
-    <div class="bet-day-summary">Total staked: <strong>${bettingFmtMoney(totalStake)}</strong> &middot; If everything hits: <strong>${bettingFmtMoney(totalPayout)}</strong> &middot; ${slate.qualifiedCount} qualifying pick${slate.qualifiedCount === 1 ? '' : 's'}</div>
-    ${bettingTicketsHtml(slate.tickets)}
+    <div class="bet-day-summary">Total staked: <strong>${bettingFmtMoney(totalStake)}</strong> &middot; If everything hits: <strong>${bettingFmtMoney(totalPayout)}</strong> &middot; ${slate.qualifiedCount} qualifying pick${slate.qualifiedCount === 1 ? '' : 's'}${lockedCount ? ` &middot; ${lockedCount} already locked` : ''}</div>
+    ${bettingTicketsHtml(fresh)}
     <div class="bet-lock-row">
-      <button class="btn" id="bettingLockBtn" type="button"${alreadyLocked ? ' disabled' : ''}>${lockLabel}</button>
+      <button class="btn" id="bettingLockBtn" type="button">🔒 ${lockedCount ? `Lock ${fresh.length} new bet${fresh.length === 1 ? '' : 's'}` : 'Lock these bets'}</button>
       <button class="btn-link" id="bettingCheckPricesBtn" type="button">💱 Check Live Prices</button>
       <a class="btn-link" href="bet-log.html">📒 View Bet Log &rarr;</a>
-      <span class="box-hint" style="margin-top:0;">Locking writes these bets to the Bet Log permanently &mdash; do it when you're taking them. New games can still qualify later; locking again adds only the ones you haven't taken yet, never a second copy.</span>
+      <span class="box-hint" style="margin-top:0;">Locking writes these bets to the Bet Log permanently &mdash; do it when you're taking them. They then drop off this slip, so anything still showing is a bet you haven't taken yet.</span>
     </div>
     <div class="box-hint" id="bettingPriceNote"></div>`;
 }
@@ -678,7 +683,9 @@ document.getElementById('bettingTodayContent').addEventListener('click', async (
     btn.disabled = true;
     btn.textContent = 'Checking…';
     try {
-      const res = await markStaleBettingPrices(currentTodaySlate.tickets);
+      // Only the tickets actually on the slip. Pricing the locked ones too
+      // would report "3 of 12 legs have moved" against a slip showing four.
+      const res = await markStaleBettingPrices(bettingUnlockedTickets(currentTodaySlate.tickets));
       renderBettingToday(currentTodaySlate); // repaint with live prices on the legs
       const note = document.getElementById('bettingPriceNote');
       if (note) {
