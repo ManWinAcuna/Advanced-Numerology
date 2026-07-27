@@ -232,7 +232,18 @@ function computeLuckyBonus(dateA, dateB) {
 
 /* ---------- Full scoring ---------- */
 
-function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompat) {
+// The blend every page uses unless a caller says otherwise. Split out as data so
+// a sport can carry its own weighting without forking the function: MLB passes
+// MLB_COMPAT_WEIGHTS (db-core.js), because its dimension-edge table measured the
+// western sun sign at 0 and day-of-year at +2 while they carried 10% and 3% of
+// the score. Every sub-score is still computed and returned at any weight - a
+// dimension has to keep being measured to notice if it ever starts predicting.
+const COMPAT_DEFAULT_WEIGHTS = {
+  numerology: 0.60, vietnamese: 0.30, western: 0.10,
+  lifePath: 0.60, dayNum: 0.35, doy: 0.05,
+};
+
+function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompat, weights = COMPAT_DEFAULT_WEIGHTS) {
   const entityLifePathInfo = compatLifePathInfo(entityDate);
   const dayLifePathInfo = compatLifePathInfo(dayDate);
   const lifePathScore = numCompatFn(entityLifePathInfo.lookupValue, dayLifePathInfo.lookupValue);
@@ -245,7 +256,7 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
   const dayDoy = getReducedDayOfYear(dayDate);
   const doyScore = numCompatFn(entityDoy, dayDoy);
 
-  const numerologyScore = 0.60 * lifePathScore + 0.35 * dayScore + 0.05 * doyScore;
+  const numerologyScore = weights.lifePath * lifePathScore + weights.dayNum * dayScore + weights.doy * doyScore;
 
   const entityYearSign = getChineseZodiacYear(entityDate);
   const dayYearSign = getChineseZodiacYear(dayDate);
@@ -265,7 +276,7 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
   const daySunSign = getSunSign(dayDate);
   const westernScore = westernCompat(entitySunSign, daySunSign);
 
-  const baseScore = 0.60 * numerologyScore + 0.30 * vietnameseScore + 0.10 * westernScore;
+  const baseScore = weights.numerology * numerologyScore + weights.vietnamese * vietnameseScore + weights.western * westernScore;
 
   const luckyBonus = computeLuckyBonus(entityDate, dayDate);
 

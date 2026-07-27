@@ -1029,22 +1029,26 @@ function saveMlbBackfillState(state) {
 // and state anchors for the COMBINED number while still computing both so the
 // breakdown popups and the dimension-edge table can keep reporting them. Only
 // MLB passes it - see MLB_DAY_ANCHOR_ONLY.
-function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate, dayOnly) {
-  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
+// compatWeights overrides the dimension blend inside each anchor's compat score
+// (life path / day number / day-of-year / zodiac / western). Defaults to the
+// app-wide blend; MLB passes MLB_COMPAT_WEIGHTS.
+function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate, dayOnly, compatWeights) {
+  const w = compatWeights || COMPAT_DEFAULT_WEIGHTS;
+  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat, w);
   if (dayOnly) {
-    const state = stateDate ? computeCompatibility(dobDate, stateDate, sportsNumerologyCompat) : null;
-    const stadium = stadiumDate ? computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat) : null;
+    const state = stateDate ? computeCompatibility(dobDate, stateDate, sportsNumerologyCompat, w) : null;
+    const stadium = stadiumDate ? computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat, w) : null;
     return { day, stadium, state, combined: day.finalScore };
   }
   if (!stateDate) {
     return { day, stadium: null, state: null, combined: day.finalScore };
   }
-  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat);
+  const state = computeCompatibility(dobDate, stateDate, sportsNumerologyCompat, w);
   if (!stadiumDate) {
     const combined = Math.round(0.75 * day.finalScore + 0.25 * state.finalScore);
     return { day, stadium: null, state, combined };
   }
-  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat);
+  const stadium = computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat, w);
   const combined = Math.round(0.60 * day.finalScore + 0.15 * stadium.finalScore + 0.25 * state.finalScore);
   return { day, stadium, state, combined };
 }
@@ -1415,6 +1419,29 @@ function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
 // their own dimension tables have not been checked this way.
 const MLB_DAY_ANCHOR_ONLY = true;
 
+// The same dimension-edge table, read one level deeper. Inside each anchor's
+// compat score the app's default blend put 36% on life path, 30% on the zodiac,
+// 21% on the day number, 10% on the western sun sign and 3% on day-of-year -
+// while the measured edges came out life path +1, zodiac +1, day number +2,
+// western 0, day-of-year +2. The two dimensions that actually beat the market
+// were carrying 24% of the score between them; the three at +1 or 0 carried 76%.
+//
+// This moves toward the measurement without handing the model over to it. The
+// western sun sign goes to zero, since a measured 0 earns no weight (it is still
+// computed and still reported, so it can be re-checked). Day-of-year rises to
+// 19% rather than to its proportional share: its +2 was earned while carrying 3%
+// of the score, making it the least stress-tested number in the table, and these
+// edges are in-sample by construction - the same trap that made the Manager +4
+// fail to replicate. Day number, the best-supported dimension, leads at 34%.
+//
+// Flattened: dayNum 33.75%, zodiac 25%, lifePath 22.5%, doy 18.75%, western 0%.
+// MLB only - UFC, Tennis and NBA keep COMPAT_DEFAULT_WEIGHTS until their own
+// dimension tables have been checked the same way.
+const MLB_COMPAT_WEIGHTS = {
+  numerology: 0.75, vietnamese: 0.25, western: 0,
+  lifePath: 0.30, dayNum: 0.45, doy: 0.25,
+};
+
 function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const side = sideLetter === 'A' ? g.sideA : g.sideB;
   const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
@@ -1435,7 +1462,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const parts = [];
   const pitcherBd = g.birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
+    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
 
     const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
     if (matchupScore != null) {
@@ -1447,7 +1474,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
     if (!bd || !bd.birthDate) return;
     const isCatcher = b.pos === 'C';
     const weight = isCatcher ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
+    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
   });
   if (teamInfo) {
     const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
@@ -1456,7 +1483,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       // exactly like any other entity through computeFighterScore, at full
       // weight, instead of the thinner zodiac-only fallback below.
       const foundingDate = parseDateInput(foundingISO);
-      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
+      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
     } else if (teamInfo.firstYearOfPlay) {
       // No real date for this team - MLB's own API only gives a founding
       // YEAR, never a month/day, and (per explicit instruction) no
@@ -1475,7 +1502,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   }
   if (manager) {
     const bd = g.birthdates.get(manager.id);
-    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
+    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
   }
 
   if (!parts.length) return null;

@@ -1163,7 +1163,7 @@ async function recordTodaysFinishedMlbGames() {
       if (!bd || !bd.birthDate || side.startingPitcherStrikeouts == null) continue;
       const baseline = await fetchMlbGameLogBeforeDate(side.startingPitcherId, season, date);
       if (!baseline) continue;
-      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat).finalScore;
+      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat, MLB_COMPAT_WEIGHTS).finalScore;
       const predictedDirection = dayScore >= 60 ? 'over' : (dayScore <= 40 ? 'under' : 'neutral');
       const actualKs = side.startingPitcherStrikeouts;
       const actualDirection = actualKs > baseline.strikeoutsPerStart ? 'over' : (actualKs < baseline.strikeoutsPerStart ? 'under' : 'push');
@@ -1258,7 +1258,7 @@ const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // real limits now are just how long one run takes (hundreds more games) and
 // whether Polymarket's own price history still reaches back that far - a gap
 // in old data is their retention, not a bug here.
-const MLB_BACKFILL_SCHEMA = 10; // bump when the stored prediction shape changes,
+const MLB_BACKFILL_SCHEMA = 11; // bump when the stored prediction shape changes,
 // v9: the NRFI and run-totals pitcher-duel markets were removed. The walk no
 // longer collects them, so v7 and v8 (which existed only to build and then
 // upgrade those two stores) are dead history. Bumped so a marker left at 7 or
@@ -1268,6 +1268,10 @@ const MLB_BACKFILL_SCHEMA = 10; // bump when the stored prediction shape changes
 // that measured 0 and +1 against the market. That changes every stored
 // component AND every composite, so the whole window has to be re-walked -
 // a rescore cannot fix it, because the per-component scores themselves move.
+// v11: same reasoning one level deeper - MLB_COMPAT_WEIGHTS (db-core.js) now
+// reweights the dimensions inside each compat score (western sun sign to 0,
+// day-of-year 3% -> 19%, day number 21% -> 34%). Every person's day score moves,
+// so every stored component moves with it. Re-walk, don't rescore.
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk
@@ -1556,7 +1560,7 @@ async function backfillMlbHistory(onProgress) {
       const baseline = await fetchMlbGameLogBeforeDate(side.startingPitcherId, season, date);
       if (!baseline) continue; // no starts yet this season to baseline against
 
-      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat).finalScore;
+      const dayScore = computeCompatibility(parseDateInput(bd.birthDate), matchDate, sportsNumerologyCompat, MLB_COMPAT_WEIGHTS).finalScore;
       const predictedDirection = dayScore >= 60 ? 'over' : (dayScore <= 40 ? 'under' : 'neutral');
       const actualKs = side.startingPitcherStrikeouts;
       const actualDirection = actualKs > baseline.strikeoutsPerStart ? 'over' : (actualKs < baseline.strikeoutsPerStart ? 'under' : 'push');

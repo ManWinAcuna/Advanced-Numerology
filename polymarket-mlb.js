@@ -307,7 +307,7 @@ async function recordPitcherKSignals(g) {
 
     const matchDateISO = currentMlbMatchDateISO(g, () => updateGameCard(g.conditionId));
     if (!matchDateISO) continue; // timezone not confirmed yet - don't guess; retried on the next enrichment pass
-    const dayScore = computeCompatibility(parseDateInput(bd.birthDate), parseDateInput(matchDateISO), sportsNumerologyCompat).finalScore;
+    const dayScore = computeCompatibility(parseDateInput(bd.birthDate), parseDateInput(matchDateISO), sportsNumerologyCompat, MLB_COMPAT_WEIGHTS).finalScore;
 
     const signals = loadMlbPitcherKSignals();
     if (signals.some((s) => s.gamePk === g.gamePk && s.pitcherId === pitcher.id)) continue;
