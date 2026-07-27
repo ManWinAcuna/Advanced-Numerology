@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Advanced Numerology">
+  <title>Advanced Numerology</title>
+  <!-- Horse head bust. 2026 is the Year of the Horse; the palette is the app's
+       own gold (#f5c542) and orange (#ff8a3d) accents so the mark sits in the
+       same family as the rest of the UI. Colours are literal rather than CSS
+       variables because this file is also loaded standalone as the favicon,
+       where the app stylesheet is not present. -->
+  <path fill="#f5c542" d="M58 24
+    L44 33
+    L26 49
+    L16 61
+    C11 65, 11 70, 16 72
+    C20 74, 25 72, 29 70
+    L41 68
+    C50 67, 58 62, 63 53
+    C61 66, 61 75, 66 88
+    L70 100
+    L100 100
+    C100 73, 94 47, 82 33
+    C74 26, 65 23, 58 24 Z"/>
+  <!-- Ear bases run a few units into the skull so the join stays solid; drawn
+       flush they leave a visible notch at the crown. -->
+  <path fill="#f5c542" d="M45 34 C44 22, 47 14, 51 12 C56 16, 57 26, 56 34 Z
+                          M58 31 C60 19, 64 12, 68 11 C70 19, 68 26, 66 33 Z"/>
+  <path fill="#ff8a3d" d="M58 24
+    C71 22, 84 32, 91 46
+    C97 59, 100 79, 100 100
+    L84 100
+    C85 77, 81 55, 73 43
+    C67 33, 64 27, 58 24 Z"/>
+  <ellipse cx="45" cy="45" rx="3.2" ry="2.5" transform="rotate(-38 45 45)" fill="#15110b"/>
+  <ellipse cx="19" cy="66" rx="2.1" ry="1.5" transform="rotate(-38 19 66)" fill="#15110b"/>
+</svg>
