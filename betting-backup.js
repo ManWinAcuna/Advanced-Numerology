@@ -114,15 +114,31 @@ async function restoreBettingBackup(backup) {
   // restore replaces it wholesale - the write guard cannot tell the two apart.
   await ensureBackupStoresLoaded();
   let restored = 0;
+  const failed = [];
   Object.keys(backup.data).forEach((key) => {
     if (!BETTING_BACKUP_KEYS.includes(key)) return; // ignore unknown keys
-    // Routed through the big store so the large prediction stores land in
-    // IndexedDB, not into a localStorage key the app no longer reads.
-    if (BIG_STORE_KEYS.includes(key)) bigStoreSetItem(key, backup.data[key]);
-    else localStorage.setItem(key, backup.data[key]);
-    restored += 1;
+    try {
+      // Routed through the big store so the large prediction stores land in
+      // IndexedDB, not into a localStorage key the app no longer reads.
+      if (BIG_STORE_KEYS.includes(key)) bigStoreSetItem(key, backup.data[key]);
+      else localStorage.setItem(key, backup.data[key]);
+      restored += 1;
+    } catch (e) {
+      // A store that refuses the write (unreadable, so writing would truncate
+      // it) must not abort the whole restore and leave it half applied. Collect
+      // the failures and report them instead of throwing from the middle.
+      failed.push(key);
+    }
   });
-  return restored;
+
+  // The restored picks carry whatever composite scores they had when the backup
+  // was taken, but the weights-version marker lives in localStorage and is NOT
+  // part of the backup - so it still reads "current" and the rescore would skip
+  // them, leaving old-weighted scores in place for good. Clearing it forces the
+  // rescore to re-run against the data that just landed.
+  localStorage.removeItem(MLB_WEIGHTS_VERSION_KEY);
+
+  return { restored, failed };
 }
 
 /* ===================== Cloud backup (opt-in, manual both ways) ===================== */
@@ -169,6 +185,6 @@ async function cloudRestoreBetting() {
   );
   const json = docs.map((d) => (d.exists ? d.data().chunk : '')).join('');
   const backup = JSON.parse(json);
-  const restored = await restoreBettingBackup(backup);
-  return { restored, summary: summarizeBettingBackup(backup) };
+  const res = await restoreBettingBackup(backup);
+  return { restored: res.restored, failed: res.failed, summary: summarizeBettingBackup(backup) };
 }

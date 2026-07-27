@@ -62,11 +62,16 @@ document.getElementById('bettingBackupFile').addEventListener('change', async (e
       betLogBackupStatus.textContent = 'Restore cancelled.';
       return;
     }
-    const restored = await restoreBettingBackup(backup);
-    betLogBackupStatus.textContent = `Restored ${restored} stores - ${betLogSummaryText(summary)}. Reloading…`;
+    const res = await restoreBettingBackup(backup);
+    if (res.failed.length) {
+      // A partly-applied restore must never read as a clean one.
+      betLogBackupStatus.textContent = `Restored ${res.restored} stores, but ${res.failed.length} could not be written (${res.failed.join(', ')}). Reload and try again before relying on this data.`;
+      return;
+    }
+    betLogBackupStatus.textContent = `Restored ${res.restored} stores - ${betLogSummaryText(summary)}. Reloading…`;
     setTimeout(() => window.location.reload(), 900);
   } catch (err) {
-    betLogBackupStatus.textContent = "That file doesn't look like a backup.";
+    betLogBackupStatus.textContent = `Restore failed: ${err.message}`;
   } finally {
     e.target.value = ''; // let the same file be picked again
   }
@@ -99,6 +104,11 @@ document.getElementById('bettingCloudRestoreBtn').addEventListener('click', asyn
       return;
     }
     const res = await cloudRestoreBetting();
+    if (res.failed.length) {
+      betLogBackupStatus.textContent = `Restored ${res.restored} stores, but ${res.failed.length} could not be written (${res.failed.join(', ')}). Reload and try again before relying on this data.`;
+      btn.disabled = false;
+      return;
+    }
     betLogBackupStatus.textContent = `Restored ${res.restored} stores - ${betLogSummaryText(res.summary)}. Reloading…`;
     setTimeout(() => window.location.reload(), 900);
   } catch (err) {
