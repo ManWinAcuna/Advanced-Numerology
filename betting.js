@@ -799,8 +799,16 @@ function renderBetting() {
 
 async function checkBettingResults(scope) {
   const jobs = [];
-  if (scope === 'all' || scope === 'ufc') jobs.push(checkResults());
-  if (scope === 'all' || scope === 'tennis') jobs.push(checkTennisResults());
+  if (scope === 'all' || scope === 'ufc') {
+    jobs.push(checkResults());
+    // Record today's not-yet-stored fights (day-anchor scoring, stats-ufc.js)
+    // so UFC fills its own slate exactly the way MLB/NBA below do.
+    jobs.push(recordTodaysUfcFights());
+  }
+  if (scope === 'all' || scope === 'tennis') {
+    jobs.push(checkTennisResults());
+    jobs.push(recordTodaysTennisMatches());
+  }
   if (scope === 'all' || scope === 'mlb') {
     jobs.push(checkMlbResults());
     // Also record today's not-yet-stored games so the Betting page fills its

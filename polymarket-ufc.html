@@ -54,63 +54,6 @@
     </div>
   </div>
 
-  <div class="box ufc-location-box" id="pmLocationBox">
-    <div class="box-label">Fight Location</div>
-    <div class="pm-location-summary" id="pmLocationSummary" style="display:none;">
-      <div class="pm-location-summary-row">
-        <span class="pm-location-summary-text" id="pmLocationSummaryText"></span>
-        <button class="btn-link" id="pmLocationChangeBtn" type="button">✏️ Change</button>
-      </div>
-      <div class="pm-location-clock" id="pmLocationClock"></div>
-    </div>
-    <div class="mode-desc">Applies to every fight below &mdash; a UFC Fight Night is one venue for the whole card. No numerology edge shows until you set this.</div>
-    <div class="hours-toggle ufc-region-toggle" id="pmRegionToggle">
-      <button type="button" class="hours-toggle-btn active" data-region="us">🇺🇸 United States</button>
-      <button type="button" class="hours-toggle-btn" data-region="intl">🌍 International</button>
-    </div>
-    <div class="ufc-location-grid">
-      <div class="ufc-location-field">
-        <label for="pmStateSelect" id="pmRegionLabel">State</label>
-        <div class="ufc-select-row">
-          <select id="pmStateSelect">
-            <option value="">Select state...</option>
-          </select>
-          <button class="btn-link" id="pmEditRegionBtn" type="button" style="display:none;">Edit</button>
-        </div>
-      </div>
-      <div class="ufc-location-field">
-        <label for="pmStadiumSelect">Stadium / Venue <span class="optional-tag">optional</span></label>
-        <div class="ufc-select-row">
-          <select id="pmStadiumSelect">
-            <option value="">Select stadium...</option>
-          </select>
-          <button class="btn-link" id="pmEditStadiumBtn" type="button" style="display:none;">Edit</button>
-        </div>
-      </div>
-    </div>
-    <div class="ufc-add-stadium-form" id="pmAddRegionForm">
-      <div class="ufc-form-sublabel" id="pmRegionFormLabel">Add New City / Region</div>
-      <input type="text" id="pmNewRegionName" placeholder="City / region name (e.g., Abu Dhabi)">
-      <button class="icon-btn icon-btn-lookup" id="pmRegionLookupBtn" type="button" title="Look up founding date">🔍</button>
-      <input type="text" id="pmNewRegionFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
-      <div class="famous-status" id="pmRegionFoundedStatus"></div>
-      <button class="btn" id="pmSaveRegionBtn" type="button">Save Region</button>
-      <button class="btn-link" id="pmCancelRegionBtn" type="button">Cancel</button>
-    </div>
-    <div class="ufc-add-stadium-form" id="pmAddStadiumForm">
-      <div class="ufc-form-sublabel" id="pmStadiumFormLabel">Add New Stadium</div>
-      <input type="text" id="pmNewStadiumName" placeholder="Stadium name">
-      <button class="icon-btn icon-btn-lookup" id="pmStadiumLookupBtn" type="button" title="Look up founding date">🔍</button>
-      <input type="text" id="pmNewStadiumFounded" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" title="Founding date">
-      <div class="famous-status" id="pmStadiumFoundedStatus"></div>
-      <select id="pmNewStadiumState">
-        <option value="">Select state...</option>
-      </select>
-      <button class="btn" id="pmSaveStadiumBtn" type="button">Save Stadium</button>
-      <button class="btn-link" id="pmCancelStadiumBtn" type="button">Cancel</button>
-    </div>
-  </div>
-
   <div id="fightsContainer">
     <div class="box pm-fight-card">
       <div class="pm-skeleton-bar" style="width:55%"></div>

@@ -388,6 +388,14 @@ async function refreshTennisAndRender() {
   currentTennisPredictions = predictions;
   renderTennisScope('', predictions);
   renderTennisScope('Old', predictions);
+  // Fill today's slate behind the first paint (recordTodaysTennisMatches
+  // below) - best-effort and non-blocking, same pattern as MLB's refresh.
+  try {
+    await recordTodaysTennisMatches();
+    const preds2 = loadTennisPredictions();
+    currentTennisPredictions = preds2;
+    renderTennisScope('', preds2);
+  } catch (e) { /* today fill is best-effort */ }
 }
 
 function wireTennisRefreshButton(btnId) {
@@ -411,9 +419,10 @@ function wireTennisRefreshButton(btnId) {
 // closed tennis event title, which all follow that same "{City}: player vs
 // player" shape - then resolved/created as an Intl Region exactly like the
 // "Add New City/Region" flow does (resolveIntlRegionForBackfillByCity,
-// db-core.js). No venue-level data exists for a backfilled match though, so
-// it scores Day 75% + Region 25% - the same blend the live tracker itself
-// falls back to whenever no specific venue has been set for a card.
+// db-core.js). No venue-level data exists for a backfilled match, so it
+// scores Day 75% + Region 25% - and since the live tracker now auto-resolves
+// its regions through this exact same path (no venue, no US-state mode),
+// that one blend is the only basis any tennis pick is ever scored on.
 
 const TENNIS_BACKFILL_STATE_KEY = 'numerology_tennis_backfill_state';
 // Deliberately local-only, no cloudPushKey - same lesson learned from MLB's
@@ -574,8 +583,8 @@ async function processTennisBackfillEvent(event, existingByConditionId, regionCa
   if (priceA == null || priceB == null) return null; // no pregame price data - don't guess
 
   // No venue-level data for a backfilled match - Day 75% + Region 25%,
-  // computeFighterScore's own no-stadium fallback (db-core.js), same blend
-  // the live tracker itself uses whenever no venue has been set.
+  // computeFighterScore's own no-stadium fallback (db-core.js), the one
+  // blend every tennis path (live tracker included) now scores with.
   const regionDate = tennisParseDateInput(region.founded);
   const scoreA = computeFighterScore(tennisParseDateInput(matchedA.dob), matchDate, null, regionDate);
   const scoreB = computeFighterScore(tennisParseDateInput(matchedB.dob), matchDate, null, regionDate);
@@ -643,6 +652,122 @@ async function backfillTennisHistory(onProgress) {
   return { eventsProcessed: total, newPredictionsCount: newPredictions.length, alreadyCurrent: false };
 }
 
+/* ===================== Today's matches (auto-tracking) ===================== */
+// Tennis counterpart of recordTodaysMlbGames (stats-mlb.js): pull today's
+// OPEN Polymarket tennis moneylines and record a pick for any match not
+// already stored. The tournament city is parsed from the event title and
+// resolved to a region automatically - exactly the backfill's own path
+// (tennisCityFromEventTitle + resolveIntlRegionForBackfillByCity) - so the
+// score is the same Day 75% + Region 25% blend, with no location picking.
+// Runs from both the Stats page refresh and the Betting page's refresh.
+//
+// Only matches that HAVEN'T started yet are recorded here: a mid-match price
+// is not a prematch price, and a match missed before its start is caught by
+// the daily backfill instead, with a real prematch CLOB price.
+
+async function fetchOpenTennisMoneylines() {
+  let events = [];
+  try {
+    const res = await fetch('https://gamma-api.polymarket.com/events/keyset?tag_slug=tennis&closed=false&limit=100');
+    if (!res.ok) return [];
+    const data = await res.json();
+    events = Array.isArray(data.events) ? data.events : [];
+  } catch (e) {
+    return [];
+  }
+  const matches = [];
+  events.forEach((ev) => {
+    (ev.markets || []).forEach((m) => {
+      if (m.sportsMarketType !== 'moneyline') return;
+      if (m.closed || m.active === false) return;
+      let outcomes = [];
+      let prices = [];
+      try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
+      try { prices = JSON.parse(m.outcomePrices).map(Number); } catch (e) { /* leave empty */ }
+      const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
+      if (!outcomes[0] || !outcomes[1] || !gameStartTime) return;
+      if (!Number.isFinite(prices[0]) || !Number.isFinite(prices[1])) return;
+      matches.push({
+        conditionId: m.conditionId,
+        playerAName: outcomes[0],
+        playerBName: outcomes[1],
+        priceA: prices[0],
+        priceB: prices[1],
+        gameStartTime,
+        eventTitle: ev.title,
+      });
+    });
+  });
+  return matches;
+}
+
+async function recordTodaysTennisMatches() {
+  const matches = await fetchOpenTennisMoneylines();
+  const now = Date.now();
+  const todays = matches.filter((m) => isTodayLocal(m.gameStartTime.toISOString()) && m.gameStartTime.getTime() > now);
+  if (!todays.length) return;
+
+  const existing = loadTennisPredictions();
+  const existingCond = new Set(existing.map((p) => p.conditionId));
+  const regionCache = new Map();
+  const playerCache = new Map();
+  const newPredictions = [];
+
+  await Promise.all(todays.map(async (m) => {
+    if (existingCond.has(m.conditionId)) return; // already stored (here, live tracker, or backfill)
+    const [matchedA, matchedB] = await Promise.all([
+      ensurePlayerInRoster(m.playerAName, playerCache),
+      ensurePlayerInRoster(m.playerBName, playerCache),
+    ]);
+    if (!matchedA || !matchedB) return; // no Wikidata birthdate either - skip, don't guess
+
+    const cityName = tennisCityFromEventTitle(m.eventTitle);
+    if (!cityName) return;
+    // Cache the in-flight PROMISE, not the result - every match in a
+    // tournament shares one city and they all process concurrently here, so
+    // a value cache would race several resolveIntlRegionForBackfillByCity
+    // calls into creating duplicate regions (same reason playerCache holds
+    // promises).
+    if (!regionCache.has(cityName)) {
+      regionCache.set(cityName, resolveIntlRegionForBackfillByCity(cityName).catch(() => null));
+    }
+    const region = await regionCache.get(cityName);
+    if (!region || !region.timezone) return; // couldn't confirm a region/timezone - don't guess
+
+    const matchDateISO = localMatchDateISO(m.gameStartTime, 'intl', region);
+    if (!matchDateISO) return;
+    const matchDate = tennisParseDateInput(matchDateISO);
+    const regionDate = tennisParseDateInput(region.founded);
+    const scoreA = computeFighterScore(tennisParseDateInput(matchedA.dob), matchDate, null, regionDate);
+    const scoreB = computeFighterScore(tennisParseDateInput(matchedB.dob), matchDate, null, regionDate);
+
+    const marketFavName = m.priceA >= m.priceB ? m.playerAName : m.playerBName;
+    const numFavName = scoreA.combined >= scoreB.combined ? m.playerAName : m.playerBName;
+    const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+
+    newPredictions.push({
+      conditionId: m.conditionId,
+      playerAName: m.playerAName,
+      playerBName: m.playerBName,
+      numerologyFavorite: numFavName,
+      numerologyScoreA: scoreA.combined,
+      numerologyScoreB: scoreB.combined,
+      dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
+      marketFavorite: marketFavName,
+      marketPriceA: m.priceA,
+      marketPriceB: m.priceB,
+      pickType: agree ? 'favorite' : 'underdog',
+      eventTitle: m.eventTitle,
+      matchTime: m.gameStartTime.toISOString(),
+      recordedAt: Date.now(),
+      result: null,
+    });
+    existingCond.add(m.conditionId);
+  }));
+
+  if (newPredictions.length) saveTennisPredictions([...existing, ...newPredictions]);
+}
+
 function initTennisBackfillButton() {
   document.getElementById('tennisBackfillBtn').addEventListener('click', async () => {
     const btn = document.getElementById('tennisBackfillBtn');
@@ -669,6 +794,47 @@ function initTennisBackfillButton() {
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkTennisResults() and the shared prediction
 // helpers, so the Betting page settles results through the same code path.
+// Backfill can only ADD matches - it dedupes by conditionId, so records
+// written before the auto-location rebuild (live-tracked with a hand-picked
+// venue or US state) keep their old scoring basis forever. This clears the
+// store and the backfill marker together and re-walks the full window, so
+// every stored tennis pick lands on the one basis every page now scores
+// with. withMlbScreenAwake lives in stats-mlb.js - generic despite the
+// name, and always loaded wherever this button exists.
+function initTennisRebuildButton() {
+  const btn = document.getElementById('tennisRebuildBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const existing = loadTennisPredictions().length;
+    if (!confirm(`Delete all ${existing} stored tennis picks and re-walk the full window from scratch?\n\nThis cannot be undone - keep this tab open and awake until it finishes.`)) return;
+
+    const status = document.getElementById('tennisBackfillStatus');
+    const backfillBtn = document.getElementById('tennisBackfillBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (backfillBtn) backfillBtn.disabled = true;
+    btn.textContent = '♻️ Rebuilding…';
+    try {
+      status.textContent = `Clearing ${existing} stored picks…`;
+      saveTennisPredictions([]);
+      saveTennisBackfillState({});
+      const result = await withMlbScreenAwake(() => backfillTennisHistory((processed, total) => {
+        status.textContent = `Rebuilding… ${processed}/${total} match events`;
+      }));
+      status.textContent = `Rebuilt from scratch - checked ${result.eventsProcessed} match events, stored ${result.newPredictionsCount} matches.`;
+      await refreshTennisAndRender();
+    } catch (e) {
+      // The store is empty at this point, so a failure here is not cosmetic -
+      // say so plainly rather than leaving a half-rebuilt store looking done.
+      status.textContent = `Rebuild failed after clearing the store: ${e && e.message ? e.message : e}. Press Backfill Data to fill it back in.`;
+      console.error('Tennis rebuild failed', e);
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+    if (backfillBtn) backfillBtn.disabled = false;
+  });
+}
+
 bigStoreReadyPromise.then(() => {
  if (document.getElementById('statsTennisSection')) {
   document.getElementById('tennisStatsHero').insertAdjacentHTML('beforebegin', dayFilterHtml('tennis'));
@@ -685,6 +851,7 @@ bigStoreReadyPromise.then(() => {
   initTennisMatchupModal('Old');
   initModalTabSwitcher('statsTennisSection');
   initTennisBackfillButton();
+  initTennisRebuildButton();
   refreshTennisAndRender();
  }
 });

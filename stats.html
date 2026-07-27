@@ -188,9 +188,11 @@
    <div class="pm-modal-page" data-page="old" style="display:none;">
     <div class="box" id="ufcBackfillBox">
       <div class="box-label">🕰️ Historical Backfill</div>
-      <div class="mode-desc">Pull already-fought UFC cards straight from Polymarket's own historical markets, instead of waiting for the live tracker to build a track record one card at a time. Old Data keeps growing forever &mdash; this just seeds it. UFC has no reliable per-fight venue data the way MLB/Tennis do, so backfilled fights are scored on the fight-day anchor only (no stadium/state).</div>
+      <div class="mode-desc">Pull already-fought UFC cards straight from Polymarket's own historical markets. Old Data keeps growing forever &mdash; this just seeds it. UFC has no reliable per-fight venue data, so every UFC pick everywhere is scored on the fight-day anchor only (no stadium/state) &mdash; the same basis the automatic daily tracking uses.</div>
       <button class="btn-link" id="ufcBackfillBtn" type="button">🔄 Backfill Data</button>
       <div class="mode-desc" id="ufcBackfillStatus"></div>
+      <div class="mode-desc" style="margin-top:12px;">Backfill only ADDS fights it doesn't already have &mdash; it never re-scores ones it does. Picks recorded before the day-only rebuild (with a hand-picked stadium/state) stay as they were until you Rebuild: it clears the stored UFC picks and walks the whole window again from scratch, so everything sits on one scoring basis.</div>
+      <button class="btn-link" id="ufcRebuildBtn" type="button">♻️ Wipe &amp; Rebuild</button>
     </div>
 
     <div class="pm-last-updated-row">
@@ -420,9 +422,11 @@
    <div class="pm-modal-page" data-page="old" style="display:none;">
     <div class="box" id="tennisBackfillBox">
       <div class="box-label">🕰️ Historical Backfill</div>
-      <div class="mode-desc">Pull already-played tennis matches straight from Polymarket's own historical markets, instead of waiting for the live tracker to build a track record one match at a time. Old Data keeps growing forever &mdash; this just seeds it. The tournament's city is auto-detected from the match's own event title, same as adding a new City/Region by hand.</div>
+      <div class="mode-desc">Pull already-played tennis matches straight from Polymarket's own historical markets. Old Data keeps growing forever &mdash; this just seeds it. The tournament's city is auto-detected from the match's own event title &mdash; the same basis the automatic daily tracking and the live tracker now use (no venue, no manual location).</div>
       <button class="btn-link" id="tennisBackfillBtn" type="button">🔄 Backfill Data</button>
       <div class="mode-desc" id="tennisBackfillStatus"></div>
+      <div class="mode-desc" style="margin-top:12px;">Backfill only ADDS matches it doesn't already have &mdash; it never re-scores ones it does. Picks recorded before the auto-location rebuild (with a hand-picked venue or US state) stay as they were until you Rebuild: it clears the stored tennis picks and walks the whole window again from scratch, so everything sits on one scoring basis.</div>
+      <button class="btn-link" id="tennisRebuildBtn" type="button">♻️ Wipe &amp; Rebuild</button>
     </div>
 
     <div class="pm-last-updated-row">

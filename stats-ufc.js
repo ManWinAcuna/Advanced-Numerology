@@ -118,7 +118,7 @@ function renderHero(stats, suffix = '') {
   if (stats.total === 0) {
     hero.innerHTML = `
       <div class="score-names">Numerology Win Rate</div>
-      <div class="empty-state">No fights tracked yet &mdash; open the Polymarket UFC tracker and set a fight location to start building a track record.</div>
+      <div class="empty-state">No fights tracked yet &mdash; fight days are picked up automatically when you open this page or the Betting page, and the backfill below fills in history.</div>
     `;
     return;
   }
@@ -414,6 +414,14 @@ async function refreshAndRenderUfc() {
   currentPredictions = predictions;
   renderUfcScope('', predictions);
   renderUfcScope('Old', predictions);
+  // Fill today's card behind the first paint (recordTodaysUfcFights below) -
+  // best-effort and non-blocking, same pattern as MLB's refresh.
+  try {
+    await recordTodaysUfcFights();
+    const preds2 = loadUfcPredictions();
+    currentPredictions = preds2;
+    renderUfcScope('', preds2);
+  } catch (e) { /* today fill is best-effort */ }
 }
 
 function wireUfcRefreshButton(btnId) {
@@ -435,11 +443,11 @@ function wireUfcRefreshButton(btnId) {
 // events. And unlike MLB (venue -> official region) or Tennis (tournament
 // city parsed straight from the event title), UFC has no reliable per-fight
 // venue/location source at all - the only mention of one is buried in a
-// loose AI-generated paragraph, not something worth trusting. Backfilled
-// fights are therefore scored on the Day anchor only (computeFighterScore's
-// now-optional stateDate, db-core.js) - narrower than a live-tracked pick
-// with a user-selected location, but real and clearly labeled as such,
-// rather than guessing a venue.
+// loose AI-generated paragraph, not something worth trusting. Every UFC
+// pick everywhere is therefore scored on the Day anchor only
+// (computeFighterScore's now-optional stateDate, db-core.js) - the live
+// tracker and the auto today-tracker above score the exact same way, so the
+// whole UFC record shares one basis rather than guessing a venue.
 
 const UFC_BACKFILL_STATE_KEY = 'numerology_ufc_backfill_state';
 // Deliberately local-only, no cloudPushKey - same lesson learned from MLB's
@@ -645,6 +653,109 @@ async function backfillUfcHistory(onProgress) {
   return { eventsProcessed: total, newPredictionsCount: newPredictions.length, alreadyCurrent: false };
 }
 
+/* ===================== Today's fights (auto-tracking) ===================== */
+// UFC counterpart of recordTodaysMlbGames (stats-mlb.js): pull today's OPEN
+// Polymarket UFC moneylines and record a pick for any fight not already
+// stored - scored on the Day anchor only, the exact basis the backfill above
+// already uses (UFC has no reliable per-fight venue source, so nothing
+// venue-shaped is guessed). Runs from both the Stats page refresh and the
+// Betting page's refresh, so a fight card gets tracked automatically every
+// day it's opened - no live tracker visit, no location picking.
+//
+// Only fights that HAVEN'T started yet are recorded here, which MLB's
+// version doesn't guard for: a mid-fight price is not a pregame price, and a
+// fight missed before its start is caught by the daily backfill instead,
+// with a real pregame CLOB price - strictly more honest than freezing
+// whatever the market drifted to mid-round.
+
+async function fetchOpenUfcMoneylines() {
+  let events = [];
+  try {
+    // Same keyset feed the live tracker reads (its GAMMA_EVENTS_URL) -
+    // duplicated here because polymarket-ufc.js never loads on the Stats or
+    // Betting pages.
+    const res = await fetch('https://gamma-api.polymarket.com/events/keyset?tag_slug=ufc&closed=false&limit=100');
+    if (!res.ok) return [];
+    const data = await res.json();
+    events = Array.isArray(data.events) ? data.events : [];
+  } catch (e) {
+    return [];
+  }
+  const fights = [];
+  events.forEach((ev) => {
+    (ev.markets || []).forEach((m) => {
+      if (m.sportsMarketType !== 'moneyline') return;
+      if (m.closed || m.active === false) return;
+      let outcomes = [];
+      let prices = [];
+      try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
+      try { prices = JSON.parse(m.outcomePrices).map(Number); } catch (e) { /* leave empty */ }
+      const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
+      if (!outcomes[0] || !outcomes[1] || !gameStartTime) return;
+      if (!Number.isFinite(prices[0]) || !Number.isFinite(prices[1])) return;
+      fights.push({
+        conditionId: m.conditionId,
+        fighterAName: outcomes[0],
+        fighterBName: outcomes[1],
+        priceA: prices[0],
+        priceB: prices[1],
+        gameStartTime,
+        eventTitle: ev.title,
+      });
+    });
+  });
+  return fights;
+}
+
+async function recordTodaysUfcFights() {
+  const fights = await fetchOpenUfcMoneylines();
+  const now = Date.now();
+  const todays = fights.filter((f) => isTodayLocal(f.gameStartTime.toISOString()) && f.gameStartTime.getTime() > now);
+  if (!todays.length) return;
+
+  const existing = loadUfcPredictions();
+  const existingCond = new Set(existing.map((p) => p.conditionId));
+  const rosterCache = new Map();
+  const newPredictions = [];
+
+  await Promise.all(todays.map(async (f) => {
+    if (existingCond.has(f.conditionId)) return; // already stored (here, live tracker, or backfill)
+    const [matchedA, matchedB] = await Promise.all([
+      ensureFighterInRoster(f.fighterAName, rosterCache),
+      ensureFighterInRoster(f.fighterBName, rosterCache),
+    ]);
+    if (!matchedA || !matchedB) return; // no Wikidata birthdate either - skip, don't guess
+
+    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), f.gameStartTime, null, null);
+    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), f.gameStartTime, null, null);
+
+    const marketFavName = f.priceA >= f.priceB ? f.fighterAName : f.fighterBName;
+    const numFavName = scoreA.combined >= scoreB.combined ? f.fighterAName : f.fighterBName;
+    const agree = normalizeName(marketFavName) === normalizeName(numFavName);
+
+    newPredictions.push({
+      conditionId: f.conditionId,
+      fighterAName: f.fighterAName,
+      fighterBName: f.fighterBName,
+      numerologyFavorite: numFavName,
+      numerologyScoreA: scoreA.combined,
+      numerologyScoreB: scoreB.combined,
+      dims: { A: extractDimensionScores(scoreA), B: extractDimensionScores(scoreB) },
+      marketFavorite: marketFavName,
+      marketPriceA: f.priceA,
+      marketPriceB: f.priceB,
+      pickType: agree ? 'favorite' : 'underdog',
+      eventTitle: f.eventTitle,
+      fightTime: f.gameStartTime.toISOString(),
+      recordedAt: Date.now(),
+      result: null,
+    });
+    existingCond.add(f.conditionId);
+  }));
+
+  if (newPredictions.length) saveUfcPredictions([...existing, ...newPredictions]);
+}
+
 function initUfcBackfillButton() {
   document.getElementById('ufcBackfillBtn').addEventListener('click', async () => {
     const btn = document.getElementById('ufcBackfillBtn');
@@ -668,6 +779,47 @@ function initUfcBackfillButton() {
   });
 }
 
+// Backfill can only ADD fights - it dedupes by conditionId, so records
+// written before the day-only rebuild (live-tracked with a hand-picked
+// stadium/state) keep their old scoring basis forever. This clears the
+// store and the backfill marker together and re-walks the full window, so
+// every stored UFC pick lands on the one basis every page now scores with.
+// withMlbScreenAwake lives in stats-mlb.js - generic despite the name, and
+// always loaded wherever this button exists.
+function initUfcRebuildButton() {
+  const btn = document.getElementById('ufcRebuildBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const existing = loadUfcPredictions().length;
+    if (!confirm(`Delete all ${existing} stored UFC picks and re-walk the full window from scratch?\n\nThis cannot be undone - keep this tab open and awake until it finishes.`)) return;
+
+    const status = document.getElementById('ufcBackfillStatus');
+    const backfillBtn = document.getElementById('ufcBackfillBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (backfillBtn) backfillBtn.disabled = true;
+    btn.textContent = '♻️ Rebuilding…';
+    try {
+      status.textContent = `Clearing ${existing} stored picks…`;
+      saveUfcPredictions([]);
+      saveUfcBackfillState({});
+      const result = await withMlbScreenAwake(() => backfillUfcHistory((processed, total) => {
+        status.textContent = `Rebuilding… ${processed}/${total} fight cards`;
+      }));
+      status.textContent = `Rebuilt from scratch - checked ${result.eventsProcessed} fight cards, stored ${result.newPredictionsCount} fights.`;
+      await refreshAndRenderUfc();
+    } catch (e) {
+      // The store is empty at this point, so a failure here is not cosmetic -
+      // say so plainly rather than leaving a half-rebuilt store looking done.
+      status.textContent = `Rebuild failed after clearing the store: ${e && e.message ? e.message : e}. Press Backfill Data to fill it back in.`;
+      console.error('UFC rebuild failed', e);
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+    if (backfillBtn) backfillBtn.disabled = false;
+  });
+}
+
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkResults() and the shared prediction helpers,
 // so the Betting page settles results through the exact same code path.
@@ -687,6 +839,7 @@ bigStoreReadyPromise.then(() => {
   initMatchupModal('Old');
   initModalTabSwitcher('statsUfcSection');
   initUfcBackfillButton();
+  initUfcRebuildButton();
   refreshAndRenderUfc();
  }
 });

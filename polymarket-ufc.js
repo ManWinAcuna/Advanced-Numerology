@@ -115,508 +115,30 @@ function initStakeInput() {
   });
 }
 
-/* ===================== Fight location (region + stadium) ===================== */
-// Polymarket gives no venue data, and the numerology score depends on it
-// (Day/Stadium/Region, same formula as ufc.js) - so no score shows at all
-// until the user sets a location here. Every fight on a UFC Fight Night
-// shares one venue, so this is set once per card rather than per fight.
-// The region is a US state (statehood date) or, for international cards, the
-// host city/emirate/province (its founding date, e.g. Abu Dhabi's) - toggled
-// between with the US/International switch.
-
-let stadiums = loadStadiums();
-let editingStadiumId = null;
-let editingRegionId = null;
-let regionMode = 'us'; // 'us' | 'intl'
-let selectedRegion = null; // a US_STATES entry or an allIntlRegions() entry - both carry .name/.founded
-let selectedStadium = null;
-
-/* ===================== Location persistence ===================== */
-// Remembering the card's location across visits means the user doesn't have
-// to re-pick a state/stadium every single time they open the tracker - it
-// just stays put until the card it was set for has completely wrapped up
-// (no more games), at which point it clears itself automatically so the
-// next (different) card doesn't silently inherit a stale venue.
-const LOCATION_KEY = 'numerology_ufc_pm_location';
-
-function loadSavedLocation() {
-  try {
-    const raw = localStorage.getItem(LOCATION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function saveLocationState() {
-  localStorage.setItem(LOCATION_KEY, JSON.stringify({
-    regionMode,
-    regionName: selectedRegion ? selectedRegion.name : null,
-    stadiumId: selectedStadium ? selectedStadium.id : null,
-  }));
-}
-
-function clearSavedLocation() {
-  localStorage.removeItem(LOCATION_KEY);
-}
-
-// Clears the in-memory selection and resets the controls' UI to match -
-// called once the card's fights are all gone (no more games).
-function resetLocationSelection() {
-  if (!selectedRegion && !selectedStadium && regionMode === 'us') { clearSavedLocation(); return; }
-  regionMode = 'us';
-  selectedRegion = null;
-  selectedStadium = null;
-  clearSavedLocation();
-  document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.region === 'us'));
-  document.getElementById('pmRegionLabel').textContent = 'State';
-  populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
-  populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
-  document.getElementById('pmStateSelect').value = '';
-  populateStadiumSelect();
-  updateEditRegionBtnVisibility();
-  updateEditStadiumBtnVisibility();
-  updateLocationSummaryUI();
-}
-
-// Applies whatever's saved to both the in-memory state and the location
-// controls' UI - called once at init, before the card's first render.
-function restoreSavedLocationIntoUI() {
-  const saved = loadSavedLocation();
-  if (!saved) return;
-
-  regionMode = saved.regionMode === 'intl' ? 'intl' : 'us';
-  document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.region === regionMode));
-  document.getElementById('pmRegionLabel').textContent = regionMode === 'intl' ? 'City / Region' : 'State';
-  populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
-  populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
-
-  const list = regionMode === 'us' ? US_STATES : allIntlRegions();
-  selectedRegion = saved.regionName ? (list.find((r) => r.name === saved.regionName) || null) : null;
-  if (selectedRegion) {
-    document.getElementById('pmStateSelect').value = regionMode === 'us'
-      ? String(US_STATES.findIndex((s) => s.name === selectedRegion.name))
-      : selectedRegion.id;
-  }
-
-  selectedStadium = saved.stadiumId ? (stadiums.find((s) => s.id === saved.stadiumId) || null) : null;
-  populateStadiumSelect(selectedStadium ? selectedStadium.id : '');
-
-  updateEditRegionBtnVisibility();
-  updateEditStadiumBtnVisibility();
-}
-
-/* ===================== Collapsed location summary ===================== */
-// Once a location is set, the full control block collapses to a one-line
-// chip plus a live clock showing the venue's current local time - the
-// clock doubles as reassurance that the right timezone resolved for
-// match-day scoring (see currentMatchDateISO below), in a way a user can
-// sanity-check at a glance. "Change" re-expands the controls.
-
-let locationManuallyExpanded = false;
-
-function updateLocationSummaryUI() {
-  const box = document.getElementById('pmLocationBox');
-  const summary = document.getElementById('pmLocationSummary');
-  if (!selectedRegion || locationManuallyExpanded) {
-    box.classList.remove('collapsed');
-    summary.style.display = 'none';
-    return;
-  }
-
-  box.classList.add('collapsed');
-  summary.style.display = '';
-  document.getElementById('pmLocationSummaryText').textContent =
-    `📍 ${selectedRegion.name}${selectedStadium ? ` · ${selectedStadium.name}` : ''}`;
-
-  const clockEl = document.getElementById('pmLocationClock');
-  const now = venueLocalTimeNow(regionMode, selectedRegion);
-  if (now) {
-    clockEl.classList.remove('warn');
-    clockEl.textContent = `🕐 Local time at the venue right now: ${now} — match days are scored on this clock.`;
-  } else if (regionMode === 'intl') {
-    ensureIntlRegionTimezone(selectedRegion, updateLocationSummaryUI);
-    clockEl.classList.add('warn');
-    clockEl.textContent = "⚠️ Couldn't confirm this region's timezone yet — match days fall back to UTC dates.";
-  } else {
-    clockEl.textContent = '';
-  }
-}
-
-function regionNoun() {
-  return regionMode === 'intl' ? 'city / region' : 'state';
-}
-
-function stateIndexByName(name) {
-  return US_STATES.findIndex((s) => s.name === name);
-}
-
-function populateRegionOptionsInto(selectEl, includeAdd) {
-  if (regionMode === 'us') {
-    selectEl.innerHTML = '<option value="">Select state...</option>'
-      + US_STATES.map((s, idx) => `<option value="${idx}">${escapeHtml(s.name)}</option>`).join('');
-  } else {
-    selectEl.innerHTML = '<option value="">Select city / region...</option>'
-      + allIntlRegions().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
-      + (includeAdd ? '<option value="__addRegion__">+ Add New City / Region</option>' : '');
-  }
-}
-
-function regionFromSelectValue(val) {
-  if (val === '' || val == null) return null;
-  if (regionMode === 'us') return US_STATES[Number(val)] || null;
-  return allIntlRegions().find((c) => c.id === val) || null;
-}
-
-// US stadiums carry a `state`, international ones a `region` (older records
-// may still say `country`) - each mode only lists its own kind so a Vegas
-// arena can't be picked for an Abu Dhabi card.
-function populateStadiumSelect(selectValue) {
-  const sel = document.getElementById('pmStadiumSelect');
-  const visible = stadiums.filter((s) => (regionMode === 'intl' ? !!(s.region || s.country) : !(s.region || s.country)));
-  sel.innerHTML = '<option value="">Select stadium...</option>'
-    + visible.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
-    + '<option value="__add__">+ Add New Stadium</option>';
-  sel.value = selectValue || '';
-}
-
-function updateEditRegionBtnVisibility() {
-  const show = regionMode === 'intl' && !!(selectedRegion && selectedRegion.id);
-  document.getElementById('pmEditRegionBtn').style.display = show ? '' : 'none';
-}
-
-function setRegionFoundedStatus(message, isError) {
-  const el = document.getElementById('pmRegionFoundedStatus');
-  el.textContent = message;
-  el.className = 'famous-status' + (isError ? ' error' : '');
-}
-
-// Same Wikidata-then-Wikipedia-infobox lookup used for fighter birthdays
-// (lookupKeyDateByName in db-core.js), aimed at a city/region's founding
-// date instead - coverage is thinner here than for people, so failing
-// quietly and leaving manual entry as the fallback is the expected case.
-function lookupRegionFoundedDate(name) {
-  setRegionFoundedStatus('🔍 Looking up founding date...', false);
-  lookupPlaceFoundingDate(name)
-    .then((info) => {
-      if (!info) {
-        setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
-        return;
-      }
-      document.getElementById('pmNewRegionFounded').value = isoToDisplay(info.date);
-      const source = info.via === 'country' ? "its country's founding" : 'Wikipedia/Wikidata';
-      setRegionFoundedStatus(`✓ Found via ${source} (${info.date}) - please double-check before saving.`, false);
-    })
-    .catch(() => setRegionFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
-}
-
-function openRegionForm(region) {
-  closeStadiumForm();
-  document.getElementById('pmAddRegionForm').classList.add('active');
-  setRegionFoundedStatus('', false);
-  if (region) {
-    editingRegionId = region.id;
-    document.getElementById('pmNewRegionName').value = region.name;
-    document.getElementById('pmNewRegionFounded').value = isoToDisplay(region.founded);
-    document.getElementById('pmRegionFormLabel').textContent = `Edit City / Region - ${region.name}`;
-    document.getElementById('pmSaveRegionBtn').textContent = 'Update Region';
-  } else {
-    editingRegionId = null;
-    document.getElementById('pmNewRegionName').value = '';
-    document.getElementById('pmNewRegionFounded').value = '';
-    document.getElementById('pmRegionFormLabel').textContent = 'Add New City / Region';
-    document.getElementById('pmSaveRegionBtn').textContent = 'Save Region';
-  }
-}
-
-function closeRegionForm() {
-  editingRegionId = null;
-  document.getElementById('pmAddRegionForm').classList.remove('active');
-  document.getElementById('pmNewRegionName').value = '';
-  document.getElementById('pmNewRegionFounded').value = '';
-  document.getElementById('pmRegionFormLabel').textContent = 'Add New City / Region';
-  document.getElementById('pmSaveRegionBtn').textContent = 'Save Region';
-  setRegionFoundedStatus('', false);
-}
-
-function updateEditStadiumBtnVisibility() {
-  const val = document.getElementById('pmStadiumSelect').value;
-  document.getElementById('pmEditStadiumBtn').style.display = (val && val !== '__add__') ? '' : 'none';
-}
-
-function setStadiumFoundedStatus(message, isError) {
-  const el = document.getElementById('pmStadiumFoundedStatus');
-  el.textContent = message;
-  el.className = 'famous-status' + (isError ? ' error' : '');
-}
-
-function lookupStadiumFoundedDate(name) {
-  setStadiumFoundedStatus('🔍 Looking up founding date...', false);
-  lookupKeyDateByName(name)
-    .then((info) => {
-      if (!info) {
-        setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
-        return;
-      }
-      document.getElementById('pmNewStadiumFounded').value = isoToDisplay(info.date);
-      setStadiumFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
-    })
-    .catch(() => setStadiumFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
-}
-
-function openStadiumForm(stadium) {
-  closeRegionForm();
-  document.getElementById('pmAddStadiumForm').classList.add('active');
-  setStadiumFoundedStatus('', false);
-  const regionSel = document.getElementById('pmNewStadiumState');
-  if (stadium) {
-    editingStadiumId = stadium.id;
-    document.getElementById('pmNewStadiumName').value = stadium.name;
-    document.getElementById('pmNewStadiumFounded').value = isoToDisplay(stadium.founded);
-    if (regionMode === 'us') {
-      const idx = stadium.state ? stateIndexByName(stadium.state) : -1;
-      regionSel.value = idx !== -1 ? String(idx) : '';
-    } else {
-      const regionName = stadium.region || stadium.country;
-      const c = regionName ? allIntlRegions().find((x) => x.name === regionName) : null;
-      regionSel.value = c ? c.id : '';
-    }
-    document.getElementById('pmStadiumFormLabel').textContent = `Edit Stadium - ${stadium.name}`;
-    document.getElementById('pmSaveStadiumBtn').textContent = 'Update Stadium';
-  } else {
-    editingStadiumId = null;
-    document.getElementById('pmNewStadiumName').value = '';
-    document.getElementById('pmNewStadiumFounded').value = '';
-    regionSel.value = '';
-    document.getElementById('pmStadiumFormLabel').textContent = 'Add New Stadium';
-    document.getElementById('pmSaveStadiumBtn').textContent = 'Save Stadium';
-  }
-}
-
-function closeStadiumForm() {
-  editingStadiumId = null;
-  document.getElementById('pmAddStadiumForm').classList.remove('active');
-  document.getElementById('pmNewStadiumName').value = '';
-  document.getElementById('pmNewStadiumFounded').value = '';
-  document.getElementById('pmNewStadiumState').value = '';
-  document.getElementById('pmStadiumFormLabel').textContent = 'Add New Stadium';
-  document.getElementById('pmSaveStadiumBtn').textContent = 'Save Stadium';
-  setStadiumFoundedStatus('', false);
-}
-
-function initLocationControls() {
-  attachDateMask(document.getElementById('pmNewStadiumFounded'));
-  attachDateMask(document.getElementById('pmNewRegionFounded'));
-  populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
-  populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
-  populateStadiumSelect();
-  updateEditStadiumBtnVisibility();
-  restoreSavedLocationIntoUI();
-  updateLocationSummaryUI();
-
-  document.getElementById('pmLocationChangeBtn').addEventListener('click', () => {
-    locationManuallyExpanded = true;
-    updateLocationSummaryUI();
-  });
-
-  // Keep the venue clock ticking while collapsed.
-  setInterval(() => {
-    if (document.visibilityState === 'visible' && selectedRegion && !locationManuallyExpanded) updateLocationSummaryUI();
-  }, 60000);
-
-  document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.region === regionMode) return;
-      regionMode = btn.dataset.region;
-      document.querySelectorAll('#pmRegionToggle .hours-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      selectedRegion = null;
-      selectedStadium = null;
-      closeRegionForm();
-      closeStadiumForm();
-      document.getElementById('pmRegionLabel').textContent = regionMode === 'intl' ? 'City / Region' : 'State';
-      populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
-      populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
-      populateStadiumSelect();
-      updateEditStadiumBtnVisibility();
-      updateEditRegionBtnVisibility();
-      updateNumerologyBlocks();
-    });
-  });
-
-  document.getElementById('pmStateSelect').addEventListener('change', (e) => {
-    const val = e.target.value;
-    if (val === '__addRegion__') {
-      e.target.value = '';
-      selectedRegion = null;
-      openRegionForm(null);
-      updateEditRegionBtnVisibility();
-      updateNumerologyBlocks();
-      return;
-    }
-    selectedRegion = regionFromSelectValue(val);
-    updateEditRegionBtnVisibility();
-    updateNumerologyBlocks();
-  });
-
-  document.getElementById('pmEditRegionBtn').addEventListener('click', () => {
-    if (selectedRegion && selectedRegion.id) openRegionForm(selectedRegion);
-  });
-
-  document.getElementById('pmCancelRegionBtn').addEventListener('click', closeRegionForm);
-
-  document.getElementById('pmNewRegionName').addEventListener('blur', () => {
-    const name = document.getElementById('pmNewRegionName').value.trim();
-    const foundedFilled = document.getElementById('pmNewRegionFounded').value.trim();
-    if (name && !foundedFilled && !editingRegionId) lookupRegionFoundedDate(name);
-  });
-
-  document.getElementById('pmRegionLookupBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmNewRegionName').value.trim();
-    if (!name) { alert('Please enter a city / region name first.'); return; }
-    lookupRegionFoundedDate(name);
-  });
-
-  document.getElementById('pmSaveRegionBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmNewRegionName').value.trim();
-    const founded = displayToISO(document.getElementById('pmNewRegionFounded').value);
-    if (!name) { alert('Please enter a city / region name.'); return; }
-    if (!founded) { alert('Please enter a valid founding date (MM/DD/YYYY).'); return; }
-
-    const regions = loadIntlRegions();
-    let selectId;
-    if (editingRegionId) {
-      const idx = regions.findIndex((c) => c.id === editingRegionId);
-      if (idx !== -1) regions[idx] = { id: editingRegionId, name, founded };
-      selectId = editingRegionId;
-    } else {
-      const region = { id: uid(), name, founded };
-      regions.push(region);
-      selectId = region.id;
-    }
-    saveIntlRegions(regions);
-    populateRegionOptionsInto(document.getElementById('pmStateSelect'), true);
-    populateRegionOptionsInto(document.getElementById('pmNewStadiumState'), false);
-    document.getElementById('pmStateSelect').value = selectId;
-    selectedRegion = regionFromSelectValue(selectId);
-    updateEditRegionBtnVisibility();
-    closeRegionForm();
-    updateNumerologyBlocks();
-  });
-
-  document.getElementById('pmStadiumSelect').addEventListener('change', (e) => {
-    const val = e.target.value;
-    if (val === '__add__') {
-      e.target.value = '';
-      openStadiumForm(null);
-      updateEditStadiumBtnVisibility();
-      return;
-    }
-
-    closeStadiumForm();
-    updateEditStadiumBtnVisibility();
-
-    if (val) {
-      const stadium = stadiums.find((s) => s.id === val);
-      selectedStadium = stadium || null;
-      if (stadium && regionMode === 'us' && stadium.state) {
-        const stIdx = stateIndexByName(stadium.state);
-        if (stIdx !== -1) {
-          document.getElementById('pmStateSelect').value = String(stIdx);
-          selectedRegion = US_STATES[stIdx];
-        }
-      } else if (stadium && regionMode === 'intl' && (stadium.region || stadium.country)) {
-        const c = allIntlRegions().find((x) => x.name === (stadium.region || stadium.country));
-        if (c) {
-          document.getElementById('pmStateSelect').value = c.id;
-          selectedRegion = c;
-        }
-      }
-    } else {
-      selectedStadium = null;
-    }
-    updateEditRegionBtnVisibility();
-    updateNumerologyBlocks();
-  });
-
-  document.getElementById('pmEditStadiumBtn').addEventListener('click', () => {
-    const stadium = stadiums.find((s) => s.id === document.getElementById('pmStadiumSelect').value);
-    if (stadium) openStadiumForm(stadium);
-  });
-
-  document.getElementById('pmCancelStadiumBtn').addEventListener('click', closeStadiumForm);
-
-  document.getElementById('pmNewStadiumName').addEventListener('blur', () => {
-    const name = document.getElementById('pmNewStadiumName').value.trim();
-    const foundedFilled = document.getElementById('pmNewStadiumFounded').value.trim();
-    if (name && !foundedFilled && !editingStadiumId) lookupStadiumFoundedDate(name);
-  });
-
-  document.getElementById('pmStadiumLookupBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmNewStadiumName').value.trim();
-    if (!name) { alert('Please enter a stadium name first.'); return; }
-    lookupStadiumFoundedDate(name);
-  });
-
-  document.getElementById('pmSaveStadiumBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmNewStadiumName').value.trim();
-    const founded = displayToISO(document.getElementById('pmNewStadiumFounded').value);
-    const regionVal = document.getElementById('pmNewStadiumState').value;
-    if (!name) { alert('Please enter a stadium name.'); return; }
-    if (!founded) { alert('Please enter a valid founding date for the stadium (MM/DD/YYYY).'); return; }
-    if (regionVal === '') { alert(`Please select which ${regionNoun()} this stadium is in.`); return; }
-
-    const regionFields = regionMode === 'us'
-      ? { state: US_STATES[Number(regionVal)].name }
-      : { region: (allIntlRegions().find((c) => c.id === regionVal) || {}).name };
-
-    let selectValue;
-    if (editingStadiumId) {
-      const idx = stadiums.findIndex((s) => s.id === editingStadiumId);
-      if (idx !== -1) stadiums[idx] = { id: editingStadiumId, name, founded, ...regionFields };
-      selectValue = editingStadiumId;
-    } else {
-      const stadium = { id: uid(), name, founded, ...regionFields };
-      stadiums.push(stadium);
-      selectValue = stadium.id;
-    }
-    saveStadiums(stadiums);
-    populateStadiumSelect(selectValue);
-    document.getElementById('pmStateSelect').value = regionVal;
-    selectedRegion = regionFromSelectValue(regionVal);
-    selectedStadium = stadiums.find((s) => s.id === selectValue) || null;
-    updateEditStadiumBtnVisibility();
-    updateEditRegionBtnVisibility();
-    closeStadiumForm();
-    updateNumerologyBlocks();
-  });
-}
-
 // computeFighterScore() now lives in db-core.js (shared with ufc.js and
 // polymarket-mlb.js) - returns the three factors plus the combined number so
 // the breakdown popup can show all of them.
 
-// The calendar date scoring uses is the one that's actually showing on a
-// clock at the venue, not whichever UTC date the fight's timestamp happens
-// to convert to - computed fresh each time (region can change after a fight
-// card is already loaded) rather than cached once at enrichment time.
+// UFC scoring is Day-anchor only now - no venue clock to consult, so the
+// fight's calendar date is the browser's own local date for its timestamp,
+// the same date the Stats backfill and the auto today-tracker
+// (stats-ufc.js) score with. Still used by the Insight tab and the Full
+// Matchup deep link.
 function currentMatchDateISO(gameStartTime) {
-  if (regionMode === 'us') return localMatchDateISO(gameStartTime, 'us', selectedRegion);
-  if (selectedRegion && !selectedRegion.timezone) {
-    ensureIntlRegionTimezone(selectedRegion, () => updateNumerologyBlocks());
-  }
-  return localMatchDateISO(gameStartTime, 'intl', selectedRegion);
+  return `${gameStartTime.getFullYear()}-${String(gameStartTime.getMonth() + 1).padStart(2, '0')}-${String(gameStartTime.getDate()).padStart(2, '0')}`;
 }
 
+// Day-anchor scoring only - identical to the Stats backfill and the auto
+// today-tracker (stats-ufc.js), so every UFC pick shares one scoring basis
+// no matter which page recorded it. The stadium/state anchors are gone from
+// UFC entirely: Polymarket gives no reliable per-fight venue, and requiring
+// a hand-picked location was the one thing stopping fights from being
+// tracked automatically every day.
 function scoresForFight(f) {
-  if (!(f.matchedA && f.matchedB && selectedRegion)) return null;
-  const matchDateISO = currentMatchDateISO(f.gameStartTime);
-  if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
-  const matchDate = parseDateInput(matchDateISO);
-  const stateDate = parseDateInput(selectedRegion.founded);
-  const stadiumDate = selectedStadium ? parseDateInput(selectedStadium.founded) : null;
+  if (!(f.matchedA && f.matchedB)) return null;
   return {
-    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), matchDate, stadiumDate, stateDate),
-    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), matchDate, stadiumDate, stateDate),
+    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), f.gameStartTime, null, null),
+    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), f.gameStartTime, null, null),
   };
 }
 
@@ -828,15 +350,7 @@ function numerologyBlockHtml(f) {
       .join('<br>')}</div>`;
   }
 
-  if (!selectedRegion) {
-    return '<div class="pm-unmatched">Set the fight location above to see the numerology edge for this card.</div>';
-  }
-
-  const scores = scoresForFight(f);
-  if (!scores) {
-    return '<div class="pm-unmatched">⏳ Waiting to confirm this region\'s timezone before scoring &mdash; check back shortly.</div>';
-  }
-  const { scoreA, scoreB } = scores;
+  const { scoreA, scoreB } = scoresForFight(f);
   const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
   const marketFavName = favA ? f.fighterAName : f.fighterBName;
   const numFavMatched = scoreA.combined >= scoreB.combined ? f.matchedA : f.matchedB;
@@ -864,25 +378,20 @@ function numerologyBlockHtml(f) {
     <div class="pm-numerology-clickable" data-condition-id="${f.conditionId}">
       <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(f.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(f.matchedB.name)} ${scoreB.combined}</span></div>
       ${signalHtml}
-      <div class="pm-breakdown-hint">Tap for the full Day / State / Stadium breakdown &rarr;</div>
+      <div class="pm-breakdown-hint">Tap for the full breakdown &rarr;</div>
     </div>
     ${tier.key === 'none' ? '' : riskManagerHtml(numFavMatched.name, pickPrice)}
   `;
 }
 
-// One fighter's column in the breakdown popup - drops the Stadium row
-// entirely (not zeroed) when no stadium is set, same as ufc.js.
+// One fighter's column in the breakdown popup. UFC scores on the Day anchor
+// alone now, so the column is the Fight Day read plus the combined number -
+// no State/Stadium rows to show.
 function breakdownColumnHtml(name, score) {
-  const regionLabel = regionMode === 'intl' ? '🏙️ Region' : '🗺️ State';
-  const stadiumRow = score.stadium
-    ? `<div class="pm-breakdown-row"><span>🏟️ Stadium</span><span class="score-inline ${scoreClass(score.stadium.finalScore)}">${score.stadium.finalScore}</span></div>`
-    : '';
   return `
     <div class="pm-breakdown-col">
       <div class="pm-breakdown-name">${escapeHtml(name)}</div>
       <div class="pm-breakdown-row"><span>🗓️ Fight Day</span><span class="score-inline ${scoreClass(score.day.finalScore)}">${score.day.finalScore}</span></div>
-      <div class="pm-breakdown-row"><span>${regionLabel}</span><span class="score-inline ${scoreClass(score.state.finalScore)}">${score.state.finalScore}</span></div>
-      ${stadiumRow}
       <div class="pm-breakdown-row pm-breakdown-total"><span>Combined</span><span class="score-inline ${scoreClass(score.combined)}">${score.combined}</span></div>
     </div>
   `;
@@ -898,12 +407,10 @@ function insightTabHtml(f) {
   const infoA = compatLifePathInfo(parseDateInput(f.matchedA.dob));
   const infoB = compatLifePathInfo(parseDateInput(f.matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
-  // Universal Day - each fighter's own life path vs. today itself (reduced
-  // the exact same way a birthdate is) - added alongside the fighter-vs-
-  // fighter read above, not instead of it. Skipped (not guessed) if the
-  // region's timezone hasn't confirmed yet, same as the real edge above.
-  const matchDateISO = currentMatchDateISO(f.gameStartTime);
-  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
+  // Universal Day - each fighter's own life path vs. the fight day itself
+  // (reduced the exact same way a birthdate is) - added alongside the
+  // fighter-vs-fighter read above, not instead of it.
+  const matchDate = parseDateInput(currentMatchDateISO(f.gameStartTime));
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(f.matchedA.name, infoA.display, infoA.lookupValue)}
@@ -997,10 +504,8 @@ function fullMatchupHtml(f) {
 }
 
 // The edge tier's key for a fight's colored card strip - '' (default
-// border) when scores can't be computed yet (unmatched fighter or no
-// location set).
+// border) when scores can't be computed yet (unmatched fighter).
 function cardTierKey(f) {
-  if (!(f.matchedA && f.matchedB && selectedRegion)) return '';
   const scores = scoresForFight(f);
   if (!scores) return '';
   return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
@@ -1101,9 +606,6 @@ function renderTradeFeeds() {
 }
 
 function updateNumerologyBlocks() {
-  saveLocationState();
-  locationManuallyExpanded = false;
-  updateLocationSummaryUI();
   cardFights.forEach((f) => {
     const el = document.getElementById(`pm-num-${f.conditionId}`);
     if (el) el.innerHTML = numerologyBlockHtml(f);
@@ -1119,16 +621,6 @@ async function pollTrades() {
   const results = await Promise.all(cardFights.map((f) => fetchTrades(f.conditionId)));
   cardFights.forEach((f, i) => tradesCache.set(f.conditionId, results[i]));
   renderTradeFeeds();
-
-  // A timezone lookup can fail on a transient network hiccup and then just
-  // sit there - ensureIntlRegionTimezone only re-attempts when something
-  // calls it again, and otherwise the next attempt wouldn't come until the
-  // full 5-minute loadEventsAndRender cycle. Retrying here piggybacks on the
-  // already-frequent trade poll instead, so a stuck "waiting to confirm this
-  // region's timezone" message clears within ~20s instead of up to 5 minutes.
-  if (regionMode === 'intl' && selectedRegion && !selectedRegion.timezone) {
-    ensureIntlRegionTimezone(selectedRegion, () => updateNumerologyBlocks());
-  }
 }
 
 async function loadEventsAndRender() {
@@ -1160,7 +652,6 @@ async function loadEventsAndRender() {
   if (!upcoming.length) {
     cardFights = [];
     document.getElementById('fightsContainer').innerHTML = '<div class="empty-state">No upcoming UFC fights found on Polymarket right now.</div>';
-    resetLocationSelection();
     return;
   }
 
@@ -1227,7 +718,6 @@ function scrollToConditionIdFromQuery() {
   // them before any read, or a pre-init read could serve a stale
   // localStorage copy and a later save would clobber newer records.
   await bigStoreReadyPromise;
-  initLocationControls();
   initRefreshButton();
   initBreakdownModal();
   initDismissButtons();

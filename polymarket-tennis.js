@@ -109,60 +109,44 @@ function initStakeInput() {
   });
 }
 
-/* ===================== Per-tournament location ===================== */
-// UFC has one card a night at one venue, so polymarket-ufc.js sets a single
-// shared location for everything on screen. Tennis has several tournaments
-// running at once in different cities, so location is set per tournament
-// instead - parsed from the event title ("Geneva Open: A vs B" -> "Geneva
-// Open") - and remembered across visits so it's only set once per event.
-const TOURNAMENT_LOCATIONS_KEY = 'numerology_tennis_pm_tournament_locations';
+/* ===================== Auto-resolved tournament regions ===================== */
+// The tournament's city IS its title prefix on Polymarket ("Bastad: A vs
+// B"), so the region resolves automatically - the exact path the Stats
+// backfill and the auto today-tracker (stats-tennis.js) already use
+// (resolveIntlRegionForBackfillByCity, db-core.js) - instead of asking for
+// a per-tournament location. A tournament whose title prefix isn't a
+// resolvable place gets NO score and NO recorded pick, matching the
+// backfill's own skip: a location is never guessed. The venue and US-state
+// anchors are gone from tennis scoring entirely, so every path now scores
+// the same Day 75% + Region 25% blend on the same city record.
 
-function loadTournamentLocationPrefs() {
-  try {
-    const raw = localStorage.getItem(TOURNAMENT_LOCATIONS_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
-  } catch (e) {
-    return {};
-  }
+// key -> 'loading' | region object | null (couldn't resolve)
+const tournamentRegions = new Map();
+
+// Polymarket prefixes lower-tier events with "ITF " ("ITF Brisbane: A vs
+// B"); the place name is what's left. Same normalization stats-tennis.js's
+// tennisCityFromEventTitle applies, just on the already-split key.
+function tournamentCityName(key) {
+  return key.replace(/^ITF\s+/i, '').trim();
 }
 
-function saveTournamentLocationPrefs(map) {
-  localStorage.setItem(TOURNAMENT_LOCATIONS_KEY, JSON.stringify(map));
+function ensureTournamentRegion(key) {
+  if (tournamentRegions.has(key)) return;
+  tournamentRegions.set(key, 'loading');
+  resolveIntlRegionForBackfillByCity(tournamentCityName(key))
+    .then((region) => {
+      tournamentRegions.set(key, region || null);
+      renderMatchesContainer();
+    })
+    .catch(() => {
+      tournamentRegions.set(key, null);
+      renderMatchesContainer();
+    });
 }
 
-let venues = loadTennisVenues();
-let tournamentLocationPrefs = loadTournamentLocationPrefs();
-
-// Live, resolved { regionMode, selectedRegion, selectedVenue } per tournament,
-// lazily derived from tournamentLocationPrefs plus the current regions/venues
-// lists - re-deriving (rather than caching the objects themselves) means an
-// edited founding date is picked up right away instead of a stale snapshot.
-const tournamentState = new Map();
-
-function getTournamentState(key) {
-  if (!tournamentState.has(key)) {
-    const pref = tournamentLocationPrefs[key] || {};
-    const regionMode = pref.regionMode === 'intl' ? 'intl' : 'us';
-    let selectedRegion = null;
-    if (pref.regionName) {
-      const list = regionMode === 'us' ? US_STATES : allIntlRegions();
-      selectedRegion = list.find((r) => r.name === pref.regionName) || null;
-    }
-    const selectedVenue = pref.venueId ? (venues.find((v) => v.id === pref.venueId) || null) : null;
-    tournamentState.set(key, { regionMode, selectedRegion, selectedVenue });
-  }
-  return tournamentState.get(key);
-}
-
-function persistTournamentState(key) {
-  const st = getTournamentState(key);
-  tournamentLocationPrefs[key] = {
-    regionMode: st.regionMode,
-    regionName: st.selectedRegion ? st.selectedRegion.name : null,
-    venueId: st.selectedVenue ? st.selectedVenue.id : null,
-  };
-  saveTournamentLocationPrefs(tournamentLocationPrefs);
+function tournamentRegionFor(key) {
+  const region = tournamentRegions.get(key);
+  return region && region !== 'loading' ? region : null;
 }
 
 function findTournamentGroupEl(key) {
@@ -212,44 +196,30 @@ function parseDateInput(value) {
 }
 
 /* ===================== Matchup scoring ===================== */
-// Same Day 60/Venue 15/Region 25 (or Day 75/Region 25 without a venue) blend
-// as computeMatchScore() in tennis.js.
+// computeFighterScore (db-core.js) with no venue anchor - Day 75% + Region
+// 25%, byte-identical to what the Stats backfill and the auto today-tracker
+// (stats-tennis.js) record, so every tennis pick shares one scoring basis
+// no matter which page wrote it. (The old local computeMatchScore also
+// returned its region score under a key extractDimensionScores never read,
+// so live-recorded picks silently dropped the region dimension from the
+// stats tables - fixed for free by sharing the function.)
 
-function computeMatchScore(dobDate, matchDate, venueDate, regionDate) {
-  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
-  const region = computeCompatibility(dobDate, regionDate, sportsNumerologyCompat);
-  if (!venueDate) {
-    const combined = Math.round(0.75 * day.finalScore + 0.25 * region.finalScore);
-    return { day, venue: null, region, combined };
-  }
-  const venue = computeCompatibility(dobDate, venueDate, sportsNumerologyCompat);
-  const combined = Math.round(0.60 * day.finalScore + 0.15 * venue.finalScore + 0.25 * region.finalScore);
-  return { day, venue, region, combined };
+// The calendar date scoring uses is the one actually showing on a clock in
+// the tournament's own city, resolved from the auto-resolved region's
+// timezone. Null until that timezone confirms - never guessed.
+function currentMatchDateISO(gameStartTime, region) {
+  return localMatchDateISO(gameStartTime, 'intl', region);
 }
 
-// The calendar date scoring uses is the one that's actually showing on a
-// clock at the venue, not whichever UTC date the match's timestamp happens
-// to convert to - computed fresh each time (a tournament's region can
-// change after its matches are already loaded) rather than cached once at
-// enrichment time.
-function currentMatchDateISO(gameStartTime, st, tournamentKey) {
-  if (st.regionMode === 'us') return localMatchDateISO(gameStartTime, 'us', st.selectedRegion);
-  if (st.selectedRegion && !st.selectedRegion.timezone) {
-    ensureIntlRegionTimezone(st.selectedRegion, () => updateTournamentMatches(tournamentKey));
-  }
-  return localMatchDateISO(gameStartTime, 'intl', st.selectedRegion);
-}
-
-function scoresForMatch(m, st) {
-  if (!(m.matchedA && m.matchedB && st.selectedRegion)) return null;
-  const matchDateISO = currentMatchDateISO(m.gameStartTime, st, m.tournament);
+function scoresForMatch(m, region) {
+  if (!(m.matchedA && m.matchedB && region)) return null;
+  const matchDateISO = currentMatchDateISO(m.gameStartTime, region);
   if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
   const matchDate = parseDateInput(matchDateISO);
-  const regionDate = parseDateInput(st.selectedRegion.founded);
-  const venueDate = st.selectedVenue ? parseDateInput(st.selectedVenue.founded) : null;
+  const regionDate = parseDateInput(region.founded);
   return {
-    scoreA: computeMatchScore(parseDateInput(m.matchedA.dob), matchDate, venueDate, regionDate),
-    scoreB: computeMatchScore(parseDateInput(m.matchedB.dob), matchDate, venueDate, regionDate),
+    scoreA: computeFighterScore(parseDateInput(m.matchedA.dob), matchDate, null, regionDate),
+    scoreB: computeFighterScore(parseDateInput(m.matchedB.dob), matchDate, null, regionDate),
   };
 }
 
@@ -455,12 +425,15 @@ function numerologyBlockHtml(m) {
       .join('<br>')}</div>`;
   }
 
-  const st = getTournamentState(m.tournament);
-  if (!st.selectedRegion) {
-    return '<div class="pm-unmatched">Set this tournament\'s location above to see the numerology edge for its matches.</div>';
+  const regionState = tournamentRegions.get(m.tournament);
+  if (regionState === undefined || regionState === 'loading') {
+    return '<div class="pm-unmatched">🔍 Working out this tournament\'s city&hellip;</div>';
+  }
+  if (!regionState) {
+    return '<div class="pm-unmatched">⚠️ Couldn\'t confirm this tournament\'s city, so its matches aren\'t scored or recorded &mdash; a location is never guessed.</div>';
   }
 
-  const scores = scoresForMatch(m, st);
+  const scores = scoresForMatch(m, regionState);
   if (!scores) {
     return '<div class="pm-unmatched">⏳ Waiting to confirm this region\'s timezone before scoring &mdash; check back shortly.</div>';
   }
@@ -490,25 +463,21 @@ function numerologyBlockHtml(m) {
     <div class="pm-numerology-clickable" data-condition-id="${m.conditionId}">
       <div class="pm-edge-line">🔢 Numerology Edge: <span class="score-inline ${scoreClass(scoreA.combined)}">${escapeHtml(m.matchedA.name)} ${scoreA.combined}</span> vs <span class="score-inline ${scoreClass(scoreB.combined)}">${escapeHtml(m.matchedB.name)} ${scoreB.combined}</span></div>
       ${signalHtml}
-      <div class="pm-breakdown-hint">Tap for the full Day / Region / Venue breakdown &rarr;</div>
+      <div class="pm-breakdown-hint">Tap for the full breakdown &rarr;</div>
     </div>
     ${tier.key === 'none' ? '' : riskManagerHtml(numFavMatched.name, pickPrice)}
   `;
 }
 
-// One player's column in the breakdown popup - drops the Venue row entirely
-// (not zeroed) when no venue is set, same as tennis.js.
-function breakdownColumnHtml(name, score, regionMode) {
-  const regionLabel = regionMode === 'intl' ? '🏙️ Region' : '🗺️ State';
-  const venueRow = score.venue
-    ? `<div class="pm-breakdown-row"><span>🏟️ Venue</span><span class="score-inline ${scoreClass(score.venue.finalScore)}">${score.venue.finalScore}</span></div>`
-    : '';
+// One player's column in the breakdown popup - the Day and Region anchors
+// plus the combined number. computeFighterScore keeps the region compat
+// under its .state key (its MLB/UFC-era name), hence score.state below.
+function breakdownColumnHtml(name, score) {
   return `
     <div class="pm-breakdown-col">
       <div class="pm-breakdown-name">${escapeHtml(name)}</div>
       <div class="pm-breakdown-row"><span>🗓️ Match Day</span><span class="score-inline ${scoreClass(score.day.finalScore)}">${score.day.finalScore}</span></div>
-      <div class="pm-breakdown-row"><span>${regionLabel}</span><span class="score-inline ${scoreClass(score.region.finalScore)}">${score.region.finalScore}</span></div>
-      ${venueRow}
+      <div class="pm-breakdown-row"><span>🏙️ Region</span><span class="score-inline ${scoreClass(score.state.finalScore)}">${score.state.finalScore}</span></div>
       <div class="pm-breakdown-row pm-breakdown-total"><span>Combined</span><span class="score-inline ${scoreClass(score.combined)}">${score.combined}</span></div>
     </div>
   `;
@@ -520,7 +489,7 @@ function breakdownColumnHtml(name, score, regionMode) {
 // are never scored against each other for the real edge above (each is only
 // ever scored against the day/region/venue), so this is the one place that
 // head-to-head number gets computed and shown at all.
-function insightTabHtml(m, st) {
+function insightTabHtml(m, region) {
   const infoA = compatLifePathInfo(parseDateInput(m.matchedA.dob));
   const infoB = compatLifePathInfo(parseDateInput(m.matchedB.dob));
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
@@ -528,7 +497,7 @@ function insightTabHtml(m, st) {
   // the exact same way a birthdate is) - added alongside the player-vs-
   // player read above, not instead of it. Skipped (not guessed) if the
   // region's timezone hasn't confirmed yet, same as the real edge above.
-  const matchDateISO = currentMatchDateISO(m.gameStartTime, st, m.tournament);
+  const matchDateISO = region ? currentMatchDateISO(m.gameStartTime, region) : null;
   const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   return `
     <div class="pm-insight-grid">
@@ -548,7 +517,7 @@ function insightTabHtml(m, st) {
   `;
 }
 
-function breakdownModalHtml(m, scores, regionMode, st) {
+function breakdownModalHtml(m, scores, region) {
   const hero = `
     <div class="score-hero">
       <div class="score-names">${escapeHtml(m.matchedA.name)} <span class="score-vs">&times;</span> ${escapeHtml(m.matchedB.name)}</div>
@@ -556,11 +525,11 @@ function breakdownModalHtml(m, scores, regionMode, st) {
   `;
   const breakdown = `
     <div class="pm-breakdown-grid">
-      ${breakdownColumnHtml(m.matchedA.name, scores.scoreA, regionMode)}
-      ${breakdownColumnHtml(m.matchedB.name, scores.scoreB, regionMode)}
+      ${breakdownColumnHtml(m.matchedA.name, scores.scoreA)}
+      ${breakdownColumnHtml(m.matchedB.name, scores.scoreB)}
     </div>
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(m, st));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(m, region));
 }
 
 function initDismissButtons() {
@@ -583,10 +552,10 @@ function initBreakdownModal() {
     if (!trigger) return;
     const m = allMatches.find((x) => x.conditionId === trigger.dataset.conditionId);
     if (!m) return;
-    const st = getTournamentState(m.tournament);
-    const scores = scoresForMatch(m, st);
+    const region = tournamentRegionFor(m.tournament);
+    const scores = scoresForMatch(m, region);
     if (!scores) return;
-    document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(m, scores, st.regionMode, st);
+    document.getElementById('pmBreakdownBody').innerHTML = breakdownModalHtml(m, scores, region);
     document.getElementById('pmBreakdownOverlay').classList.add('active');
   });
 
@@ -601,21 +570,19 @@ function initBreakdownModal() {
 
 function fullMatchupHtml(m) {
   if (!(m.matchedA && m.matchedB)) return '';
-  const st = getTournamentState(m.tournament);
-  const params = new URLSearchParams({
-    a: m.matchedA.name,
-    b: m.matchedB.name,
-    date: isoToDisplay(currentMatchDateISO(m.gameStartTime, st, m.tournament)),
-  });
+  const params = new URLSearchParams({ a: m.matchedA.name, b: m.matchedB.name });
+  // The date prefill rides along only once the region's timezone has
+  // confirmed - omitted (not guessed) before then.
+  const region = tournamentRegionFor(m.tournament);
+  const matchDateISO = region ? currentMatchDateISO(m.gameStartTime, region) : null;
+  if (matchDateISO) params.set('date', isoToDisplay(matchDateISO));
   return `<a class="btn" href="tennis.html?${params.toString()}">Full Matchup &rarr;</a>`;
 }
 
 // The edge tier's key for a match's colored card strip - '' (default
 // border) when scores can't be computed yet.
 function cardTierKey(m) {
-  const st = getTournamentState(m.tournament);
-  if (!(m.matchedA && m.matchedB && st.selectedRegion)) return '';
-  const scores = scoresForMatch(m, st);
+  const scores = scoresForMatch(m, tournamentRegionFor(m.tournament));
   if (!scores) return '';
   return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
@@ -653,313 +620,41 @@ function matchCardHtml(m) {
   `;
 }
 
-function regionOptionsHtml(regionMode, selectedRegion) {
-  if (regionMode === 'us') {
-    return '<option value="">Select state...</option>'
-      + US_STATES.map((r) => `<option value="${escapeHtml(r.name)}"${selectedRegion && selectedRegion.name === r.name ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
-  }
-  return '<option value="">Select city / region...</option>'
-    + allIntlRegions().map((r) => `<option value="${escapeHtml(r.name)}"${selectedRegion && selectedRegion.name === r.name ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')
-    + '<option value="__add__">+ Add New City / Region</option>';
-}
-
-function venueOptionsHtml(regionMode, selectedVenue) {
-  const visible = venues.filter((v) => (regionMode === 'intl' ? !!v.region : !v.region));
-  return '<option value="">Select venue...</option>'
-    + visible.map((v) => `<option value="${v.id}"${selectedVenue && selectedVenue.id === v.id ? ' selected' : ''}>${escapeHtml(v.name)}</option>`).join('')
-    + '<option value="__add__">+ Add New Venue</option>';
-}
-
-/* ===================== Tournament location suggestion ===================== */
-// Best-effort auto-detection of a tournament's usual host city, so the user
-// doesn't have to already know where e.g. "Kitzbuehel" or "Estoril Open" is
-// played. This is a SUGGESTION the user must accept, never a silent
-// auto-fill - a generically-named tournament can genuinely resolve to the
-// wrong Wikipedia article entirely (a live test found "Swiss Open" redirects
-// to a golf tournament, not the tennis event Polymarket means here), and a
-// wrong location would quietly corrupt the numerology score with nothing
-// visibly off. Manual selection via the dropdowns below always remains the
-// reliable path regardless of whether a suggestion appears.
-
-// key -> 'loading' | 'none' | 'dismissed' | { city, state, country, venue }
-const tournamentSuggestions = new Map();
-
-// Strips the common wikitext decorations out of a single infobox field's
-// raw value: flag-icon templates, HTML comments, <ref> citations, wikilinks
-// (resolved to their display text), and stray tags.
-function cleanWikitextFragment(raw) {
-  return raw
-    .replace(/\{\{flagicon\|[^}]*\}\}/gi, '')
-    .replace(/\{\{flag\|([^}|]*)\}\}/gi, '$1')
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>|<ref[^>]*\/>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
-    .replace(/<[^>]+>/g, '')
-    .trim();
-}
-
-// A combined infobox "location" value looks like "Geneva, Switzerland" or
-// "Lincoln, Nebraska, U.S." - the last comma-separated part is the country
-// (or "U.S.", in which case the part before it is a state).
-function parseCommaLocation(text) {
-  const parts = text.split(',').map((s) => s.trim()).filter(Boolean);
-  if (!parts.length) return null;
-  const last = parts[parts.length - 1];
-  const isUS = /^(u\.?s\.?a?\.?|united states(?: of america)?)$/i.test(last);
-  if (isUS && parts.length >= 2) {
-    return { city: parts.length >= 3 ? parts[0] : null, state: parts[parts.length - 2], country: 'United States' };
-  }
-  return { city: parts.length >= 2 ? parts[0] : null, state: null, country: last };
-}
-
-// Real {{Infobox tennis tournament}} pages (e.g. "Austrian Open Kitzbühel")
-// use separate city/country/venue fields, not one combined "location" -
-// checked first since it's both more common and gives the venue for free.
-// Everything is restricted to roughly the first ~3000 characters of the
-// wikitext, which reliably covers only the page's own primary infobox - a
-// live test found a "location" field matching deep in the Kitzbühel *city*
-// article that actually belonged to an unrelated defunct 1971-2000 ski
-// event mentioned further down the same page, not the city itself.
-function extractTournamentLocation(wikitext, searchedName) {
-  const head = wikitext.slice(0, 3000);
-
-  const cityMatch = /\|\s*city\s*=\s*([^\n]+)/i.exec(head);
-  const countryMatch = /\|\s*country\s*=\s*([^\n]+)/i.exec(head);
-  const venueMatch = /\|\s*venue\s*=\s*([^\n]+)/i.exec(head);
-  const venue = venueMatch ? cleanWikitextFragment(venueMatch[1]) : null;
-
-  if (cityMatch || countryMatch) {
-    const city = cityMatch ? cleanWikitextFragment(cityMatch[1]) : null;
-    const country = countryMatch ? cleanWikitextFragment(countryMatch[1]) : null;
-    if (city || country) return { city, state: null, country, venue };
-  }
-
-  const locationMatch = /\|\s*location\s*=\s*([^\n]+)/i.exec(head);
-  if (locationMatch) {
-    const parsed = parseCommaLocation(cleanWikitextFragment(locationMatch[1]));
-    if (parsed) return { ...parsed, venue };
-  }
-
-  // The tournament name resolved straight to a place article (e.g.
-  // "Granby" -> the town of Granby) rather than a dedicated tournament
-  // article - the page's own subject IS the location in that case.
-  const subdivTypeMatch = /\|\s*subdivision_type\s*=\s*([^\n]+)/i.exec(head);
-  const subdivNameMatch = /\|\s*subdivision_name\s*=\s*([^\n]+)/i.exec(head);
-  if (subdivTypeMatch && subdivNameMatch && /country/i.test(subdivTypeMatch[1])) {
-    const country = cleanWikitextFragment(subdivNameMatch[1]);
-    const isUS = /^(united states|u\.?s\.?a?\.?)$/i.test(country);
-    let state = null;
-    if (isUS) {
-      const subdivType1Match = /\|\s*subdivision_type1\s*=\s*([^\n]+)/i.exec(head);
-      const subdivName1Match = /\|\s*subdivision_name1\s*=\s*([^\n]+)/i.exec(head);
-      if (subdivType1Match && subdivName1Match && /state/i.test(subdivType1Match[1])) {
-        state = cleanWikitextFragment(subdivName1Match[1]);
-      }
-    }
-    return { city: searchedName, state, country: isUS ? 'United States' : country, venue: null };
-  }
-
-  return null;
-}
-
-// The tournament group key is the grouping/display name (kept as-is so
-// qualifying rounds stay a distinct group from the main draw), but Polymarket
-// tacks on suffixes like ", Qualification" that have no corresponding
-// Wikipedia article - stripped only for the search query itself.
-function tournamentSearchName(tournamentKey) {
-  return tournamentKey.replace(/,?\s*qualification\s*$/i, '').trim();
-}
-
-function lookupTournamentLocation(tournamentName) {
-  const searchName = tournamentSearchName(tournamentName);
-  return fetchWikipediaWikitext(searchName).then((wikitext) => (
-    wikitext ? extractTournamentLocation(wikitext, searchName) : null
-  ));
-}
-
-function suggestionLabel(suggestion) {
-  const place = suggestion.state
-    ? `${suggestion.city ? suggestion.city + ', ' : ''}${suggestion.state}`
-    : `${suggestion.city ? suggestion.city + ', ' : ''}${suggestion.country}`;
-  return suggestion.venue ? `${place} (${suggestion.venue})` : place;
-}
-
-function suggestionBannerHtml(key) {
-  const suggestion = tournamentSuggestions.get(key);
-  if (!suggestion || suggestion === 'none' || suggestion === 'dismissed') return '';
-  if (suggestion === 'loading') {
-    return '<div class="pm-location-suggestion">🔍 Checking where this tournament is usually played&hellip;</div>';
-  }
-  return `
-    <div class="pm-location-suggestion">
-      📍 Guessed location: <strong>${escapeHtml(suggestionLabel(suggestion))}</strong> - is this right?
-      <button class="btn-link" data-accept-suggestion="${escapeHtml(key)}" type="button">Use this</button>
-      <button class="btn-link" data-dismiss-suggestion="${escapeHtml(key)}" type="button">No, I'll set it</button>
-    </div>
-  `;
-}
-
-function updateTournamentSuggestionUI(key) {
-  const groupEl = findTournamentGroupEl(key);
-  if (!groupEl) return;
-  const wrap = groupEl.querySelector('.pm-location-suggestion-wrap');
-  if (!wrap) return;
-  const st = getTournamentState(key);
-  wrap.innerHTML = st.selectedRegion ? '' : suggestionBannerHtml(key);
-}
-
-function ensureTournamentSuggestion(key) {
-  if (tournamentSuggestions.has(key)) return;
-  tournamentSuggestions.set(key, 'loading');
-  lookupTournamentLocation(key).then((loc) => {
-    tournamentSuggestions.set(key, loc || 'none');
-    updateTournamentSuggestionUI(key);
-  });
-}
-
-// Once the region is settled, also try to auto-add/select the detected
-// venue - same founding-date lookup the manual "+ Add New Venue" form uses
-// (no country-fallback here: a specific stadium/venue's own opening date is
-// already the concrete, official record, unlike a city that may only have
-// an ancient, undocumented-to-the-day history).
-function applyDetectedVenue(key, venueName) {
-  const st = getTournamentState(key);
-  const existing = venues.find((v) => v.name.toLowerCase() === venueName.toLowerCase());
-  if (existing) {
-    st.selectedVenue = existing;
-    persistTournamentState(key);
-    updateTournamentMatches(key);
-    return;
-  }
-
-  const regionFields = st.regionMode === 'us' ? { state: st.selectedRegion.name } : { region: st.selectedRegion.name };
-  lookupKeyDateByName(venueName).then((info) => {
-    if (!info) return; // couldn't confirm a founding date - leave venue unset, region alone still applies
-    const venue = { id: uid(), name: venueName, founded: info.date, ...regionFields };
-    venues.push(venue);
-    saveTennisVenues(venues);
-    st.selectedVenue = venue;
-    persistTournamentState(key);
-    updateTournamentMatches(key);
-  });
-}
-
-// Applies an accepted suggestion: matches an existing US state or saved
-// international region by name, or - for a new international city - fetches
-// its founding date (same country-fallback lookup the manual "+ Add New
-// City / Region" flow uses) and adds it before selecting it.
-function acceptTournamentSuggestion(key) {
-  const suggestion = tournamentSuggestions.get(key);
-  if (!suggestion || suggestion === 'loading' || suggestion === 'none' || suggestion === 'dismissed') return;
-  const st = getTournamentState(key);
-
-  const finish = () => {
-    persistTournamentState(key);
-    tournamentSuggestions.delete(key);
-    renderMatchesContainer();
-    if (suggestion.venue) applyDetectedVenue(key, suggestion.venue);
-  };
-
-  if (suggestion.state) {
-    const stateObj = US_STATES.find((s) => s.name.toLowerCase() === suggestion.state.toLowerCase());
-    if (stateObj) {
-      st.regionMode = 'us';
-      st.selectedRegion = stateObj;
-      st.selectedVenue = null;
-      finish();
-      return;
-    }
-  }
-
-  const cityName = suggestion.city || suggestion.country;
-  const regions = loadIntlRegions();
-  const existing = regions.find((r) => r.name.toLowerCase() === cityName.toLowerCase());
-  if (existing) {
-    st.regionMode = 'intl';
-    st.selectedRegion = existing;
-    st.selectedVenue = null;
-    finish();
-    return;
-  }
-
-  lookupPlaceFoundingDate(cityName).then((info) => {
-    if (!info) {
-      alert(`Guessed "${cityName}" as the location, but couldn't automatically find its founding date - please add it yourself via "+ Add New City / Region".`);
-      return;
-    }
-    const region = { id: uid(), name: cityName, founded: info.date };
-    regions.push(region);
-    saveIntlRegions(regions);
-    st.regionMode = 'intl';
-    st.selectedRegion = region;
-    st.selectedVenue = null;
-    finish();
-  });
-}
-
-// Tournament groups whose set location the user has temporarily re-expanded
-// via "Change" - cleared again the moment a new selection is made.
-const expandedTournamentLocations = new Set();
-
 function tournamentGroupHtml(key, matches) {
-  const st = getTournamentState(key);
-  const regionLabel = st.regionMode === 'intl' ? 'City / Region' : 'State';
-  if (!st.selectedRegion) ensureTournamentSuggestion(key);
+  ensureTournamentRegion(key);
+  const regionState = tournamentRegions.get(key);
 
-  // Same collapsed chip + live venue clock as the UFC tracker's location
-  // box - with 7+ tournament groups on screen, collapsing the set ones is
-  // where most of the vertical space comes back.
-  const collapsed = !!st.selectedRegion && !expandedTournamentLocations.has(key);
-  let locationSummaryHtml = '';
-  if (collapsed) {
-    const now = venueLocalTimeNow(st.regionMode, st.selectedRegion);
-    let clockHtml = '';
+  // One auto-resolved location line per group - the live clock stays, as
+  // proof the right timezone resolved for match-day scoring.
+  let locationHtml;
+  if (regionState === undefined || regionState === 'loading') {
+    locationHtml = '<div class="pm-location-suggestion">🔍 Working out where this tournament is played&hellip;</div>';
+  } else if (!regionState) {
+    locationHtml = `<div class="pm-location-suggestion">⚠️ Couldn't confirm where ${escapeHtml(key)} is played &mdash; its matches aren't scored or recorded (a location is never guessed).</div>`;
+  } else {
+    const now = venueLocalTimeNow('intl', regionState);
+    let clockHtml;
     if (now) {
-      clockHtml = `<div class="pm-location-clock">🕐 Local time at the venue right now: ${now} &mdash; match days are scored on this clock.</div>`;
-    } else if (st.regionMode === 'intl') {
-      ensureIntlRegionTimezone(st.selectedRegion, () => renderMatchesContainer());
-      clockHtml = `<div class="pm-location-clock warn">⚠️ Couldn't confirm this region's timezone yet &mdash; match days fall back to UTC dates.</div>`;
+      clockHtml = `<div class="pm-location-clock">🕐 Local time there right now: ${now} &mdash; match days are scored on this clock.</div>`;
+    } else {
+      ensureIntlRegionTimezone(regionState, () => renderMatchesContainer());
+      clockHtml = '<div class="pm-location-clock warn">⚠️ Couldn\'t confirm this region\'s timezone yet &mdash; matches aren\'t scored until it resolves.</div>';
     }
-    locationSummaryHtml = `
+    locationHtml = `
       <div class="pm-location-summary">
         <div class="pm-location-summary-row">
-          <span class="pm-location-summary-text">📍 ${escapeHtml(st.selectedRegion.name)}${st.selectedVenue ? ` · ${escapeHtml(st.selectedVenue.name)}` : ''}</span>
-          <button class="btn-link" data-change-location="${escapeHtml(key)}" type="button">✏️ Change</button>
+          <span class="pm-location-summary-text">📍 ${escapeHtml(regionState.name)}</span>
         </div>
         ${clockHtml}
       </div>`;
   }
 
-  // The tournament name links out to a Google search built from one of its
-  // actual matchups, asking in one query for everything the location form
-  // needs: the host city, the venue, and the venue's founding date - the
-  // quickest way to fill it all in when the Wikipedia auto-suggestion can't
-  // (generic names like "Lincoln" or "Granby" resolve to disambiguation
-  // pages, not a tournament article).
-  const searchMatch = matches[0];
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${searchMatch.playerAName} vs ${searchMatch.playerBName} where is the game, what venue, and the venue's founding date`)}`;
-
   return `
-    <div class="box pm-tournament-group ${collapsed ? 'location-collapsed' : ''}" data-tournament="${escapeHtml(key)}">
+    <div class="box pm-tournament-group location-collapsed" data-tournament="${escapeHtml(key)}">
       <div class="pm-tournament-header">
-        <a class="pm-tournament-name" href="${searchUrl}" target="_blank" rel="noopener" title="Google where this tournament's matches are being played">🎾 ${escapeHtml(key)} <span class="pm-tournament-search-icon">🔎</span></a>
+        <span class="pm-tournament-name">🎾 ${escapeHtml(key)}</span>
       </div>
-      ${locationSummaryHtml}
-      <div class="pm-location-suggestion-wrap">${st.selectedRegion ? '' : suggestionBannerHtml(key)}</div>
-      <div class="hours-toggle ufc-region-toggle pm-tournament-region-toggle">
-        <button type="button" class="hours-toggle-btn ${st.regionMode === 'us' ? 'active' : ''}" data-region="us">🇺🇸 United States</button>
-        <button type="button" class="hours-toggle-btn ${st.regionMode === 'intl' ? 'active' : ''}" data-region="intl">🌍 International</button>
-      </div>
-      <div class="ufc-location-grid pm-tournament-location-grid">
-        <div class="ufc-location-field">
-          <label>${regionLabel}</label>
-          <select class="pm-tournament-region-select">${regionOptionsHtml(st.regionMode, st.selectedRegion)}</select>
-        </div>
-        <div class="ufc-location-field">
-          <label>Venue <span class="optional-tag">optional</span></label>
-          <select class="pm-tournament-venue-select">${venueOptionsHtml(st.regionMode, st.selectedVenue)}</select>
-        </div>
-      </div>
+      ${locationHtml}
       <div class="pm-tournament-matches">
         ${matches.map((m) => matchCardHtml(m)).join('')}
       </div>
@@ -1063,13 +758,13 @@ async function pollTrades() {
   allMatches.forEach((m, i) => tradesCache.set(m.conditionId, results[i]));
   renderTradeFeeds();
 
-  // Same reasoning as UFC's pollTrades: a timezone lookup that failed on a
-  // transient hiccup otherwise wouldn't retry until the 5-minute event
-  // refresh. Piggyback on this 20s poll instead so it clears sooner, for
-  // every tournament currently on screen (not just one shared region).
-  tournamentState.forEach((st, key) => {
-    if (st.regionMode === 'intl' && st.selectedRegion && !st.selectedRegion.timezone) {
-      ensureIntlRegionTimezone(st.selectedRegion, () => updateTournamentMatches(key));
+  // A timezone lookup that failed on a transient hiccup otherwise wouldn't
+  // retry until the 5-minute event refresh. Piggyback on this 20s poll
+  // instead so it clears sooner, for every auto-resolved region on screen
+  // still missing its timezone.
+  tournamentRegions.forEach((region, key) => {
+    if (region && region !== 'loading' && !region.timezone) {
+      ensureIntlRegionTimezone(region, () => updateTournamentMatches(key));
     }
   });
 }
@@ -1114,21 +809,13 @@ async function loadEventsAndRender() {
     matchesByTournament.get(m.tournament).push(m);
   });
 
-  // Once a tournament's matches are all gone (no more games for it), forget
-  // its saved location - same idea as the UFC tracker clearing its shared
-  // location once a card wraps up - so if the same-named tournament recurs
-  // later at a possibly different city, it starts fresh instead of
-  // silently inheriting a stale one.
-  let prefsChanged = false;
-  Object.keys(tournamentLocationPrefs).forEach((key) => {
-    if (!matchesByTournament.has(key)) {
-      delete tournamentLocationPrefs[key];
-      tournamentState.delete(key);
-      tournamentSuggestions.delete(key);
-      prefsChanged = true;
-    }
+  // Forget resolved regions for tournaments no longer on screen so a
+  // long-lived tab doesn't accumulate them - the city record itself stays
+  // saved in the shared Intl Regions list either way, so a recurring
+  // tournament re-resolves instantly from that list.
+  [...tournamentRegions.keys()].forEach((key) => {
+    if (!matchesByTournament.has(key)) tournamentRegions.delete(key);
   });
-  if (prefsChanged) saveTournamentLocationPrefs(tournamentLocationPrefs);
 
   if (!allMatches.length) {
     document.getElementById('matchesContainer').innerHTML = '<div class="empty-state">No upcoming tennis matches found on Polymarket right now.</div>';
@@ -1166,251 +853,6 @@ function startPolling() {
   });
 }
 
-/* ===================== Add region / venue modals ===================== */
-// One shared modal for each (rather than one inline form per tournament
-// group) - tagged with whichever tournament's "+ Add New..." option
-// triggered it, since there can be several groups on screen at once.
-
-let pendingLocationTournament = null;
-
-function setRegionModalFoundedStatus(message, isError) {
-  const el = document.getElementById('pmRegionModalFoundedStatus');
-  el.textContent = message;
-  el.className = 'famous-status' + (isError ? ' error' : '');
-}
-
-// Same Wikidata-then-Wikipedia-infobox lookup used for player birthdays
-// (lookupKeyDateByName in db-core.js), aimed at a city/region's founding
-// date instead - coverage is thinner here than for people, so failing
-// quietly and leaving manual entry as the fallback is the expected case.
-function lookupRegionModalFoundedDate(name) {
-  setRegionModalFoundedStatus('🔍 Looking up founding date...', false);
-  lookupPlaceFoundingDate(name)
-    .then((info) => {
-      if (!info) {
-        setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
-        return;
-      }
-      document.getElementById('pmModalRegionFounded').value = isoToDisplay(info.date);
-      const source = info.via === 'country' ? "its country's founding" : 'Wikipedia/Wikidata';
-      setRegionModalFoundedStatus(`✓ Found via ${source} (${info.date}) - please double-check before saving.`, false);
-    })
-    .catch(() => setRegionModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
-}
-
-function setVenueModalFoundedStatus(message, isError) {
-  const el = document.getElementById('pmVenueModalFoundedStatus');
-  el.textContent = message;
-  el.className = 'famous-status' + (isError ? ' error' : '');
-}
-
-function lookupVenueModalFoundedDate(name) {
-  setVenueModalFoundedStatus('🔍 Looking up founding date...', false);
-  lookupKeyDateByName(name)
-    .then((info) => {
-      if (!info) {
-        setVenueModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true);
-        return;
-      }
-      document.getElementById('pmModalVenueFounded').value = isoToDisplay(info.date);
-      setVenueModalFoundedStatus(`✓ Found via Wikipedia/Wikidata (${info.date}) - please double-check before saving.`, false);
-    })
-    .catch(() => setVenueModalFoundedStatus(`Couldn't find a founding date automatically for ${name} - please enter it yourself.`, true));
-}
-
-function openRegionModal(tournamentKey) {
-  pendingLocationTournament = tournamentKey;
-  document.getElementById('pmModalRegionName').value = '';
-  document.getElementById('pmModalRegionFounded').value = '';
-  setRegionModalFoundedStatus('', false);
-  document.getElementById('pmRegionModal').classList.add('active');
-}
-
-function closeRegionModal() {
-  pendingLocationTournament = null;
-  document.getElementById('pmRegionModal').classList.remove('active');
-}
-
-function openVenueModal(tournamentKey) {
-  pendingLocationTournament = tournamentKey;
-  document.getElementById('pmModalVenueName').value = '';
-  document.getElementById('pmModalVenueFounded').value = '';
-  setVenueModalFoundedStatus('', false);
-  const st = getTournamentState(tournamentKey);
-  const regionSel = document.getElementById('pmModalVenueRegionSelect');
-  if (st.regionMode === 'us') {
-    regionSel.innerHTML = '<option value="">Select state...</option>'
-      + US_STATES.map((s, idx) => `<option value="${idx}">${escapeHtml(s.name)}</option>`).join('');
-  } else {
-    regionSel.innerHTML = '<option value="">Select city / region...</option>'
-      + allIntlRegions().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  }
-  document.getElementById('pmVenueModal').classList.add('active');
-}
-
-function closeVenueModal() {
-  pendingLocationTournament = null;
-  document.getElementById('pmVenueModal').classList.remove('active');
-}
-
-function initLocationModals() {
-  attachDateMask(document.getElementById('pmModalRegionFounded'));
-  attachDateMask(document.getElementById('pmModalVenueFounded'));
-
-  document.getElementById('pmRegionModalClose').addEventListener('click', closeRegionModal);
-  document.getElementById('pmRegionModal').addEventListener('click', (e) => {
-    if (e.target.id === 'pmRegionModal') closeRegionModal();
-  });
-  document.getElementById('pmModalRegionName').addEventListener('blur', () => {
-    const name = document.getElementById('pmModalRegionName').value.trim();
-    const foundedFilled = document.getElementById('pmModalRegionFounded').value.trim();
-    if (name && !foundedFilled) lookupRegionModalFoundedDate(name);
-  });
-
-  document.getElementById('pmRegionModalLookupBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmModalRegionName').value.trim();
-    if (!name) { alert('Please enter a city / region name first.'); return; }
-    lookupRegionModalFoundedDate(name);
-  });
-  document.getElementById('pmModalSaveRegionBtn').addEventListener('click', () => {
-    const key = pendingLocationTournament;
-    if (!key) return;
-    const name = document.getElementById('pmModalRegionName').value.trim();
-    const founded = displayToISO(document.getElementById('pmModalRegionFounded').value);
-    if (!name) { alert('Please enter a city / region name.'); return; }
-    if (!founded) { alert('Please enter a valid founding date (MM/DD/YYYY).'); return; }
-
-    const regions = loadIntlRegions();
-    const region = { id: uid(), name, founded };
-    regions.push(region);
-    saveIntlRegions(regions);
-
-    const st = getTournamentState(key);
-    st.selectedRegion = region;
-    persistTournamentState(key);
-    expandedTournamentLocations.delete(key);
-    closeRegionModal();
-    renderMatchesContainer();
-  });
-
-  document.getElementById('pmVenueModalClose').addEventListener('click', closeVenueModal);
-  document.getElementById('pmVenueModal').addEventListener('click', (e) => {
-    if (e.target.id === 'pmVenueModal') closeVenueModal();
-  });
-  document.getElementById('pmModalVenueName').addEventListener('blur', () => {
-    const name = document.getElementById('pmModalVenueName').value.trim();
-    const foundedFilled = document.getElementById('pmModalVenueFounded').value.trim();
-    if (name && !foundedFilled) lookupVenueModalFoundedDate(name);
-  });
-
-  document.getElementById('pmVenueModalLookupBtn').addEventListener('click', () => {
-    const name = document.getElementById('pmModalVenueName').value.trim();
-    if (!name) { alert('Please enter a venue name first.'); return; }
-    lookupVenueModalFoundedDate(name);
-  });
-  document.getElementById('pmModalSaveVenueBtn').addEventListener('click', () => {
-    const key = pendingLocationTournament;
-    if (!key) return;
-    const st = getTournamentState(key);
-    const name = document.getElementById('pmModalVenueName').value.trim();
-    const founded = displayToISO(document.getElementById('pmModalVenueFounded').value);
-    const regionVal = document.getElementById('pmModalVenueRegionSelect').value;
-    if (!name) { alert('Please enter a venue name.'); return; }
-    if (!founded) { alert('Please enter a valid founding date for the venue (MM/DD/YYYY).'); return; }
-    if (regionVal === '') { alert(`Please select which ${st.regionMode === 'intl' ? 'city / region' : 'state'} this venue is in.`); return; }
-
-    const regionFields = st.regionMode === 'us'
-      ? { state: US_STATES[Number(regionVal)].name }
-      : { region: (allIntlRegions().find((c) => c.id === regionVal) || {}).name };
-
-    const venue = { id: uid(), name, founded, ...regionFields };
-    venues.push(venue);
-    saveTennisVenues(venues);
-    st.selectedVenue = venue;
-    persistTournamentState(key);
-    expandedTournamentLocations.delete(key);
-    closeVenueModal();
-    renderMatchesContainer();
-  });
-}
-
-/* ===================== Per-tournament location controls ===================== */
-
-function initTournamentLocationControls() {
-  document.getElementById('matchesContainer').addEventListener('click', (e) => {
-    const changeBtn = e.target.closest('[data-change-location]');
-    if (changeBtn) {
-      expandedTournamentLocations.add(changeBtn.dataset.changeLocation);
-      renderMatchesContainer();
-      return;
-    }
-
-    const acceptBtn = e.target.closest('[data-accept-suggestion]');
-    if (acceptBtn) {
-      acceptTournamentSuggestion(acceptBtn.dataset.acceptSuggestion);
-      return;
-    }
-
-    const dismissBtn = e.target.closest('[data-dismiss-suggestion]');
-    if (dismissBtn) {
-      const key = dismissBtn.dataset.dismissSuggestion;
-      tournamentSuggestions.set(key, 'dismissed');
-      updateTournamentSuggestionUI(key);
-      return;
-    }
-
-    const toggleBtn = e.target.closest('.pm-tournament-region-toggle .hours-toggle-btn');
-    if (!toggleBtn) return;
-    const groupEl = toggleBtn.closest('.pm-tournament-group');
-    const key = groupEl.dataset.tournament;
-    const st = getTournamentState(key);
-    const mode = toggleBtn.dataset.region;
-    if (mode !== st.regionMode) {
-      st.regionMode = mode;
-      st.selectedRegion = null;
-      st.selectedVenue = null;
-      persistTournamentState(key);
-      renderMatchesContainer();
-    }
-  });
-
-  document.getElementById('matchesContainer').addEventListener('change', (e) => {
-    const regionSelect = e.target.closest('.pm-tournament-region-select');
-    if (regionSelect) {
-      const key = regionSelect.closest('.pm-tournament-group').dataset.tournament;
-      const val = regionSelect.value;
-      const st = getTournamentState(key);
-      if (val === '__add__') {
-        regionSelect.value = st.selectedRegion ? st.selectedRegion.name : '';
-        openRegionModal(key);
-        return;
-      }
-      const list = st.regionMode === 'us' ? US_STATES : allIntlRegions();
-      st.selectedRegion = val ? (list.find((r) => r.name === val) || null) : null;
-      persistTournamentState(key);
-      expandedTournamentLocations.delete(key);
-      renderMatchesContainer();
-      return;
-    }
-
-    const venueSelect = e.target.closest('.pm-tournament-venue-select');
-    if (venueSelect) {
-      const key = venueSelect.closest('.pm-tournament-group').dataset.tournament;
-      const val = venueSelect.value;
-      const st = getTournamentState(key);
-      if (val === '__add__') {
-        venueSelect.value = st.selectedVenue ? st.selectedVenue.id : '';
-        openVenueModal(key);
-        return;
-      }
-      st.selectedVenue = val ? (venues.find((v) => v.id === val) || null) : null;
-      persistTournamentState(key);
-      expandedTournamentLocations.delete(key);
-      renderMatchesContainer();
-    }
-  });
-}
-
 // Arriving from the Tennis page (?from=tennis), the back link returns there
 // instead of dropping the user at the Polymarket hub menu.
 (function initBackLink() {
@@ -1439,8 +881,6 @@ function scrollToConditionIdFromQuery() {
   // them before any read, or a pre-init read could serve a stale
   // localStorage copy and a later save would clobber newer records.
   await bigStoreReadyPromise;
-  initLocationModals();
-  initTournamentLocationControls();
   initRefreshButton();
   initBreakdownModal();
   initDismissButtons();
