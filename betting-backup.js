@@ -37,7 +37,20 @@ const BETTING_BACKUP_KEYS = [
 
 const BETTING_BACKUP_VERSION = 1;
 
-function buildBettingBackup() {
+// The lazy stores are not read at startup, so a backup has to pull them in
+// first. Without this a backup would silently omit the largest store in the
+// app - and silently omitting data from a backup is the worst possible way to
+// find out about it.
+function ensureBackupStoresLoaded() {
+  return Promise.all(
+    BETTING_BACKUP_KEYS
+      .filter((key) => BIG_STORE_LAZY_KEYS.includes(key))
+      .map((key) => ensureBigStoreKey(key)),
+  );
+}
+
+async function buildBettingBackup() {
+  await ensureBackupStoresLoaded();
   const data = {};
   BETTING_BACKUP_KEYS.forEach((key) => {
     // bigStoreGetItem transparently covers both homes, so a backup captures
@@ -78,8 +91,8 @@ function summarizeBettingBackup(backup) {
   };
 }
 
-function downloadBettingBackup() {
-  const backup = buildBettingBackup();
+async function downloadBettingBackup() {
+  const backup = await buildBettingBackup();
   const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -95,8 +108,11 @@ function downloadBettingBackup() {
 // Restores every key present in the file. Keys absent from the backup are
 // left alone rather than cleared, so an older backup can't silently wipe a
 // store it predates.
-function restoreBettingBackup(backup) {
+async function restoreBettingBackup(backup) {
   if (!backup || typeof backup !== 'object' || !backup.data) throw new Error('not a backup file');
+  // A lazy store has to be loaded before it can be written, even though a
+  // restore replaces it wholesale - the write guard cannot tell the two apart.
+  await ensureBackupStoresLoaded();
   let restored = 0;
   Object.keys(backup.data).forEach((key) => {
     if (!BETTING_BACKUP_KEYS.includes(key)) return; // ignore unknown keys
@@ -125,7 +141,7 @@ function bettingCloudDoc() {
 }
 
 async function cloudBackupBetting() {
-  const json = JSON.stringify(buildBettingBackup());
+  const json = JSON.stringify(await buildBettingBackup());
   const chunks = [];
   for (let i = 0; i < json.length; i += BETTING_CLOUD_CHUNK_BYTES) {
     chunks.push(json.slice(i, i + BETTING_CLOUD_CHUNK_BYTES));
@@ -153,6 +169,6 @@ async function cloudRestoreBetting() {
   );
   const json = docs.map((d) => (d.exists ? d.data().chunk : '')).join('');
   const backup = JSON.parse(json);
-  const restored = restoreBettingBackup(backup);
+  const restored = await restoreBettingBackup(backup);
   return { restored, summary: summarizeBettingBackup(backup) };
 }

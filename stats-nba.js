@@ -675,6 +675,9 @@ async function refreshAndRenderNba() {
   await checkNbaTotalsResults();
   currentNbaPredictions = loadNbaPredictions();
   currentNbaTotals = loadNbaTotalsPredictions();
+  // Lazy store - this is the read that pulls it in, and the Stats page is one
+  // of only two places that needs it at all.
+  await ensureNbaPropSignals();
   currentNbaPropSignals = loadNbaPropSignals();
   renderNbaScope('', currentNbaPredictions, currentNbaTotals);
   renderNbaScope('Old', currentNbaPredictions, currentNbaTotals);
@@ -1113,6 +1116,10 @@ async function backfillNbaPropSignals(onProgress) {
   }
   if (startDate > endDate) return { alreadyCurrent: true };
 
+  // Before either branch: a fresh walk still checkpoints through
+  // saveNbaPropSignals, and writing a lazy store that was never loaded is
+  // refused outright.
+  await ensureNbaPropSignals();
   const signals = freshWalk ? [] : loadNbaPropSignals();
   const birthdates = loadNbaBirthdates();
   const seen = new Set(signals.map((r) => `${r.g}|${r.p}`));

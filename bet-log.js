@@ -35,12 +35,14 @@ function betLogSummaryText(s) {
   return `${s.mlbGames} MLB games, ${s.nrfi} NRFI, ${s.totals} totals, ${s.kSignals} K-signals, ${s.ufc} UFC, ${s.tennis} tennis, ${s.lockedSlates} locked slates`;
 }
 
-document.getElementById('bettingBackupDownloadBtn').addEventListener('click', () => {
+document.getElementById('bettingBackupDownloadBtn').addEventListener('click', async () => {
   try {
-    const summary = downloadBettingBackup();
+    const summary = await downloadBettingBackup();
     betLogBackupStatus.textContent = `Downloaded - ${betLogSummaryText(summary)}.`;
   } catch (e) {
-    betLogBackupStatus.textContent = 'Could not build the backup file.';
+    // Says which store refused rather than a flat "could not build" - a backup
+    // that fails because a store would not load is worth reading in full.
+    betLogBackupStatus.textContent = `Could not build the backup file: ${e.message}`;
   }
 });
 
@@ -60,7 +62,7 @@ document.getElementById('bettingBackupFile').addEventListener('change', async (e
       betLogBackupStatus.textContent = 'Restore cancelled.';
       return;
     }
-    const restored = restoreBettingBackup(backup);
+    const restored = await restoreBettingBackup(backup);
     betLogBackupStatus.textContent = `Restored ${restored} stores - ${betLogSummaryText(summary)}. Reloading…`;
     setTimeout(() => window.location.reload(), 900);
   } catch (err) {

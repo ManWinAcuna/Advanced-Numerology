@@ -1728,6 +1728,14 @@ function rescoreMlbPredictionsForWeights() {
   if (Number(localStorage.getItem(MLB_WEIGHTS_VERSION_KEY)) === MLB_WEIGHTS_VERSION) {
     return { alreadyCurrent: true, rescored: 0, skipped: 0, flipped: 0 };
   }
+  // An unloaded store reads as [], which would rescore nothing and then stamp
+  // the version marker below as though the job were done - so the rescore would
+  // never run again even after the store came back. Bail out instead and let
+  // the next load do it.
+  if (!bigStoreKeyHydrated(MLB_PREDICTIONS_KEY)) {
+    return { alreadyCurrent: false, unavailable: true, rescored: 0, skipped: 0, flipped: 0 };
+  }
+
   const predictions = loadMlbPredictions();
   let rescored = 0;
   let skipped = 0;
@@ -3082,9 +3090,20 @@ function nbaPropDayBand(dayScore) {
     || NBA_PROP_DAY_BANDS[NBA_PROP_DAY_BANDS.length - 1];
 }
 
+// This store is lazy: at ~4.4MB it is the largest in the app and only two
+// screens read it, so it is not hydrated at startup. Await this before either
+// loading or saving it.
+async function ensureNbaPropSignals() {
+  return ensureBigStoreKey(NBA_PROP_SIGNALS_KEY);
+}
+
 function loadNbaPropSignals() {
+  // Deliberately outside the try: if the store is not loaded, or failed to
+  // load, that error must reach the caller. Backfill builds its next value by
+  // appending to whatever this returns, so answering [] would turn a two-season
+  // walk into a one-day file the next time it checkpoints.
+  const raw = bigStoreGetItem(NBA_PROP_SIGNALS_KEY);
   try {
-    const raw = bigStoreGetItem(NBA_PROP_SIGNALS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {

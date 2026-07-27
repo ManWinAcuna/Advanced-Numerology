@@ -22,7 +22,10 @@ const BIG_STORE_DB_VERSION = 1;
 
 // Keys held here rather than in localStorage. Everything else (settings,
 // profile, custom rosters, venues) is small and stays where it is.
-const BIG_STORE_KEYS = [
+//
+// Eager keys are read at startup, before any page paints, because essentially
+// every page reads at least one of them immediately.
+const BIG_STORE_EAGER_KEYS = [
   'numerology_mlb_predictions',
   'numerology_mlb_pitcher_k_signals',
   'numerology_mlb_nrfi_predictions',
@@ -40,12 +43,22 @@ const BIG_STORE_KEYS = [
   'numerology_nba_totals_predictions',
   'numerology_nba_player_form',
   'numerology_nba_birthdates',
-  // Player prop signals. Measured at 109 bytes per record and ~16 records per
-  // game over two seasons, this is ~42,000 records / 4.4MB on its own - by far
-  // the largest single store, and the reason the IndexedDB migration had to
-  // happen before props were possible at all.
+];
+
+// Lazy keys are read only when something actually asks for them, via
+// ensureBigStoreKey(). Player prop signals measure 109 bytes per record and
+// ~16 records per game over two seasons - ~42,000 records / 4.4MB, by far the
+// largest store in the app. Exactly two screens read it (the Stats prop tables
+// and its own backfill), but hydrating it at startup put that 4.4MB read on
+// the critical path of every page, including the betting page that never
+// touches it.
+const BIG_STORE_LAZY_KEYS = [
   'numerology_nba_prop_signals',
 ];
+
+// The full set, for the callers that only ask "does this key live here?" -
+// saveJsonGuarded's routing and the backup file's read/write paths.
+const BIG_STORE_KEYS = [...BIG_STORE_EAGER_KEYS, ...BIG_STORE_LAZY_KEYS];
 
 const BIG_STORE_MIGRATED_FLAG = 'numerology_big_store_migrated';
 
@@ -61,8 +74,36 @@ const _bigStorePending = new Map(); // key -> latest value awaiting a write
 // silently dropped on the next load.
 const _bigStoreDirty = new Set();
 
+// Keys whose value has actually been read out of storage. This is what makes
+// "no data" distinguishable from "not loaded yet": a key absent from here has
+// an unknown value, not an empty one.
+const _bigStoreHydrated = new Set();
+// Lazy keys currently being read, so ten callers asking at once share one read.
+const _bigStoreHydrating = new Map();
+// Keys whose read genuinely FAILED. Reading or writing these is refused rather
+// than answered with an empty array - see bigStoreGetItem/bigStoreSetItem.
+const _bigStoreFailedKeys = new Set();
+
+// What the pages show the user. 'loading' until init settles, then 'ready',
+// 'degraded' (DB opened but one or more keys would not read), or 'unavailable'
+// (no IndexedDB at all - the app falls back to localStorage).
+let _bigStoreState = 'loading';
+let _bigStoreStateReason = null;
+
 function bigStoreAvailable() {
   return _bigStoreReady && !!_bigStoreDb;
+}
+
+function bigStoreStatus() {
+  return {
+    state: _bigStoreState,
+    reason: _bigStoreStateReason,
+    failedKeys: [..._bigStoreFailedKeys],
+  };
+}
+
+function bigStoreKeyHydrated(key) {
+  return _bigStoreHydrated.has(key);
 }
 
 function openBigStoreDb() {
@@ -82,16 +123,40 @@ function bigStoreTx(mode) {
   return _bigStoreDb.transaction(BIG_STORE_TABLE, mode).objectStore(BIG_STORE_TABLE);
 }
 
+// Rejects on a failed read rather than resolving undefined. The old version
+// collapsed "this key is not stored" and "this read did not work" into the same
+// answer, and since the caller treats undefined as "no data", a transient
+// failure rendered a confident empty page with nothing in the console. Every
+// caller must now decide which case it is looking at.
 function bigStoreGet(key) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     try {
       const req = bigStoreTx('readonly').get(key);
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(undefined);
+      req.onerror = () => reject(req.error || new Error(`indexedDB read failed for ${key}`));
     } catch (e) {
-      resolve(undefined);
+      reject(e);
     }
   });
+}
+
+// A read can fail transiently - most plausibly while another tab commits a
+// multi-megabyte backfill checkpoint - so a single failure is retried before
+// the key is declared unreadable.
+async function bigStoreGetRetrying(key, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return { ok: true, value: await bigStoreGet(key) };
+    } catch (e) {
+      lastError = e;
+      if (attempt < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+      }
+    }
+  }
+  console.error(`[big-store] could not read ${key}`, lastError);
+  return { ok: false, error: lastError };
 }
 
 function bigStorePut(key, rawString) {
@@ -115,38 +180,34 @@ async function initBigStore() {
   } catch (e) {
     // No IndexedDB (private mode, ancient browser): stay on localStorage.
     _bigStoreReady = false;
+    _bigStoreState = 'unavailable';
+    _bigStoreStateReason = e && e.message;
     return { ok: false, reason: e && e.message };
   }
 
   const alreadyMigrated = localStorage.getItem(BIG_STORE_MIGRATED_FLAG) === '1';
-  let migrated = 0;
 
-  for (const key of BIG_STORE_KEYS) {
-    // Written while the DB was opening - that value is authoritative.
-    if (_bigStoreDirty.has(key)) {
-      await bigStorePut(key, _bigStoreCache.get(key)).catch(() => {});
-      continue;
-    }
-    let raw = await bigStoreGet(key);
-    if (raw === undefined && !alreadyMigrated) {
-      const local = localStorage.getItem(key);
-      if (local != null) {
-        try {
-          await bigStorePut(key, local);
-          raw = local;
-          migrated += 1;
-        } catch (e) { /* leave it in localStorage; cache falls back below */ }
-      }
-    }
-    if (raw === undefined) {
-      const local = localStorage.getItem(key); // never migrated, or copy failed
-      if (local != null) raw = local;
-    }
-    if (raw !== undefined) _bigStoreCache.set(key, raw);
-  }
+  // In parallel, not one at a time. Sequentially, every page waited on the SUM
+  // of all these reads before its first paint, so the slowest store set the
+  // floor for screens that never read it.
+  const results = await Promise.all(
+    BIG_STORE_EAGER_KEYS.map((key) => hydrateBigStoreKey(key, alreadyMigrated)),
+  );
+  const migrated = results.reduce((n, r) => n + (r.migrated || 0), 0);
 
   _bigStoreReady = true;
   _bigStoreDirty.clear();
+
+  const failed = [..._bigStoreFailedKeys];
+  if (failed.length) {
+    // Deliberately do NOT set the migrated flag or release anything: a key that
+    // would not read still needs its localStorage copy, and setting the flag is
+    // what makes bigStoreGetItem answer null instead of falling back.
+    _bigStoreState = 'degraded';
+    _bigStoreStateReason = `${failed.length} store${failed.length === 1 ? '' : 's'} could not be read`;
+    return { ok: false, degraded: true, failedKeys: failed, keys: _bigStoreCache.size };
+  }
+
   if (!alreadyMigrated) localStorage.setItem(BIG_STORE_MIGRATED_FLAG, '1');
 
   // Release the localStorage copies now that IndexedDB is confirmed to hold
@@ -157,7 +218,81 @@ async function initBigStore() {
   // confirming it matches, so this can never delete the sole copy.
   const freed = await releaseMigratedLocalCopies();
 
+  _bigStoreState = 'ready';
   return { ok: true, migrated, keys: _bigStoreCache.size, freedKeys: freed };
+}
+
+// Reads one key into the cache. Shared by startup and the lazy path so both
+// handle the migration copy, the localStorage fallback and read failure the
+// same way.
+async function hydrateBigStoreKey(key, alreadyMigrated) {
+  // Written while the DB was opening - that value is authoritative, and must
+  // not be overwritten from disk.
+  if (_bigStoreDirty.has(key)) {
+    await bigStorePut(key, _bigStoreCache.get(key)).catch(() => {});
+    _bigStoreDirty.delete(key);
+    _bigStoreHydrated.add(key);
+    return { migrated: 0 };
+  }
+
+  const read = await bigStoreGetRetrying(key);
+  if (!read.ok) {
+    // The key is left OUT of the cache and marked failed. It is not hydrated,
+    // so reads refuse and writes refuse - which is the whole point, because
+    // answering "empty" here is what silently wiped a store's worth of work.
+    _bigStoreFailedKeys.add(key);
+    return { migrated: 0, failed: true };
+  }
+
+  let raw = read.value;
+  let migrated = 0;
+  if (raw === undefined && !alreadyMigrated) {
+    const local = localStorage.getItem(key);
+    if (local != null) {
+      try {
+        await bigStorePut(key, local);
+        raw = local;
+        migrated = 1;
+      } catch (e) { /* leave it in localStorage; cache falls back below */ }
+    }
+  }
+  if (raw === undefined) {
+    const local = localStorage.getItem(key); // never migrated, or copy failed
+    if (local != null) raw = local;
+  }
+  if (raw !== undefined) _bigStoreCache.set(key, raw);
+  _bigStoreHydrated.add(key);
+  return { migrated };
+}
+
+// Reads a lazy key on first use. Safe to call repeatedly and concurrently -
+// callers share the one in-flight read. Resolves true when the key is usable.
+function ensureBigStoreKey(key) {
+  if (_bigStoreHydrated.has(key)) return Promise.resolve(true);
+  if (_bigStoreHydrating.has(key)) return _bigStoreHydrating.get(key);
+
+  const run = bigStoreReadyPromise
+    .then(async () => {
+      if (_bigStoreHydrated.has(key)) return true;
+      if (!bigStoreAvailable()) {
+        // No IndexedDB at all. Serve whatever localStorage has, matching how
+        // the eager keys degrade, so the caller still gets a real answer.
+        const local = localStorage.getItem(key);
+        if (local != null) _bigStoreCache.set(key, local);
+        _bigStoreHydrated.add(key);
+        return true;
+      }
+      const res = await hydrateBigStoreKey(key, localStorage.getItem(BIG_STORE_MIGRATED_FLAG) === '1');
+      return !res.failed;
+    })
+    .catch(() => false)
+    .then((ok) => {
+      _bigStoreHydrating.delete(key);
+      return ok;
+    });
+
+  _bigStoreHydrating.set(key, run);
+  return run;
 }
 
 async function releaseMigratedLocalCopies() {
@@ -165,8 +300,14 @@ async function releaseMigratedLocalCopies() {
   for (const key of BIG_STORE_KEYS) {
     const local = localStorage.getItem(key);
     if (local == null) continue;
-    const stored = await bigStoreGet(key);
-    if (stored !== undefined && stored === _bigStoreCache.get(key)) {
+    // An unhydrated lazy key has no cached value to compare, so it is checked
+    // straight against localStorage - freeing the copy must never require
+    // pulling 4.4MB into memory just to prove it is redundant.
+    const reference = _bigStoreHydrated.has(key) ? _bigStoreCache.get(key) : local;
+    if (reference === undefined) continue;
+    const read = await bigStoreGetRetrying(key);
+    if (!read.ok) continue; // could not verify: keep the copy
+    if (read.value !== undefined && read.value === reference) {
       localStorage.removeItem(key);
       freed += 1;
     }
@@ -178,6 +319,17 @@ async function releaseMigratedLocalCopies() {
 // string, or null, matching localStorage.getItem's contract so the callers in
 // db-core.js keep their existing shape.
 function bigStoreGetItem(key) {
+  // A key whose read failed has an UNKNOWN value. Returning null would let the
+  // caller parse it as an empty array and paint a page that says "no data" -
+  // the exact failure this guard exists to stop.
+  if (_bigStoreFailedKeys.has(key)) {
+    throw new Error(`${key} could not be read from storage. Reload the page - do not save over it.`);
+  }
+  // Same for a lazy key nobody has loaded yet: the answer is not "empty", it is
+  // "not asked for yet". Callers must await ensureBigStoreKey(key) first.
+  if (BIG_STORE_LAZY_KEYS.includes(key) && !_bigStoreHydrated.has(key)) {
+    throw new Error(`${key} has not been loaded yet - await ensureBigStoreKey('${key}') before reading it.`);
+  }
   if (_bigStoreCache.has(key)) return _bigStoreCache.get(key);
   // Only fall back to localStorage before the one-time copy has happened.
   // Afterwards that copy is a frozen snapshot from migration day, and serving
@@ -193,6 +345,17 @@ function bigStoreGetItem(key) {
 // genuinely unrecoverable problems; a failed IndexedDB write falls back to
 // localStorage so data is never silently dropped.
 function bigStoreSetItem(key, rawString) {
+  // Refuse to write over a store we could not read. Callers build their new
+  // value by loading the old one and appending, so if the load came back empty
+  // because of a failed read, this write is a truncation - the single most
+  // destructive thing this file can do. Fail loudly instead.
+  if (_bigStoreFailedKeys.has(key)) {
+    throw new Error(`${key} could not be read from storage, so saving now would replace it with a partial copy. Reload the page and try again.`);
+  }
+  if (BIG_STORE_LAZY_KEYS.includes(key) && !_bigStoreHydrated.has(key)) {
+    throw new Error(`${key} has not been loaded yet - await ensureBigStoreKey('${key}') before saving, or this write would replace the stored data with a partial copy.`);
+  }
+
   _bigStoreCache.set(key, rawString);
 
   if (!bigStoreAvailable()) {
@@ -255,3 +418,63 @@ function bigStoreKeyBytes(key) {
 // Kicked off the moment this file loads, so the DB is usually open before any
 // page script runs. Pages gate their first render on it.
 const bigStoreReadyPromise = initBigStore();
+
+/* ---------- Status banner ---------- */
+// Wired here rather than per page so every screen that loads this file reports
+// the same thing. Before this, a store that failed to load looked exactly like
+// a store with nothing in it: no console error, no banner, just an empty page
+// that invited a fresh backfill over data that was fine.
+
+function bigStoreBanner(text, tone) {
+  const existing = document.getElementById('bigStoreBanner');
+  const el = existing || document.createElement('div');
+  el.id = 'bigStoreBanner';
+  el.textContent = text;
+  el.style.cssText = [
+    'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+    'padding:10px 14px', 'font:14px/1.4 system-ui,sans-serif',
+    'text-align:center', 'color:#fff',
+    `background:${tone === 'error' ? '#b3261e' : '#444'}`,
+  ].join(';');
+  if (!existing && document.body) document.body.appendChild(el);
+  return el;
+}
+
+function bigStoreClearBanner() {
+  const el = document.getElementById('bigStoreBanner');
+  if (el) el.remove();
+}
+
+(function wireBigStoreBanner() {
+  if (typeof document === 'undefined') return;
+
+  const onBody = (fn) => {
+    if (document.body) fn();
+    else document.addEventListener('DOMContentLoaded', fn, { once: true });
+  };
+
+  // Only announce a slow load if it is actually slow - a normal open resolves
+  // in well under this and the user never sees a flash.
+  let settled = false;
+  setTimeout(() => {
+    if (settled) return;
+    onBody(() => { if (!settled) bigStoreBanner('Loading saved data…', 'info'); });
+  }, 600);
+
+  bigStoreReadyPromise.then((res) => {
+    settled = true;
+    onBody(() => {
+      if (res && res.ok) { bigStoreClearBanner(); return; }
+      if (res && res.degraded) {
+        bigStoreBanner(
+          `Saved data could not be loaded (${res.failedKeys.join(', ')}). Your data is still on disk - reload the page. Do not run a backfill until this clears.`,
+          'error',
+        );
+        return;
+      }
+      // No IndexedDB at all: the app still works off localStorage, so this is a
+      // warning about capacity rather than a data-loss risk.
+      bigStoreBanner('Large-storage is unavailable in this browser, so saved history may be incomplete.', 'error');
+    });
+  });
+}());
