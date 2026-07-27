@@ -163,11 +163,20 @@ function renderBettingLog() {
     const right = s.inProgress
       ? `${bettingFmtMoney(s.staked)} staked &middot; pending`
       : `${bettingFmtMoney(s.staked)} staked &middot; <span class="score-inline ${s.profit > 0 ? 'good' : s.profit < 0 ? 'bad' : ''}">${bettingFmtSignedMoney(s.profit)}</span>`;
+    // settleLockedSlates spreads the stored record, so id survives hydration.
+    // Older records predate ids; the content signature identifies those.
+    //
+    // encodeURIComponent, not escapeHtml: escapeHtml round-trips through
+    // textContent/innerHTML, which escapes & < > but NOT the double quote - and
+    // a signature is built from matchup and pick names, so a fighter nickname
+    // like Jon "Bones" Jones would close the attribute early. Percent-encoding
+    // leaves nothing that can terminate it, and the handler decodes on read.
+    const key = encodeURIComponent(String(s.id || s.signature || ''));
     return `
       <div class="bet-log-entry">
         <div class="bet-log-head">
           <span>${bettingFmtDate(s.dateKey)} &middot; ${meta.icon} ${meta.label} &middot; ${bettingModeLabel(s.mode, s.mixedTypes)} &middot; 🔒 ${timeStr}</span>
-          <span>${right}</span>
+          <span class="bet-log-head-right">${right}<button type="button" class="bet-log-delete" data-slate="${key}" title="Delete this locked bet" aria-label="Delete this locked bet">🗑</button></span>
         </div>
         <div class="bet-log-body" style="display:none;">${bettingTicketsHtml(s.tickets)}</div>
       </div>`;

@@ -15,9 +15,17 @@ async function refreshBetLogAndRender() {
   renderBettingLog();
 }
 
-// Expanding a locked slate's tickets - delegated so pagination re-renders
-// don't need rewiring.
+// Expanding a locked slate's tickets, and deleting one - both delegated so
+// pagination re-renders don't need rewiring.
 document.getElementById('bettingLog').addEventListener('click', (e) => {
+  // The delete button sits INSIDE the header, so it has to be handled first or
+  // removing a row would also toggle the row it no longer belongs to.
+  const del = e.target.closest('.bet-log-delete');
+  if (del) {
+    e.stopPropagation();
+    deleteLockedBet(decodeURIComponent(del.getAttribute('data-slate') || ''));
+    return;
+  }
   const head = e.target.closest('.bet-log-head');
   if (!head) return;
   const body = head.nextElementSibling;
@@ -25,6 +33,33 @@ document.getElementById('bettingLog').addEventListener('click', (e) => {
     body.style.display = body.style.display === 'none' ? '' : 'none';
   }
 });
+
+// Deleting a locked bet is permanent and it is real recorded history, so the
+// confirmation names exactly what is about to go rather than asking "are you
+// sure". A key that no longer matches anything just re-renders: another tab or
+// a double-tap already removed it, which is the intended end state either way.
+function deleteLockedBet(key) {
+  if (!key) return;
+  const slate = loadBettingLockedSlates().find((s) => (s.id || s.signature) === key);
+  if (!slate) {
+    renderBettingLog();
+    return;
+  }
+  const staked = slate.tickets.reduce((sum, t) => sum + t.stake, 0);
+  const meta = BETTING_SCOPE_META[slate.scope] || { label: slate.scope };
+  const lines = [
+    'Delete this locked bet?',
+    '',
+    `${bettingFmtDate(slate.dateKey)} - ${meta.label}`,
+    `${slate.tickets.length} ticket${slate.tickets.length === 1 ? '' : 's'} - ${bettingFmtMoney(staked)} staked`,
+    '',
+    'This removes it from your locked record permanently and cannot be undone.',
+  ];
+  if (!confirm(lines.join('\n'))) return;
+
+  deleteBettingLockedSlate(key);
+  renderBettingLog();
+}
 
 /* ===================== Backup & restore ===================== */
 

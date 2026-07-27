@@ -764,6 +764,24 @@ function saveBettingLockedSlates(list) {
   saveJsonGuarded(BETTING_LOCKED_SLATES_KEY, list);
 }
 
+// Removes one locked receipt. Keyed by id, falling back to the content
+// signature for records written before ids existed (and for anything restored
+// from an older backup) - the signature is unique per locked slate by
+// construction, so it identifies the same row just as well.
+//
+// Returns the removed record so the caller can report what went, or null when
+// the key matches nothing. Callers must treat null as "already gone" rather
+// than an error: a double-tap on a phone, or another tab that deleted it first,
+// both land here and neither is a failure.
+function deleteBettingLockedSlate(key) {
+  const list = loadBettingLockedSlates();
+  const idx = list.findIndex((s) => (s.id || s.signature) === key);
+  if (idx < 0) return null;
+  const [removed] = list.splice(idx, 1);
+  saveBettingLockedSlates(list);
+  return removed;
+}
+
 // Identity of a slate's content - used to stop the same slate being locked
 // twice. A later slate the same day (games dropped out / new games tracked)
 // has a different signature and locks as its own receipt.
