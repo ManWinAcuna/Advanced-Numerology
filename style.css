@@ -4594,6 +4594,120 @@ body {
   background: rgba(245, 197, 66, 0.05);
 }
 
+/* ===================== Expandable charts + month calendar ===================== */
+
+/* The box chrome is the click target for expanding; the chart inside keeps its
+   own drag/tap behaviour, so only the label and padding read as "open me". */
+#bettingCurveBox,
+#bettingStabilityBox {
+  cursor: zoom-in;
+}
+
+#bettingCurveBox > #bettingCurve,
+#bettingStabilityBox > #bettingStability {
+  cursor: auto;
+}
+
+/* 12 months will not fit a phone at a legible size, so the grid keeps a real
+   minimum cell width and scrolls sideways inside its own container rather than
+   squeezing cells to nothing or pushing the page wide. */
+.bet-cal-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bet-cal {
+  min-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bet-cal-row {
+  display: grid;
+  grid-template-columns: 42px repeat(12, 1fr);
+  gap: 4px;
+  align-items: stretch;
+}
+
+.bet-cal-year,
+.bet-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.bet-cal-year {
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+
+.bet-cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.bet-cal-cell.selected,
+.bet-cal-cell:hover,
+.bet-cal-cell:focus-visible {
+  border-color: var(--yellow);
+  transform: scale(1.05);
+  outline: none;
+}
+
+.bet-cal-cell.bet-cal-empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+
+.bet-cal-cell.bet-cal-empty:hover {
+  border-color: var(--border);
+  transform: none;
+}
+
+.bet-cal-roi {
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.bet-cal-pl {
+  font-size: 0.6rem;
+  opacity: 0.85;
+}
+
+.bet-cal-cell.good .bet-cal-roi,
+.bet-cal-cell.good .bet-cal-pl {
+  color: var(--good);
+}
+
+.bet-cal-cell.bad .bet-cal-roi,
+.bet-cal-cell.bad .bet-cal-pl {
+  color: var(--bad);
+}
+
+.bet-cal-now {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  font-size: 0.7rem;
+  color: var(--yellow);
+}
+
 /* Keeps the P/L and the delete button together as one unit, so the header's
    space-between still puts the date at one end and the money at the other
    instead of stranding the button in the middle. */

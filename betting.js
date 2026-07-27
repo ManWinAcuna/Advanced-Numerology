@@ -159,9 +159,20 @@ function renderBettingCurve(sim) {
     return;
   }
   box.style.display = '';
+  paintBettingCurve(sim, days, 'bettingCurve', 'bettingCurve', 600, 170);
+}
+
+// The curve at any size, into any container. The inline chart and the expanded
+// modal are the same drawing with a different viewBox, so they share this
+// rather than diverging - a fix to the scrub or the labels lands in both.
+// idPrefix namespaces the SVG's internal ids so both copies can be in the DOM
+// at once without the modal's crosshair being driven by the inline chart's.
+function paintBettingCurve(sim, days, containerId, idPrefix, W, H) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
 
   const values = [sim.startBankroll, ...days.map((d) => d.bankrollAfter)];
-  const W = 600, H = 170, padL = 8, padR = 8, padT = 16, padB = 18;
+  const padL = 8, padR = 8, padT = 16, padB = 18;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -175,8 +186,8 @@ function renderBettingCurve(sim) {
   // touch-action:pan-y is what makes this usable on a phone: a vertical swipe
   // still scrolls the page, while a horizontal drag scrubs the curve. Without
   // it the chart either eats every scroll or never sees a touch at all.
-  document.getElementById('bettingCurve').innerHTML = `
-    <svg id="bettingCurveSvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair;">
+  container.innerHTML = `
+    <svg id="${idPrefix}Svg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair;">
       <line x1="${padL}" y1="${y(values[0]).toFixed(1)}" x2="${W - padR}" y2="${y(values[0]).toFixed(1)}" stroke="var(--border)" stroke-dasharray="4 4" />
       <polygon points="${x(0).toFixed(1)},${(H - padB)} ${pts} ${x(values.length - 1).toFixed(1)},${(H - padB)}" fill="${endUp ? 'rgba(139, 195, 74, 0.08)' : 'rgba(229, 57, 63, 0.08)'}" />
       <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" />
@@ -185,26 +196,26 @@ function renderBettingCurve(sim) {
       <text x="${W - padR}" y="11" fill="var(--yellow)" font-size="10" text-anchor="end">peak ${bettingFmtMoney(sim.peakBankroll)}</text>
       <text x="${padL}" y="${H - 5}" fill="var(--muted)" font-size="10">${days.length} betting days</text>
       <text x="${W - padR}" y="${H - 5}" fill="${lineColor}" font-size="10" text-anchor="end">now ${bettingFmtMoney(sim.finalBankroll)}</text>
-      <g id="bettingCurveCrosshair" style="display:none;pointer-events:none;">
-        <line id="bettingCurveCrossLine" y1="${padT}" y2="${H - padB}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="3 3" opacity="0.7" />
-        <circle id="bettingCurveCrossDot" r="4" fill="var(--yellow)" stroke="var(--bg)" stroke-width="1.5" />
+      <g id="${idPrefix}Crosshair" style="display:none;pointer-events:none;">
+        <line id="${idPrefix}CrossLine" y1="${padT}" y2="${H - padB}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="3 3" opacity="0.7" />
+        <circle id="${idPrefix}CrossDot" r="4" fill="var(--yellow)" stroke="var(--bg)" stroke-width="1.5" />
       </g>
     </svg>
-    <div id="bettingCurveReadout" class="pm-breakdown-hint" style="text-align:center;min-height:1.2em;">Drag across the curve to read any day.</div>`;
+    <div id="${idPrefix}Readout" class="pm-breakdown-hint" style="text-align:center;min-height:1.2em;">Drag across the curve to read any day.</div>`;
 
-  attachBettingCurveScrub(days, values, x, y, W);
+  attachBettingCurveScrub(days, values, x, y, W, idPrefix);
 }
 
 // Scrubbing is wired after the innerHTML above rather than baked into it,
 // because the readout needs the per-day ledger rows and those don't survive a
 // round trip through markup. Index 0 of `values` is the starting bankroll
 // (before any bet), so day i lives at values[i+1] - hence the -1 below.
-function attachBettingCurveScrub(days, values, x, y, W) {
-  const svg = document.getElementById('bettingCurveSvg');
-  const readout = document.getElementById('bettingCurveReadout');
-  const cross = document.getElementById('bettingCurveCrosshair');
-  const line = document.getElementById('bettingCurveCrossLine');
-  const dot = document.getElementById('bettingCurveCrossDot');
+function attachBettingCurveScrub(days, values, x, y, W, idPrefix) {
+  const svg = document.getElementById(`${idPrefix}Svg`);
+  const readout = document.getElementById(`${idPrefix}Readout`);
+  const cross = document.getElementById(`${idPrefix}Crosshair`);
+  const line = document.getElementById(`${idPrefix}CrossLine`);
+  const dot = document.getElementById(`${idPrefix}CrossDot`);
   if (!svg || !readout) return;
 
   const show = (clientX) => {
@@ -260,9 +271,10 @@ function attachBettingCurveScrub(days, values, x, y, W) {
 // Edge Stability - profit per dollar staked, month by month, as bars around
 // a zero line. One tall bar carrying the whole total is the luck signature;
 // steady green is the edge signature.
-function renderBettingStability(sim) {
-  const box = document.getElementById('bettingStabilityBox');
-  const days = [...sim.ledger].reverse(); // chronological
+// Month buckets in chronological order, keyed YYYY-MM. Shared by the bar chart
+// and the calendar so the two views can never disagree about a month.
+function bettingMonthlyBuckets(sim) {
+  const days = [...sim.ledger].reverse(); // ledger is newest-first
   const byMonth = new Map();
   days.forEach((d) => {
     const key = d.dateKey.slice(0, 7);
@@ -272,7 +284,12 @@ function renderBettingStability(sim) {
     m.profit += d.profit;
     m.tickets += d.tickets.length;
   });
-  const months = [...byMonth.entries()];
+  return byMonth;
+}
+
+function renderBettingStability(sim) {
+  const box = document.getElementById('bettingStabilityBox');
+  const months = [...bettingMonthlyBuckets(sim).entries()];
   if (months.length < 2) {
     box.style.display = 'none'; // one month has no stability story to tell
     return;
@@ -369,6 +386,150 @@ function attachBettingStabilityTaps(months, slot) {
         + ` &middot; ${m.tickets} ticket${m.tickets === 1 ? '' : 's'}`
         + (share != null && m.profit > 0 ? ` &middot; ${share}% of all profit` : '');
     });
+  });
+}
+
+// Edge Stability as a calendar: one row per year, Jan-Dec across. The bar chart
+// packs months shoulder to shoulder, which hides the shape of a season - Oct
+// through Feb sit right next to each other as though they followed on, when
+// really nothing happened for five months. A grid puts every month in its own
+// place, so the gaps are as visible as the bars, and stacking the years lines
+// each month up against the same month a year earlier.
+function paintBettingCalendar(sim, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const byMonth = bettingMonthlyBuckets(sim);
+  const keys = [...byMonth.keys()].sort();
+  if (!keys.length) {
+    container.innerHTML = '<div class="empty-state">No betting months yet.</div>';
+    return;
+  }
+
+  const years = [...new Set(keys.map((k) => k.slice(0, 4)))].sort();
+  // Shade by share of the biggest month, so intensity reads as "how much of the
+  // record is this" rather than tracking ROI, which is scale-free and would
+  // paint a +2% month on $50 the same as a +102% month on $260.
+  const maxAbs = Math.max(...[...byMonth.values()].map((m) => Math.abs(m.profit)), 1);
+  const currentKey = bettingLocalDateKey(new Date()).slice(0, 7);
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const header = `<div class="bet-cal-row"><div class="bet-cal-year"></div>${monthNames
+    .map((n) => `<div class="bet-cal-head">${n}</div>`).join('')}</div>`;
+
+  const rows = years.map((yr) => {
+    const cells = monthNames.map((_, i) => {
+      const key = `${yr}-${String(i + 1).padStart(2, '0')}`;
+      const m = byMonth.get(key);
+      if (!m) return '<div class="bet-cal-cell bet-cal-empty">&middot;</div>';
+      const roi = m.staked > 0 ? m.profit / m.staked : 0;
+      const strength = 0.15 + 0.55 * (Math.abs(m.profit) / maxAbs);
+      const rgb = m.profit >= 0 ? '139, 195, 74' : '229, 57, 63';
+      const cls = m.profit > 0 ? 'good' : m.profit < 0 ? 'bad' : '';
+      return `<div class="bet-cal-cell ${cls}" data-month="${key}" style="background:rgba(${rgb}, ${strength.toFixed(2)});" role="button" tabindex="0">
+        <span class="bet-cal-roi">${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%</span>
+        <span class="bet-cal-pl">${bettingFmtCompactMoney(Math.round(m.profit))}</span>
+        ${key === currentKey ? '<span class="bet-cal-now">*</span>' : ''}
+      </div>`;
+    }).join('');
+    return `<div class="bet-cal-row"><div class="bet-cal-year">${yr}</div>${cells}</div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="bet-cal-scroll"><div class="bet-cal">${header}${rows}</div></div>
+    <div id="bettingCalendarReadout" class="pm-breakdown-hint" style="text-align:center;min-height:1.2em;">Tap a month for its full numbers. Empty cells are months with no bets.</div>`;
+
+  const readout = document.getElementById('bettingCalendarReadout');
+  const totalProfit = [...byMonth.values()].reduce((s, m) => s + m.profit, 0);
+  const openCell = (cell) => {
+    const key = cell.getAttribute('data-month');
+    const m = byMonth.get(key);
+    if (!m) return;
+    container.querySelectorAll('.bet-cal-cell.selected').forEach((c) => c.classList.remove('selected'));
+    cell.classList.add('selected');
+    const roi = m.staked > 0 ? m.profit / m.staked : 0;
+    const cls = m.profit > 0 ? 'good' : m.profit < 0 ? 'bad' : '';
+    const name = new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1)
+      .toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const share = totalProfit > 0 ? Math.round((m.profit / totalProfit) * 100) : null;
+    readout.innerHTML = `<strong>${name}</strong>`
+      + ` &middot; <span class="score-inline ${cls}">${bettingFmtSignedMoney(Math.round(m.profit * 100) / 100)}</span>`
+      + ` on ${bettingFmtMoney(Math.round(m.staked * 100) / 100)} staked`
+      + ` &middot; ROI <span class="score-inline ${cls}">${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%</span>`
+      + ` &middot; ${m.tickets} ticket${m.tickets === 1 ? '' : 's'}`
+      + (share != null && m.profit > 0 ? ` &middot; ${share}% of all profit` : '');
+  };
+
+  container.querySelectorAll('.bet-cal-cell[data-month]').forEach((cell) => {
+    cell.addEventListener('click', () => openCell(cell));
+    // Cells are focusable, so keyboard users get the same readout.
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCell(cell); }
+    });
+  });
+}
+
+/* ===================== Expanded chart modal ===================== */
+
+function openBettingChartModal(kind) {
+  const sim = currentBettingSim;
+  if (!sim || !sim.ledger || sim.ledger.length < 2) return;
+  const overlay = document.getElementById('bettingChartModal');
+  const title = document.getElementById('bettingChartModalTitle');
+  const hint = document.getElementById('bettingChartModalHint');
+  if (!overlay) return;
+
+  overlay.classList.add('active');
+
+  if (kind === 'curve') {
+    title.textContent = '📈 Bankroll Curve';
+    hint.textContent = 'Drag across the curve to read any day — date, closing bankroll, that day\'s P/L and its tickets.';
+    // Wider and much taller than the inline copy: the whole point of expanding
+    // is that a flat-then-vertical curve is unreadable at 170px.
+    paintBettingCurve(sim, [...sim.ledger].reverse(), 'bettingChartModalBody', 'bettingCurveBig', 900, 420);
+  } else {
+    title.textContent = '📆 Edge Stability — Monthly Calendar';
+    hint.textContent = 'Each month in its own slot, years stacked. Shading is that month\'s share of the biggest month, so the gaps and the outliers both show.';
+    paintBettingCalendar(sim, 'bettingChartModalBody');
+  }
+}
+
+function closeBettingChartModal() {
+  const overlay = document.getElementById('bettingChartModal');
+  if (!overlay) return;
+  overlay.classList.remove('active');
+  // Drop the enlarged chart so its scrub handlers and DOM don't linger behind
+  // the overlay - the next open rebuilds it from the current sim anyway.
+  document.getElementById('bettingChartModalBody').innerHTML = '';
+}
+
+function initBettingChartModal() {
+  const overlay = document.getElementById('bettingChartModal');
+  if (!overlay) return;
+
+  const curveBox = document.getElementById('bettingCurveBox');
+  const stabilityBox = document.getElementById('bettingStabilityBox');
+  if (curveBox) {
+    curveBox.addEventListener('click', (e) => {
+      // The inline curve is draggable, so a scrub must not also open the modal.
+      // Only the box's own chrome - its label - opens it.
+      if (e.target.closest('#bettingCurve')) return;
+      openBettingChartModal('curve');
+    });
+  }
+  if (stabilityBox) {
+    stabilityBox.addEventListener('click', (e) => {
+      // Same reasoning: tapping a bar reads that month out in place.
+      if (e.target.closest('#bettingStability')) return;
+      openBettingChartModal('stability');
+    });
+  }
+
+  document.getElementById('bettingChartModalClose').addEventListener('click', closeBettingChartModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeBettingChartModal(); // backdrop only, not the box
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('active')) closeBettingChartModal();
   });
 }
 
@@ -867,6 +1028,8 @@ bettingModeSelectEl.addEventListener('change', () => {
   resetPagination('bettingLedger');
   renderBetting();
 });
+
+initBettingChartModal();
 
 document.getElementById('bettingRefreshBtn').addEventListener('click', async () => {
   const btn = document.getElementById('bettingRefreshBtn');
