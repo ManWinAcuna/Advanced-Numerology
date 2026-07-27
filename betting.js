@@ -82,15 +82,27 @@ function renderBettingToday(slate) {
 
   const totalStake = slate.tickets.reduce((s, t) => s + t.stake, 0);
   const totalPayout = slate.tickets.reduce((s, t) => s + t.stake / t.prodPrice, 0);
-  const alreadyLocked = loadBettingLockedSlates().some((s) => s.signature === bettingSlateSignature(currentBettingScope, loadBettingMode(), bettingLocalDateKey(new Date()), slate.tickets));
+  // Ticket-level, not slate-level. A slate-wide signature call this "unlocked"
+  // whenever anything moved - a new game qualifying, but equally a bankroll
+  // edit or a price drift re-sizing an existing stake - and locking again then
+  // wrote the whole slate a second time. Counting the tickets that aren't on
+  // the record yet answers the only question the button needs: is there
+  // anything here I haven't already taken?
+  const freshCount = bettingUnlockedTickets(slate.tickets).length;
+  const alreadyLocked = freshCount === 0;
+  const lockLabel = alreadyLocked
+    ? '✓ Locked'
+    : (freshCount === slate.tickets.length
+      ? '🔒 Lock these bets'
+      : `🔒 Lock ${freshCount} new bet${freshCount === 1 ? '' : 's'}`);
   el.innerHTML = `
     <div class="bet-day-summary">Total staked: <strong>${bettingFmtMoney(totalStake)}</strong> &middot; If everything hits: <strong>${bettingFmtMoney(totalPayout)}</strong> &middot; ${slate.qualifiedCount} qualifying pick${slate.qualifiedCount === 1 ? '' : 's'}</div>
     ${bettingTicketsHtml(slate.tickets)}
     <div class="bet-lock-row">
-      <button class="btn" id="bettingLockBtn" type="button"${alreadyLocked ? ' disabled' : ''}>${alreadyLocked ? '✓ Locked' : '🔒 Lock these bets'}</button>
+      <button class="btn" id="bettingLockBtn" type="button"${alreadyLocked ? ' disabled' : ''}>${lockLabel}</button>
       <button class="btn-link" id="bettingCheckPricesBtn" type="button">💱 Check Live Prices</button>
       <a class="btn-link" href="bet-log.html">📒 View Bet Log &rarr;</a>
-      <span class="box-hint" style="margin-top:0;">Locking freezes this exact slate into the Bet Log permanently &mdash; do it when you're taking the bets.</span>
+      <span class="box-hint" style="margin-top:0;">Locking writes these bets to the Bet Log permanently &mdash; do it when you're taking them. New games can still qualify later; locking again adds only the ones you haven't taken yet, never a second copy.</span>
     </div>
     <div class="box-hint" id="bettingPriceNote"></div>`;
 }

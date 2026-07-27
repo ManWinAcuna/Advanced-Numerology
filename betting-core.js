@@ -790,11 +790,54 @@ function bettingSlateSignature(scope, mode, dateKey, tickets) {
   return `${scope}#${mode}#${dateKey}#${body}`;
 }
 
+// Identity of ONE ticket on a given day, deliberately excluding both the stake
+// and the scope.
+//
+// Stake, because Kelly re-sizes off the bankroll and the live price: edit the
+// bankroll or let a price drift and the identical bet looks new. Scope, because
+// a ticket surfaced under "All" and the same ticket under "MLB" is one bet, not
+// two. What this answers is "have I already locked this bet today", and neither
+// the stake nor which filter showed it changes that.
+//
+// Legs are sorted so the same parlay built in a different order matches itself.
+function bettingTicketSignature(dateKey, ticket) {
+  const legs = (ticket.legs || [])
+    .map((l) => `${l.sport}~${l.matchup}~${l.pickName}`)
+    .sort()
+    .join('+');
+  return `${dateKey}#${legs}`;
+}
+
+// Every ticket already on the locked record, across all slates and scopes.
+function bettingLockedTicketKeys() {
+  const keys = new Set();
+  loadBettingLockedSlates().forEach((s) => {
+    (s.tickets || []).forEach((t) => keys.add(bettingTicketSignature(s.dateKey, t)));
+  });
+  return keys;
+}
+
+// The tickets in this slate that aren't on the record yet. Drives both what
+// lockBettingSlate writes and what the Lock button offers to write.
+function bettingUnlockedTickets(tickets) {
+  const dateKey = bettingLocalDateKey(new Date());
+  const locked = bettingLockedTicketKeys();
+  return (tickets || []).filter((t) => !locked.has(bettingTicketSignature(dateKey, t)));
+}
+
 function lockBettingSlate(scope, mode, mixedTypes, bankroll, tickets) {
   if (!tickets.length) return null;
-  const list = loadBettingLockedSlates();
   const dateKey = bettingLocalDateKey(new Date());
-  const signature = bettingSlateSignature(scope, mode, dateKey, tickets);
+  // Only the genuinely new tickets get written. Locking the whole slate again
+  // is how the same bet used to land on the record twice - once in the original
+  // receipt and again in the one written after a new game qualified - which
+  // double-counted its stake and P/L in the log's totals.
+  const alreadyOnRecord = bettingLockedTicketKeys(); // read the store once, not per ticket
+  const fresh = tickets.filter((t) => !alreadyOnRecord.has(bettingTicketSignature(dateKey, t)));
+  if (!fresh.length) return null; // everything here is already on the record
+
+  const list = loadBettingLockedSlates();
+  const signature = bettingSlateSignature(scope, mode, dateKey, fresh);
   if (list.some((s) => s.signature === signature)) return null;
 
   const record = {
@@ -806,7 +849,7 @@ function lockBettingSlate(scope, mode, mixedTypes, bankroll, tickets) {
     mixedTypes: mode === 'mixed' ? mixedTypes : null,
     bankroll,
     signature,
-    tickets: tickets.map((t) => ({
+    tickets: fresh.map((t) => ({
       stake: t.stake,
       prodPrice: t.prodPrice,
       estProb: t.estProb,
