@@ -1655,6 +1655,55 @@ function initMlbBackfillButton() {
   });
 }
 
+// Backfill can only ADD games. A change to how scores are CALCULATED needs the
+// stored picks gone first, which used to mean a console command - impossible on
+// a phone, which is where this app mostly gets used. Same walk as Backfill, just
+// against an empty store.
+//
+// Clears three things together, and all three matter: the picks themselves, the
+// backfill marker (or the walk resumes from where the old data ended and covers
+// nothing), and MLB_WEIGHTS_VERSION_KEY in localStorage (or a later rescore sees
+// a current-looking marker and skips the fresh records - the same trap that made
+// restoring a backup silently keep old-weighted scores, betting-backup.js:135).
+// The strikeout signals go too: they carry a stored dayScore, which the compat
+// weights move as well.
+function initMlbRebuildButton() {
+  const btn = document.getElementById('mlbRebuildBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const existing = loadMlbPredictions().length;
+    if (!confirm(`Delete all ${existing} stored MLB picks and re-walk the full window from scratch?\n\nThis cannot be undone, and the rebuild takes several minutes - keep this tab open and awake until it finishes.`)) return;
+
+    const status = document.getElementById('mlbBackfillStatus');
+    const backfillBtn = document.getElementById('mlbBackfillBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (backfillBtn) backfillBtn.disabled = true;
+    btn.textContent = '♻️ Rebuilding…';
+    try {
+      status.textContent = `Clearing ${existing} stored picks…`;
+      saveMlbPredictions([]);
+      saveMlbPitcherKSignals([]);
+      saveMlbBackfillState({});
+      localStorage.removeItem(MLB_WEIGHTS_VERSION_KEY);
+
+      const result = await backfillMlbHistory((processed, total) => {
+        status.textContent = `Rebuilding… ${processed}/${total} games`;
+      });
+      status.textContent = `Rebuilt from scratch - checked ${result.gamesProcessed} games, stored ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals.`;
+      await refreshAndRenderMlb();
+    } catch (e) {
+      // The store is empty at this point, so a failure here is not cosmetic -
+      // say so plainly rather than leaving a half-rebuilt store looking done.
+      status.textContent = `Rebuild failed after clearing the store: ${e && e.message ? e.message : e}. Press Backfill Data to fill it back in.`;
+      console.error('MLB rebuild failed', e);
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+    if (backfillBtn) backfillBtn.disabled = false;
+  });
+}
+
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkMlbResults() and the shared prediction
 // helpers, so the Betting page settles results through the same code path.
@@ -1674,6 +1723,7 @@ mlbStoreReady.then(() => {
   initMlbKSignalModal('Old');
   initModalTabSwitcher('statsMlbSection');
   initMlbBackfillButton();
+  initMlbRebuildButton();
   initMlbStorageControls();
   refreshAndRenderMlb();
  }
