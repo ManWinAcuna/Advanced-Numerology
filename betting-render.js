@@ -23,6 +23,18 @@ function bettingFmtSignedMoney(v) {
   return v > 0 ? `+$${v.toFixed(2)}` : bettingFmtMoney(v);
 }
 
+// Chart-label money: full precision doesn't fit under a 56px bar, and on a
+// phone the bars are narrower still. Drops to $1.2k past a thousand.
+function bettingFmtCompactMoney(v) {
+  const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) {
+    const k = abs / 1000;
+    return `${sign}$${(k >= 10 ? Math.round(k) : Math.round(k * 10) / 10)}k`;
+  }
+  return `${sign}$${Math.round(abs)}`;
+}
+
 function bettingFmtCents(price) {
   return `${Math.round(price * 100)}¢`;
 }

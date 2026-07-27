@@ -148,8 +148,11 @@ function renderBettingCurve(sim) {
   const endUp = values[values.length - 1] >= values[0];
   const lineColor = endUp ? 'var(--good)' : 'var(--bad)';
 
+  // touch-action:pan-y is what makes this usable on a phone: a vertical swipe
+  // still scrolls the page, while a horizontal drag scrubs the curve. Without
+  // it the chart either eats every scroll or never sees a touch at all.
   document.getElementById('bettingCurve').innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+    <svg id="bettingCurveSvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair;">
       <line x1="${padL}" y1="${y(values[0]).toFixed(1)}" x2="${W - padR}" y2="${y(values[0]).toFixed(1)}" stroke="var(--border)" stroke-dasharray="4 4" />
       <polygon points="${x(0).toFixed(1)},${(H - padB)} ${pts} ${x(values.length - 1).toFixed(1)},${(H - padB)}" fill="${endUp ? 'rgba(139, 195, 74, 0.08)' : 'rgba(229, 57, 63, 0.08)'}" />
       <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" />
@@ -158,7 +161,76 @@ function renderBettingCurve(sim) {
       <text x="${W - padR}" y="11" fill="var(--yellow)" font-size="10" text-anchor="end">peak ${bettingFmtMoney(sim.peakBankroll)}</text>
       <text x="${padL}" y="${H - 5}" fill="var(--muted)" font-size="10">${days.length} betting days</text>
       <text x="${W - padR}" y="${H - 5}" fill="${lineColor}" font-size="10" text-anchor="end">now ${bettingFmtMoney(sim.finalBankroll)}</text>
-    </svg>`;
+      <g id="bettingCurveCrosshair" style="display:none;pointer-events:none;">
+        <line id="bettingCurveCrossLine" y1="${padT}" y2="${H - padB}" stroke="var(--yellow)" stroke-width="1" stroke-dasharray="3 3" opacity="0.7" />
+        <circle id="bettingCurveCrossDot" r="4" fill="var(--yellow)" stroke="var(--bg)" stroke-width="1.5" />
+      </g>
+    </svg>
+    <div id="bettingCurveReadout" class="pm-breakdown-hint" style="text-align:center;min-height:1.2em;">Drag across the curve to read any day.</div>`;
+
+  attachBettingCurveScrub(days, values, x, y, W);
+}
+
+// Scrubbing is wired after the innerHTML above rather than baked into it,
+// because the readout needs the per-day ledger rows and those don't survive a
+// round trip through markup. Index 0 of `values` is the starting bankroll
+// (before any bet), so day i lives at values[i+1] - hence the -1 below.
+function attachBettingCurveScrub(days, values, x, y, W) {
+  const svg = document.getElementById('bettingCurveSvg');
+  const readout = document.getElementById('bettingCurveReadout');
+  const cross = document.getElementById('bettingCurveCrosshair');
+  const line = document.getElementById('bettingCurveCrossLine');
+  const dot = document.getElementById('bettingCurveCrossDot');
+  if (!svg || !readout) return;
+
+  const show = (clientX) => {
+    const box = svg.getBoundingClientRect();
+    if (!box.width) return;
+    // Client pixels -> viewBox units, then to the nearest plotted point.
+    const vbX = ((clientX - box.left) / box.width) * W;
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < values.length; i++) {
+      const d = Math.abs(x(i) - vbX);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    cross.style.display = '';
+    line.setAttribute('x1', x(best).toFixed(1));
+    line.setAttribute('x2', x(best).toFixed(1));
+    dot.setAttribute('cx', x(best).toFixed(1));
+    dot.setAttribute('cy', y(values[best]).toFixed(1));
+
+    if (best === 0) {
+      readout.innerHTML = `<strong>Start</strong> &middot; ${bettingFmtMoney(values[0])} &middot; before the first bet`;
+      return;
+    }
+    const day = days[best - 1];
+    const plCls = day.profit > 0 ? 'good' : day.profit < 0 ? 'bad' : '';
+    const wins = day.tickets.filter((t) => t.status === 'won').length;
+    const losses = day.tickets.filter((t) => t.status === 'lost').length;
+    readout.innerHTML = `<strong>${bettingFmtDate(day.dateKey)}</strong>`
+      + `${day.inProgress ? ' <span class="bet-inprogress">(in progress)</span>' : ''}`
+      + ` &middot; ${bettingFmtMoney(day.bankrollAfter)}`
+      + ` &middot; <span class="score-inline ${plCls}">${bettingFmtSignedMoney(day.profit)}</span>`
+      + ` &middot; ${day.tickets.length} ticket${day.tickets.length === 1 ? '' : 's'} (${wins}W-${losses}L)`
+      + ` &middot; ${bettingFmtMoney(day.staked)} staked`;
+  };
+
+  const hide = () => {
+    cross.style.display = 'none';
+    readout.textContent = 'Drag across the curve to read any day.';
+  };
+
+  let pressed = false;
+  svg.addEventListener('pointerdown', (e) => { pressed = true; show(e.clientX); });
+  svg.addEventListener('pointermove', (e) => {
+    // A mouse scrubs on hover; a finger only while it's actually down, so the
+    // crosshair doesn't get stranded mid-chart after a scroll.
+    if (e.pointerType === 'mouse' || pressed) show(e.clientX);
+  });
+  svg.addEventListener('pointerup', () => { pressed = false; });
+  svg.addEventListener('pointercancel', () => { pressed = false; hide(); });
+  svg.addEventListener('pointerleave', () => { pressed = false; hide(); });
 }
 
 // Edge Stability - profit per dollar staked, month by month, as bars around
@@ -185,7 +257,11 @@ function renderBettingStability(sim) {
 
   // padB fits two label lines under the axis: the month, then its ticket
   // count - a month's ROI is unreadable without knowing if it's 4 bets or 90.
-  const W = 600, H = 190, padT = 18, padB = 38;
+  // padT/H carry two lines at the bar tip instead of one: ROI% on top, dollars
+  // under it. Percent alone hides the thing that matters most in a compounding
+  // sim - an early +36% and a late +126% are the same height and nowhere near
+  // the same money.
+  const W = 600, H = 214, padT = 32, padB = 40;
   const slot = (W - 20) / months.length;
   const barW = Math.min(56, slot - 10);
   const rois = months.map(([, m]) => (m.staked > 0 ? m.profit / m.staked : 0));
@@ -207,19 +283,65 @@ function renderBettingStability(sim) {
     const monthLabel = monthDate.toLocaleDateString(undefined, multiYear ? { month: 'short', year: '2-digit' } : { month: 'short' })
       + (key === currentKey ? '*' : '');
     const roiLabel = `${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%`;
-    const labelY = roi >= 0 ? y - 4 : y + h + 11;
+    const plLabel = bettingFmtCompactMoney(Math.round(m.profit));
+    // Stack outward from the bar tip so neither line ever sits on the bar.
+    const roiY = roi >= 0 ? y - 15 : y + h + 12;
+    const plY = roi >= 0 ? y - 4 : y + h + 23;
+    const cx = (x + barW / 2).toFixed(1);
     return `
       <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85" rx="2" />
-      <text x="${(x + barW / 2).toFixed(1)}" y="${labelY.toFixed(1)}" fill="${color}" font-size="10" text-anchor="middle">${roiLabel}</text>
-      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 20}" fill="var(--muted)" font-size="10" text-anchor="middle">${monthLabel}</text>
-      <text x="${(x + barW / 2).toFixed(1)}" y="${H - 7}" fill="var(--muted)" font-size="9" text-anchor="middle" opacity="0.75">${m.tickets} bet${m.tickets === 1 ? '' : 's'}</text>`;
+      <text x="${cx}" y="${roiY.toFixed(1)}" fill="${color}" font-size="10" text-anchor="middle">${roiLabel}</text>
+      <text x="${cx}" y="${plY.toFixed(1)}" fill="${color}" font-size="10" text-anchor="middle" opacity="0.8" font-weight="600">${plLabel}</text>
+      <text x="${cx}" y="${H - 22}" fill="var(--muted)" font-size="10" text-anchor="middle">${monthLabel}</text>
+      <text x="${cx}" y="${H - 9}" fill="var(--muted)" font-size="9" text-anchor="middle" opacity="0.75">${m.tickets} bet${m.tickets === 1 ? '' : 's'}</text>
+      <rect class="betting-stability-hit" data-i="${i}" x="${(10 + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent" style="cursor:pointer;" />`;
   }).join('');
 
   document.getElementById('bettingStability').innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+    <svg id="bettingStabilitySvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
       <line x1="10" y1="${zeroY}" x2="${W - 10}" y2="${zeroY}" stroke="var(--border)" />
+      <rect id="bettingStabilitySel" x="0" y="0" width="0" height="${H}" fill="var(--yellow)" opacity="0.08" rx="3" style="display:none;pointer-events:none;" />
       ${bars}
-    </svg>`;
+    </svg>
+    <div id="bettingStabilityReadout" class="pm-breakdown-hint" style="text-align:center;min-height:1.2em;">Tap a month for its full numbers.</div>`;
+
+  attachBettingStabilityTaps(months, slot);
+}
+
+// Per-month detail on tap. The bars themselves are often only a few pixels
+// tall, so the hit target is the whole column, not the drawn rect.
+function attachBettingStabilityTaps(months, slot) {
+  const svg = document.getElementById('bettingStabilitySvg');
+  const readout = document.getElementById('bettingStabilityReadout');
+  const sel = document.getElementById('bettingStabilitySel');
+  if (!svg || !readout) return;
+
+  const totalProfit = months.reduce((s, [, m]) => s + m.profit, 0);
+
+  svg.querySelectorAll('.betting-stability-hit').forEach((hit) => {
+    hit.addEventListener('click', () => {
+      const i = Number(hit.getAttribute('data-i'));
+      const [key, m] = months[i];
+      const roi = m.staked > 0 ? m.profit / m.staked : 0;
+      const cls = m.profit > 0 ? 'good' : m.profit < 0 ? 'bad' : '';
+      const monthDate = new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1);
+      const name = monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      // Share of the total is the point of the whole chart: it's what tells you
+      // whether one month is carrying the record.
+      const share = totalProfit > 0 ? Math.round((m.profit / totalProfit) * 100) : null;
+
+      sel.style.display = '';
+      sel.setAttribute('x', (10 + i * slot).toFixed(1));
+      sel.setAttribute('width', slot.toFixed(1));
+
+      readout.innerHTML = `<strong>${name}</strong>`
+        + ` &middot; <span class="score-inline ${cls}">${bettingFmtSignedMoney(Math.round(m.profit * 100) / 100)}</span>`
+        + ` on ${bettingFmtMoney(Math.round(m.staked * 100) / 100)} staked`
+        + ` &middot; ROI <span class="score-inline ${cls}">${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%</span>`
+        + ` &middot; ${m.tickets} ticket${m.tickets === 1 ? '' : 's'}`
+        + (share != null && m.profit > 0 ? ` &middot; ${share}% of all profit` : '');
+    });
+  });
 }
 
 function renderBettingLedger(sim) {
