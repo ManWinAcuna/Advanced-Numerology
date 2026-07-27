@@ -4597,10 +4597,46 @@ body {
 /* ===================== Expandable charts + month calendar ===================== */
 
 /* The box chrome is the click target for expanding; the chart inside keeps its
-   own drag/tap behaviour, so only the label and padding read as "open me". */
+   own drag/tap behaviour, so only the label and padding read as "open me".
+   On a phone the chart fills nearly the whole box, which leaves the label row
+   as the only live area - far too subtle to find. Hence the explicit button
+   below: it sits in the label row, so the box-level handler already catches it
+   and it needs no listener of its own. */
 #bettingCurveBox,
 #bettingStabilityBox {
   cursor: zoom-in;
+}
+
+.bet-chart-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bet-chart-expand {
+  flex: none;
+  /* 32px min height keeps it a reliable tap target next to 11px label text. */
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--yellow);
+  cursor: zoom-in;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.bet-chart-expand:hover,
+.bet-chart-expand:focus-visible {
+  border-color: var(--yellow);
+  background: rgba(245, 197, 66, 0.1);
+  outline: none;
 }
 
 #bettingCurveBox > #bettingCurve,
