@@ -22,46 +22,6 @@ function parseMlbGameStart(raw) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// Flattens one Polymarket market object (any two-outcome sports market -
-// NRFI's Yes/No, a totals line's Over/Under) into the parsed fields the
-// pitcher-duel tracking needs. Returns null when the essentials are missing.
-function parseMlbSideMarket(m) {
-  if (!m) return null;
-  let outcomes = [];
-  let prices = [];
-  let clobTokenIds = [];
-  try { outcomes = JSON.parse(m.outcomes); } catch (e) { /* leave empty */ }
-  try { prices = JSON.parse(m.outcomePrices).map(Number); } catch (e) { /* leave empty */ }
-  try { clobTokenIds = JSON.parse(m.clobTokenIds); } catch (e) { /* leave empty */ }
-  if (!outcomes[0] || !outcomes[1]) return null;
-  return {
-    conditionId: m.conditionId,
-    outcomeA: outcomes[0],
-    outcomeB: outcomes[1],
-    priceA: Number.isFinite(prices[0]) ? prices[0] : null,
-    priceB: Number.isFinite(prices[1]) ? prices[1] : null,
-    clobTokenIdA: clobTokenIds[0] || null,
-    clobTokenIdB: clobTokenIds[1] || null,
-    line: m.line != null && Number.isFinite(Number(m.line)) ? Number(m.line) : null,
-    closed: !!m.closed,
-  };
-}
-
-// The event's NRFI market plus every totals line, parsed - shared by the
-// live feed and the per-game historical lookup below so both hand identical
-// shapes to the duel-record builders.
-function extractMlbDuelMarkets(ev) {
-  const markets = ev.markets || [];
-  const nrfiRaw = markets.find((mk) => mk.sportsMarketType === 'nrfi');
-  return {
-    nrfiMarket: parseMlbSideMarket(nrfiRaw),
-    totalsMarkets: markets
-      .filter((mk) => mk.sportsMarketType === 'totals')
-      .map(parseMlbSideMarket)
-      .filter((t) => t && t.line != null),
-  };
-}
-
 // Same shape as fetchUfcEvents()/parseMarket() in polymarket-ufc.js, just
 // pointed at MLB's tag and named teamA/teamB instead of fighterA/fighterB.
 async function fetchMlbMoneylineEvents() {
@@ -72,7 +32,6 @@ async function fetchMlbMoneylineEvents() {
     const events = Array.isArray(data.events) ? data.events : [];
     const games = [];
     events.forEach((ev) => {
-      const duelMarkets = extractMlbDuelMarkets(ev);
       (ev.markets || []).forEach((m) => {
         if (m.sportsMarketType !== 'moneyline') return;
         if (m.closed || m.active === false) return;
@@ -90,8 +49,6 @@ async function fetchMlbMoneylineEvents() {
           priceB: Number.isFinite(prices[1]) ? prices[1] : null,
           gameStartTime,
           eventTitle: ev.title,
-          nrfiMarket: duelMarkets.nrfiMarket,
-          totalsMarkets: duelMarkets.totalsMarkets,
         });
       });
     });
@@ -174,29 +131,12 @@ async function fetchGameLiveFeed(gamePk) {
       };
     }
 
-    // First-inning and full-game run totals - the ground truth for resolving
-    // the NRFI and totals markets. Polymarket's own outcomePrices can NOT be
-    // used for these: confirmed live that every closed MLB per-game market
-    // (moneyline, nrfi, and all seven totals lines) reports a flat ["1","0"]
-    // regardless of what actually happened, which would resolve every NRFI
-    // as Yes and every total as Over.
-    const innings = (linescore && linescore.innings) || [];
-    const first = innings[0];
-    const firstInningRuns = first
-      ? (Number(first.home && first.home.runs) || 0) + (Number(first.away && first.away.runs) || 0)
-      : null;
-    const awayRuns = linescore && linescore.teams && linescore.teams.away ? linescore.teams.away.runs : null;
-    const homeRuns = linescore && linescore.teams && linescore.teams.home ? linescore.teams.home.runs : null;
-    const totalRuns = (Number.isFinite(awayRuns) && Number.isFinite(homeRuns)) ? awayRuns + homeRuns : null;
-
     return {
       gamePk,
       venue: data.gameData.venue || null,
       officialDate: data.gameData.datetime ? data.gameData.datetime.officialDate : null,
       abstractGameState: status.abstractGameState || null, // 'Preview' | 'Live' | 'Final'
       detailedState: status.detailedState || null,
-      firstInningRuns,
-      totalRuns,
       away: sideInfo('away'),
       home: sideInfo('home'),
     };
@@ -366,7 +306,6 @@ async function fetchMlbMoneylineEventForGame(awayAbbr, homeAbbr, officialDate) {
     try { clobTokenIds = JSON.parse(m.clobTokenIds); } catch (e) { /* leave empty */ }
     const gameStartTime = parseMlbGameStart(m.gameStartTime);
     if (!outcomes[0] || !outcomes[1] || !gameStartTime || clobTokenIds.length < 2) return null;
-    const duelMarkets = extractMlbDuelMarkets(ev);
     return {
       conditionId: m.conditionId,
       teamAName: outcomes[0],
@@ -375,8 +314,6 @@ async function fetchMlbMoneylineEventForGame(awayAbbr, homeAbbr, officialDate) {
       clobTokenIdA: clobTokenIds[0],
       clobTokenIdB: clobTokenIds[1],
       eventTitle: ev.title,
-      nrfiMarket: duelMarkets.nrfiMarket,
-      totalsMarkets: duelMarkets.totalsMarkets,
     };
   } catch (e) {
     return null;

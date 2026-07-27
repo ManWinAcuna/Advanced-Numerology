@@ -213,15 +213,13 @@ function bettingDayMatchesFilter(dateKey, filter) {
 // one-on-one UFC/Tennis gaps, so tier tallies are never pooled across sports
 // even in All Sports mode.
 
-// scopeSport maps a pseudo-sport onto the scope tab it belongs to (the MLB
-// duel markets live under the MLB scope); market names the toggle that turns
-// it on/off (entries without one are always on). Each pseudo-sport keeps its
-// own tier calibration and its own tallies, so an NRFI record never pollutes
-// a moneyline record.
+// scopeSport maps a pseudo-sport onto the scope tab it belongs to (NBA totals
+// live under the NBA scope); market names the toggle that turns it on/off
+// (entries without one are always on). Each pseudo-sport keeps its own tier
+// calibration and its own tallies, so a totals record never pollutes a
+// moneyline record.
 const BETTING_SPORTS = {
   mlb: { label: 'MLB', icon: '⚾', load: () => loadMlbPredictions(), timeField: 'gameTime', minGap: MLB_REAL_EDGE_MIN_GAP, tiers: MLB_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName', market: 'moneyline', scopeSport: 'mlb' },
-  mlbNrfi: { label: 'MLB NRFI', icon: '1️⃣', load: () => loadMlbNrfiPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'nrfi', scopeSport: 'mlb' },
-  mlbTotals: { label: 'MLB Totals', icon: '↕️', load: () => loadMlbTotalsPredictions(), timeField: 'gameTime', minGap: MLB_DUEL_MIN_GAP, tiers: MLB_DUEL_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'totals', scopeSport: 'mlb' },
   nba: { label: 'NBA', icon: '🏀', load: () => loadNbaPredictions(), timeField: 'gameTime', minGap: NBA_REAL_EDGE_MIN_GAP, tiers: NBA_EDGE_TIERS, nameA: 'teamAName', nameB: 'teamBName', market: 'nbaMoneyline', scopeSport: 'nba', eventIdField: 'eventId' },
   nbaTotals: { label: 'NBA Totals', icon: '↕️', load: () => loadNbaTotalsPredictions(), timeField: 'gameTime', minGap: NBA_TOTALS_MIN_GAP, tiers: NBA_TOTALS_TIERS, nameA: 'teamAName', nameB: 'teamBName', matchupField: 'gameLabel', market: 'nbaTotals', scopeSport: 'nba', eventIdField: 'eventId' },
   tennis: { label: 'Tennis', icon: '🎾', load: () => loadTennisPredictions(), timeField: 'matchTime', minGap: REAL_EDGE_MIN_GAP, tiers: EDGE_TIERS, nameA: 'playerAName', nameB: 'playerBName' },
@@ -232,7 +230,11 @@ const BETTING_SPORTS = {
 // owned by exactly one scope (see BETTING_MARKET_SCOPE in betting.js) so an
 // NBA toggle can never gate an MLB market or vice versa.
 const BETTING_MARKETS_KEY = 'numerology_betting_markets';
-const BETTING_MARKET_OPTIONS = ['moneyline', 'nrfi', 'totals', 'nbaMoneyline', 'nbaTotals'];
+// 'nrfi' and 'totals' (the MLB pitcher-duel markets) were removed. A saved list
+// still naming them is cleaned by the filter in loadBettingMarkets below, so no
+// version bump is needed - and bumping would be wrong here, since the union
+// step would switch markets back on that were deliberately toggled off.
+const BETTING_MARKET_OPTIONS = ['moneyline', 'nbaMoneyline', 'nbaTotals'];
 
 // Bumped whenever new market keys are introduced. Without this, a saved list
 // from before NBA existed would filter down to the three MLB keys and the new
@@ -294,9 +296,8 @@ function normalizeBettingPick(p, sportKey) {
     // Which side of the market this pick is - so a live re-quote reads the
     // same outcome the pick was made on.
     outcomeIndex: normalizeName(p.numerologyFavorite) === normalizeName(nameA) ? 0 : 1,
-    // Identifies the underlying event across markets - MLB's moneyline, NRFI
-    // and totals records for one game all share its gamePk, and NBA's
-    // moneyline and totals share ESPN's eventId, which is what lets the parlay
+    // Identifies the underlying event across markets - NBA's moneyline and
+    // totals records for one game share ESPN's eventId, which is what lets the parlay
     // builder see that several "different" legs are really several reads on the
     // same game. cfg.eventIdField names whichever field carries that id; the
     // resulting key is prefixed by scope so two sports can never collide.
@@ -471,8 +472,8 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes, kellyF
     return bettingCombinations(pool, legCount).map((legs, i) => {
       const estProb = legs.reduce((p, l) => p * l.estProb, 1);
       const prodPrice = legs.reduce((p, l) => p * l.price, 1);
-      // Legs drawn from the same game (an NRFI and an Under both read off one
-      // pitching duel) are not independent. They're positively correlated, so
+      // Legs drawn from the same game (a moneyline and an Under both read off
+      // one matchup) are not independent. They're positively correlated, so
       // multiplying their probabilities actually UNDER-states the ticket's
       // true win chance - the problem isn't the EV, it's concentration: one
       // game can sink every leg at once, so a ticket like this carries far

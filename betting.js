@@ -474,9 +474,8 @@ async function checkBettingResults(scope) {
   if (scope === 'all' || scope === 'tennis') jobs.push(checkTennisResults());
   if (scope === 'all' || scope === 'mlb') {
     jobs.push(checkMlbResults());
-    jobs.push(checkMlbDuelResults());
-    // Also record today's not-yet-stored games (moneyline + NRFI + totals) so
-    // the Betting page fills its own slate without a Stats-page visit first.
+    // Also record today's not-yet-stored games so the Betting page fills its
+    // own slate without a Stats-page visit first.
     jobs.push(recordTodaysMlbGames());
   }
   if (scope === 'all' || scope === 'nba') {
@@ -604,25 +603,23 @@ function renderBettingMixedChips() {
   document.getElementById('bettingMixedRow').style.display = loadBettingMode() === 'mixed' ? '' : 'none';
 }
 
-// Market toggles. Every market kind belongs to exactly one sport - NRFI and
-// run totals don't exist for a fight or a tennis match, and NBA's own
-// moneyline/totals are separate keys so an MLB toggle can't gate them. UFC and
-// Tennis have no market switch at all.
+// Market toggles. Every market kind belongs to exactly one sport - NBA's
+// moneyline and totals are separate keys so an MLB toggle can't gate them, and
+// UFC and Tennis have no market switch at all.
 //
 // Each chip therefore declares its owning scope, and the row only shows the
 // chips that can actually affect the scope being viewed - hiding entirely on
 // scopes it can't touch. Previously the MLB chips rendered on the UFC and
-// Tennis scopes where they did nothing, which read as NRFI existing for boxing.
+// Tennis scopes where they did nothing, which read as MLB markets existing for
+// boxing.
 const BETTING_MARKET_LABELS = {
   moneyline: '⚾ MLB Moneyline',
-  nrfi: '1️⃣ MLB NRFI',
-  totals: '↕️ MLB Totals',
   nbaMoneyline: '🏀 NBA Moneyline',
   nbaTotals: '↕️ NBA Totals',
 };
 
 const BETTING_MARKET_SCOPE = {
-  moneyline: 'mlb', nrfi: 'mlb', totals: 'mlb',
+  moneyline: 'mlb',
   nbaMoneyline: 'nba', nbaTotals: 'nba',
 };
 

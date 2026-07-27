@@ -8,7 +8,6 @@ async function refreshBetLogAndRender() {
     checkResults(),
     checkTennisResults(),
     checkMlbResults(),
-    checkMlbDuelResults(),
     checkNbaResults(),
     checkNbaTotalsResults(),
   ]);
@@ -32,7 +31,7 @@ document.getElementById('bettingLog').addEventListener('click', (e) => {
 const betLogBackupStatus = document.getElementById('bettingBackupStatus');
 
 function betLogSummaryText(s) {
-  return `${s.mlbGames} MLB games, ${s.nrfi} NRFI, ${s.totals} totals, ${s.kSignals} K-signals, ${s.ufc} UFC, ${s.tennis} tennis, ${s.lockedSlates} locked slates`;
+  return `${s.mlbGames} MLB games, ${s.kSignals} K-signals, ${s.ufc} UFC, ${s.tennis} tennis, ${s.lockedSlates} locked slates`;
 }
 
 document.getElementById('bettingBackupDownloadBtn').addEventListener('click', async () => {

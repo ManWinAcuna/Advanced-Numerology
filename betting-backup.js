@@ -10,8 +10,6 @@ const BETTING_BACKUP_KEYS = [
   MLB_PREDICTIONS_KEY,
   MLB_PITCHER_K_SIGNALS_KEY,
   MLB_BACKFILL_STATE_KEY,
-  MLB_NRFI_PREDICTIONS_KEY,
-  MLB_TOTALS_PREDICTIONS_KEY,
   NBA_PREDICTIONS_KEY,
   NBA_TOTALS_PREDICTIONS_KEY,
   // The form store is not just a cache: a rebuild means re-walking two seasons
@@ -80,8 +78,6 @@ function summarizeBettingBackup(backup) {
     createdAt: backup.createdAt,
     mlbGames: count(MLB_PREDICTIONS_KEY),
     kSignals: count(MLB_PITCHER_K_SIGNALS_KEY),
-    nrfi: count(MLB_NRFI_PREDICTIONS_KEY),
-    totals: count(MLB_TOTALS_PREDICTIONS_KEY),
     nbaGames: count(NBA_PREDICTIONS_KEY),
     nbaTotals: count(NBA_TOTALS_PREDICTIONS_KEY),
     nbaPlayers: count(NBA_PLAYER_FORM_KEY),

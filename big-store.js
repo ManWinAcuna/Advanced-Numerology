@@ -28,8 +28,10 @@ const BIG_STORE_DB_VERSION = 1;
 const BIG_STORE_EAGER_KEYS = [
   'numerology_mlb_predictions',
   'numerology_mlb_pitcher_k_signals',
-  'numerology_mlb_nrfi_predictions',
-  'numerology_mlb_totals_predictions',
+  // numerology_mlb_nrfi_predictions and numerology_mlb_totals_predictions were
+  // dropped with the MLB pitcher-duel markets. Deliberately NOT deleted from
+  // IndexedDB - unregistering just stops the app reading or writing them, so
+  // reverting that removal brings the records back with it.
   'numerology_ufc_predictions',
   'numerology_tennis_predictions',
   'numerology_betting_locked_slates',

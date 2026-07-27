@@ -896,8 +896,10 @@ function saveMlbPredictions(predictions) {
 /* ===================== Storage size guard ===================== */
 // localStorage is only ~5MB per origin (less on iOS Safari), and the MLB
 // stores outgrew it: measured against real records, a full 52-week window
-// projects to ~6.6MB (game picks 2.3 + K signals 1.6 + NRFI 1.4 + totals
-// 1.5). Past the cap setItem throws QuotaExceededError, which surfaced as an
+// projected to ~6.6MB back when the pitcher-duel markets were still collected
+// (game picks 2.3 + K signals 1.6 + NRFI 1.4 + totals 1.5); dropping those two
+// takes ~2.9MB off it, but the remainder still clears the cap once NBA is
+// counted. Past the cap setItem throws QuotaExceededError, which surfaced as an
 // opaque "something went wrong" halfway through a long backfill. Big stores
 // save through here so the failure names itself and points at the fix.
 
@@ -932,166 +934,6 @@ function saveJsonGuarded(key, value) {
     }
     throw e;
   }
-}
-
-/* ===================== MLB pitcher-duel markets (NRFI / totals) ===================== */
-// Local-only, like the other MLB prediction stores - deliberately NOT in
-// CLOUD_SYNC_FIELDS (see the comment there for the Firestore-size lesson).
-
-const MLB_NRFI_PREDICTIONS_KEY = 'numerology_mlb_nrfi_predictions';
-const MLB_TOTALS_PREDICTIONS_KEY = 'numerology_mlb_totals_predictions';
-
-function loadMlbNrfiPredictions() {
-  try {
-    const raw = bigStoreGetItem(MLB_NRFI_PREDICTIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveMlbNrfiPredictions(predictions) {
-  saveJsonGuarded(MLB_NRFI_PREDICTIONS_KEY, predictions);
-}
-
-function loadMlbTotalsPredictions() {
-  try {
-    const raw = bigStoreGetItem(MLB_TOTALS_PREDICTIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveMlbTotalsPredictions(predictions) {
-  saveJsonGuarded(MLB_TOTALS_PREDICTIONS_KEY, predictions);
-}
-
-// The pitcher-duel signal: both starting pitchers' day scores averaged. A
-// high duel means both starters are "on" - quiet bats, so No run in the 1st
-// and Under; a low duel means runs. Scores are mirrored around
-// MLB_DUEL_NEUTRAL (the observed center of pitcher day scores - see the
-// MLB_K_SIGNAL_TIERS calibration note) so the record carries a scoreA/scoreB
-// pair shaped exactly like every other prediction: edgeGap, the edge tiers,
-// numerologyPickPrice, and the whole betting engine work on it unchanged.
-const MLB_DUEL_NEUTRAL = 63;
-
-const MLB_DUEL_MIN_GAP = 5;
-
-const MLB_DUEL_TIERS = [
-  { key: 'strong', label: 'Strong Edge', icon: '🔥', min: 22, max: Infinity },
-  { key: 'clear', label: 'Clear Edge', icon: '💪', min: 12, max: 22 },
-  { key: 'slight', label: 'Slight Edge', icon: '📈', min: MLB_DUEL_MIN_GAP, max: 12 },
-  { key: 'none', label: 'No Edge (tossup)', icon: '⚖️', min: 0, max: MLB_DUEL_MIN_GAP },
-];
-
-// Run scoring is a property of the whole game, not of one side, so a duel
-// record's components are each role averaged ACROSS both teams: both
-// starters, both managers, both lineups, and so on. That gives the same
-// "which single signal predicts best" test the game picks get, just aimed at
-// quiet-vs-loud instead of who wins. pitchers is the existing duel score.
-const MLB_DUEL_COMPONENT_KEYS = ['pitchers', 'managers', 'batters', 'catchers', 'pitcherMatchups', 'franchises'];
-
-const MLB_DUEL_COMPONENT_LABELS = {
-  pitchers: 'Both Starters (duel)',
-  managers: 'Both Managers',
-  batters: 'Both Lineups',
-  catchers: 'Both Catchers',
-  pitcherMatchups: 'Pitcher vs Lineup (both)',
-  franchises: 'Both Franchises',
-  duel: '⚔️ Duel Score (live)',
-};
-
-// Averages the two sides' stored component sets (extractComponents shapes)
-// into the game-level set above. A role missing on either side is skipped
-// rather than half-counted.
-function mlbDuelComponentsFromSides(compHome, compAway) {
-  if (!compHome || !compAway) return null;
-  const pair = (key) => {
-    const a = compHome[key];
-    const b = compAway[key];
-    if (a == null || b == null) return null;
-    return Math.round(((a + b) / 2) * 10) / 10;
-  };
-  return {
-    pitchers: pair('pitcher'),
-    managers: pair('manager'),
-    batters: pair('batters'),
-    catchers: pair('catcher'),
-    pitcherMatchups: pair('pitcherMatchup'),
-    franchises: pair('franchise'),
-  };
-}
-
-// kind is 'nrfi' or 'totals'; market is a parseMlbSideMarket() shape whose
-// priceA/priceB must already be the PRE-GAME prices (the backfill swaps the
-// resolved 1/0 finals out for CLOB history prices before calling this).
-// The quiet side (No / Under) gets the duel score itself; the loud side gets
-// its mirror, so the favorite flips at the neutral point.
-function buildMlbDuelRecord(kind, market, duelScore, gameLabel, gameTimeISO, result, gamePk, duelComponents) {
-  const quietIsA = ['no', 'under'].includes(normalizeName(market.outcomeA));
-  const d = Math.round(duelScore * 10) / 10;
-  const mirrored = Math.round((2 * MLB_DUEL_NEUTRAL - duelScore) * 10) / 10;
-  const quietName = quietIsA ? market.outcomeA : market.outcomeB;
-  const loudName = quietIsA ? market.outcomeB : market.outcomeA;
-  return {
-    conditionId: market.conditionId,
-    gamePk,
-    kind,
-    line: market.line != null ? market.line : undefined,
-    teamAName: market.outcomeA,
-    teamBName: market.outcomeB,
-    gameLabel,
-    duelScore: d,
-    numerologyFavorite: duelScore >= MLB_DUEL_NEUTRAL ? quietName : loudName,
-    numerologyScoreA: quietIsA ? d : mirrored,
-    numerologyScoreB: quietIsA ? mirrored : d,
-    marketPriceA: market.priceA,
-    marketPriceB: market.priceB,
-    duelComponents: duelComponents || undefined,
-    gameTime: gameTimeISO,
-    recordedAt: Date.now(),
-    result: result || null,
-  };
-}
-
-// Which side of a duel market a given component score favors, mirrored around
-// MLB_DUEL_NEUTRAL exactly like the duel score itself: at or above neutral is
-// the quiet side (No run / Under), below it the loud side (Yes / Over).
-function mlbDuelSideForScore(score, outcomeA, outcomeB) {
-  const quietIsA = ['no', 'under'].includes(normalizeName(outcomeA));
-  const quietName = quietIsA ? outcomeA : outcomeB;
-  const loudName = quietIsA ? outcomeB : outcomeA;
-  return score >= MLB_DUEL_NEUTRAL ? quietName : loudName;
-}
-
-// Duel markets resolve from MLB's own final linescore, never from
-// Polymarket's outcomePrices: confirmed live that a closed MLB per-game
-// market reports a flat ["1","0"] on every market of the event (moneyline,
-// nrfi, and all seven totals lines alike) no matter the actual result, so
-// trusting it would mark every NRFI "Yes" and every total "Over". The
-// linescore is unambiguous and matches how the game picks already resolve.
-// outcomeA/outcomeB are the market's own labels ("Yes"/"No", "Over"/"Under")
-// so the returned winner always matches what the record stored.
-
-function mlbNrfiResultFromFeed(feed, outcomeA, outcomeB) {
-  if (!feed || feed.abstractGameState !== 'Final' || !Number.isFinite(feed.firstInningRuns)) return null;
-  const yesIsA = normalizeName(outcomeA) === 'yes';
-  const scored = feed.firstInningRuns > 0;
-  const yesName = yesIsA ? outcomeA : outcomeB;
-  const noName = yesIsA ? outcomeB : outcomeA;
-  return { winner: scored ? yesName : noName, draw: false, resolvedAt: Date.now() };
-}
-
-function mlbTotalsResultFromFeed(feed, outcomeA, outcomeB, line) {
-  if (!feed || feed.abstractGameState !== 'Final' || !Number.isFinite(feed.totalRuns) || !Number.isFinite(line)) return null;
-  // Polymarket's lines are always .5 (no push possible), but a whole-number
-  // line landing exactly on the total would be a push - treated as a void.
-  if (feed.totalRuns === line) return { winner: null, draw: true, resolvedAt: Date.now() };
-  const overIsA = normalizeName(outcomeA) === 'over';
-  const overName = overIsA ? outcomeA : outcomeB;
-  const underName = overIsA ? outcomeB : outcomeA;
-  return { winner: feed.totalRuns > line ? overName : underName, draw: false, resolvedAt: Date.now() };
 }
 
 const MLB_VENUES_KEY = 'numerology_mlb_venues';
