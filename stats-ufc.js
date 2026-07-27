@@ -492,7 +492,13 @@ const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
 // entries against 52 weeks of fights. ensureFighterInRoster now auto-adds
 // an unmatched fighter via the same Wikidata lookup "Add Fighter" itself
 // uses, instead of just skipping them.
-const UFC_BACKFILL_SCHEMA = 3;
+// v4: the scoring day is the event's own eventDate (the billed fight date),
+// not the browser-local calendar date of the UTC start timestamp. Verified
+// against live data: a late US card's UTC timestamp rolls past midnight
+// (UFC Freedom 250 - billed 2026-06-14, gameStartTime 2026-06-15T00:00Z)
+// while eventDate stays on the billed day, and the old timestamp-local way
+// also made the day depend on whichever device happened to run the walk.
+const UFC_BACKFILL_SCHEMA = 4;
 const UFC_BACKFILL_CHUNK = 5;
 // Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
 // itself (confirmed live) - start_date_min/max below filters by that LISTING
@@ -588,8 +594,13 @@ async function processUfcBackfillEvent(event, existingByConditionId, rosterCache
   ]);
   if (priceA == null || priceB == null) return null; // no pregame price data - don't guess
 
-  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), gameStartTime, null, null);
-  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), gameStartTime, null, null);
+  // Scored on the event's billed date, not the timestamp's browser-local
+  // date - deterministic on every device, and stays on the right side of
+  // midnight for late US cards (see the v4 schema note above). The window
+  // filter in fetchClosedUfcEventsInWindow already guarantees eventDate.
+  const fightDay = ufcParseDateInput(event.eventDate);
+  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null);
+  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null);
 
   const favA = priceA >= priceB;
   const marketFavName = favA ? outcomes[0] : outcomes[1];
@@ -692,6 +703,7 @@ async function fetchOpenUfcMoneylines() {
       try { prices = JSON.parse(m.outcomePrices).map(Number); } catch (e) { /* leave empty */ }
       const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
       if (!outcomes[0] || !outcomes[1] || !gameStartTime) return;
+      if (!ev.eventDate) return; // no billed fight date - can't pin the scoring day, don't guess
       if (!Number.isFinite(prices[0]) || !Number.isFinite(prices[1])) return;
       fights.push({
         conditionId: m.conditionId,
@@ -700,6 +712,7 @@ async function fetchOpenUfcMoneylines() {
         priceA: prices[0],
         priceB: prices[1],
         gameStartTime,
+        eventDate: ev.eventDate,
         eventTitle: ev.title,
       });
     });
@@ -710,7 +723,16 @@ async function fetchOpenUfcMoneylines() {
 async function recordTodaysUfcFights() {
   const fights = await fetchOpenUfcMoneylines();
   const now = Date.now();
-  const todays = fights.filter((f) => isTodayLocal(f.gameStartTime.toISOString()) && f.gameStartTime.getTime() > now);
+  const nowD = new Date();
+  const todayISO = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(nowD.getDate()).padStart(2, '0')}`;
+  // "Today's card" is anything billed for today (eventDate) OR starting on
+  // today's local calendar date - the OR matters both ways: a late US main
+  // event's UTC timestamp rolls into tomorrow while its eventDate stays on
+  // the billed day (so eventDate catches it the evening you'd actually bet
+  // it), and a viewer checking just after midnight still catches the card
+  // whose fights start "today" off yesterday's billed date.
+  const todays = fights.filter((f) => (f.eventDate === todayISO || isTodayLocal(f.gameStartTime.toISOString()))
+    && f.gameStartTime.getTime() > now);
   if (!todays.length) return;
 
   const existing = loadUfcPredictions();
@@ -726,8 +748,11 @@ async function recordTodaysUfcFights() {
     ]);
     if (!matchedA || !matchedB) return; // no Wikidata birthdate either - skip, don't guess
 
-    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), f.gameStartTime, null, null);
-    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), f.gameStartTime, null, null);
+    // Scored on the billed fight date, same as the backfill (v4 note above) -
+    // never the timestamp's browser-local date, which flips with the device.
+    const fightDay = ufcParseDateInput(f.eventDate);
+    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null);
+    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null);
 
     const marketFavName = f.priceA >= f.priceB ? f.fighterAName : f.fighterBName;
     const numFavName = scoreA.combined >= scoreB.combined ? f.fighterAName : f.fighterBName;

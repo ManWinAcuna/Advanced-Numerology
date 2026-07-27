@@ -119,13 +119,14 @@ function initStakeInput() {
 // polymarket-mlb.js) - returns the three factors plus the combined number so
 // the breakdown popup can show all of them.
 
-// UFC scoring is Day-anchor only now - no venue clock to consult, so the
-// fight's calendar date is the browser's own local date for its timestamp,
-// the same date the Stats backfill and the auto today-tracker
-// (stats-ufc.js) score with. Still used by the Insight tab and the Full
-// Matchup deep link.
-function currentMatchDateISO(gameStartTime) {
-  return `${gameStartTime.getFullYear()}-${String(gameStartTime.getMonth() + 1).padStart(2, '0')}-${String(gameStartTime.getDate()).padStart(2, '0')}`;
+// The fight's scoring day is the event's billed date (eventDate), exactly
+// like the Stats backfill and the auto today-tracker (stats-ufc.js) - NOT
+// the browser-local calendar date of the UTC timestamp, which flips with
+// the viewer's timezone and rolls past midnight on late US cards (verified
+// live: UFC Freedom 250, billed 2026-06-14, timestamps 2026-06-15T00:00Z).
+// Still used by the Insight tab and the Full Matchup deep link.
+function currentMatchDateISO(f) {
+  return f.eventDate || null;
 }
 
 // Day-anchor scoring only - identical to the Stats backfill and the auto
@@ -135,10 +136,11 @@ function currentMatchDateISO(gameStartTime) {
 // a hand-picked location was the one thing stopping fights from being
 // tracked automatically every day.
 function scoresForFight(f) {
-  if (!(f.matchedA && f.matchedB)) return null;
+  if (!(f.matchedA && f.matchedB && f.eventDate)) return null;
+  const fightDay = parseDateInput(f.eventDate);
   return {
-    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), f.gameStartTime, null, null),
-    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), f.gameStartTime, null, null),
+    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), fightDay, null, null),
+    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), fightDay, null, null),
   };
 }
 
@@ -236,6 +238,10 @@ function parseMarket(market, event) {
     priceA: Number.isFinite(prices[0]) ? prices[0] : null,
     priceB: Number.isFinite(prices[1]) ? prices[1] : null,
     gameStartTime: parseGameStart(market.gameStartTime),
+    // The billed fight date - the scoring day (see scoresForFight). Present
+    // on every Polymarket UFC event in practice; a fight without one isn't
+    // scored rather than guessing a day.
+    eventDate: event.eventDate || null,
     eventTitle: event.title,
   };
 }
@@ -350,7 +356,11 @@ function numerologyBlockHtml(f) {
       .join('<br>')}</div>`;
   }
 
-  const { scoreA, scoreB } = scoresForFight(f);
+  const scores = scoresForFight(f);
+  if (!scores) {
+    return '<div class="pm-unmatched">⏳ Polymarket hasn\'t listed this fight\'s event date yet &mdash; not scored until it does (the scoring day is never guessed).</div>';
+  }
+  const { scoreA, scoreB } = scores;
   const favA = f.priceA != null && f.priceB != null && f.priceA >= f.priceB;
   const marketFavName = favA ? f.fighterAName : f.fighterBName;
   const numFavMatched = scoreA.combined >= scoreB.combined ? f.matchedA : f.matchedB;
@@ -409,8 +419,10 @@ function insightTabHtml(f) {
   const pair = pairInsight(infoA.lookupValue, infoB.lookupValue);
   // Universal Day - each fighter's own life path vs. the fight day itself
   // (reduced the exact same way a birthdate is) - added alongside the
-  // fighter-vs-fighter read above, not instead of it.
-  const matchDate = parseDateInput(currentMatchDateISO(f.gameStartTime));
+  // fighter-vs-fighter read above, not instead of it. Skipped (not guessed)
+  // in the rare case the event has no billed date yet.
+  const matchDateISO = currentMatchDateISO(f);
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   return `
     <div class="pm-insight-grid">
       ${personInsightHtml(f.matchedA.name, infoA.display, infoA.lookupValue)}
@@ -495,11 +507,11 @@ function initBreakdownModal() {
 
 function fullMatchupHtml(f) {
   if (!(f.matchedA && f.matchedB)) return '';
-  const params = new URLSearchParams({
-    a: f.matchedA.name,
-    b: f.matchedB.name,
-    date: isoToDisplay(currentMatchDateISO(f.gameStartTime)),
-  });
+  const params = new URLSearchParams({ a: f.matchedA.name, b: f.matchedB.name });
+  // The date prefill rides along only when the billed fight date is known -
+  // omitted (not guessed) otherwise.
+  const matchDateISO = currentMatchDateISO(f);
+  if (matchDateISO) params.set('date', isoToDisplay(matchDateISO));
   return `<a class="btn" href="ufc.html?${params.toString()}">Full Matchup &rarr;</a>`;
 }
 
