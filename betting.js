@@ -291,9 +291,13 @@ function renderBettingStability(sim) {
       + (key === currentKey ? '*' : '');
     const roiLabel = `${roi > 0 ? '+' : ''}${Math.round(roi * 100)}%`;
     const plLabel = bettingFmtCompactMoney(Math.round(m.profit));
-    // Stack outward from the bar tip so neither line ever sits on the bar.
-    const roiY = roi >= 0 ? y - 15 : y + h + 12;
-    const plY = roi >= 0 ? y - 4 : y + h + 23;
+    // Positive bars label outward from the tip. Negative bars label just ABOVE
+    // the zero line instead of under the bar: a full-depth bar (a -100% month)
+    // bottoms out only ~18px clear of the axis labels, so two stacked lines
+    // under it ran straight into the month name. The space above zero in a
+    // negative column is always empty, so it can never collide.
+    const roiY = roi >= 0 ? y - 15 : zeroY - 15;
+    const plY = roi >= 0 ? y - 4 : zeroY - 4;
     const cx = (x + barW / 2).toFixed(1);
     return `
       <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85" rx="2" />
