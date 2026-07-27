@@ -501,12 +501,33 @@ function buildBettingSlate(dayPicks, mode, tallies, bankroll, mixedTypes, kellyF
     if (types.includes('singles')) {
       tickets = bettingCapDayStakes(makeSingles(), bankroll, BETTING_MAX_DAY_SINGLES_FRACTION);
     }
-    let parlays = [];
-    ['2', '3', '4'].forEach((n) => {
-      if (types.includes(n)) parlays = parlays.concat(makeParlays(Number(n)));
-    });
-    tickets = tickets.concat(bettingCapDayStakes(parlays, bankroll, BETTING_MAX_DAY_PARLAY_FRACTION));
-    return { tickets, qualifiedCount: qualified.length, mixed: true };
+    // Each selected parlay size gets its own slice of the parlay budget rather
+    // than every size competing in one pool. Total day parlay risk is unchanged
+    // - still BETTING_MAX_DAY_PARLAY_FRACTION across the lot - but the sizes no
+    // longer cannibalise each other.
+    //
+    // One shared pool quietly defeated the point of Mixed. A 4-leg is both the
+    // longest shot (so the smallest Kelly stake) and the most numerous ticket
+    // (C(5,4)=5 against C(3,2)=3), so with 2+3+4 on, twelve tickets were scaled
+    // into a single 10% budget and then rounded to whole dollars - and the
+    // 4-legs were always the ones that landed under BETTING_MIN_STAKE and got
+    // filtered out. They never appeared at all, and nothing said why.
+    const parlaySizes = ['2', '3', '4'].filter((n) => types.includes(n));
+    const droppedTypes = [];
+    if (parlaySizes.length) {
+      const share = BETTING_MAX_DAY_PARLAY_FRACTION / parlaySizes.length;
+      parlaySizes.forEach((n) => {
+        const legCount = Number(n);
+        const built = makeParlays(legCount);
+        const kept = bettingCapDayStakes(built, bankroll, share);
+        // Report a selected size that produced nothing, and which of the two
+        // reasons it was - "not enough qualifying picks" and "stakes too small
+        // to place" need completely different responses from the user.
+        if (!kept.length) droppedTypes.push({ legCount, built: built.length, needed: legCount, qualified: qualified.length });
+        tickets = tickets.concat(kept);
+      });
+    }
+    return { tickets, qualifiedCount: qualified.length, mixed: true, droppedTypes };
   }
 
   const legCount = Number(mode);

@@ -4594,6 +4594,18 @@ body {
   background: rgba(245, 197, 66, 0.05);
 }
 
+/* A selected bet type that produced nothing. Not an error - the slate is still
+   valid - so it sits between the summary and the tickets as a note, not a
+   warning banner. */
+.bet-missing-types {
+  margin: 6px 0 10px;
+  padding: 7px 10px;
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  background: rgba(245, 197, 66, 0.05);
+  line-height: 1.5;
+}
+
 /* ===================== Expandable charts + month calendar ===================== */
 
 /* The box chrome is the click target for expanding; the chart inside keeps its

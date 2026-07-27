@@ -102,6 +102,7 @@ function renderBettingToday(slate) {
   const totalPayout = fresh.reduce((s, t) => s + t.stake / t.prodPrice, 0);
   el.innerHTML = `
     <div class="bet-day-summary">Total staked: <strong>${bettingFmtMoney(totalStake)}</strong> &middot; If everything hits: <strong>${bettingFmtMoney(totalPayout)}</strong> &middot; ${slate.qualifiedCount} qualifying pick${slate.qualifiedCount === 1 ? '' : 's'}${lockedCount ? ` &middot; ${lockedCount} already locked` : ''}</div>
+    ${bettingMissingTypesHtml(slate)}
     ${bettingTicketsHtml(fresh)}
     <div class="bet-lock-row">
       <button class="btn" id="bettingLockBtn" type="button">🔒 ${lockedCount ? `Lock ${fresh.length} new bet${fresh.length === 1 ? '' : 's'}` : 'Lock these bets'}</button>
@@ -147,6 +148,23 @@ function renderBettingSummary(sim) {
     <div class="score-big ${cls}">${bettingFmtMoney(sim.finalBankroll)}</div>
     <div class="pm-breakdown-hint" style="text-align:center;">Started ${bettingFmtMoney(sim.startBankroll)} &middot; P/L <span class="score-inline ${cls}">${bettingFmtSignedMoney(delta)}</span> &middot; ROI ${roi}% of ${bettingFmtMoney(sim.totals.staked)} staked</div>
     <div class="pm-breakdown-hint" style="text-align:center;">Tickets: ${bits.join(' &middot; ')} &middot; ${sim.dayCount} betting day${sim.dayCount === 1 ? '' : 's'}</div>`;
+}
+
+// A bet type selected in Mixed that produced no tickets used to just be absent,
+// which is indistinguishable from "the setting isn't working". The two causes
+// need opposite responses from the user, so they're named separately: not enough
+// qualifying picks is a wait-for-more-games problem, stakes under the minimum is
+// a bankroll-or-fewer-types problem.
+function bettingMissingTypesHtml(slate) {
+  const dropped = slate.droppedTypes || [];
+  if (!dropped.length) return '';
+  const lines = dropped.map((d) => {
+    if (!d.built) {
+      return `<strong>${d.legCount}-leg parlays:</strong> needs ${d.needed} qualifying picks today, there ${d.qualified === 1 ? 'is' : 'are'} ${d.qualified}.`;
+    }
+    return `<strong>${d.legCount}-leg parlays:</strong> ${d.built} built, but each stake came out under the ${bettingFmtMoney(BETTING_MIN_STAKE)} minimum once the parlay budget was split ${dropped.length > 1 ? 'across the selected sizes' : ''}&mdash; a bigger bankroll, or fewer bet types selected, would let them through.`;
+  });
+  return `<div class="box-hint bet-missing-types">${lines.join('<br>')}</div>`;
 }
 
 // Bankroll curve - inline SVG line of the simulated balance across every
