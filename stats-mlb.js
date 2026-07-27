@@ -1354,8 +1354,17 @@ async function refreshAndRenderMlb() {
   } catch (e) { /* today-slate fill is best-effort */ }
 }
 
+// The null check is load-bearing, not defensive padding. This file is loaded by
+// betting.html and bet-log.html too, and neither has the Stats page's refresh
+// buttons - so without it this threw at top level and killed the REST of the
+// file's execution, leaving every const declared below (MLB_BACKFILL_SCHEMA and
+// friends) permanently in the temporal dead zone on those two pages. Function
+// declarations still hoisted, which is what made the breakage so quiet.
+// wireNbaRefreshButton has always guarded; this one did not.
 function wireMlbRefreshButton(btnId) {
-  document.getElementById(btnId).addEventListener('click', async () => {
+  const el = document.getElementById(btnId);
+  if (!el) return;
+  el.addEventListener('click', async () => {
     const btn = document.getElementById(btnId);
     btn.disabled = true;
     const original = btn.textContent;
