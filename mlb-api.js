@@ -15,6 +15,42 @@ const MLB_STATS_BASE = 'https://statsapi.mlb.com/api/v1';
 const MLB_STATS_BASE_V11 = 'https://statsapi.mlb.com/api/v1.1';
 const MLB_MONEYLINE_EVENTS_URL = 'https://gamma-api.polymarket.com/events/keyset?tag_slug=mlb&closed=false&limit=100';
 
+// Matches one of a pick's team names to a side of MLB's live feed.
+//
+// This has to tolerate two naming conventions. Records written during the 2025
+// season stored SHORT names ("Giants", "Tigers"), while the feed always returns
+// full ones ("San Francisco Giants", "Detroit Tigers"), so an exact compare
+// misses every one of them. The previous inline version fell back to the AWAY
+// side on any miss:
+//
+//   const sideForName = (name) => (home === name ? feed.home : feed.away);
+//
+// which meant a short-named game resolved BOTH teams to away - identical run
+// totals, so the game was stamped a tie, and its composite was built from the
+// wrong side's manager and team info. That silently turned 784 real games into
+// draws, and draws are excluded from every statistic on the Stats page.
+//
+// Returns null when the name matches nothing, or matches both sides ambiguously
+// (e.g. a bare "Sox"). Callers must treat null as "cannot score this game"
+// rather than guessing a side.
+function mlbFeedSideForName(feed, name) {
+  if (!feed || !feed.home || !feed.away || !name) return null;
+  const want = normalizeName(name);
+  if (!want) return null;
+  const home = normalizeName(feed.home.teamName || '');
+  const away = normalizeName(feed.away.teamName || '');
+  if (want === home) return feed.home;
+  if (want === away) return feed.away;
+  // Whole-word suffix match, so "giants" hits "san francisco giants" but a
+  // bare "sox" hits both Sox teams and is rejected as ambiguous below.
+  const suffix = (full, part) => full.endsWith(` ${part}`);
+  const homeHit = suffix(home, want);
+  const awayHit = suffix(away, want);
+  if (homeHit && !awayHit) return feed.home;
+  if (awayHit && !homeHit) return feed.away;
+  return null;
+}
+
 function parseMlbGameStart(raw) {
   if (!raw) return null;
   const iso = raw.replace(' ', 'T').replace(/\+00$/, 'Z').replace(/\+00:00$/, 'Z');

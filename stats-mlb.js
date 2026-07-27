@@ -39,13 +39,14 @@ async function checkMlbResults() {
       const feed = feeds[i];
       if (!feed || feed.abstractGameState !== 'Final') return;
 
-      const runsForName = (name) => {
-        if (normalizeName(feed.home.teamName) === normalizeName(name)) return feed.home.runs;
-        if (normalizeName(feed.away.teamName) === normalizeName(name)) return feed.away.runs;
-        return null;
-      };
-      const runsA = runsForName(p.teamAName);
-      const runsB = runsForName(p.teamBName);
+      // Both sides must match DISTINCT feed sides. Exact-comparing missed every
+      // short-named 2025 record, and the two names resolving to the same side
+      // is what manufactured tie results out of decided games.
+      const sideA = mlbFeedSideForName(feed, p.teamAName);
+      const sideB = mlbFeedSideForName(feed, p.teamBName);
+      if (!sideA || !sideB || sideA === sideB) return;
+      const runsA = sideA.runs;
+      const runsB = sideB.runs;
       if (!Number.isFinite(runsA) || !Number.isFinite(runsB)) return;
 
       p.result = runsA === runsB
@@ -58,6 +59,67 @@ async function checkMlbResults() {
   }
 
   return predictions;
+}
+
+// One-time repair for games wrongly stored as ties.
+//
+// Baseball has no ties, so any stored draw is suspect. They came from the old
+// name matcher defaulting to the away side (see mlbFeedSideForName in
+// mlb-api.js): a record naming its teams "Giants"/"Braves" matched neither
+// against the feed's "San Francisco Giants"/"Atlanta Braves", so BOTH sides
+// resolved to away, the run totals came out identical, and the game was written
+// as a draw. Draws are excluded from every statistic on the Stats page, so each
+// one silently deleted a real game from the measured track record - which is
+// what pulled the Manager component's edge down and made the v3 weights look
+// unjustified.
+//
+// Re-resolves each suspect draw from MLB's own linescore using the strict
+// matcher. A genuinely tied game (a suspended or called game) simply stays a
+// draw, so this can only correct records that were actually decided.
+const MLB_DRAW_REPAIR_KEY = 'numerology_mlb_draw_repair_version';
+const MLB_DRAW_REPAIR_VERSION = 1;
+
+async function repairMlbFalseDraws(onProgress) {
+  const predictions = loadMlbPredictions();
+  const suspects = predictions.filter((p) => p.result && p.result.draw && p.gamePk);
+  if (!suspects.length) {
+    localStorage.setItem(MLB_DRAW_REPAIR_KEY, String(MLB_DRAW_REPAIR_VERSION));
+    return { checked: 0, repaired: 0, stillTied: 0, unmatched: 0 };
+  }
+
+  let repaired = 0;
+  let stillTied = 0;
+  let unmatched = 0;
+  let checked = 0;
+
+  // Batched rather than one big Promise.all - 700+ concurrent boxscore fetches
+  // get throttled, and a throttled fetch returns null, which would look like
+  // "cannot repair" and burn the record's only chance at being fixed.
+  const BATCH = 8;
+  for (let i = 0; i < suspects.length; i += BATCH) {
+    const batch = suspects.slice(i, i + BATCH);
+    const feeds = await Promise.all(batch.map((p) => fetchGameLiveFeed(p.gamePk)));
+    batch.forEach((p, j) => {
+      checked += 1;
+      const feed = feeds[j];
+      if (!feed || feed.abstractGameState !== 'Final') { unmatched += 1; return; }
+      const sideA = mlbFeedSideForName(feed, p.teamAName);
+      const sideB = mlbFeedSideForName(feed, p.teamBName);
+      if (!sideA || !sideB || sideA === sideB) { unmatched += 1; return; }
+      const rA = sideA.runs;
+      const rB = sideB.runs;
+      if (!Number.isFinite(rA) || !Number.isFinite(rB)) { unmatched += 1; return; }
+      if (rA === rB) { stillTied += 1; return; } // a real tie - leave it alone
+      p.result = { winner: rA > rB ? p.teamAName : p.teamBName, draw: false, resolvedAt: Date.now() };
+      repaired += 1;
+    });
+    if (onProgress) onProgress(checked, suspects.length, repaired);
+    if (repaired) saveMlbPredictions(predictions); // checkpoint as we go
+  }
+
+  if (repaired) saveMlbPredictions(predictions);
+  localStorage.setItem(MLB_DRAW_REPAIR_KEY, String(MLB_DRAW_REPAIR_VERSION));
+  return { checked, repaired, stillTied, unmatched };
 }
 
 // isCorrectPick, PRICE_BUCKETS, computeBucketStats, edgeGap live in db-core.js,
@@ -858,11 +920,17 @@ async function recordTodaysMlbGames() {
     ];
     const birthdates = await fetchPeopleBirthdates(allIds);
 
-    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
+    // Must resolve to two DISTINCT feed sides. A name that matches neither used
+    // to fall through to away, which scored the game against the wrong team's
+    // manager and then called it a tie.
+    const sideA = mlbFeedSideForName(feed, m.teamAName);
+    const sideB = mlbFeedSideForName(feed, m.teamBName);
+    if (!sideA || !sideB || sideA === sideB) { pending.push({ ...m, status: 'pending' }); return; }
+
     const gObj = {
-      sideA: sideForName(m.teamAName), sideB: sideForName(m.teamBName),
-      teamInfoA: teamInfoCache.get(sideForName(m.teamAName).teamId), teamInfoB: teamInfoCache.get(sideForName(m.teamBName).teamId),
-      managerA: managerCache.get(sideForName(m.teamAName).teamId), managerB: managerCache.get(sideForName(m.teamBName).teamId),
+      sideA, sideB,
+      teamInfoA: teamInfoCache.get(sideA.teamId), teamInfoB: teamInfoCache.get(sideB.teamId),
+      managerA: managerCache.get(sideA.teamId), managerB: managerCache.get(sideB.teamId),
       birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: m.gameStartTime,
     };
     const scoreA = computeTeamComposite(gObj, 'A');
@@ -874,8 +942,8 @@ async function recordTodaysMlbGames() {
     const marketFavName = m.priceA >= m.priceB ? m.teamAName : m.teamBName;
     const numFavName = scoreA.combined >= scoreB.combined ? m.teamAName : m.teamBName;
     const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-    const rA = sideForName(m.teamAName).runs;
-    const rB = sideForName(m.teamBName).runs;
+    const rA = sideA.runs;
+    const rB = sideB.runs;
     const result = (feed.abstractGameState === 'Final' && Number.isFinite(rA) && Number.isFinite(rB))
       ? (rA === rB ? { winner: null, draw: true, resolvedAt: Date.now() } : { winner: rA > rB ? m.teamAName : m.teamBName, draw: false, resolvedAt: Date.now() })
       : null;
@@ -986,16 +1054,21 @@ async function recordTodaysFinishedMlbGames() {
       managerCache.get(feed.away.teamId) && managerCache.get(feed.away.teamId).id,
     ];
     const birthdates = await fetchPeopleBirthdates(allIds);
-    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
-
     // ---- Game Picks half ----
     // Reuse the same per-side scoring for both the patch and create paths.
-    const buildGObj = (aName, bName) => ({
-      sideA: sideForName(aName), sideB: sideForName(bName),
-      teamInfoA: teamInfoCache.get(sideForName(aName).teamId), teamInfoB: teamInfoCache.get(sideForName(bName).teamId),
-      managerA: managerCache.get(sideForName(aName).teamId), managerB: managerCache.get(sideForName(bName).teamId),
-      birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: new Date(g.gameDate),
-    });
+    // Returns null when either name can't be matched to its own feed side, so
+    // a game is skipped rather than scored against the wrong team's manager.
+    const buildGObj = (aName, bName) => {
+      const sideA = mlbFeedSideForName(feed, aName);
+      const sideB = mlbFeedSideForName(feed, bName);
+      if (!sideA || !sideB || sideA === sideB) return null;
+      return {
+        sideA, sideB,
+        teamInfoA: teamInfoCache.get(sideA.teamId), teamInfoB: teamInfoCache.get(sideB.teamId),
+        managerA: managerCache.get(sideA.teamId), managerB: managerCache.get(sideB.teamId),
+        birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded, gameStartTime: new Date(g.gameDate),
+      };
+    };
     const dhKey = [feed.home.teamId, feed.away.teamId].sort().join('-');
     // Skip only a pick that's already complete (has components). A componentless
     // pick gets patched in place with its OWN A/B naming (same in-place upgrade
@@ -1003,8 +1076,9 @@ async function recordTodaysFinishedMlbGames() {
     // stored yet, a fresh pick is built from the closed market.
     if (!stored || !stored.components || !stored.dims) {
       if (stored) {
-        const scoreA = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'A');
-        const scoreB = computeTeamComposite(buildGObj(stored.teamAName, stored.teamBName), 'B');
+        const gObj = buildGObj(stored.teamAName, stored.teamBName);
+        const scoreA = gObj && computeTeamComposite(gObj, 'A');
+        const scoreB = gObj && computeTeamComposite(gObj, 'B');
         if (scoreA && scoreB) {
           stored.components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
           stored.dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
@@ -1013,8 +1087,9 @@ async function recordTodaysFinishedMlbGames() {
       } else if (!dhKeys.has(dhKey)) {
         const event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
         if (event) {
-          const scoreA = computeTeamComposite(buildGObj(event.teamAName, event.teamBName), 'A');
-          const scoreB = computeTeamComposite(buildGObj(event.teamAName, event.teamBName), 'B');
+          const gObj = buildGObj(event.teamAName, event.teamBName);
+          const scoreA = gObj && computeTeamComposite(gObj, 'A');
+          const scoreB = gObj && computeTeamComposite(gObj, 'B');
           if (scoreA && scoreB) {
             const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
             const [priceA, priceB] = await Promise.all([
@@ -1025,8 +1100,8 @@ async function recordTodaysFinishedMlbGames() {
               const marketFavName = priceA >= priceB ? event.teamAName : event.teamBName;
               const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
               const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-              const rA = sideForName(event.teamAName).runs;
-              const rB = sideForName(event.teamBName).runs;
+              const rA = gObj.sideA.runs;
+              const rB = gObj.sideB.runs;
               const result = (!Number.isFinite(rA) || !Number.isFinite(rB))
                 ? null
                 : rA === rB
@@ -1344,20 +1419,24 @@ async function backfillMlbHistory(onProgress) {
     ];
     const birthdates = await fetchPeopleBirthdates(allIds);
 
-    const sideForName = (name) => (normalizeName(feed.home.teamName) === normalizeName(name) ? feed.home : feed.away);
-    const teamInfoForName = (name) => teamInfoCache.get(sideForName(name).teamId);
-    const managerForName = (name) => managerCache.get(sideForName(name).teamId);
     // gameStartTime is the real UTC first-pitch instant (not the already-
     // resolved matchDate) so computeTeamComposite's own currentMlbMatchDateISO(g)
     // re-derives the identical matchDateISO from the same real timestamp +
     // region, rather than re-converting an already-local-midnight Date.
-    const buildGObj = (aName, bName) => ({
-      sideA: sideForName(aName), sideB: sideForName(bName),
-      teamInfoA: teamInfoForName(aName), teamInfoB: teamInfoForName(bName),
-      managerA: managerForName(aName), managerB: managerForName(bName),
-      birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode,
-      stadiumFounded, gameStartTime: new Date(g.gameDate),
-    });
+    // Returns null when either name can't be matched to its own feed side - the
+    // walk then skips the game instead of scoring it against the wrong side.
+    const buildGObj = (aName, bName) => {
+      const sideA = mlbFeedSideForName(feed, aName);
+      const sideB = mlbFeedSideForName(feed, bName);
+      if (!sideA || !sideB || sideA === sideB) return null;
+      return {
+        sideA, sideB,
+        teamInfoA: teamInfoCache.get(sideA.teamId), teamInfoB: teamInfoCache.get(sideB.teamId),
+        managerA: managerCache.get(sideA.teamId), managerB: managerCache.get(sideB.teamId),
+        birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode,
+        stadiumFounded, gameStartTime: new Date(g.gameDate),
+      };
+    };
 
     // ---- Game Picks half ----
     // Skip entirely only if this game is already stored WITH both components and
@@ -1377,9 +1456,10 @@ async function backfillMlbHistory(onProgress) {
         event = await fetchMlbMoneylineEventForGame(g.teams.away.team.abbreviation, g.teams.home.team.abbreviation, date);
         if (event) { teamAName = event.teamAName; teamBName = event.teamBName; }
       }
-      if (teamAName) {
-        const scoreA = computeTeamComposite(buildGObj(teamAName, teamBName), 'A');
-        const scoreB = computeTeamComposite(buildGObj(teamAName, teamBName), 'B');
+      const gObj = teamAName ? buildGObj(teamAName, teamBName) : null;
+      if (gObj) {
+        const scoreA = computeTeamComposite(gObj, 'A');
+        const scoreB = computeTeamComposite(gObj, 'B');
         if (scoreA && scoreB) {
           const components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
           const dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
@@ -1398,9 +1478,8 @@ async function backfillMlbHistory(onProgress) {
               const marketFavName = favA ? event.teamAName : event.teamBName;
               const numFavName = scoreA.combined >= scoreB.combined ? event.teamAName : event.teamBName;
               const agree = normalizeName(marketFavName) === normalizeName(numFavName);
-              const runsForName = (name) => sideForName(name).runs;
-              const runsA = runsForName(event.teamAName);
-              const runsB = runsForName(event.teamBName);
+              const runsA = gObj.sideA.runs;
+              const runsB = gObj.sideB.runs;
               const result = !Number.isFinite(runsA) || !Number.isFinite(runsB)
                 ? null
                 : runsA === runsB
