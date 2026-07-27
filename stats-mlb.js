@@ -1402,6 +1402,10 @@ async function backfillMlbHistory(onProgress) {
   const existingByGamePk = new Map(existingPredictions.filter((p) => p.gamePk != null).map((p) => [p.gamePk, p]));
   const existingSignals = loadMlbPitcherKSignals();
   const existingSignalKeys = new Set(existingSignals.map((s) => `${s.gamePk}|${s.pitcherId}`));
+  // Signals per game, so a game with nothing left to collect can be skipped
+  // BEFORE its live feed is fetched - see the early-out in processGame.
+  const signalCountByGamePk = new Map();
+  existingSignals.forEach((s) => signalCountByGamePk.set(s.gamePk, (signalCountByGamePk.get(s.gamePk) || 0) + 1));
 
   const teamInfoCache = new Map();
   const managerCache = new Map();
@@ -1426,6 +1430,18 @@ async function backfillMlbHistory(onProgress) {
 
   async function processGame({ date, g }) {
     const gamePk = g.gamePk;
+    // Skip before fetching the feed when there is genuinely nothing left to
+    // add: a stored pick that already has components AND dims, plus both
+    // starters' strikeout signals. The today-slate walk has always done this;
+    // this one did not, so an interrupted run re-fetched every game's live feed
+    // from the start of the window on the next attempt - the single reason a
+    // resumed backfill was almost as slow as a fresh one. A pick missing
+    // components, or a game short of two signals, still falls through and gets
+    // re-examined, so this can never skip past work that hasn't been done.
+    const storedPick = existingByGamePk.get(gamePk);
+    if (storedPick && storedPick.components && storedPick.dims
+      && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
+
     const feed = await fetchGameLiveFeed(gamePk);
     if (!feed || feed.abstractGameState !== 'Final') return;
     if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) return; // no full lineup - can't score
@@ -1628,6 +1644,40 @@ function initMlbStorageControls() {
   });
 }
 
+// A full-window walk is thousands of games and several minutes of fetching. On
+// a phone the screen locking is what actually kills it: a backgrounded tab has
+// its timers and network suspended on iOS, and can be discarded outright on
+// Android, so the run just stops. The Screen Wake Lock API holds the display
+// awake for exactly as long as the walk takes, and no longer.
+//
+// The browser drops the lock whenever the page is hidden, so it's re-acquired
+// on return - otherwise one glance at another app ends it permanently. Where
+// the API is missing or the request is refused this resolves to no lock at all
+// and the walk runs exactly as before; it just needs the screen kept on by hand.
+async function withMlbScreenAwake(run) {
+  let lock = null;
+  const acquire = async () => {
+    try {
+      if (navigator.wakeLock && navigator.wakeLock.request) lock = await navigator.wakeLock.request('screen');
+    } catch (e) {
+      lock = null; // unsupported, or refused because the page wasn't visible
+    }
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible' && (!lock || lock.released)) acquire();
+  };
+  await acquire();
+  document.addEventListener('visibilitychange', onVisible);
+  try {
+    return await run();
+  } finally {
+    document.removeEventListener('visibilitychange', onVisible);
+    if (lock && !lock.released) {
+      try { await lock.release(); } catch (e) { /* already gone - nothing to undo */ }
+    }
+  }
+}
+
 function initMlbBackfillButton() {
   document.getElementById('mlbBackfillBtn').addEventListener('click', async () => {
     const btn = document.getElementById('mlbBackfillBtn');
@@ -1636,9 +1686,9 @@ function initMlbBackfillButton() {
     const original = btn.textContent;
     status.textContent = 'Starting…';
     try {
-      const result = await backfillMlbHistory((processed, total) => {
+      const result = await withMlbScreenAwake(() => backfillMlbHistory((processed, total) => {
         status.textContent = `Backfilling… ${processed}/${total} games`;
-      });
+      }));
       status.textContent = result.alreadyCurrent
         ? 'Already caught up to yesterday - nothing new to backfill.'
         : `Done - checked ${result.gamesProcessed} games, added ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals${result.patchedCount ? `, upgraded ${result.patchedCount} existing picks with component data` : ''}.`;
@@ -1687,9 +1737,9 @@ function initMlbRebuildButton() {
       saveMlbBackfillState({});
       localStorage.removeItem(MLB_WEIGHTS_VERSION_KEY);
 
-      const result = await backfillMlbHistory((processed, total) => {
+      const result = await withMlbScreenAwake(() => backfillMlbHistory((processed, total) => {
         status.textContent = `Rebuilding… ${processed}/${total} games`;
-      });
+      }));
       status.textContent = `Rebuilt from scratch - checked ${result.gamesProcessed} games, stored ${result.newPredictionsCount} game picks and ${result.newSignalsCount} strikeout signals.`;
       await refreshAndRenderMlb();
     } catch (e) {
