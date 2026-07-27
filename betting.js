@@ -13,6 +13,37 @@ let currentTodaySlate = null;
 
 /* ===================== Today's Bets ===================== */
 
+// Today's games that were fetched but can't be scored yet, and what each is
+// waiting on. The trackers keep these lists so the Stats table can show the
+// full slate; the betting page reads them so an unscoreable slate reads as
+// "not ready yet" rather than "no games".
+const BETTING_PENDING_REASONS = {
+  lineup: 'the starting lineups are not posted yet (MLB puts them up a few hours before first pitch)',
+  rotation: 'there are not enough recent games yet to build each rotation',
+  venue: 'the venue and timezone details have not resolved yet',
+  pending: 'the schedule and box-score feed has not filled in yet',
+};
+
+function bettingPendingToday(scope) {
+  const counts = {};
+  let count = 0;
+  const add = (list) => {
+    (list || []).forEach((g) => {
+      count += 1;
+      const key = g.status || 'pending';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+  };
+  if ((scope === 'all' || scope === 'mlb') && typeof todaysMlbSlatePending !== 'undefined') add(todaysMlbSlatePending);
+  if ((scope === 'all' || scope === 'nba') && typeof todaysNbaSlatePending !== 'undefined') add(todaysNbaSlatePending);
+
+  const reasonText = Object.keys(counts)
+    .sort((a, b) => counts[b] - counts[a])
+    .map((k) => BETTING_PENDING_REASONS[k] || `they are waiting on ${k} data`)
+    .join('; ');
+  return { count, counts, reasonText };
+}
+
 function renderBettingToday(slate) {
   const el = document.getElementById('bettingTodayContent');
 
@@ -23,6 +54,15 @@ function renderBettingToday(slate) {
     return;
   }
   if (!slate.totalTodayPicks) {
+    // A game is fetched long before it can be scored: the composite needs both
+    // starting lineups, which MLB posts only a few hours before first pitch.
+    // Reporting that as "no games tracked" made an ordinary morning look like
+    // the slate had vanished, so say how many are waiting and on what.
+    const pending = bettingPendingToday(currentBettingScope);
+    if (pending.count) {
+      el.innerHTML = `<div class="empty-state">${pending.count} game${pending.count === 1 ? '' : 's'} found for today, but none can be scored yet &mdash; ${pending.reasonText}. This fills in on its own once the data is up; nothing is lost.</div>`;
+      return;
+    }
     el.innerHTML = '<div class="empty-state">No games tracked for today yet &mdash; open the Polymarket trackers to pull today\'s slate first.</div>';
     return;
   }
