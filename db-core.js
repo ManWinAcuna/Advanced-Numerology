@@ -986,7 +986,15 @@ function saveMlbPitcherKSignals(signals) {
 // fastest way back under it without losing the recent history that matters
 // most. Changing it clears the progress marker so the next run re-walks.
 const MLB_BACKFILL_WINDOW_KEY = 'numerology_mlb_backfill_window_days';
-const MLB_BACKFILL_WINDOW_OPTIONS = [91, 182, 273, 364];
+// 728 = two full years. It exists for one specific job: everything before the
+// 364-day window is data the current weights were NEVER fitted on, so running
+// the frozen model across it is a genuine out-of-sample test rather than more
+// of the same. It also roughly doubles every tier's sample, which is what the
+// win-probability estimates actually need - a tier qualifies at 20 picks, where
+// the standard error is around 11 points, comparable to the whole claimed edge.
+// Whether Polymarket's price history reaches back that far is the open question;
+// where it doesn't, those games simply produce no pick.
+const MLB_BACKFILL_WINDOW_OPTIONS = [91, 182, 273, 364, 728];
 
 function loadMlbBackfillWindowDays() {
   const v = Number(localStorage.getItem(MLB_BACKFILL_WINDOW_KEY));
