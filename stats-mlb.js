@@ -1266,12 +1266,15 @@ const MLB_BACKFILL_SCHEMA = 11; // bump when the stored prediction shape changes
 // v10: MLB now scores every person on the birth-vs-game-day anchor alone
 // (MLB_DAY_ANCHOR_ONLY in db-core.js), dropping the stadium and state anchors
 // that measured 0 and +1 against the market. That changes every stored
-// component AND every composite, so the whole window has to be re-walked -
-// a rescore cannot fix it, because the per-component scores themselves move.
-// v11: same reasoning one level deeper - MLB_COMPAT_WEIGHTS (db-core.js) now
+// component AND every composite.
+// v11: same reasoning one level deeper - MLB_COMPAT_WEIGHTS (db-core.js)
 // reweights the dimensions inside each compat score (western sun sign to 0,
-// day-of-year 3% -> 19%, day number 21% -> 34%). Every person's day score moves,
-// so every stored component moves with it. Re-walk, don't rescore.
+// day-of-year 3% -> 19%, day number 21% -> 34%), and the lucky-number bonus is
+// added to DIMENSION_KEYS as a ninth measured dimension. Every person's day
+// score moves, and every stored dims vector gains a field.
+// NOTE for both: a bump alone does NOT re-score existing records - see the
+// comment in backfillMlbHistory. The store has to be WIPED first, or the walk
+// will skip every game it already has and the old numbers will survive.
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk
@@ -1354,8 +1357,15 @@ async function backfillMlbHistory(onProgress) {
   const todayISO = isoDateOnlyUTC(new Date());
   const state = loadMlbBackfillState();
   // A stored marker only lets us skip ahead if it was written by THIS schema.
-  // On a schema bump (e.g. adding per-component scores) we re-walk the whole
-  // window once so already-stored records get upgraded in place.
+  // On a schema bump we re-walk the whole window once instead of continuing
+  // from the marker.
+  //
+  // IMPORTANT: re-walking is not re-scoring. processGame below skips any game
+  // already stored WITH components and dims, so a bump only back-fills records
+  // MISSING those fields - it cannot update ones that have them. A change to
+  // how scores are CALCULATED (weights, anchors, blends) therefore needs the
+  // store wiped first; the schema bump alone will leave every existing record
+  // exactly as it was.
   const schemaCurrent = state && state.schemaVersion === MLB_BACKFILL_SCHEMA;
   const startISO = (schemaCurrent && state.throughDateISO)
     ? addDaysISO(state.throughDateISO, 1)

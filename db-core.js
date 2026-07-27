@@ -1696,7 +1696,7 @@ function scoresForGame(g, onTimezoneResolved) {
 // only honest way to answer "does the stadium/state anchor add anything," "is
 // life-path-to-life-path stronger than day-number-to-day-number," etc. Shared by
 // all three sports, since they all score people through computeFighterScore.
-const DIMENSION_KEYS = ['day', 'stadium', 'state', 'lifePath', 'dayNum', 'doy', 'zodiac', 'western'];
+const DIMENSION_KEYS = ['day', 'stadium', 'state', 'lifePath', 'dayNum', 'doy', 'zodiac', 'western', 'lucky'];
 
 const DIMENSION_LABELS = {
   day: 'Day anchor (birth ↔ game day)',
@@ -1707,6 +1707,7 @@ const DIMENSION_LABELS = {
   doy: 'Day-of-year ↔ day-of-year',
   zodiac: 'Chinese/Vietnamese zodiac',
   western: 'Western sun sign',
+  lucky: 'Lucky number bonus',
   composite: 'Full Score (current blend)',
 };
 
@@ -1730,6 +1731,13 @@ function extractDimensionScores(fs) {
     doy: d.numerology.doyScore,
     zodiac: d.vietnamese ? d.vietnamese.score : null,
     western: d.western ? d.western.score : null,
+    // The lucky-number bonus is the one input that is ADDED to a score rather
+    // than weighted into it (compat-engine.js), so no reweighting can measure
+    // it - it has to be tested on its own. Scale differs from the rest (0/5/10/
+    // 15/20, usually 0), which is fine: every dimension is judged by comparing
+    // side A to side B, and a game where neither side caught a bonus ties at
+    // 0 and is dropped as "no lean" like any other tie.
+    lucky: d.bonuses ? d.bonuses.total : null,
   };
 }
 
@@ -1750,7 +1758,17 @@ function extractTeamDimensions(parts) {
     });
   });
   const out = {};
-  DIMENSION_KEYS.forEach((k) => { out[k] = acc[k].w ? Math.round(acc[k].sum / acc[k].w) : null; });
+  DIMENSION_KEYS.forEach((k) => {
+    if (!acc[k].w) { out[k] = null; return; }
+    const avg = acc[k].sum / acc[k].w;
+    // Everything else is a 0-100 score, where rounding to an integer costs
+    // nothing. The lucky bonus is not: it's 0-20 before being weight-averaged
+    // down, so a batter's +10 at weight 0.005 lands around 0.05 and would round
+    // to 0 - erasing the lean and making the row look like a permanent tie.
+    // These values are only ever compared A-vs-B, never displayed, so keeping
+    // the full precision here costs nothing either.
+    out[k] = k === 'lucky' ? avg : Math.round(avg);
+  });
   return out;
 }
 
