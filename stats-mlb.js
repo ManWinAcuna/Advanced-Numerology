@@ -1258,11 +1258,16 @@ const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // real limits now are just how long one run takes (hundreds more games) and
 // whether Polymarket's own price history still reaches back that far - a gap
 // in old data is their retention, not a bug here.
-const MLB_BACKFILL_SCHEMA = 9; // bump when the stored prediction shape changes,
+const MLB_BACKFILL_SCHEMA = 10; // bump when the stored prediction shape changes,
 // v9: the NRFI and run-totals pitcher-duel markets were removed. The walk no
 // longer collects them, so v7 and v8 (which existed only to build and then
 // upgrade those two stores) are dead history. Bumped so a marker left at 7 or
 // 8 doesn't imply this walk still gathers them.
+// v10: MLB now scores every person on the birth-vs-game-day anchor alone
+// (MLB_DAY_ANCHOR_ONLY in db-core.js), dropping the stadium and state anchors
+// that measured 0 and +1 against the market. That changes every stored
+// component AND every composite, so the whole window has to be re-walked -
+// a rescore cannot fix it, because the per-component scores themselves move.
 // when the lookback window grows, OR (as here) when a bug meant earlier runs
 // silently under-collected - a schema-current marker just continues forward
 // from its own throughDateISO, so it has no way to know a past "complete" walk

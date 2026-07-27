@@ -1025,8 +1025,17 @@ function saveMlbBackfillState(state) {
 // source the way MLB's official venue API or Tennis's tournament-city title
 // parsing do. A day-only score is a real, honest degrade (not a guess), same
 // spirit as dropping just the stadium anchor when only that's missing.
-function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate) {
+// dayOnly scores on the birth-vs-game-day anchor alone, ignoring the stadium
+// and state anchors for the COMBINED number while still computing both so the
+// breakdown popups and the dimension-edge table can keep reporting them. Only
+// MLB passes it - see MLB_DAY_ANCHOR_ONLY.
+function computeFighterScore(dobDate, matchDate, stadiumDate, stateDate, dayOnly) {
   const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
+  if (dayOnly) {
+    const state = stateDate ? computeCompatibility(dobDate, stateDate, sportsNumerologyCompat) : null;
+    const stadium = stadiumDate ? computeCompatibility(dobDate, stadiumDate, sportsNumerologyCompat) : null;
+    return { day, stadium, state, combined: day.finalScore };
+  }
   if (!stateDate) {
     return { day, stadium: null, state: null, combined: day.finalScore };
   }
@@ -1389,6 +1398,23 @@ function pitcherVsLineupScore(pitcherDobDate, opposingBatters, birthdates) {
 // polling) and the historical backfill (stats-mlb.js, enriched once from an
 // already-finished game) can build one and score it identically - nothing
 // here cares how g got populated, only that it's fully populated.
+// MLB scores every person on the birth-vs-game-day anchor alone.
+//
+// The dimension-edge table measured all three anchors separately over 2,404
+// resolved games: the day anchor beat the market by +2, the state/region anchor
+// by +1, and the stadium anchor by 0 - while the blended Full Score also came
+// out at +2. So 40% of every MLB score (0.15 stadium + 0.25 state) sat on
+// anchors carrying no measurable signal, and carrying them bought nothing: the
+// blend never beat the day anchor it was diluting.
+//
+// This is a removal of dead weight rather than a search for a better number,
+// which is why it is a defensible read of the same games that produced it -
+// unlike picking whichever component happens to top the table. Expect the edge
+// to stay at +2; what should improve is the spread, since the composite stops
+// carrying two noise terms. UFC, Tennis and NBA are deliberately untouched -
+// their own dimension tables have not been checked this way.
+const MLB_DAY_ANCHOR_ONLY = true;
+
 function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const side = sideLetter === 'A' ? g.sideA : g.sideB;
   const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
@@ -1409,7 +1435,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const parts = [];
   const pitcherBd = g.birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate) });
+    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
 
     const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
     if (matchupScore != null) {
@@ -1421,7 +1447,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
     if (!bd || !bd.birthDate) return;
     const isCatcher = b.pos === 'C';
     const weight = isCatcher ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
   });
   if (teamInfo) {
     const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
@@ -1430,7 +1456,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       // exactly like any other entity through computeFighterScore, at full
       // weight, instead of the thinner zodiac-only fallback below.
       const foundingDate = parseDateInput(foundingISO);
-      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate) });
+      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
     } else if (teamInfo.firstYearOfPlay) {
       // No real date for this team - MLB's own API only gives a founding
       // YEAR, never a month/day, and (per explicit instruction) no
@@ -1449,7 +1475,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   }
   if (manager) {
     const bd = g.birthdates.get(manager.id);
-    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate) });
+    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY) });
   }
 
   if (!parts.length) return null;
