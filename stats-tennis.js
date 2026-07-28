@@ -467,7 +467,12 @@ const TENNIS_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB/UFC's windo
 // entries against 52 weeks of matches. ensurePlayerInRoster now auto-adds
 // an unmatched player via the same Wikidata lookup "Add Player" itself
 // uses, instead of just skipping them.
-const TENNIS_BACKFILL_SCHEMA = 3;
+// v4: that lookup gained the Wikidata label-search fallback (db-core.js)
+// for players with a day-precision birthdate but no English Wikipedia
+// article - the same silent dropout that cost UFC ~4 of 5 available
+// fights. A schema-stale marker re-walks the window and ADDS the newly
+// resolvable matches; already-stored ones dedupe by conditionId.
+const TENNIS_BACKFILL_SCHEMA = 4;
 const TENNIS_BACKFILL_CHUNK = 5;
 // Polymarket lists a tennis event's markets shortly before the match itself
 // (confirmed live) - start_date_min/max below filters by that LISTING date,
@@ -520,19 +525,32 @@ async function fetchClosedTennisEventsInWindow(startISO, endISO) {
 // PROMISE per name (not just the result) so two matches in the same
 // concurrent chunk that share a never-seen name share one lookup instead of
 // both racing to add a duplicate custom player.
+// Description gate for the label-search fallback - "German tennis player",
+// "tennis player from Australia", etc.
+const TENNIS_PLAYER_DESC_RE = /tennis/i;
+
 function ensurePlayerInRoster(name, playerCache) {
   const found = matchPlayer(name, buildAllPlayers());
   if (found) return Promise.resolve(found);
 
   if (!playerCache.has(name)) {
-    playerCache.set(name, lookupKeyDateByName(name).then((info) => {
-      if (!info || info.kind !== 'born') return null;
-      const player = { id: uid(), name, dob: info.date };
-      const custom = loadCustomTennisPlayers();
-      custom.push(player);
-      saveCustomTennisPlayers(custom);
-      return player;
-    }).catch(() => null));
+    // Article-title lookup first (unchanged), then the Wikidata label
+    // search (db-core.js) for lower-tour players who have a day-precision
+    // birthdate on Wikidata but no English Wikipedia article - the same
+    // gap that was silently dropping ~4 of 5 available UFC fights.
+    playerCache.set(name, lookupKeyDateByName(name)
+      .catch(() => null)
+      .then((info) => ((info && info.kind === 'born')
+        ? info
+        : lookupPersonDobByLabelSearch(name, TENNIS_PLAYER_DESC_RE)))
+      .then((info) => {
+        if (!info || info.kind !== 'born') return null;
+        const player = { id: uid(), name, dob: info.date };
+        const custom = loadCustomTennisPlayers();
+        custom.push(player);
+        saveCustomTennisPlayers(custom);
+        return player;
+      }).catch(() => null));
   }
   return playerCache.get(name);
 }
@@ -554,9 +572,13 @@ async function processTennisBackfillEvent(event, existingByConditionId, regionCa
   const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
   if (!gameStartTime) return null;
 
+  // Full names from the event title where outcomes[] only carries surnames
+  // (tennisResolveSideNames, db-core.js) - side.nameA stays outcomes[0]'s
+  // player, so prices and results keep their indexing.
+  const side = tennisResolveSideNames(outcomes, event.title);
   const [matchedA, matchedB] = await Promise.all([
-    ensurePlayerInRoster(outcomes[0], playerCache),
-    ensurePlayerInRoster(outcomes[1], playerCache),
+    ensurePlayerInRoster(side.nameA, playerCache),
+    ensurePlayerInRoster(side.nameB, playerCache),
   ]);
   if (!matchedA || !matchedB) return null; // no Wikidata birthdate either - skip, don't guess
 
@@ -590,14 +612,14 @@ async function processTennisBackfillEvent(event, existingByConditionId, regionCa
   const scoreB = computeFighterScore(tennisParseDateInput(matchedB.dob), matchDate, null, regionDate);
 
   const favA = priceA >= priceB;
-  const marketFavName = favA ? outcomes[0] : outcomes[1];
-  const numFavName = scoreA.combined >= scoreB.combined ? outcomes[0] : outcomes[1];
+  const marketFavName = favA ? side.nameA : side.nameB;
+  const numFavName = scoreA.combined >= scoreB.combined ? side.nameA : side.nameB;
   const agree = normalizeName(marketFavName) === normalizeName(numFavName);
 
   return {
     conditionId: m.conditionId,
-    playerAName: outcomes[0],
-    playerBName: outcomes[1],
+    playerAName: side.nameA,
+    playerBName: side.nameB,
     numerologyFavorite: numFavName,
     numerologyScoreA: scoreA.combined,
     numerologyScoreB: scoreB.combined,
@@ -687,10 +709,13 @@ async function fetchOpenTennisMoneylines() {
       const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
       if (!outcomes[0] || !outcomes[1] || !gameStartTime) return;
       if (!Number.isFinite(prices[0]) || !Number.isFinite(prices[1])) return;
+      // Full names from the title where outcomes[] are surnames - the
+      // A side stays outcomes[0]'s player (tennisResolveSideNames, db-core.js).
+      const side = tennisResolveSideNames(outcomes, ev.title);
       matches.push({
         conditionId: m.conditionId,
-        playerAName: outcomes[0],
-        playerBName: outcomes[1],
+        playerAName: side.nameA,
+        playerBName: side.nameB,
         priceA: prices[0],
         priceB: prices[1],
         gameStartTime,

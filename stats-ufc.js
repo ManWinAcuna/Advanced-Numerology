@@ -498,7 +498,12 @@ const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
 // (UFC Freedom 250 - billed 2026-06-14, gameStartTime 2026-06-15T00:00Z)
 // while eventDate stays on the billed day, and the old timestamp-local way
 // also made the day depend on whichever device happened to run the walk.
-const UFC_BACKFILL_SCHEMA = 4;
+// v5: fighter names come from the event TITLE (ufcResolveSideNames,
+// db-core.js) so the surname-only outcome era (< ~March 2026) matches, and
+// the birthdate lookup gained the label-search fallback - together these
+// recover the ~4 of 5 available fights the old walk silently dropped (74
+// stored of 397 available, measured live; zero of the losses were prices).
+const UFC_BACKFILL_SCHEMA = 5;
 const UFC_BACKFILL_CHUNK = 5;
 // Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
 // itself (confirmed live) - start_date_min/max below filters by that LISTING
@@ -544,19 +549,34 @@ async function fetchClosedUfcEventsInWindow(startISO, endISO) {
 // PROMISE per name (not just the result) so two fights in the same
 // concurrent chunk that share a never-seen name share one lookup instead of
 // both racing to add a duplicate custom fighter.
+// A person counts as a fighter for the label-search fallback when their
+// Wikidata description reads like one - MMA first, plus the combat-sport
+// backgrounds UFC fighters actually arrive from ("Russian sambo fighter"
+// is a real UFC prelim fighter's description, verified live).
+const UFC_FIGHTER_DESC_RE = /mixed martial|mma|fighter|kickbox|wrestl|jiu[- ]?jitsu|judo|sambo|boxer|boxing/i;
+
 function ensureFighterInRoster(name, rosterCache) {
   const found = matchFighter(name, buildAllFighters());
   if (found) return Promise.resolve(found);
 
   if (!rosterCache.has(name)) {
-    rosterCache.set(name, lookupKeyDateByName(name).then((info) => {
-      if (!info || info.kind !== 'born') return null;
-      const fighter = { id: uid(), name, dob: info.date };
-      const custom = loadCustomFighters();
-      custom.push(fighter);
-      saveCustomFighters(custom);
-      return fighter;
-    }).catch(() => null));
+    // Article-title lookup first (unchanged), then the Wikidata label
+    // search (db-core.js) for the many fighters who have a day-precision
+    // birthdate on Wikidata but no English Wikipedia article - measured
+    // live, that gap alone cost ~4 of every 5 available fights.
+    rosterCache.set(name, lookupKeyDateByName(name)
+      .catch(() => null)
+      .then((info) => ((info && info.kind === 'born')
+        ? info
+        : lookupPersonDobByLabelSearch(name, UFC_FIGHTER_DESC_RE)))
+      .then((info) => {
+        if (!info || info.kind !== 'born') return null;
+        const fighter = { id: uid(), name, dob: info.date };
+        const custom = loadCustomFighters();
+        custom.push(fighter);
+        saveCustomFighters(custom);
+        return fighter;
+      }).catch(() => null));
   }
   return rosterCache.get(name);
 }
@@ -579,9 +599,13 @@ async function processUfcBackfillEvent(event, existingByConditionId, rosterCache
   const gameStartTime = parseMlbGameStart(m.gameStartTime); // generic timestamp parser, mlb-api.js
   if (!gameStartTime) return null;
 
+  // Full names from the event title where outcomes[] only carries surnames
+  // (every event before ~March 2026) - side.nameA stays outcomes[0]'s
+  // fighter, so prices and results keep their indexing.
+  const side = ufcResolveSideNames(outcomes, event.title);
   const [matchedA, matchedB] = await Promise.all([
-    ensureFighterInRoster(outcomes[0], rosterCache),
-    ensureFighterInRoster(outcomes[1], rosterCache),
+    ensureFighterInRoster(side.nameA, rosterCache),
+    ensureFighterInRoster(side.nameB, rosterCache),
   ]);
   if (!matchedA || !matchedB) return null; // no Wikidata birthdate either - skip, don't guess
 
@@ -603,14 +627,14 @@ async function processUfcBackfillEvent(event, existingByConditionId, rosterCache
   const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null);
 
   const favA = priceA >= priceB;
-  const marketFavName = favA ? outcomes[0] : outcomes[1];
-  const numFavName = scoreA.combined >= scoreB.combined ? outcomes[0] : outcomes[1];
+  const marketFavName = favA ? side.nameA : side.nameB;
+  const numFavName = scoreA.combined >= scoreB.combined ? side.nameA : side.nameB;
   const agree = normalizeName(marketFavName) === normalizeName(numFavName);
 
   return {
     conditionId: m.conditionId,
-    fighterAName: outcomes[0],
-    fighterBName: outcomes[1],
+    fighterAName: side.nameA,
+    fighterBName: side.nameB,
     numerologyFavorite: numFavName,
     numerologyScoreA: scoreA.combined,
     numerologyScoreB: scoreB.combined,
@@ -705,10 +729,13 @@ async function fetchOpenUfcMoneylines() {
       if (!outcomes[0] || !outcomes[1] || !gameStartTime) return;
       if (!ev.eventDate) return; // no billed fight date - can't pin the scoring day, don't guess
       if (!Number.isFinite(prices[0]) || !Number.isFinite(prices[1])) return;
+      // Full names from the title where outcomes[] are surnames - the
+      // A-side stays outcomes[0]'s fighter (ufcResolveSideNames, db-core.js).
+      const side = ufcResolveSideNames(outcomes, ev.title);
       fights.push({
         conditionId: m.conditionId,
-        fighterAName: outcomes[0],
-        fighterBName: outcomes[1],
+        fighterAName: side.nameA,
+        fighterBName: side.nameB,
         priceA: prices[0],
         priceB: prices[1],
         gameStartTime,

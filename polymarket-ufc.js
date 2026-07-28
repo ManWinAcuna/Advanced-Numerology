@@ -231,10 +231,17 @@ function parseMarket(market, event) {
   try { outcomes = JSON.parse(market.outcomes); } catch (e) { /* leave empty */ }
   try { prices = JSON.parse(market.outcomePrices).map(Number); } catch (e) { /* leave empty */ }
 
+  // Full names from the event title where outcomes[] only carries surnames
+  // (ufcResolveSideNames, db-core.js) - the A side stays outcomes[0]'s
+  // fighter, so the prices below keep their indexing. Same resolution the
+  // Stats backfill and today-tracker use, so all three write identical
+  // names for the same fight.
+  const side = outcomes[0] && outcomes[1] ? ufcResolveSideNames(outcomes, event.title) : { nameA: outcomes[0] || '', nameB: outcomes[1] || '' };
+
   return {
     conditionId: market.conditionId,
-    fighterAName: outcomes[0] || '',
-    fighterBName: outcomes[1] || '',
+    fighterAName: side.nameA,
+    fighterBName: side.nameB,
     priceA: Number.isFinite(prices[0]) ? prices[0] : null,
     priceB: Number.isFinite(prices[1]) ? prices[1] : null,
     gameStartTime: parseGameStart(market.gameStartTime),

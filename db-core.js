@@ -339,6 +339,58 @@ function lookupKeyDateByName(name) {
     .then((result) => (result || lookupKeyDateFromWikipediaInfobox(name)));
 }
 
+/* ===================== Label-search birthdate fallback ===================== */
+// lookupKeyDateByName above starts from an ENGLISH WIKIPEDIA ARTICLE at the
+// exact name - but a large share of UFC prelim fighters and lower-tour
+// tennis players have a Wikidata item (with a day-precision birthdate) and
+// no article at all, so the whole backfill funnel silently dropped them:
+// measured live, only ~74 of 397 available UFC fights survived, and every
+// loss was this lookup, not prices. This searches Wikidata items by label
+// instead, and accepts a hit only when it has BOTH a day-precision P569
+// AND an English description matching descriptionRe - the description gate
+// is what stops "Jose Delgado" from resolving to some unrelated namesake
+// with a birthday.
+
+// Wikimedia throttles bursty clients ("You are making too many requests" -
+// hit directly while measuring the funnel), and a 400-fight rebuild is
+// exactly that. Every lookup here funnels through one queue: sequential,
+// lightly spaced, one retry after a pause. A skipped person costs a whole
+// recorded fight, so this is coverage, not politeness.
+let wikiSearchQueue = Promise.resolve();
+
+function queuedWikiJson(url) {
+  const run = wikiSearchQueue.then(async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return await res.json();
+      } catch (e) { /* fall through to the retry pause */ }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    return null;
+  });
+  wikiSearchQueue = run.catch(() => null).then(() => new Promise((r) => setTimeout(r, 300)));
+  return run;
+}
+
+async function lookupPersonDobByLabelSearch(name, descriptionRe) {
+  const data = await queuedWikiJson(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&type=item&limit=5&format=json&origin=*`);
+  const hits = data && Array.isArray(data.search) ? data.search : [];
+  if (!hits.length) return null;
+  // One batched entity fetch for all candidates instead of one call each.
+  const d = await queuedWikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${hits.map((h) => h.id).join('|')}&props=claims%7Cdescriptions&format=json&origin=*`);
+  const entities = (d && d.entities) || {};
+  for (const hit of hits) {
+    const entity = entities[hit.id];
+    if (!entity) continue;
+    const desc = entity.descriptions && entity.descriptions.en ? entity.descriptions.en.value : '';
+    if (!descriptionRe.test(desc)) continue;
+    const born = dateFromClaim(entity.claims && entity.claims.P569);
+    if (born) return { date: born, kind: 'born' };
+  }
+  return null;
+}
+
 /* ===================== Match-day timezone correctness ===================== */
 // A match's numerology "Day" factor needs to be scored against the calendar
 // date it actually falls on AT THE VENUE, not whatever date UTC happens to
@@ -839,6 +891,72 @@ function normalizeName(name) {
     .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/* ===================== UFC full names from the event title ===================== */
+// Polymarket UFC events before ~March 2026 list outcomes as bare surnames
+// (["Spann","Kuniev"]) that no roster or birthdate lookup can safely use -
+// but the event TITLE usually carries the full names ("UFC Fight Night:
+// Ryan Spann vs. Rizvan Kuniev (Heavyweight, Main Card)"), the same trick
+// parseTennisTitle already relies on for tennis. Shared here because both
+// the Stats backfill/today-tracker (stats-ufc.js) and the live tracker
+// (polymarket-ufc.js) need it, and those files never load together.
+
+// "UFC 326: Charles Oliveira vs. Max Holloway (Lightweight, Main Card)"
+// -> { nameA: 'Charles Oliveira', nameB: 'Max Holloway' }, or null when the
+// title doesn't follow the shape - callers fall back to outcomes[] as-is.
+function ufcNamesFromEventTitle(title) {
+  const colonIdx = (title || '').indexOf(':');
+  if (colonIdx === -1) return null;
+  const matchup = title.slice(colonIdx + 1).trim().replace(/\s*\([^)]*\)\s*$/, '');
+  const vs = /\s+vs\.?\s+/i.exec(matchup);
+  if (!vs) return null;
+  const nameA = matchup.slice(0, vs.index).trim();
+  const nameB = matchup.slice(vs.index + vs[0].length).trim();
+  return nameA && nameB ? { nameA, nameB } : null;
+}
+
+// Aligns a title's full names to the outcome sides - outcomes[0] is what
+// prices and results are indexed by, so side A must stay that person. The
+// outcome label is either the full name or its trailing part ("Spann" of
+// "Ryan Spann"); if neither title name matches outcomes[0], or both do
+// (same-surname opponents), alignment is ambiguous and the outcomes are
+// kept as-is rather than guessed.
+function alignSideNamesToOutcomes(outcomes, parsed) {
+  const fallback = { nameA: outcomes[0], nameB: outcomes[1] };
+  if (!parsed) return fallback;
+  const matches = (outcome, name) => {
+    const o = normalizeName(outcome);
+    const n = normalizeName(name);
+    return !!o && !!n && (o === n || n.endsWith(' ' + o));
+  };
+  const a0 = matches(outcomes[0], parsed.nameA);
+  const b0 = matches(outcomes[0], parsed.nameB);
+  if (a0 && !b0) return { nameA: parsed.nameA, nameB: parsed.nameB };
+  if (b0 && !a0) return { nameA: parsed.nameB, nameB: parsed.nameA };
+  return fallback;
+}
+
+function ufcResolveSideNames(outcomes, title) {
+  return alignSideNamesToOutcomes(outcomes, ufcNamesFromEventTitle(title));
+}
+
+// Tennis counterpart, for the Stats backfill/today-tracker: titles are
+// "{City}: A vs B" and always carry full names, while outcomes[] sometimes
+// only has surnames (polymarket-tennis.js's parseTennisTitle relies on the
+// same fact). Split on the LAST " vs " like parseTennisTitle does. Full
+// names matter double here - tennis has same-surname siblings on tour
+// (Cerundolo, Andreeva), exactly what the ambiguity fallback refuses to
+// guess about.
+function tennisResolveSideNames(outcomes, title) {
+  const colonIdx = (title || '').indexOf(':');
+  if (colonIdx === -1) return alignSideNamesToOutcomes(outcomes, null);
+  const matchup = title.slice(colonIdx + 1).trim();
+  const vsIdx = matchup.toLowerCase().lastIndexOf(' vs ');
+  if (vsIdx === -1) return alignSideNamesToOutcomes(outcomes, null);
+  const nameA = matchup.slice(0, vsIdx).trim();
+  const nameB = matchup.slice(vsIdx + 4).trim();
+  return alignSideNamesToOutcomes(outcomes, nameA && nameB ? { nameA, nameB } : null);
 }
 
 /* ===================== Tennis Numerology Predictions (Stats tracker) ===================== */
@@ -2031,8 +2149,29 @@ function numerologyPickPrice(p) {
   return Number.isFinite(price) ? price : null;
 }
 
+// result.winner is whatever label the market's outcomes[] carried - on many
+// (mostly older) UFC/tennis markets that's a bare surname ("Spann",
+// "Siegemund"), while the stored pick's names are the full names parsed
+// from the event title. The old exact-only compare silently counted every
+// such WIN as a LOSS. The surname rule below is deliberately narrow: it
+// only runs when the exact compare fails, only matches a name that ENDS in
+// the winner's tokens, and refuses to decide when the label fits both
+// sides (same-surname opponents) - never guessed.
+function winnerMatchesName(winner, name) {
+  const w = normalizeName(winner);
+  const n = normalizeName(name);
+  if (!w || !n) return false;
+  return w === n || n.endsWith(' ' + w) || w.endsWith(' ' + n);
+}
+
 function isCorrectPick(p) {
-  return !!(p.result && !p.result.draw && normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite));
+  if (!p.result || p.result.draw || p.result.winner == null) return false;
+  if (normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite)) return true;
+  if (!winnerMatchesName(p.result.winner, p.numerologyFavorite)) return false;
+  // Ambiguity guard: the winner label must identify exactly one side.
+  const nameA = p.fighterAName || p.playerAName || p.teamAName;
+  const nameB = p.fighterBName || p.playerBName || p.teamBName;
+  return !(winnerMatchesName(p.result.winner, nameA) && winnerMatchesName(p.result.winner, nameB));
 }
 
 /* ===================== Edge strength tiers ===================== */
