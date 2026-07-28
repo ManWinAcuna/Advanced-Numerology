@@ -1561,11 +1561,33 @@ const MLB_DAY_ANCHOR_ONLY = true;
 // fail to replicate. Day number, the best-supported dimension, leads at 34%.
 //
 // Flattened: dayNum 33.75%, zodiac 25%, lifePath 22.5%, doy 18.75%, western 0%.
-// MLB only - UFC, Tennis and NBA keep COMPAT_DEFAULT_WEIGHTS until their own
-// dimension tables have been checked the same way.
+// MLB only - Tennis and NBA keep COMPAT_DEFAULT_WEIGHTS until their own
+// dimension tables have been checked the same way. UFC got its own check
+// and its own weights below.
 const MLB_COMPAT_WEIGHTS = {
   numerology: 0.75, vietnamese: 0.25, western: 0,
   lifePath: 0.30, dayNum: 0.45, doy: 0.25,
+};
+
+// UFC blend, fitted 2026-07-28 on the rebuilt 141-resolved-pick record via
+// the Weights Lab (stats-ufc.js). The zodiac YEAR ANIMAL alone measured
+// +10 edge on 98 picks (~2 standard errors, the strongest clean reading in
+// the record); the zodiac's own month (-4) and day-sign (-6) components,
+// every numerology dimension, and the sun sign all measured
+// flat-to-negative, and the old default blend sat at exactly 0. So UFC
+// scores on the year animal alone: the vietnamese block takes the whole
+// blend and its inner split is year-only (zodiacYear/Month/Day
+// sub-weights, compat-engine.js). The lucky-number bonus still adds on
+// top, unchanged. Same-animal matchups genuinely tie and drop out as
+// tossups - fewer, sharper picks, by design.
+//
+// IN-SAMPLE fit, frozen 2026-07-28: the record from this date forward is
+// the real test (the MLB reweight measured +46% in-fit vs -6%
+// out-of-fit on exactly this kind of exercise).
+const UFC_COMPAT_WEIGHTS = {
+  numerology: 0, vietnamese: 1, western: 0,
+  lifePath: 0, dayNum: 1, doy: 0, // inner numerology split is moot at numerology: 0
+  zodiacYear: 1, zodiacMonth: 0, zodiacDay: 0,
 };
 
 function computeTeamComposite(g, sideLetter, onTimezoneResolved) {

@@ -138,9 +138,11 @@ function currentMatchDateISO(f) {
 function scoresForFight(f) {
   if (!(f.matchedA && f.matchedB && f.eventDate)) return null;
   const fightDay = parseDateInput(f.eventDate);
+  // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js) - identical
+  // to what the backfill and today-tracker record.
   return {
-    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), fightDay, null, null),
-    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), fightDay, null, null),
+    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS),
+    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS),
   };
 }
 

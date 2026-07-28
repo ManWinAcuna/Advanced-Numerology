@@ -270,7 +270,14 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
   const dayDaySign = getChineseDaySign(dayDate);
   const daySignScore = vietnameseCompat(entityDaySign, dayDaySign);
 
-  const vietnameseScore = 0.60 * yearScore + 0.30 * monthScore + 0.10 * daySignScore;
+  // The zodiac's inner year/month/day split is itself weight-able (UFC's
+  // measured edge lives entirely in the year animal - UFC_COMPAT_WEIGHTS,
+  // db-core.js). Callers that don't pass the sub-weights get the original
+  // 60/30/10 blend bit-for-bit.
+  const zwYear = weights.zodiacYear != null ? weights.zodiacYear : 0.60;
+  const zwMonth = weights.zodiacMonth != null ? weights.zodiacMonth : 0.30;
+  const zwDay = weights.zodiacDay != null ? weights.zodiacDay : 0.10;
+  const vietnameseScore = zwYear * yearScore + zwMonth * monthScore + zwDay * daySignScore;
 
   const entitySunSign = getSunSign(entityDate);
   const daySunSign = getSunSign(dayDate);

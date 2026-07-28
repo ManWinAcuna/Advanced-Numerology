@@ -722,8 +722,11 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   const fighterA = selectedFighters.A;
   const fighterB = selectedFighters.B;
 
-  const scoreA = computeFighterScore(parseDateInput(fighterA.dob), matchDate, stadiumDate, stateDate);
-  const scoreB = computeFighterScore(parseDateInput(fighterB.dob), matchDate, stadiumDate, stateDate);
+  // UFC_COMPAT_WEIGHTS (db-core.js): year-animal-only scoring, so this
+  // calculator's Day numbers agree with the tracker/backfill record. The
+  // optional stadium/state anchors here still blend in on top when set.
+  const scoreA = computeFighterScore(parseDateInput(fighterA.dob), matchDate, stadiumDate, stateDate, false, UFC_COMPAT_WEIGHTS);
+  const scoreB = computeFighterScore(parseDateInput(fighterB.dob), matchDate, stadiumDate, stateDate, false, UFC_COMPAT_WEIGHTS);
 
   const resultsEl = document.getElementById('ufcResults');
   resultsEl.classList.add('active');

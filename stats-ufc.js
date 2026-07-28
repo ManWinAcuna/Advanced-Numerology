@@ -503,7 +503,10 @@ const UFC_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks, matching MLB's window.
 // the birthdate lookup gained the label-search fallback - together these
 // recover the ~4 of 5 available fights the old walk silently dropped (74
 // stored of 397 available, measured live; zero of the losses were prices).
-const UFC_BACKFILL_SCHEMA = 5;
+// v6: scoring switched to UFC_COMPAT_WEIGHTS (year-animal-only, db-core.js)
+// - a SCORING change, so existing records need a Wipe & Rebuild to
+// re-score; the bump alone only re-walks and adds.
+const UFC_BACKFILL_SCHEMA = 6;
 const UFC_BACKFILL_CHUNK = 5;
 // Polymarket lists a UFC event's markets roughly 1-3 weeks before the fight
 // itself (confirmed live) - start_date_min/max below filters by that LISTING
@@ -622,9 +625,10 @@ async function processUfcBackfillEvent(event, existingByConditionId, rosterCache
   // date - deterministic on every device, and stays on the right side of
   // midnight for late US cards (see the v4 schema note above). The window
   // filter in fetchClosedUfcEventsInWindow already guarantees eventDate.
+  // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js, v6 note).
   const fightDay = ufcParseDateInput(event.eventDate);
-  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null);
-  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null);
+  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
+  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
 
   const favA = priceA >= priceB;
   const marketFavName = favA ? side.nameA : side.nameB;
@@ -777,9 +781,10 @@ async function recordTodaysUfcFights() {
 
     // Scored on the billed fight date, same as the backfill (v4 note above) -
     // never the timestamp's browser-local date, which flips with the device.
+    // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js, v6 note).
     const fightDay = ufcParseDateInput(f.eventDate);
-    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null);
-    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null);
+    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
+    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
 
     const marketFavName = f.priceA >= f.priceB ? f.fighterAName : f.fighterBName;
     const numFavName = scoreA.combined >= scoreB.combined ? f.fighterAName : f.fighterBName;
@@ -890,7 +895,7 @@ function initUfcRebuildButton() {
 // same kind of exercise.
 
 const UFC_LAB_NAMED_BLENDS = [
-  { label: 'Shipping blend, recomputed from dims (life path 36 · zodiac 30 · day num 21 · sun 10 · doy 3)', w: { lifePath: 0.36, zodiac: 0.30, dayNum: 0.21, western: 0.10, doy: 0.03 } },
+  { label: 'Old default blend (life path 36 · zodiac 30 · day num 21 · sun 10 · doy 3)', w: { lifePath: 0.36, zodiac: 0.30, dayNum: 0.21, western: 0.10, doy: 0.03 } },
   { label: 'Zodiac only', w: { zodiac: 1 } },
   { label: 'Zodiac 70 · day number 20 · sun sign 10', w: { zodiac: 0.70, dayNum: 0.20, western: 0.10 } },
   { label: 'MLB recipe (day num 34 · zodiac 25 · life path 22 · doy 19)', w: { dayNum: 0.3375, zodiac: 0.25, lifePath: 0.225, doy: 0.1875 } },
