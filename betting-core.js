@@ -314,6 +314,13 @@ function normalizeBettingPick(p, sportKey) {
     resolved: !!p.result,
     draw: !!(p.result && p.result.draw),
     won: isCorrectPick(p),
+    // The raw sides and result winner, so a locked receipt can grade the
+    // side it actually locked (settleLockedSlates below). `won` above can't
+    // serve that: it follows the store's CURRENT favorite, which a later
+    // reweight rescore can flip on an already-finished game.
+    sideAName: nameA,
+    sideBName: p[cfg.nameB],
+    winnerName: p.result && !p.result.draw ? (p.result.winner || null) : null,
   };
 }
 
@@ -893,7 +900,18 @@ function settleLockedSlates(lockedList) {
     const tickets = s.tickets.map((t) => {
       const legs = t.legs.map((l) => {
         const cur = idx.get(`${l.sport}|${l.timeISO}|${normalizeName(l.matchup)}`);
-        return { ...l, resolved: !!(cur && cur.resolved), draw: !!(cur && cur.draw), won: !!(cur && cur.won) };
+        // Grade the LOCKED side against the game's actual winner - never
+        // cur.won, which asks whether the store's CURRENT favorite won. A
+        // reweight rescore can flip a finished game's stored favorite, and
+        // the receipt must keep scoring the side that was actually given and
+        // bet (the Jul 27 Mets leg: locked Mets, Mets won 14-3, the v4
+        // rescore flipped the game's favorite to the Braves, and the leg
+        // re-graded itself to a loss). Only the game RESULT is read live.
+        const resolved = !!(cur && cur.resolved);
+        const draw = !!(cur && cur.draw);
+        const won = resolved && !draw && !!cur.winnerName
+          && resultWinnerIs(cur.winnerName, l.pickName, cur.sideAName, cur.sideBName);
+        return { ...l, resolved, draw, won };
       });
       const hydrated = { ...t, legs };
       return { ...hydrated, ...settleBettingTicket(hydrated) };
