@@ -1446,35 +1446,35 @@ const MLB_TEAM_FOUNDING_DATES = {
 // flat (decided against batting-order weighting - the real plate-appearance
 // gap top-to-bottom is modest, not worth the extra complexity).
 //
-// Weights v3 - data-chosen, not guessed. The per-component signal table over
-// ~1,700 resolved games was unambiguous: the Manager score beat the market by
-// +4 points (3.3 standard errors - the only component with real statistical
-// support), the Starting Pitcher by +2 (1.7 se, marginal), and every other
-// component sat at 0 or below (Batters -1, Catcher 0, Pitcher-vs-Lineup 0,
-// Franchise 0 - all inside one standard error of noise). The tell that the
-// old weighting was actively wrong: Manager ALONE (+4) beat the Full
-// Composite (+1), because 40% of the weight sat on the batter average, a
-// noise signal that drowned the one component that works. So Manager leads
-// here, Pitcher second, and the unproven components keep only token weight -
-// enough that they'd still show up if they ever start predicting, too little
-// to dilute. See MLB_WEIGHTS_SINCE for the honest out-of-sample test: these
-// numbers were fit to games already played, so their in-sample edge is
-// optimistic by construction.
+// Weights v4 - fitted from the three-layer Weights Lab over ~3,700 resolved
+// games (2026-07-28). The Starting Pitcher was the only role that beat the
+// market on its own (52% vs 50%), every one of the role sweep's +3 blends
+// carried pitcher at 50%, and this exact blend was the top find built
+// entirely from roles that are individually positive (pitcher +2, manager
+// +1, franchise +1 solo). Pitcher-vs-Lineup and Batters measured 0 alone and
+// Catcher -1, so they score at ZERO - but their parts are still computed and
+// stored in components (a zero weight adds nothing to the weighted average),
+// so the component table and future lab runs keep auditing them. The v3
+// story this replaces (manager-heavy 45/28, chosen off ~1,700 games where
+// Manager solo measured +4 at 3.3 se) did not hold at twice the sample:
+// Manager alone had fallen to +1, back inside the noise, while Pitcher held.
+// See MLB_WEIGHTS_SINCE for the honest out-of-sample test: these numbers
+// were fit to games already played, so their in-sample edge is optimistic by
+// construction.
 const MLB_ROLE_WEIGHTS = {
-  manager: 0.45,
-  pitcher: 0.28,
-  pitcherMatchup: 0.10, // pitcher's life path vs. the opposing lineup's,
-  // averaged across all 9 batters (pitcherVsLineupScore below) - the one
-  // place the two teams' numerology actually meets head-to-head, instead of
-  // each side only ever being scored against the day/venue.
-  catcher: 0.03,
-  batter: 0.005, // each of the 8 non-catcher batters (0.04 combined)
-  franchise: 0.10, // Backed by a real founding date (MLB_TEAM_FOUNDING_DATES
+  manager: 0.25,
+  pitcher: 0.50,
+  pitcherMatchup: 0, // pitcher's life path vs. the opposing lineup's,
+  // averaged across all 9 batters (pitcherVsLineupScore below) - measured no
+  // edge alone, kept in parts/components at zero weight so it stays audited.
+  catcher: 0, // measured -1 alone - the only negative role
+  batter: 0, // each of the 8 non-catcher batters - measured 0 alone (as avg)
+  franchise: 0.25, // Backed by a real founding date (MLB_TEAM_FOUNDING_DATES
   // above) for every current team, so it gets the full person-style
   // day/stadium/state blend like everything else. A team missing from that
   // table falls back to a thinner zodiac-year-only score, weighted down
   // instead (franchiseZodiacOnly below) - see computeTeamComposite below.
-  franchiseZodiacOnly: 0.03,
+  franchiseZodiacOnly: 0.075, // same 30% haircut vs full franchise as v3 (0.03/0.10)
 };
 
 // The calendar date a game falls on at the venue - same pattern as
@@ -1655,6 +1655,9 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
 
   if (!parts.length) return null;
   const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
+  // Possible since v4 zeroed some roles: a game where ONLY zero-weighted
+  // roles resolved has parts but no scoreable weight - don't divide by zero.
+  if (!totalWeight) return null;
   const combined = Math.round(parts.reduce((s, p) => s + p.score.combined * p.weight, 0) / totalWeight);
   return { combined, parts };
 }
@@ -1698,15 +1701,15 @@ function extractComponents(parts) {
 // The live composite's weighting expressed over the same six stored
 // components, so any weighting can be recomputed apples-to-apples from a
 // prediction's stored components alone - no re-scoring, no re-fetching.
-// batters at 0.40 exactly reproduces the eight individual 0.05 batter weights
-// (0.05 x 8 = 0.40 x their average).
+// (When batters carry weight, one `batters` weight over the stored average
+// reproduces the eight per-slot batter weights exactly: 8 x w = 8w x avg.)
 const MLB_ROLE_WEIGHTS_CURRENT = {
-  manager: 0.45,
-  pitcher: 0.28,
-  pitcherMatchup: 0.10,
-  franchise: 0.10,
-  catcher: 0.03,
-  batters: 0.04, // 0.005 x 8 batters
+  manager: 0.25,
+  pitcher: 0.50,
+  pitcherMatchup: 0,
+  franchise: 0.25,
+  catcher: 0,
+  batters: 0,
 };
 
 // The weighting that was live before v3 - an up-front guess with nothing
@@ -1742,10 +1745,11 @@ const MLB_ROLE_WEIGHTS_V2 = {
   catcher: 0.05,
 };
 
-// The date the v3 weights went live. A resolved game on or after this had no
+// The date the v4 weights went live. A resolved game on or after this had no
 // hand in choosing them, so it's a fair out-of-sample test of the model that
-// is now actually placing bets.
-const MLB_WEIGHTS_SINCE = '2026-07-26';
+// is now actually placing bets. (v3's out-of-sample window only ran
+// 2026-07-26..28 - two days, far too short to have said anything.)
+const MLB_WEIGHTS_SINCE = '2026-07-28';
 
 // Superseded by MLB_WEIGHTS_SINCE - kept because older stored state and the
 // component table's history still reference the v2 cutoff.
@@ -1837,7 +1841,8 @@ function rescoreUfcPredictionsForWeights() {
 }
 
 const MLB_WEIGHTS_VERSION_KEY = 'numerology_mlb_weights_version';
-const MLB_WEIGHTS_VERSION = 3;
+// 3 = manager-heavy v3; 4 = pitcher 50 · manager 25 · franchise 25 (lab-fitted 2026-07-28)
+const MLB_WEIGHTS_VERSION = 4;
 
 function rescoreMlbPredictionsForWeights() {
   if (Number(localStorage.getItem(MLB_WEIGHTS_VERSION_KEY)) === MLB_WEIGHTS_VERSION) {

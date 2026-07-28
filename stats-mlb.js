@@ -838,8 +838,8 @@ function renderMlbComponentSignal(predictions, suffix = '') {
   // matters - V2 measured only on games played since the weights were fixed.
   const oos = v2OutOfSample;
   const oosLine = oos.count >= MIN_BUCKET_SAMPLE
-    ? `🎯 <b>Live model (v3), out-of-sample</b> (games since ${MLB_WEIGHTS_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the Full Composite edge above was fit to these same games.`
-    : `🎯 <b>Live model (v3)</b> weights Manager 45% / Pitcher 28%, because Manager was the only component beating the market with real statistical support (+4, 3.3 se) while Batters, Catcher and Pitcher-vs-Lineup measured as noise &mdash; and 40% on Batters was diluting the signal badly enough that Manager alone outperformed the whole composite. The Full Composite edge in the table is <b>in-sample</b> (these weights were chosen from these games), so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> since ${MLB_WEIGHTS_SINCE}. Watch that number as new games resolve.`;
+    ? `🎯 <b>Live model (v4), out-of-sample</b> (games since ${MLB_WEIGHTS_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the Full Composite edge above was fit to these same games.`
+    : `🎯 <b>Live model (v4)</b> weights Pitcher 50 / Manager 25 / Franchise 25, fitted from the three-layer Weights Lab over ~3,700 games: the Starting Pitcher was the only role beating the market on its own, every top sweep blend was pitcher-heavy, and Catcher, Batters and Pitcher-vs-Lineup measured as noise or worse (they now score at zero but stay tracked here). The Full Composite edge in the table is <b>in-sample</b> (these weights were chosen from these games), so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> since ${MLB_WEIGHTS_SINCE}. Watch that number as new games resolve.`;
 
   el.innerHTML = `
     <div class="pm-table-total">Total picks: ${total}</div>
@@ -1782,7 +1782,8 @@ const MLB_LAB_ROLE_KEYS = ['manager', 'pitcher', 'pitcherMatchup', 'franchise', 
 const MLB_LAB_ROLE_NAMES = { manager: 'manager', pitcher: 'pitcher', pitcherMatchup: 'matchup', franchise: 'franchise', catcher: 'catcher', batters: 'batters' };
 
 const MLB_LAB_ROLE_BLENDS = [
-  { label: 'Current roles (manager 45 · pitcher 28 · matchup 10 · franchise 10 · catcher 3 · batters 4)', w: { manager: 0.45, pitcher: 0.28, pitcherMatchup: 0.10, franchise: 0.10, catcher: 0.03, batters: 0.04 } },
+  { label: 'Current roles v4 (pitcher 50 · manager 25 · franchise 25)', w: { manager: 0.25, pitcher: 0.50, franchise: 0.25 } },
+  { label: 'Old v3 roles (manager 45 · pitcher 28 · matchup 10 · franchise 10 · catcher 3 · batters 4)', w: { manager: 0.45, pitcher: 0.28, pitcherMatchup: 0.10, franchise: 0.10, catcher: 0.03, batters: 0.04 } },
   { label: 'Manager only', w: { manager: 1 } },
   { label: 'Starting pitcher only', w: { pitcher: 1 } },
   { label: 'Pitcher-vs-lineup only', w: { pitcherMatchup: 1 } },
