@@ -213,6 +213,7 @@
         <option value="statsDayEnergyBoxOld">Win Rate by Day Energy</option>
         <option value="statsDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
         <option value="ufcDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+        <option value="ufcWeightsLabBox">Weights Lab &mdash; Test Score Blends</option>
       </select>
     </div>
 
@@ -272,6 +273,13 @@
       <div class="box-label">Which Compatibility Dimension Predicts Best</div>
       <div class="mode-desc">The fighter score blends the fight-day anchor&rsquo;s sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, day-of-year, zodiac, sun-sign). Each is tested alone &mdash; a positive <b>Edge</b> means it beats the market, ~0 or negative means it&rsquo;s dead weight. &#127919; Full Score is the current blend. Every UFC pick is day-anchor only now, so the venue/state rows stay empty by design &mdash; they&rsquo;re kept for old mixed-basis picks recorded before the rebuild.</div>
       <div class="pm-table-scroll" id="ufcDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="ufcWeightsLabBox">
+      <div class="box-label">🧪 Weights Lab &mdash; Which Blend Would Have Done Best</div>
+      <div class="mode-desc">Replays every resolved UFC pick under candidate score blends, using the same per-dimension data the table above reads. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof. The zodiac year/month/day split rows only cover picks recorded after the split landed; run ♻️ Wipe &amp; Rebuild once to fill them for history.</div>
+      <button class="btn" id="ufcWeightsLabBtn" type="button">🧪 Run Weights Lab</button>
+      <div class="pm-table-scroll" id="ufcWeightsLabResults"></div>
     </div>
 
     <div class="box" id="statsTableBoxOld">

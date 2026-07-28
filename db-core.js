@@ -1822,7 +1822,7 @@ function scoresForGame(g, onTimezoneResolved) {
 // only honest way to answer "does the stadium/state anchor add anything," "is
 // life-path-to-life-path stronger than day-number-to-day-number," etc. Shared by
 // all three sports, since they all score people through computeFighterScore.
-const DIMENSION_KEYS = ['day', 'stadium', 'state', 'lifePath', 'dayNum', 'doy', 'zodiac', 'western', 'lucky'];
+const DIMENSION_KEYS = ['day', 'stadium', 'state', 'lifePath', 'dayNum', 'doy', 'zodiac', 'zodiacYear', 'zodiacMonth', 'zodiacDay', 'western', 'lucky'];
 
 const DIMENSION_LABELS = {
   day: 'Day anchor (birth ↔ game day)',
@@ -1832,6 +1832,13 @@ const DIMENSION_LABELS = {
   dayNum: 'Day number ↔ day number',
   doy: 'Day-of-year ↔ day-of-year',
   zodiac: 'Chinese/Vietnamese zodiac',
+  // The zodiac dimension is itself a blend (year 60 / month 30 / day 10,
+  // compat-engine.js) - these three split it open so the one dimension
+  // with signal can show WHERE that signal lives. Only populated on picks
+  // recorded after the split landed (or re-recorded by a rebuild).
+  zodiacYear: 'Zodiac — year animal',
+  zodiacMonth: 'Zodiac — month sign',
+  zodiacDay: 'Zodiac — day sign',
   western: 'Western sun sign',
   lucky: 'Lucky number bonus',
   composite: 'Full Score (current blend)',
@@ -1856,6 +1863,9 @@ function extractDimensionScores(fs) {
     dayNum: d.numerology.dayScore,
     doy: d.numerology.doyScore,
     zodiac: d.vietnamese ? d.vietnamese.score : null,
+    zodiacYear: d.vietnamese && d.vietnamese.yearScore != null ? d.vietnamese.yearScore : null,
+    zodiacMonth: d.vietnamese && d.vietnamese.monthScore != null ? d.vietnamese.monthScore : null,
+    zodiacDay: d.vietnamese && d.vietnamese.daySignScore != null ? d.vietnamese.daySignScore : null,
     western: d.western ? d.western.score : null,
     // The lucky-number bonus is the one input that is ADDED to a score rather
     // than weighted into it (compat-engine.js), so no reweighting can measure
@@ -1916,7 +1926,9 @@ function computeDimensionEdgeStats(predictions, sideNames) {
       const favName = a > b ? nameA : nameB;
       const implied = priceOf(p, favName);
       if (implied == null) return null;
-      return { won: normalizeName(p.result.winner) === normalizeName(favName), implied };
+      // resultWinnerIs, not an exact compare - surname-labeled winners
+      // ("Spann") must credit a full-name side, same as isCorrectPick.
+      return { won: resultWinnerIs(p.result.winner, favName, nameA, nameB), implied };
     }).filter(Boolean);
     const n = picks.length;
     const wins = picks.filter((x) => x.won).length;
@@ -2164,14 +2176,22 @@ function winnerMatchesName(winner, name) {
   return w === n || n.endsWith(' ' + w) || w.endsWith(' ' + n);
 }
 
-function isCorrectPick(p) {
-  if (!p.result || p.result.draw || p.result.winner == null) return false;
-  if (normalizeName(p.result.winner) === normalizeName(p.numerologyFavorite)) return true;
-  if (!winnerMatchesName(p.result.winner, p.numerologyFavorite)) return false;
+// The one shared answer to "did this side win?" - used by isCorrectPick,
+// the dimension-edge table, and the Weights Lab, so no analysis can quietly
+// disagree with the headline stats about what a win was.
+function resultWinnerIs(winner, name, nameA, nameB) {
+  if (winner == null) return false;
+  if (normalizeName(winner) === normalizeName(name)) return true;
+  if (!winnerMatchesName(winner, name)) return false;
   // Ambiguity guard: the winner label must identify exactly one side.
+  return !(winnerMatchesName(winner, nameA) && winnerMatchesName(winner, nameB));
+}
+
+function isCorrectPick(p) {
+  if (!p.result || p.result.draw) return false;
   const nameA = p.fighterAName || p.playerAName || p.teamAName;
   const nameB = p.fighterBName || p.playerBName || p.teamBName;
-  return !(winnerMatchesName(p.result.winner, nameA) && winnerMatchesName(p.result.winner, nameB));
+  return resultWinnerIs(p.result.winner, p.numerologyFavorite, nameA, nameB);
 }
 
 /* ===================== Edge strength tiers ===================== */
