@@ -1759,6 +1759,163 @@ function initMlbRebuildButton() {
   });
 }
 
+/* ===================== MLB Weights Lab (three layers) ===================== */
+// MLB's score has three fitted layers, and each is replayable from what every
+// pick already stores:
+//   1. ROLES - who carries a side's score (components: per-role combined
+//      scores, replayed via mlbCompositeFromComponents, the same function the
+//      production rescore uses).
+//   2. ANCHORS - which dates a person is scored against (dims.day/stadium/
+//      state: the team-averaged finalScore of each anchor).
+//   3. BLEND - the sub-pieces inside the day anchor (the shared Weights Lab's
+//      flat dimensions, zodiac splits included).
+// STAGED, not a joint refit: each layer is swept while the other layers stay
+// as currently shipped, because the stored values were produced under the
+// shipped weights - a role score baked in the current anchor blend, an anchor
+// score baked in the current sub-piece blend. Staged sweeps answer "which
+// direction should this layer move, holding the rest still," which is the
+// honest question the stored data can answer without re-walking every game.
+// And as everywhere in the labs: IN-SAMPLE, best-in-hindsight, a shortlist
+// for the forward test rather than proof.
+
+const MLB_LAB_ROLE_KEYS = ['manager', 'pitcher', 'pitcherMatchup', 'franchise', 'catcher', 'batters'];
+const MLB_LAB_ROLE_NAMES = { manager: 'manager', pitcher: 'pitcher', pitcherMatchup: 'matchup', franchise: 'franchise', catcher: 'catcher', batters: 'batters' };
+
+const MLB_LAB_ROLE_BLENDS = [
+  { label: 'Current roles (manager 45 · pitcher 28 · matchup 10 · franchise 10 · catcher 3 · batters 4)', w: { manager: 0.45, pitcher: 0.28, pitcherMatchup: 0.10, franchise: 0.10, catcher: 0.03, batters: 0.04 } },
+  { label: 'Manager only', w: { manager: 1 } },
+  { label: 'Starting pitcher only', w: { pitcher: 1 } },
+  { label: 'Pitcher-vs-lineup only', w: { pitcherMatchup: 1 } },
+  { label: 'Franchise only', w: { franchise: 1 } },
+  { label: 'Catcher only', w: { catcher: 1 } },
+  { label: 'Batters only', w: { batters: 1 } },
+  { label: 'Equal six', w: { manager: 1 / 6, pitcher: 1 / 6, pitcherMatchup: 1 / 6, franchise: 1 / 6, catcher: 1 / 6, batters: 1 / 6 } },
+];
+
+const MLB_LAB_ANCHOR_KEYS = ['day', 'stadium', 'state'];
+const MLB_LAB_ANCHOR_NAMES = { day: 'day', stadium: 'stadium', state: 'state' };
+
+const MLB_LAB_ANCHOR_BLENDS = [
+  { label: 'Current anchors (day 60 · stadium 15 · state 25)', w: { day: 0.60, stadium: 0.15, state: 0.25 } },
+  { label: 'Day only (UFC-style)', w: { day: 1 } },
+  { label: 'Day 75 · state 25 (tennis-style)', w: { day: 0.75, state: 0.25 } },
+  { label: 'Day 85 · stadium 15', w: { day: 0.85, stadium: 0.15 } },
+  { label: 'Stadium only', w: { stadium: 1 } },
+  { label: 'State only', w: { state: 1 } },
+];
+
+// Every way to split 100% across `keys` in 25% steps - the generic version of
+// db-core's weightsLabGridBlends (which is hard-wired to the flat dimensions).
+function mlbLabCompositions(keys, steps) {
+  const out = [];
+  const walk = (idx, left, acc) => {
+    if (idx === keys.length - 1) {
+      const w = { ...acc };
+      if (left) w[keys[idx]] = left / steps;
+      if (Object.keys(w).length) out.push(w);
+      return;
+    }
+    for (let units = 0; units <= left; units++) {
+      const w = { ...acc };
+      if (units) w[keys[idx]] = units / steps;
+      walk(idx + 1, left - units, w);
+    }
+  };
+  walk(0, steps, {});
+  return out;
+}
+
+function mlbLabWeightsLabel(w, names) {
+  return Object.keys(w).map((k) => `${names[k] || k} ${Math.round(w[k] * 100)}`).join(' · ');
+}
+
+// Role replay: the exact production function (renormalizes over the
+// components a game actually has, so a missing catcher doesn't zero a side).
+function mlbLabRoleScorer(w, side) {
+  return (p) => (p.components && p.components[side] ? mlbCompositeFromComponents(p.components[side], w) : null);
+}
+
+// Anchor replay: Σ w · anchor finalScore. NO lucky-bonus add here - unlike
+// the flat sub-dimensions, an anchor's stored finalScore already contains
+// the lucky bonus (finalScore = round(base + lucky), compat-engine.js), so
+// adding dims.lucky again would double-count it.
+function mlbLabAnchorScorer(w, side) {
+  return (p) => {
+    if (!p.dims || !p.dims[side]) return null;
+    let total = 0;
+    for (const k of Object.keys(w)) {
+      const v = p.dims[side][k];
+      if (v == null) return null;
+      total += w[k] * v;
+    }
+    return total;
+  };
+}
+
+function mlbLabSection(title, note, rowsHtml) {
+  return `<div class="pm-table-total" style="margin-top:14px;">${title}</div>`
+    + (note ? `<div class="mode-desc">${note}</div>` : '')
+    + `<table class="astro-table"><thead><tr><th>Blend</th><th>Picks</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+}
+
+function mlbLabRunLayer(resolved, sideNames, named, keys, names, scorerFor, sweepTop) {
+  const rows = named
+    .map((c) => ({ label: c.label, r: weightsLabEvaluate(resolved, scorerFor(c.w, 'A'), scorerFor(c.w, 'B'), sideNames) }))
+    .sort((x, y) => (y.r.edge == null ? -Infinity : y.r.edge) - (x.r.edge == null ? -Infinity : x.r.edge));
+  const namedSigs = new Set(named.map((c) => mlbLabWeightsLabel(c.w, names)));
+  const sweep = mlbLabCompositions(keys, 4)
+    .filter((w) => !namedSigs.has(mlbLabWeightsLabel(w, names)))
+    .map((w) => ({ label: mlbLabWeightsLabel(w, names), r: weightsLabEvaluate(resolved, scorerFor(w, 'A'), scorerFor(w, 'B'), sideNames) }))
+    .filter((x) => x.r.count > 0)
+    .sort((x, y) => y.r.edge - x.r.edge)
+    .slice(0, sweepTop);
+  return rows.map((x) => weightsLabRowHtml(x.label, x.r)).join('')
+    + (sweep.length ? `<tr><td colspan="5" class="empty-state" style="text-align:center;">&mdash; top sweep finds &mdash;</td></tr>` : '')
+    + sweep.map((x) => weightsLabRowHtml(x.label, x.r)).join('');
+}
+
+function runMlbWeightsLab() {
+  const el = document.getElementById('mlbWeightsLabResults');
+  const sideNames = (p) => [p.teamAName, p.teamBName];
+  const resolved = loadMlbPredictions().filter((p) => p.result && !p.result.draw);
+  if (!resolved.length) {
+    el.innerHTML = '<div class="empty-state">No resolved picks yet &mdash; backfill first.</div>';
+    return;
+  }
+
+  // The one baseline every layer has to beat: the composite as recorded.
+  const composite = weightsLabEvaluate(resolved, (p) => p.numerologyScoreA, (p) => p.numerologyScoreB, sideNames);
+
+  // Layer 3 reuses the shared flat-blend engine (named blends + zodiac
+  // splits + the 70-blend sweep), evaluated over the dims-carrying subset.
+  const withDims = resolved.filter((p) => p.dims && p.dims.A && p.dims.B);
+  const flatNamed = WEIGHTS_LAB_NAMED_BLENDS
+    .map((c) => ({ label: c.label, r: weightsLabEvaluate(withDims, weightsLabBlendScorer(c.w, 'A'), weightsLabBlendScorer(c.w, 'B'), sideNames) }))
+    .sort((x, y) => (y.r.edge == null ? -Infinity : y.r.edge) - (x.r.edge == null ? -Infinity : x.r.edge));
+  const flatSigs = new Set(WEIGHTS_LAB_NAMED_BLENDS.map((c) => weightsLabBlendLabel(c.w)));
+  const flatSweep = weightsLabGridBlends()
+    .filter((w) => !flatSigs.has(weightsLabBlendLabel(w)))
+    .map((w) => ({ label: weightsLabBlendLabel(w), r: weightsLabEvaluate(withDims, weightsLabBlendScorer(w, 'A'), weightsLabBlendScorer(w, 'B'), sideNames) }))
+    .filter((x) => x.r.count > 0)
+    .sort((x, y) => y.r.edge - x.r.edge)
+    .slice(0, 8);
+
+  el.innerHTML = `
+    <div class="pm-table-total">Resolved picks replayed: ${resolved.length}</div>
+    <table class="astro-table"><thead><tr><th>Blend</th><th>Picks</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
+    <tbody>${weightsLabRowHtml('Current composite as recorded', composite, true)}</tbody></table>
+    ${mlbLabSection('// ROLES — who carries the score', 'Replayed from each pick’s stored per-role scores, renormalized over the roles a game actually had.', mlbLabRunLayer(resolved, sideNames, MLB_LAB_ROLE_BLENDS, MLB_LAB_ROLE_KEYS, MLB_LAB_ROLE_NAMES, mlbLabRoleScorer, 8))}
+    ${mlbLabSection('// ANCHORS — which dates matter', 'Day vs stadium vs state, replayed from each anchor’s stored team-averaged score.', mlbLabRunLayer(resolved, sideNames, MLB_LAB_ANCHOR_BLENDS, MLB_LAB_ANCHOR_KEYS, MLB_LAB_ANCHOR_NAMES, mlbLabAnchorScorer, 8))}
+    ${mlbLabSection('// SCORE BLEND — inside the day anchor', 'Same flat-dimension replay as every sport’s lab, zodiac year/month/day splits included.', flatNamed.map((x) => weightsLabRowHtml(x.label, x.r)).join('') + (flatSweep.length ? `<tr><td colspan="5" class="empty-state" style="text-align:center;">&mdash; top sweep finds &mdash;</td></tr>` : '') + flatSweep.map((x) => weightsLabRowHtml(x.label, x.r)).join(''))}
+  `;
+}
+
+function initMlbWeightsLab() {
+  const btn = document.getElementById('mlbWeightsLabBtn');
+  if (!btn) return;
+  btn.addEventListener('click', runMlbWeightsLab);
+}
+
 // Wire the Stats page DOM only when it exists - this file also loads on
 // betting.html purely for checkMlbResults() and the shared prediction
 // helpers, so the Betting page settles results through the same code path.
@@ -1780,7 +1937,7 @@ mlbStoreReady.then(() => {
   initMlbBackfillButton();
   initMlbRebuildButton();
   initMlbStorageControls();
-  initWeightsLab('mlbWeightsLabBtn', 'mlbWeightsLabResults', loadMlbPredictions, (p) => [p.teamAName, p.teamBName]);
+  initMlbWeightsLab(); // three-layer MLB lab (roles + anchors + blend), not the shared flat-only runner
   refreshAndRenderMlb();
  }
 });

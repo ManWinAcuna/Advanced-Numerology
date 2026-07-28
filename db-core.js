@@ -1764,6 +1764,78 @@ const MLB_V2_SINCE = '2026-07-19';
 // re-derives numerologyFavorite and pickType since a reweighting can flip
 // which side the model prefers.
 
+/* ===================== UFC weights rescore (no-rebuild) ===================== */
+// The UFC counterpart of the MLB rescore below, so a UFC weights change
+// never needs a Wipe & Rebuild again: every pick stores its per-dimension
+// scores (dims.A/dims.B, zodiac year/month/day split included), and for a
+// day-anchor-only sport the composite is EXACTLY reconstructable from them:
+//   score = min(100, round( numerology·(lp·lifePath + dn·dayNum + doy·doy)
+//                         + vietnamese·(zy·zodiacYear + zm·zodiacMonth + zd·zodiacDay)
+//                         + western·western + lucky ))
+// Runs once per weights version on load, before anything reads the store.
+// A pick recorded before the zodiac split (no zodiacYear stored) is left
+// untouched rather than half-rescored - a rebuild remains the only way to
+// re-score those, but every pick recorded from the split onward is covered.
+const UFC_WEIGHTS_VERSION_KEY = 'numerology_ufc_weights_version';
+const UFC_WEIGHTS_VERSION = 1; // 1 = year-animal-only (UFC_COMPAT_WEIGHTS, fitted 2026-07-28)
+
+function ufcCompositeFromDims(d, w) {
+  if (!d) return null;
+  const flat = {
+    lifePath: w.numerology * w.lifePath,
+    dayNum: w.numerology * w.dayNum,
+    doy: w.numerology * w.doy,
+    zodiacYear: w.vietnamese * (w.zodiacYear != null ? w.zodiacYear : 0.60),
+    zodiacMonth: w.vietnamese * (w.zodiacMonth != null ? w.zodiacMonth : 0.30),
+    zodiacDay: w.vietnamese * (w.zodiacDay != null ? w.zodiacDay : 0.10),
+    western: w.western,
+  };
+  let total = 0;
+  for (const k of Object.keys(flat)) {
+    if (!flat[k]) continue; // zero-weighted piece may be missing on old picks without penalty
+    if (d[k] == null) return null; // a NEEDED piece is missing - don't half-score
+    total += flat[k] * d[k];
+  }
+  return Math.min(100, Math.round(total + (d.lucky || 0)));
+}
+
+function rescoreUfcPredictionsForWeights() {
+  if (Number(localStorage.getItem(UFC_WEIGHTS_VERSION_KEY)) === UFC_WEIGHTS_VERSION) {
+    return { alreadyCurrent: true, rescored: 0, skipped: 0, flipped: 0 };
+  }
+  // Same bail-out as the MLB rescore: an unhydrated store reads as [], and
+  // stamping the marker over that would mean the rescore never runs.
+  if (!bigStoreKeyHydrated(UFC_PREDICTIONS_KEY)) {
+    return { alreadyCurrent: false, unavailable: true, rescored: 0, skipped: 0, flipped: 0 };
+  }
+
+  const predictions = loadUfcPredictions();
+  let rescored = 0;
+  let skipped = 0;
+  let flipped = 0;
+
+  predictions.forEach((p) => {
+    if (!p.dims || !p.dims.A || !p.dims.B) { skipped += 1; return; }
+    const a = ufcCompositeFromDims(p.dims.A, UFC_COMPAT_WEIGHTS);
+    const b = ufcCompositeFromDims(p.dims.B, UFC_COMPAT_WEIGHTS);
+    if (a == null || b == null) { skipped += 1; return; }
+
+    const wasFavorite = p.numerologyFavorite;
+    p.numerologyScoreA = a;
+    p.numerologyScoreB = b;
+    p.numerologyFavorite = a >= b ? p.fighterAName : p.fighterBName;
+    if (p.marketFavorite) {
+      p.pickType = normalizeName(p.marketFavorite) === normalizeName(p.numerologyFavorite) ? 'favorite' : 'underdog';
+    }
+    if (wasFavorite && normalizeName(wasFavorite) !== normalizeName(p.numerologyFavorite)) flipped += 1;
+    rescored += 1;
+  });
+
+  if (rescored) saveUfcPredictions(predictions);
+  localStorage.setItem(UFC_WEIGHTS_VERSION_KEY, String(UFC_WEIGHTS_VERSION));
+  return { alreadyCurrent: false, rescored, skipped, flipped };
+}
+
 const MLB_WEIGHTS_VERSION_KEY = 'numerology_mlb_weights_version';
 const MLB_WEIGHTS_VERSION = 3;
 

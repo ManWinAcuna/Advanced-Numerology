@@ -821,7 +821,7 @@
 
     <div class="box" id="mlbWeightsLabBox">
       <div class="box-label">🧪 Weights Lab &mdash; Which Blend Would Have Done Best</div>
-      <div class="mode-desc">Replays every resolved MLB game pick under candidate score blends, using the same team-level per-dimension data the table above reads. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof. The zodiac year/month/day split rows only cover picks recorded after the split landed; a ♻️ Wipe &amp; Rebuild fills them for history.</div>
+      <div class="mode-desc">Replays every resolved MLB pick across all three fitted layers: <b>roles</b> (manager / pitcher / matchup / franchise / catcher / batters, from each pick's stored per-role scores), <b>anchors</b> (game day vs stadium vs state), and the <b>score blend</b> inside the day anchor (zodiac year/month/day splits included). Each layer is swept while the other layers stay as currently shipped &mdash; a staged audit, not a joint refit. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof.</div>
       <button class="btn" id="mlbWeightsLabBtn" type="button">🧪 Run Weights Lab</button>
       <div class="pm-table-scroll" id="mlbWeightsLabResults"></div>
     </div>
