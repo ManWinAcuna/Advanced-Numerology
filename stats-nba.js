@@ -1399,7 +1399,7 @@ nbaStoreReady.then(() => {
   });
 
   initBreakdownToggle('nbaBreakdownToggle', ['nbaStatsEdgeTiersBox', 'nbaStatsPriceBucketsBox', 'nbaUniversalDayBox', 'nbaDayEnergyBox', 'nbaDayComboBox', 'nbaComponentSignalBox', 'nbaDimensionEdgeBox']);
-  initBreakdownToggle('nbaBreakdownToggleOld', ['nbaStatsEdgeTiersBoxOld', 'nbaStatsPriceBucketsBoxOld', 'nbaUniversalDayBoxOld', 'nbaDayEnergyBoxOld', 'nbaDayComboBoxOld', 'nbaComponentSignalBoxOld', 'nbaDimensionEdgeBoxOld']);
+  initBreakdownToggle('nbaBreakdownToggleOld', ['nbaStatsEdgeTiersBoxOld', 'nbaStatsPriceBucketsBoxOld', 'nbaUniversalDayBoxOld', 'nbaDayEnergyBoxOld', 'nbaDayComboBoxOld', 'nbaComponentSignalBoxOld', 'nbaDimensionEdgeBoxOld', 'nbaWeightsLabBox']);
 
   ['', 'Old'].forEach((s) => {
     initBreakdownToggle(`nbaTotalsBreakdownToggle${s}`, ['TierBox', 'ComponentBox', 'UniversalDayBox', 'DayEnergyBox', 'DayComboBox'].map((b) => `nbaTotals${b}${s}`));
@@ -1413,6 +1413,7 @@ nbaStoreReady.then(() => {
   initNbaRegroupButton();
   initNbaPropBackfillButton();
   initNbaStorageControls();
+  initWeightsLab('nbaWeightsLabBtn', 'nbaWeightsLabResults', loadNbaPredictions, (p) => [p.teamAName, p.teamBName]);
   wireNbaRefreshButton('nbaStatsRefreshBtn');
   wireNbaRefreshButton('nbaStatsRefreshBtnOld');
 

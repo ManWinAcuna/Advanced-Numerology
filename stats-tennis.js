@@ -868,7 +868,7 @@ bigStoreReadyPromise.then(() => {
   initDayFilter('tennisOld', () => { resetPagination('tennisStatsTableOld'); renderTennisScope('Old', currentTennisPredictions); });
 
   initBreakdownToggle('tennisBreakdownToggle', ['tennisStatsEdgeTiersBox', 'tennisStatsPriceBucketsBox', 'tennisUniversalDayBox', 'tennisDayEnergyBox', 'tennisDayComboBox', 'tennisDimensionEdgeBox']);
-  initBreakdownToggle('tennisBreakdownToggleOld', ['tennisStatsEdgeTiersBoxOld', 'tennisStatsPriceBucketsBoxOld', 'tennisUniversalDayBoxOld', 'tennisDayEnergyBoxOld', 'tennisDayComboBoxOld', 'tennisDimensionEdgeBoxOld']);
+  initBreakdownToggle('tennisBreakdownToggleOld', ['tennisStatsEdgeTiersBoxOld', 'tennisStatsPriceBucketsBoxOld', 'tennisUniversalDayBoxOld', 'tennisDayEnergyBoxOld', 'tennisDayComboBoxOld', 'tennisDimensionEdgeBoxOld', 'tennisWeightsLabBox']);
 
   wireTennisRefreshButton('tennisStatsRefreshBtn');
   wireTennisRefreshButton('tennisStatsRefreshBtnOld');
@@ -877,6 +877,7 @@ bigStoreReadyPromise.then(() => {
   initModalTabSwitcher('statsTennisSection');
   initTennisBackfillButton();
   initTennisRebuildButton();
+  initWeightsLab('tennisWeightsLabBtn', 'tennisWeightsLabResults', loadTennisPredictions, (p) => [p.playerAName, p.playerBName]);
   refreshTennisAndRender();
  }
 });

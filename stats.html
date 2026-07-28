@@ -455,6 +455,7 @@
         <option value="tennisDayEnergyBoxOld">Win Rate by Day Energy</option>
         <option value="tennisDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
         <option value="tennisDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+        <option value="tennisWeightsLabBox">Weights Lab &mdash; Test Score Blends</option>
       </select>
     </div>
 
@@ -514,6 +515,13 @@
       <div class="box-label">Which Compatibility Dimension Predicts Best</div>
       <div class="mode-desc">The player score is a blend of date anchors (birth vs. <b>match day</b>, <b>venue</b>, <b>city/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone &mdash; a positive <b>Edge</b> means it beats the market, ~0 or negative means it&rsquo;s dead weight. &#127919; Full Score is the current blend. Fills in as tracked matches resolve.</div>
       <div class="pm-table-scroll" id="tennisDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="tennisWeightsLabBox">
+      <div class="box-label">🧪 Weights Lab &mdash; Which Blend Would Have Done Best</div>
+      <div class="mode-desc">Replays every resolved tennis pick under candidate score blends, using the same per-dimension data the table above reads. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof. The zodiac year/month/day split rows only cover picks recorded after the split landed; run ♻️ Wipe &amp; Rebuild once to fill them for history.</div>
+      <button class="btn" id="tennisWeightsLabBtn" type="button">🧪 Run Weights Lab</button>
+      <div class="pm-table-scroll" id="tennisWeightsLabResults"></div>
     </div>
 
     <div class="box" id="tennisStatsTableBoxOld">
@@ -743,6 +751,7 @@
         <option value="mlbDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
         <option value="mlbComponentSignalBoxOld">Which Component Predicts Best</option>
         <option value="mlbDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+        <option value="mlbWeightsLabBox">Weights Lab &mdash; Test Score Blends</option>
       </select>
     </div>
 
@@ -808,6 +817,13 @@
       <div class="box-label">Which Compatibility Dimension Predicts Best</div>
       <div class="mode-desc">One level deeper than components: the score itself is a blend of date anchors (birth vs. <b>game day</b>, <b>stadium</b>, <b>state/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone here &mdash; a positive <b>Edge</b> means that dimension beats the market, ~0 or negative means it&rsquo;s dead weight diluting the score. &#127919; Full Score is the current blend, the baseline to beat.</div>
       <div class="pm-table-scroll" id="mlbDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="mlbWeightsLabBox">
+      <div class="box-label">🧪 Weights Lab &mdash; Which Blend Would Have Done Best</div>
+      <div class="mode-desc">Replays every resolved MLB game pick under candidate score blends, using the same team-level per-dimension data the table above reads. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof. The zodiac year/month/day split rows only cover picks recorded after the split landed; a ♻️ Wipe &amp; Rebuild fills them for history.</div>
+      <button class="btn" id="mlbWeightsLabBtn" type="button">🧪 Run Weights Lab</button>
+      <div class="pm-table-scroll" id="mlbWeightsLabResults"></div>
     </div>
 
     <div class="box" id="mlbStatsTableBoxOld">
@@ -1134,6 +1150,7 @@
         <option value="nbaDayComboBoxOld">Win Rate by Universal Day + Day Energy Combo</option>
         <option value="nbaComponentSignalBoxOld">Which Component Predicts Best</option>
         <option value="nbaDimensionEdgeBoxOld">Which Compatibility Dimension Predicts Best</option>
+        <option value="nbaWeightsLabBox">Weights Lab &mdash; Test Score Blends</option>
       </select>
     </div>
 
@@ -1199,6 +1216,13 @@
       <div class="box-label">Which Compatibility Dimension Predicts Best</div>
       <div class="mode-desc">One level deeper than components: the score itself is a blend of date anchors (birth vs. <b>game day</b>, <b>state/region</b>) and sub-pieces (<b>life-path</b> vs. life-path, <b>day-number</b>, zodiac, sun-sign). Each is tested alone here &mdash; a positive <b>Edge</b> means that dimension beats the market, ~0 or negative means it&rsquo;s dead weight diluting the score. &#127919; Full Score is the current blend, the baseline to beat.</div>
       <div class="pm-table-scroll" id="nbaDimensionEdgeOld"></div>
+    </div>
+
+    <div class="box" id="nbaWeightsLabBox">
+      <div class="box-label">🧪 Weights Lab &mdash; Which Blend Would Have Done Best</div>
+      <div class="mode-desc">Replays every resolved NBA game pick under candidate score blends, using the same per-dimension data the table above reads. <strong>Best-in-hindsight isn't a guarantee going forward</strong> &mdash; this is a shortlist for the forward test, not proof. The zodiac year/month/day split rows only cover picks recorded after the split landed; a ♻️ Wipe &amp; Rebuild fills them for history.</div>
+      <button class="btn" id="nbaWeightsLabBtn" type="button">🧪 Run Weights Lab</button>
+      <div class="pm-table-scroll" id="nbaWeightsLabResults"></div>
     </div>
 
     <div class="box" id="nbaStatsTableBoxOld">

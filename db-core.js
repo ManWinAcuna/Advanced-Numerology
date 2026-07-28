@@ -1989,6 +1989,156 @@ function renderDimensionEdgeTable(elId, predictions, sideNames, emptyMsg) {
   el.innerHTML = `<div class="pm-table-total">Total picks: ${total}</div><table class="astro-table"><thead><tr><th>Dimension</th><th>Games</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
+/* ===================== Weights Lab (shared) ===================== */
+// Replays every resolved pick under candidate weight blends, using the
+// per-side dimension vectors stored on each pick (dims.A/dims.B) - the same
+// inputs the dimension-edge table above reads, so the two can never
+// disagree about the underlying data. Sport-agnostic the same way
+// renderDimensionEdgeTable is: each Stats section passes its own
+// predictions + side-name accessor. A blend's score is Σ w_k · dims[k]
+// plus the lucky bonus (ADDED, not weighted - exactly how the live engine
+// treats it, compat-engine.js). A pick is skipped for a blend when any
+// weighted dimension is missing on either side (records from before the
+// zodiac year/month/day split), or when the blend ties the two sides - no
+// lean, no pick, the dimension table's own rule. Wins settle through
+// resultWinnerIs, the same answer the headline stats use.
+//
+// Everything here is IN-SAMPLE: the top row is best-in-hindsight on the
+// exact games it was scored over - a shortlist for the forward test, not
+// proof. The MLB reweight measured +46% in-fit vs -6% out-of-fit on this
+// same kind of exercise; UFC's year-animal blend came out of exactly this
+// lab and is on its own forward test now.
+
+const WEIGHTS_LAB_NAMED_BLENDS = [
+  { label: 'Default blend (life path 36 · zodiac 30 · day num 21 · sun 10 · doy 3)', w: { lifePath: 0.36, zodiac: 0.30, dayNum: 0.21, western: 0.10, doy: 0.03 } },
+  { label: 'Zodiac only', w: { zodiac: 1 } },
+  { label: 'Zodiac 70 · day number 20 · sun sign 10', w: { zodiac: 0.70, dayNum: 0.20, western: 0.10 } },
+  { label: 'MLB recipe (day num 34 · zodiac 25 · life path 22 · doy 19)', w: { dayNum: 0.3375, zodiac: 0.25, lifePath: 0.225, doy: 0.1875 } },
+  // The zodiac dimension is itself year 60 / month 30 / day 10 - these
+  // split the one dimension open so the lab can say WHERE any signal
+  // lives. Need picks recorded after the split (rebuild fills history).
+  { label: 'Zodiac year animal only (UFC shipping blend)', w: { zodiacYear: 1 } },
+  { label: 'Zodiac month sign only', w: { zodiacMonth: 1 } },
+  { label: 'Zodiac day sign only', w: { zodiacDay: 1 } },
+  { label: 'Zodiac month 60 · day sign 40 (no year)', w: { zodiacMonth: 0.60, zodiacDay: 0.40 } },
+];
+
+// Every way to split 100% across the five flat dimensions in 25% steps -
+// 70 blends, cheap to replay, broad enough to catch a shape no one named.
+const WEIGHTS_LAB_GRID_DIMS = ['zodiac', 'dayNum', 'lifePath', 'western', 'doy'];
+const WEIGHTS_LAB_GRID_STEPS = 4;
+
+function weightsLabGridBlends() {
+  const out = [];
+  const walk = (idx, left, acc) => {
+    if (idx === WEIGHTS_LAB_GRID_DIMS.length - 1) {
+      const w = { ...acc };
+      if (left) w[WEIGHTS_LAB_GRID_DIMS[idx]] = left / WEIGHTS_LAB_GRID_STEPS;
+      if (Object.keys(w).length) out.push(w);
+      return;
+    }
+    for (let units = 0; units <= left; units++) {
+      const w = { ...acc };
+      if (units) w[WEIGHTS_LAB_GRID_DIMS[idx]] = units / WEIGHTS_LAB_GRID_STEPS;
+      walk(idx + 1, left - units, w);
+    }
+  };
+  walk(0, WEIGHTS_LAB_GRID_STEPS, {});
+  return out;
+}
+
+function weightsLabBlendLabel(w) {
+  const names = { zodiac: 'zodiac', dayNum: 'day num', lifePath: 'life path', western: 'sun', doy: 'doy', zodiacYear: 'zodiac yr', zodiacMonth: 'zodiac mo', zodiacDay: 'zodiac day' };
+  return Object.keys(w).map((k) => `${names[k] || k} ${Math.round(w[k] * 100)}`).join(' · ');
+}
+
+// Per-side scorer for a blend - null when any weighted dimension is missing
+// on that side, which skips the pick rather than scoring half a blend.
+function weightsLabBlendScorer(w, side) {
+  return (p) => {
+    let total = 0;
+    for (const k of Object.keys(w)) {
+      const v = p.dims[side][k];
+      if (v == null) return null;
+      total += w[k] * v;
+    }
+    return total + (p.dims[side].lucky || 0);
+  };
+}
+
+function weightsLabEvaluate(resolved, scoreAOf, scoreBOf, sideNames) {
+  let n = 0;
+  let wins = 0;
+  let impliedSum = 0;
+  resolved.forEach((p) => {
+    const a = scoreAOf(p);
+    const b = scoreBOf(p);
+    if (a == null || b == null || a === b) return;
+    const [nameA, nameB] = sideNames(p);
+    const favA = a > b;
+    const favName = favA ? nameA : nameB;
+    const implied = favA ? p.marketPriceA : p.marketPriceB;
+    if (implied == null) return;
+    n++;
+    impliedSum += implied;
+    if (resultWinnerIs(p.result.winner, favName, nameA, nameB)) wins++;
+  });
+  if (!n) return { count: 0, winPct: null, marketPct: null, edge: null };
+  const winPct = Math.round((wins / n) * 100);
+  const marketPct = Math.round((impliedSum / n) * 100);
+  return { count: n, winPct, marketPct, edge: winPct - marketPct };
+}
+
+function weightsLabRowHtml(label, r, star) {
+  const edgeCell = (r.edge != null && r.count >= MIN_BUCKET_SAMPLE)
+    ? `<span class="score-inline ${r.edge > 0 ? 'good' : (r.edge < 0 ? 'bad' : '')}">${r.edge > 0 ? '+' : ''}${r.edge}</span>`
+    : `<span class="empty-state">${r.count ? 'thin' : 'needs rebuild'}</span>`;
+  return `<tr${star ? ' style="border-top:2px solid var(--border);"' : ''}><td>${star ? '🎯 ' : ''}${escapeHtml(label)}</td><td>${r.count}</td><td>${r.winPct != null ? `${r.winPct}%` : '—'}</td><td>${r.marketPct != null ? `${r.marketPct}%` : '—'}</td><td>${edgeCell}</td></tr>`;
+}
+
+function runWeightsLab(resultsElId, predictions, sideNames) {
+  const el = document.getElementById(resultsElId);
+  const resolved = (predictions || []).filter((p) => p.result && !p.result.draw && p.dims && p.dims.A && p.dims.B);
+  if (!resolved.length) {
+    el.innerHTML = '<div class="empty-state">No resolved picks with dimension data yet &mdash; backfill first.</div>';
+    return;
+  }
+
+  // The honest baseline: the composite exactly as recorded (rounding, cap
+  // and all), same accessor the dimension table's Full Score row uses.
+  const composite = weightsLabEvaluate(resolved, (p) => p.numerologyScoreA, (p) => p.numerologyScoreB, sideNames);
+
+  const named = WEIGHTS_LAB_NAMED_BLENDS
+    .map((c) => ({ label: c.label, r: weightsLabEvaluate(resolved, weightsLabBlendScorer(c.w, 'A'), weightsLabBlendScorer(c.w, 'B'), sideNames) }))
+    .sort((x, y) => (y.r.edge == null ? -Infinity : y.r.edge) - (x.r.edge == null ? -Infinity : x.r.edge));
+
+  const namedSigs = new Set(WEIGHTS_LAB_NAMED_BLENDS.map((c) => weightsLabBlendLabel(c.w)));
+  const grid = weightsLabGridBlends()
+    .filter((w) => !namedSigs.has(weightsLabBlendLabel(w)))
+    .map((w) => ({ label: weightsLabBlendLabel(w), r: weightsLabEvaluate(resolved, weightsLabBlendScorer(w, 'A'), weightsLabBlendScorer(w, 'B'), sideNames) }))
+    .filter((x) => x.r.count > 0)
+    .sort((x, y) => y.r.edge - x.r.edge)
+    .slice(0, 8);
+
+  el.innerHTML = `
+    <div class="pm-table-total">Resolved picks replayed: ${resolved.length}</div>
+    <table class="astro-table">
+      <thead><tr><th>Blend</th><th>Picks</th><th>Win%</th><th>Market%</th><th>Edge</th></tr></thead>
+      <tbody>
+        ${weightsLabRowHtml('Current blend as recorded', composite, true)}
+        ${named.map((x) => weightsLabRowHtml(x.label, x.r)).join('')}
+        <tr><td colspan="5" class="empty-state" style="text-align:center;">&mdash; top finds from a 25%-step sweep of zodiac / day num / life path / sun / doy &mdash;</td></tr>
+        ${grid.map((x) => weightsLabRowHtml(x.label, x.r)).join('')}
+      </tbody>
+    </table>`;
+}
+
+function initWeightsLab(btnId, resultsElId, loadPredictions, sideNames) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.addEventListener('click', () => runWeightsLab(resultsElId, loadPredictions(), sideNames));
+}
+
 /* ===================== Day filter (Stats page) ===================== */
 // Lets each Stats section slice its own tracked picks by which kind of day
 // the match/game fell on - independent of the per-fighter/team edge tested

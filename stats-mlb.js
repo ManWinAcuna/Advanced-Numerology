@@ -1765,7 +1765,7 @@ mlbStoreReady.then(() => {
   initDayFilter('mlbOld', () => { resetPagination('mlbStatsTableOld'); resetPagination('mlbKSignalOld'); renderMlbScope('Old', currentMlbPredictions, currentMlbKSignals); });
 
   initBreakdownToggle('mlbBreakdownToggle', ['mlbStatsEdgeTiersBox', 'mlbStatsPriceBucketsBox', 'mlbUniversalDayBox', 'mlbDayEnergyBox', 'mlbDayComboBox', 'mlbComponentSignalBox', 'mlbDimensionEdgeBox']);
-  initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld']);
+  initBreakdownToggle('mlbBreakdownToggleOld', ['mlbStatsEdgeTiersBoxOld', 'mlbStatsPriceBucketsBoxOld', 'mlbUniversalDayBoxOld', 'mlbDayEnergyBoxOld', 'mlbDayComboBoxOld', 'mlbComponentSignalBoxOld', 'mlbDimensionEdgeBoxOld', 'mlbWeightsLabBox']);
 
   initMlbMatchupModal('');
   initMlbMatchupModal('Old');
@@ -1775,6 +1775,7 @@ mlbStoreReady.then(() => {
   initMlbBackfillButton();
   initMlbRebuildButton();
   initMlbStorageControls();
+  initWeightsLab('mlbWeightsLabBtn', 'mlbWeightsLabResults', loadMlbPredictions, (p) => [p.teamAName, p.teamBName]);
   refreshAndRenderMlb();
  }
 });
