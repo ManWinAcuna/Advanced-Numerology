@@ -123,6 +123,129 @@ async function repairMlbFalseDraws(onProgress) {
   return { checked, repaired, stillTied, unmatched, componentsCleared: stripped };
 }
 
+// The roles that actually carry the composite under the v4 weights. A record
+// missing one of these INSIDE its components re-scores on partial data (the
+// rescore renormalizes over whatever is present), which is exactly what
+// manufactured a false favorite for the Jul 27 2026 Braves@Mets pick: one
+// missing 54-scoring Braves component turned an honest Mets 68 - Braves 67
+// into a fake Braves 71 favorite. So a hole in a weighted role marks the
+// record as needing a component patch, the same as having no components.
+const MLB_WEIGHTED_COMPONENT_KEYS = ['pitcher', 'manager', 'franchise'];
+
+function mlbComponentsHoled(p) {
+  if (!p.components || !p.dims || !p.components.A || !p.components.B) return true;
+  return MLB_WEIGHTED_COMPONENT_KEYS.some((k) => p.components.A[k] == null || p.components.B[k] == null);
+}
+
+// One patch applier shared by the repair pass and both walk patchers, so a
+// patched record can never come out half-updated: components and dims are
+// replaced together with the score, favorite and pickType they imply. The
+// score MUST be refreshed with the components - the rescore invariant is
+// numerologyScoreA/B === mlbCompositeFromComponents(components, current
+// weights), and filling components without re-deriving the score would break
+// it until the next weights version bump.
+function applyMlbComponentPatch(p, scoreA, scoreB) {
+  p.components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
+  p.dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
+  p.numerologyScoreA = scoreA.combined;
+  p.numerologyScoreB = scoreB.combined;
+  p.numerologyFavorite = scoreA.combined >= scoreB.combined ? p.teamAName : p.teamBName;
+  if (p.marketFavorite) {
+    p.pickType = normalizeName(p.marketFavorite) === normalizeName(p.numerologyFavorite) ? 'favorite' : 'underdog';
+  }
+}
+
+// One-time store-wide repair for holed components. Two suspect groups:
+// records with a hole in a weighted role (see mlbComponentsHoled), and
+// everything from the last few days regardless - young records were built
+// from morning data and are where record-time transients (a failed manager
+// or teamInfo fetch) live. Each suspect is rebuilt from its game's own feed
+// with the exact enrichment the backfill uses, then re-scored in place.
+// Version-keyed one-shot; the walk patchers catch new holes from here on.
+const MLB_COMPONENT_REPAIR_KEY = 'numerology_mlb_component_repair_version';
+const MLB_COMPONENT_REPAIR_VERSION = 1;
+
+async function repairMlbIncompleteComponents() {
+  if (Number(localStorage.getItem(MLB_COMPONENT_REPAIR_KEY)) === MLB_COMPONENT_REPAIR_VERSION) {
+    return { alreadyDone: true, repaired: 0, flipped: 0 };
+  }
+  // Same bail-out as the weights rescore: an unhydrated store reads as [],
+  // and stamping the marker over that would mean the repair never runs.
+  if (!bigStoreKeyHydrated(MLB_PREDICTIONS_KEY)) {
+    return { unavailable: true, repaired: 0, flipped: 0 };
+  }
+
+  const predictions = loadMlbPredictions();
+  const freshCutoff = new Date(Date.now() - 4 * 86400000).toISOString();
+  const suspects = predictions.filter((p) => p.gamePk
+    && (mlbComponentsHoled(p) || (p.gameTime && p.gameTime >= freshCutoff)));
+  let repaired = 0;
+  let flipped = 0;
+
+  const regionCache = new Map();
+  const stadiumCache = new Map();
+  const teamInfoCache = new Map();
+  const managerCache = new Map(); // keyed teamId|season, in case the window spans a season boundary
+
+  const BATCH = 6; // same throttling caution as repairMlbFalseDraws above
+  for (let i = 0; i < suspects.length; i += BATCH) {
+    const batch = suspects.slice(i, i + BATCH);
+    const feeds = await Promise.all(batch.map((p) => fetchGameLiveFeed(p.gamePk)));
+    for (let j = 0; j < batch.length; j++) {
+      const p = batch[j];
+      const feed = feeds[j];
+      if (!feed || feed.abstractGameState !== 'Final') continue;
+      if (feed.home.batters.length !== 9 || feed.away.batters.length !== 9) continue;
+
+      const venueId = feed.venue && feed.venue.id;
+      const venueName = feed.venue && feed.venue.name;
+      if (!venueId) continue;
+      let regionInfo = regionCache.get(venueId);
+      if (!regionInfo) { regionInfo = await resolveMlbRegionForBackfill(venueId, venueName); regionCache.set(venueId, regionInfo); }
+      if (!regionInfo.region) continue;
+      let stadiumFounded = stadiumCache.get(venueId);
+      if (stadiumFounded === undefined) { stadiumFounded = await resolveMlbStadiumFoundedForBackfill(venueId, venueName); stadiumCache.set(venueId, stadiumFounded); }
+
+      const season = new Date(p.gameTime).getFullYear();
+      await Promise.all([feed.home.teamId, feed.away.teamId].map(async (id) => {
+        if (!teamInfoCache.has(id)) teamInfoCache.set(id, await fetchTeamInfo(id));
+        const mKey = `${id}|${season}`;
+        if (!managerCache.has(mKey)) managerCache.set(mKey, await fetchTeamManager(id, season));
+      }));
+      const allIds = [
+        feed.home.startingPitcherId, feed.away.startingPitcherId,
+        ...feed.home.batters.map((b) => b.id), ...feed.away.batters.map((b) => b.id),
+        (managerCache.get(`${feed.home.teamId}|${season}`) || {}).id,
+        (managerCache.get(`${feed.away.teamId}|${season}`) || {}).id,
+      ];
+      const birthdates = await fetchPeopleBirthdates(allIds);
+
+      const sideA = mlbFeedSideForName(feed, p.teamAName);
+      const sideB = mlbFeedSideForName(feed, p.teamBName);
+      if (!sideA || !sideB || sideA === sideB) continue;
+      const gObj = {
+        sideA, sideB,
+        teamInfoA: teamInfoCache.get(sideA.teamId), teamInfoB: teamInfoCache.get(sideB.teamId),
+        managerA: managerCache.get(`${sideA.teamId}|${season}`), managerB: managerCache.get(`${sideB.teamId}|${season}`),
+        birthdates, region: regionInfo.region, regionMode: regionInfo.regionMode, stadiumFounded,
+        gameStartTime: new Date(p.gameTime),
+      };
+      const scoreA = computeTeamComposite(gObj, 'A');
+      const scoreB = computeTeamComposite(gObj, 'B');
+      if (!scoreA || !scoreB) continue;
+
+      const wasFavorite = p.numerologyFavorite;
+      applyMlbComponentPatch(p, scoreA, scoreB);
+      if (wasFavorite && normalizeName(wasFavorite) !== normalizeName(p.numerologyFavorite)) flipped += 1;
+      repaired += 1;
+    }
+    if (repaired) saveMlbPredictions(predictions); // checkpoint as we go
+  }
+
+  localStorage.setItem(MLB_COMPONENT_REPAIR_KEY, String(MLB_COMPONENT_REPAIR_VERSION));
+  return { alreadyDone: false, repaired, flipped, suspectCount: suspects.length };
+}
+
 // Second half of the same corruption. When both team names resolved to the away
 // side, side A and side B were scored as the SAME team - so the record's two
 // component sets came out byte-identical and its two composites came out equal.
@@ -1045,11 +1168,11 @@ async function recordTodaysFinishedMlbGames() {
   async function processFinal(g) {
     const gamePk = g.gamePk;
     // Skip before fetching the feed only if there's nothing left to add: an
-    // existing pick that ALREADY has components, plus both starters' signals.
-    // A componentless pick still needs patching (that's exactly the case that
-    // left today's games out of the component table), so it must not skip here.
+    // existing pick that ALREADY has complete components, plus both starters'
+    // signals. A componentless OR holed pick still needs patching (see
+    // mlbComponentsHoled), so it must not skip here.
     const stored = existingByGamePk.get(gamePk);
-    const pickComplete = stored && stored.components && stored.dims;
+    const pickComplete = stored && !mlbComponentsHoled(stored);
     if (pickComplete && (signalCountByGamePk.get(gamePk) || 0) >= 2) return;
 
     const date = g.officialDate;
@@ -1098,18 +1221,19 @@ async function recordTodaysFinishedMlbGames() {
       };
     };
     const dhKey = [feed.home.teamId, feed.away.teamId].sort().join('-');
-    // Skip only a pick that's already complete (has components). A componentless
-    // pick gets patched in place with its OWN A/B naming (same in-place upgrade
-    // the backfill does, but the backfill never reaches today); if nothing's
-    // stored yet, a fresh pick is built from the closed market.
-    if (!stored || !stored.components || !stored.dims) {
+    // Skip only a pick that's already complete (components without holes). A
+    // componentless or holed pick gets patched in place with its OWN A/B naming
+    // (same in-place upgrade the backfill does, but the backfill never reaches
+    // today); if nothing's stored yet, a fresh pick is built from the closed
+    // market. applyMlbComponentPatch also refreshes score/favorite/pickType so
+    // the record matches what its completed components imply.
+    if (!stored || mlbComponentsHoled(stored)) {
       if (stored) {
         const gObj = buildGObj(stored.teamAName, stored.teamBName);
         const scoreA = gObj && computeTeamComposite(gObj, 'A');
         const scoreB = gObj && computeTeamComposite(gObj, 'B');
         if (scoreA && scoreB) {
-          stored.components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
-          stored.dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
+          applyMlbComponentPatch(stored, scoreA, scoreB);
           patchedCount++;
         }
       } else if (!dhKeys.has(dhKey)) {
@@ -1507,13 +1631,14 @@ async function backfillMlbHistory(onProgress) {
     };
 
     // ---- Game Picks half ----
-    // Skip entirely only if this game is already stored WITH both components and
-    // dimension scores. If it lacks either (older record) we recompute to
-    // back-fill them in place; if it isn't stored at all, we create it.
+    // Skip entirely only if this game is already stored WITH complete
+    // components (no holes in the weighted roles - mlbComponentsHoled). If it
+    // lacks or holes them, we recompute to back-fill in place; if it isn't
+    // stored at all, we create it.
     const dhKey = `${date}|${[feed.home.teamId, feed.away.teamId].sort().join('-')}`;
     const existingPred = existingByGamePk.get(gamePk);
     let event = null;
-    if (!existingPred || !existingPred.components || !existingPred.dims) {
+    if (!existingPred || mlbComponentsHoled(existingPred)) {
       let teamAName = null;
       let teamBName = null;
       if (existingPred) {
@@ -1532,8 +1657,9 @@ async function backfillMlbHistory(onProgress) {
           const components = { A: extractComponents(scoreA.parts), B: extractComponents(scoreB.parts) };
           const dims = { A: extractTeamDimensions(scoreA.parts), B: extractTeamDimensions(scoreB.parts) };
           if (existingPred) {
-            existingPred.components = components;
-            existingPred.dims = dims;
+            // Score/favorite/pickType refresh alongside the components - see
+            // applyMlbComponentPatch for why they must move together.
+            applyMlbComponentPatch(existingPred, scoreA, scoreB);
             patchedCount++;
           } else if (event) {
             const targetTs = Math.floor(event.gameStartTime.getTime() / 1000);
@@ -1941,4 +2067,13 @@ mlbStoreReady.then(() => {
   initMlbWeightsLab(); // three-layer MLB lab (roles + anchors + blend), not the shared flat-only runner
   refreshAndRenderMlb();
  }
+
+ // One-shot component-hole repair, after the store and the weights rescore
+ // are both done. Deliberately outside the statsMlbSection guard: this file
+ // loads on betting.html too, so the store heals on whichever page opens
+ // first. Best-effort and behind the first render; re-render Stats only if
+ // something actually changed.
+ repairMlbIncompleteComponents().then((r) => {
+  if (r.repaired && document.getElementById('statsMlbSection')) refreshAndRenderMlb();
+ }).catch(() => {});
 });
