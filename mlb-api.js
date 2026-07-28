@@ -101,18 +101,34 @@ async function fetchMlbMoneylineEvents() {
 // names alone don't uniquely identify a game - findScheduleGameForMarket
 // below breaks the tie by whichever candidate's start time is closest to
 // Polymarket's.
+// CHUNKED, and failures THROW - both halves matter. MLB's schedule endpoint
+// silently truncates a large span at ~3,000 games: a 104-week request came
+// back ending 2025-09-20 with res.ok and no error flag of any kind
+// (verified live 2026-07-28). The old single-request version handed the
+// backfill that truncated list, the walk finished it, and the "caught up
+// to yesterday" marker got stamped over a record missing a full year. A
+// 90-day chunk can never approach the cap, and a chunk that fails now
+// throws instead of quietly returning a short list - the backfill's catch
+// shows the failure and the marker stays unstamped, so a retry resumes
+// instead of the store looking complete while it isn't.
 async function fetchMlbSchedule(startDateISO, endDateISO) {
-  const url = `${MLB_STATS_BASE}/schedule?sportId=1&startDate=${startDateISO}&endDate=${endDateISO}&hydrate=probablePitcher,venue,team`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
+  const addDays = (iso, n) => {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const games = [];
+  let cursor = startDateISO;
+  while (cursor <= endDateISO) {
+    const chunkEnd = addDays(cursor, 89) < endDateISO ? addDays(cursor, 89) : endDateISO;
+    const url = `${MLB_STATS_BASE}/schedule?sportId=1&startDate=${cursor}&endDate=${chunkEnd}&hydrate=probablePitcher,venue,team`;
+    const res = await fetch(url); // a network error propagates - deliberately
+    if (!res.ok) throw new Error(`MLB schedule ${cursor}..${chunkEnd} failed (HTTP ${res.status})`);
     const data = await res.json();
-    const games = [];
     (data.dates || []).forEach((d) => (d.games || []).forEach((g) => games.push(g)));
-    return games;
-  } catch (e) {
-    return [];
+    cursor = addDays(chunkEnd, 1);
   }
+  return games;
 }
 
 // normalizeName() lives in db-core.js (shared with fighter/player matching).

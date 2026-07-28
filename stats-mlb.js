@@ -1258,7 +1258,12 @@ const MLB_BACKFILL_LOOKBACK_DAYS = 364; // 52 weeks (~1 full MLB season) - now
 // real limits now are just how long one run takes (hundreds more games) and
 // whether Polymarket's own price history still reaches back that far - a gap
 // in old data is their retention, not a bug here.
-const MLB_BACKFILL_SCHEMA = 11; // bump when the stored prediction shape changes,
+// v12: fetchMlbSchedule is chunked now - the old single-request version was
+// silently truncated by MLB's API at ~3,000 games on a 104-week span, so a
+// "caught up" marker stamped by v11 can describe a store missing a year of
+// games. The bump forces one full re-walk: already-stored games fast-skip
+// via the early-out, the missing months actually get walked this time.
+const MLB_BACKFILL_SCHEMA = 12; // bump when the stored prediction shape changes,
 // v9: the NRFI and run-totals pitcher-duel markets were removed. The walk no
 // longer collects them, so v7 and v8 (which existed only to build and then
 // upgrade those two stores) are dead history. Bumped so a marker left at 7 or
