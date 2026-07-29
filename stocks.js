@@ -1346,7 +1346,11 @@ const STOCKS_CYCLE_MIN_N = 8;
 // whichever of up/down/consolidate is its best case) to earn a lean tag.
 const STOCKS_CYCLE_LEAN_MARGIN = 10;
 
-const STOCKS_CYCLE_UNIVERSAL_DAY_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28, 33];
+// No 2: same doctrine as universalDayNumber (db-core.js) - a standalone 2
+// doesn't exist in this system, it's an 11. The only place lookupValue can
+// be 2 is the 20th-of-month quirk in compatLifePathInfo, which is folded
+// into the 11 bucket below rather than kept as its own row.
+const STOCKS_CYCLE_UNIVERSAL_DAY_ORDER = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28, 33];
 const STOCKS_CYCLE_CAL_DAY_REDUCED_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22];
 
 function stocksClassifyOutcome(pctChange) {
@@ -1363,7 +1367,7 @@ function stocksDayCycleLabels(date) {
   return {
     calendarDay: getRawDay(date),
     calendarDayReduced: getReducedDay(date),
-    universalDay: u.lookupValue,
+    universalDay: u.lookupValue === 2 ? 11 : u.lookupValue,
     universalMonth: getUniversalMonth(date),
     zodiacDay: getChineseDaySign(date),
   };
@@ -1441,8 +1445,10 @@ function stocksComputeCycles(inst, bars) {
 
     anchors.forEach((a, idx) => {
       const birthDate = stocksParseDate(a.date);
-      const personalMonth = reduceNumber(getPersonalMonthRaw(birthDate, date));
-      const personalYear = reduceNumber(getPersonalYearRaw(birthDate, date));
+      let personalMonth = reduceNumber(getPersonalMonthRaw(birthDate, date));
+      if (personalMonth === 2) personalMonth = 11; // no standalone 2 - same doctrine as universalDayNumber
+      let personalYear = reduceNumber(getPersonalYearRaw(birthDate, date));
+      if (personalYear === 2) personalYear = 11;
       stocksBumpCycleBucket(personalMonthMaps[idx], personalMonth, outcome, pct);
       stocksBumpCycleBucket(personalYearMaps[idx], personalYear, outcome, pct);
     });
