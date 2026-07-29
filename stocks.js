@@ -636,6 +636,13 @@ const STOCKS_TD_KEY = 'numerology_twelvedata_key';
 // where the last print landed.
 const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v2';
 
+// Which entry mode the Trades panel displays. Both modes are still computed
+// on every render (cheap - prices are day-cached), but only one is shown at
+// a time so the panel doesn't double every multi-day window into a pair of
+// near-identical cards. Resets to Calendar on page load, same as the grid
+// filters below.
+let stocksTradeMode = 'Calendar';
+
 async function stocksFetchSeries(symbol) {
   const todayISO = new Date().toISOString().slice(0, 10);
   let cache = {};
@@ -1070,10 +1077,10 @@ async function renderStockTrades(inst) {
   cards.push(...stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }));
 
   // Record over the calls that actually traded - stated up front so the
-  // reader never has to count for themselves.
-  // One record line per entry mode, judged on identical windows - this is
-  // the whole point of running both: same leans, different triggers, let
-  // the records argue it out. The lone Day card counts under Calendar.
+  // reader never has to count for themselves. Both modes are computed on
+  // every render so the toggle below is instant, but only the active mode's
+  // record and cards are shown. The lone Day card has no mode and counts
+  // under Calendar, same as it always has.
   const modeLine = (modeLabel, list) => {
     const settled = list.filter((c) => c.grade != null && c.grade !== 'open');
     const openCount = list.filter((c) => c.grade === 'open').length;
@@ -1085,16 +1092,30 @@ async function renderStockTrades(inst) {
     const cls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
     return `<div class="stock-trades-summary">${escapeHtml(modeLabel)}: <span class="score-inline ${cls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} open` : ''}${nofills ? ` · ${nofills} no-fill` : ''}</div>`;
   };
-  const summary = (modeLine('Calendar', cards.filter((c) => !c.mode || c.mode === 'Calendar'))
-    + modeLine('Cal + price', cards.filter((c) => c.mode === 'Cal + Price')))
+  const visibleCards = cards.filter((c) => !c.mode || c.mode === stocksTradeMode);
+  const summary = modeLine(stocksTradeMode, cards.filter((c) => stocksTradeMode === 'Calendar' ? (!c.mode || c.mode === 'Calendar') : c.mode === 'Cal + Price'))
     || `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
+  const modeToggle = `
+    <div class="stocks-filter-seg" id="stockTradeModeToggle">
+      <button class="stocks-filter-btn${stocksTradeMode === 'Calendar' ? ' active' : ''}" data-mode="Calendar">Calendar</button>
+      <button class="stocks-filter-btn${stocksTradeMode === 'Cal + Price' ? ' active' : ''}" data-mode="Cal + Price">Cal + Price</button>
+    </div>`;
 
   panel.innerHTML = `${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each directional window is traded both ways: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open - later, but never trades a lean the tape didn't validate. Multi-day calls are graded on the whole path from entry.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Every directional window can be traded two ways - toggle to compare: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open - later, but never trades a lean the tape didn't validate. Multi-day calls are graded on the whole path from entry.</div>
+      ${modeToggle}
       ${summary}
-      ${cards.map((c) => c.html).join('')}
+      ${visibleCards.map((c) => c.html).join('')}
     </div>`;
+
+  document.querySelectorAll('#stockTradeModeToggle .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksTradeMode === btn.dataset.mode) return;
+      stocksTradeMode = btn.dataset.mode;
+      renderStockTrades(inst);
+    });
+  });
 }
 
 /* ===================== Page init ===================== */
