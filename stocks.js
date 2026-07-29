@@ -672,19 +672,38 @@ function stocksLeanAt(inst, level, atDate) {
 // primary anchors' average energy-flow score on each session date. This is
 // NOT hindsight: energies are pure calendar math (no prices involved), so
 // the peak day was knowable before the window ever opened.
+// The one signal both entry pickers share: the primary anchors' average
+// energy on a date, flipped so "bigger = better entry" for either side
+// (deepest weakness for a short, peak strength for a long).
+function stocksSignalScoreAt(inst, lean, date) {
+  const anchorDates = inst.anchors.filter((a) => a.primary && a.date).map((a) => stocksParseDate(a.date));
+  if (!anchorDates.length) return null;
+  const avg = anchorDates.reduce((s, ad) => s + computeEnergyFlow(ad, date).finalScore, 0) / anchorDates.length;
+  return lean.lean === 'short' ? -avg : avg;
+}
+
 function stocksEntryBarIndex(inst, lean, bars) {
   if (bars.length <= 1) return 0;
-  const anchorDates = inst.anchors.filter((a) => a.primary && a.date).map((a) => stocksParseDate(a.date));
-  if (!anchorDates.length) return 0;
   let bestI = 0;
   let best = null;
   bars.forEach((b, i) => {
-    const d = stocksParseDate(b[0]);
-    const avg = anchorDates.reduce((s, ad) => s + computeEnergyFlow(ad, d).finalScore, 0) / anchorDates.length;
-    const signal = lean.lean === 'short' ? -avg : avg; // deepest weakness / peak strength
-    if (best == null || signal > best) { best = signal; bestI = i; }
+    const signal = stocksSignalScoreAt(inst, lean, stocksParseDate(b[0]));
+    if (signal != null && (best == null || signal > best)) { best = signal; bestI = i; }
   });
   return bestI;
+}
+
+// Peak-signal calendar day over a list of FUTURE dates - same math as the
+// replay entries, pointed forward. Legit because energies are pure date
+// math: tomorrow's weakness is as computable as last month's.
+function stocksPeakDay(inst, lean, dates) {
+  let bestD = null;
+  let best = null;
+  dates.forEach((d) => {
+    const signal = stocksSignalScoreAt(inst, lean, d);
+    if (signal != null && (best == null || signal > best)) { best = signal; bestD = d; }
+  });
+  return bestD;
 }
 
 // First day of the current zodiac year, found with the engine's own
@@ -757,6 +776,9 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
   const held = closes[closes.length - 1].f;
   const extremes = bars.map((b) => ({ d: b[0], f: fav(lean.lean === 'short' ? b[3] : b[2]) }));
   const best = extremes.reduce((m, x) => (x.f > m.f ? x : m));
+  // The friendliest CLOSE is the realistic take-profit: an exit you could
+  // actually have taken at a session's end, unlike the intraday wick above.
+  const bestClose = closes.reduce((m, x) => (x.f > m.f ? x : m));
   // The other side of the path: the worst the trade was ever against you,
   // measured on the adverse extremes (a short's pain is the highest HIGH).
   const adverse = bars.map((b) => ({ d: b[0], f: fav(lean.lean === 'short' ? b[2] : b[3]) }));
@@ -806,7 +828,8 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
         </div>` : `
         <div class="stock-trade-path">
           <span>in profit ${Math.round(inProfit * 100)}% of days${isOpen ? ' so far' : ''}</span>
-          <span>best exit <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
+          <span>take profit <span class="score-inline ${bestClose.f > 0 ? 'good' : 'bad'}">${bestClose.f > 0 ? '+' : ''}${bestClose.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(bestClose.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
+          <span>peak <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
           <span>worst <span class="score-inline ${worst.f < 0 ? 'bad' : 'good'}">${worst.f > 0 ? '+' : ''}${worst.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(worst.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
         </div>`;
 
@@ -830,13 +853,75 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
   };
 }
 
+// The forward view: where the system says the NEXT entries are. Pure
+// calendar - no prices, no API key - so it renders for everyone, first.
+// Tomorrow's day lean, next month's lean with its pre-computed entry day,
+// and the best remaining entry day of the current zodiac year.
+function stocksUpcomingHtml(inst) {
+  const today = new Date();
+  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const rows = [];
+
+  const pill = (lean) => {
+    const cls = lean.lean === 'short' ? 'short' : lean.lean === 'long' ? 'long' : lean.lean === 'caution' ? 'caution' : 'neutral';
+    return `<span class="stock-watch ${cls}">${escapeHtml(lean.label)}</span>`;
+  };
+  const row = (label, lean, note) => `
+    <div class="stock-trade-card upcoming">
+      <div class="stock-trade-top">
+        <span class="stock-trade-window">${escapeHtml(label)}</span>
+        <span class="stock-trade-chips">${pill(lean)}</span>
+      </div>
+      <div class="stock-trade-story">${escapeHtml(lean.why)}.${note ? ` ${escapeHtml(note)}` : ''}</div>
+    </div>`;
+
+  // Tomorrow, at day resolution.
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  rows.push(row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), ''));
+
+  // Next calendar month, with its entry day picked in advance.
+  const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
+  let monthNote = '';
+  if (monthLean.lean === 'short' || monthLean.lean === 'long') {
+    const days = [];
+    for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
+    const peak = stocksPeakDay(inst, monthLean, days);
+    if (peak) monthNote = `Enter ${fmtD(peak)} - the month's ${monthLean.lean === 'short' ? 'weakest' : 'strongest'} energy day.`;
+  }
+  rows.push(row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, monthNote));
+
+  // Best remaining entry inside the current zodiac year.
+  const yearLean = stocksLeanAt(inst, 'year', today);
+  let yearNote = '';
+  if (yearLean.lean === 'short' || yearLean.lean === 'long') {
+    const animal = getChineseZodiacYear(today);
+    const days = [];
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
+      days.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    const peak = stocksPeakDay(inst, yearLean, days);
+    if (peak) yearNote = `Best remaining entry ${fmtD(peak)} - the ${yearLean.lean === 'short' ? 'weakest' : 'strongest'} energy day left this zodiac year.`;
+  }
+  rows.push(row('Rest of the zodiac year', yearLean, yearNote));
+
+  return `
+    <div class="stock-trades-box">
+      <div class="stock-trades-note">Upcoming entries - pure calendar math, computed in advance, no prices involved.</div>
+      ${rows.join('')}
+    </div>`;
+}
+
 async function renderStockTrades(inst) {
   const panel = document.getElementById('stockTradesPanel');
+  const upcoming = stocksUpcomingHtml(inst);
   const key = localStorage.getItem(STOCKS_TD_KEY);
   if (!key) {
-    panel.innerHTML = `
+    panel.innerHTML = `${upcoming}
       <div class="stock-trades-box">
-        <div class="stock-trades-note">Live prices need a free Twelve Data API key (twelvedata.com, free tier) - pasted once, kept only on this device.</div>
+        <div class="stock-trades-note">Replayed trades need live prices - a free Twelve Data API key (twelvedata.com, free tier), pasted once, kept only on this device.</div>
         <div class="stock-trades-keyrow">
           <input type="text" id="stockTdKeyInput" placeholder="Paste API key" autocomplete="off">
           <button id="stockTdKeySave">Save</button>
@@ -851,12 +936,12 @@ async function renderStockTrades(inst) {
     return;
   }
 
-  panel.innerHTML = `<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} prices…</div></div>`;
+  panel.innerHTML = `${upcoming}<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} prices…</div></div>`;
   let bars;
   try {
     bars = await stocksFetchSeries(inst.px.symbol);
   } catch (err) {
-    panel.innerHTML = `
+    panel.innerHTML = `${upcoming}
       <div class="stock-trades-box">
         <div class="stock-trades-note bad">Price feed error: ${escapeHtml(err.message || 'unknown')}.</div>
         <div class="stock-trades-keyrow"><button id="stockTdKeyReset">Change API key</button></div>
@@ -912,7 +997,7 @@ async function renderStockTrades(inst) {
     ? `<div class="stock-trades-summary">Record on settled calls: <span class="score-inline ${recordCls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} still open` : ''}</div>`
     : `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
 
-  panel.innerHTML = `
+  panel.innerHTML = `${upcoming}
     <div class="stock-trades-box">
       <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window; entries land on the window's peak-signal energy day (pure calendar math - knowable before the window opened, never price-picked); and multi-day calls are graded on the whole path from entry, not just where the last print landed.</div>
       ${summary}

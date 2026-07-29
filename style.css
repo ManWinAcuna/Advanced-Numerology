@@ -5511,3 +5511,8 @@ body {
   font-size: 0.75rem;
   margin: 20px 0 10px;
 }
+
+.stock-trade-card.upcoming {
+  border-left-color: var(--purple);
+  border-style: dashed;
+}
