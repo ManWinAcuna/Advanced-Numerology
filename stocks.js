@@ -906,6 +906,24 @@ function stocksZodiacYearStart(today) {
   return d;
 }
 
+// The actual exit: hold from entry until the first day whose own day-lean
+// flips to the OPPOSITE direction (the exact same signal that already
+// computes the Upcoming section's "TP" day, just pointed at bars already in
+// hand instead of the future) - or the window's natural end if that never
+// fires. A take-profit day the system never actually acted on is just a
+// look-back stat; this is what turns it into a real exit, so "held"/
+// "peak"/"worst"/"take profit" all get graded over what actually happened,
+// not an arbitrary month/year boundary ridden past the good exit.
+function stocksApplyExitRule(inst, lean, entryBars, wasOpen) {
+  if (entryBars.length <= 1) return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
+  const afterDate = stocksParseDate(entryBars[0][0]);
+  const laterDates = entryBars.slice(1).map((b) => stocksParseDate(b[0]));
+  const reversal = stocksReversalDay(inst, lean, afterDate, laterDates);
+  if (!reversal) return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
+  const exitIdx = entryBars.findIndex((b) => stocksParseDate(b[0]).getTime() === reversal.getTime());
+  return { bars: entryBars.slice(0, exitIdx + 1), stillOpen: false, exitDate: reversal };
+}
+
 // One trade, one card, told from the TRADE's point of view - and graded on
 // the WHOLE PATH, not just the endpoints. Endpoint grading is path-blind: a
 // short that was in profit all month gets called wrong because of one
@@ -915,9 +933,11 @@ function stocksZodiacYearStart(today) {
 // exit the window offered and what holding to the end actually returned -
 // the endpoint number stays as a fact, it just no longer gets to be the
 // judge. A one-session call has no path, so it stays a plain WIN/LOSS.
-// Multi-day windows route through here: pick the system's entry day first
-// (stocksEntryBarIndex), trade from there to the window's end, and say so
-// on the card. Neutral/sporadic windows fall straight through untimed.
+// Multi-day windows route through here: pick the system's entry day first,
+// then actually exit at the first energy-reversal day (stocksApplyExitRule)
+// instead of riding blind to the window's end - a take-profit day the
+// system never acted on was just a look-back stat, not a real exit.
+// Neutral/sporadic windows fall straight through untimed.
 // Every directional multi-day window produces THREE entry-mode cards, so
 // their records can be compared on identical windows: 'Calendar' (enter at
 // the first energy-confirming day's open), 'Cal + Price' (energy trigger,
@@ -929,6 +949,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
     return [stocksTradeCard(label, lean, bars, null, opts)];
   }
   const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); // for real Date objects, not ISO strings (e.g. exit.exitDate)
   const fmtT = (iso) => iso.slice(11, 16);
   const fmtPx = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const noFill = (mode, why) => ({
@@ -954,8 +975,13 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (ei < 0) {
     cards.push(noFill('Calendar', `The ${lean.lean} lean never got a daily energy confirmation - no trade taken.`));
   } else {
-    const stats = [{ label: 'Entry', value: fmtD(bars[ei][0]) }, peakStat];
-    cards.push({ ...stocksTradeCard(label, lean, bars.slice(ei), stats, { ...opts, mode: 'Calendar' }), mode: 'Calendar' });
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(ei), opts && opts.open);
+    const stats = [
+      { label: 'Entry', value: fmtD(bars[ei][0]) },
+      ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
+      peakStat,
+    ];
+    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Calendar', open: exit.stillOpen }), mode: 'Calendar' });
   }
 
   // Mode 2: calendar + price.
@@ -965,13 +991,15 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
       ? 'No energy confirmation, so price was never consulted - no trade taken.'
       : `Price never closed ${lean.lean === 'short' ? 'red' : 'green'} after the energy trigger - no trade taken.`));
   } else {
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(pei), opts && opts.open);
     const stats = [
       { label: 'Trigger', value: fmtD(bars[ei][0]) },
       { label: 'Confirmed', value: fmtD(bars[pei - 1][0]) },
       { label: 'Entry', value: fmtD(bars[pei][0]) },
+      ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
       peakStat,
     ];
-    cards.push({ ...stocksTradeCard(label, lean, bars.slice(pei), stats, { ...opts, mode: 'Cal + Price' }), mode: 'Cal + Price' });
+    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Cal + Price', open: exit.stillOpen }), mode: 'Cal + Price' });
   }
 
   // Mode 3: intraday (CISD/IFVG). Needs a day to zoom into, so it rides the
@@ -1000,13 +1028,15 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
         const remLow = Math.min(...rest.map((b) => b[3]));
         const dayClose = ibars[ibars.length - 1][4];
         const windowBars = [[dayISO, entryBar[1], remHigh, remLow, dayClose], ...bars.slice(ei + 1)];
+        const exit = stocksApplyExitRule(inst, lean, windowBars, opts && opts.open);
         const stats = [
           { label: 'Trigger', value: fmtD(dayISO) },
           { label: which, value: fmtT(ibars[ti][0]) },
           { label: 'Entry', value: `${fmtT(entryBar[0])} @ ${fmtPx(entryBar[1])}` },
+          ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
           peakStat,
         ];
-        cards.push({ ...stocksTradeCard(label, lean, windowBars, stats, { ...opts, mode: 'Intraday' }), mode: 'Intraday' });
+        cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Intraday', open: exit.stillOpen }), mode: 'Intraday' });
       }
     }
   }
@@ -1699,9 +1729,9 @@ function stocksCyclesCacheHit(symbol) {
 function stocksGradeWindowTwoModes(inst, lean, bars) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: null, calPrice: null };
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
-  const calendar = ei < 0 ? null : stocksTradeCard('', lean, bars.slice(ei)).grade;
+  const calendar = ei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei)).bars).grade;
   const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
-  const calPrice = pei < 0 ? null : stocksTradeCard('', lean, bars.slice(pei)).grade;
+  const calPrice = pei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei)).bars).grade;
   return { calendar, calPrice };
 }
 
