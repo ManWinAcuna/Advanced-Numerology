@@ -1,115 +1,131 @@
 // Stock Cycles - the numerology engine pointed at markets instead of matchups.
 // Every instrument is a set of dated anchors (company founding, IPO, CEO
-// birthdate; contract launch and index birth for futures), each read exactly
-// like a person elsewhere in the app: life path from numerology.js, zodiac
-// year animal from getChineseZodiacYear, this year's animal relationship from
-// the same VIETNAMESE_TABLE the sports engine scores with (clash pairs sit at
-// 10, trine allies at 85+), and the anchor's own Personal Year cycle.
+// birthdate; exchange/contract dates for futures), each read exactly like a
+// person elsewhere in the app: life path from numerology.js, zodiac year
+// animal, this year's animal relationship from the same VIETNAMESE_TABLE the
+// sports engine scores with (clash pairs sit at 10, trine allies at 85+),
+// and the anchor's Personal Year/Month/Day cycles via computeEnergyFlow.
 //
 // HONEST SCOPE: unlike the sports side there is no tracked record behind any
-// of this yet - no fitted weights, no win rates, no backtest. Every read on
-// this page is the raw engine, presented as a watchlist lens, not a proven
-// edge. Dates are sourced public record; an anchor whose exact day is not
-// reliably known (COMEX silver, 1963) carries a YEAR ONLY read - the zodiac
-// animal is the only thing a bare year genuinely determines (same rule as
-// the MLB franchise fallback), so that is all it gets. No fabricated dates.
+// of this yet - no fitted weights, no backtest. Every read on this page is
+// the raw engine, presented as a watchlist lens, not a proven edge. Dates
+// are sourced public record; an anchor whose exact day is not reliably known
+// (COMEX silver, 1963) carries a YEAR ONLY read - the zodiac animal is the
+// only thing a bare year genuinely determines (same rule as the MLB
+// franchise fallback). No fabricated dates.
 
 /* ===================== Instruments ===================== */
-// kind drives which anchors count as PRIMARY for the watch verdict: a
-// company trades on its own cycle and its CEO's (the two the user circled),
-// with the IPO as context; a contract or coin has only its own dates.
+// primary anchors drive the watch verdicts: a company trades on its own
+// cycle and its CEO's, with the IPO as context; a contract or coin has only
+// its own dates. px maps each instrument to its Twelve Data price symbol for
+// the Trades panel (futures/metals ride 1:1 proxies, labeled).
 
 const STOCK_INSTRUMENTS = [
   {
     ticker: 'TSLA', name: 'Tesla', kind: 'stock', hue: 0,
+    px: { symbol: 'TSLA' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '2003-07-01', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '2010-06-29' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Elon Musk', date: '1971-06-28', primary: true },
+      { key: 'company', label: 'Company', date: '2003-07-01', primary: true },
+      { key: 'ipo', label: 'IPO', date: '2010-06-29' },
+      { key: 'ceo', label: 'CEO', person: 'Elon Musk', date: '1971-06-28', primary: true },
     ],
   },
   {
     ticker: 'META', name: 'Meta', kind: 'stock', hue: 217,
+    px: { symbol: 'META' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '2004-02-04', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '2012-05-18' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Mark Zuckerberg', date: '1984-05-14', primary: true },
+      { key: 'company', label: 'Company', date: '2004-02-04', primary: true },
+      { key: 'ipo', label: 'IPO', date: '2012-05-18' },
+      { key: 'ceo', label: 'CEO', person: 'Mark Zuckerberg', date: '1984-05-14', primary: true },
     ],
   },
   {
     ticker: 'AAPL', name: 'Apple', kind: 'stock', hue: 210,
+    px: { symbol: 'AAPL' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '1976-04-01', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '1980-12-12' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Tim Cook', date: '1960-11-01', primary: true },
+      { key: 'company', label: 'Company', date: '1976-04-01', primary: true },
+      { key: 'ipo', label: 'IPO', date: '1980-12-12' },
+      { key: 'ceo', label: 'CEO', person: 'Tim Cook', date: '1960-11-01', primary: true },
     ],
   },
   {
     ticker: 'NVDA', name: 'Nvidia', kind: 'stock', hue: 95,
+    px: { symbol: 'NVDA' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '1993-04-05', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '1999-01-22' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Jensen Huang', date: '1963-02-17', primary: true },
+      { key: 'company', label: 'Company', date: '1993-04-05', primary: true },
+      { key: 'ipo', label: 'IPO', date: '1999-01-22' },
+      { key: 'ceo', label: 'CEO', person: 'Jensen Huang', date: '1963-02-17', primary: true },
     ],
   },
   {
     ticker: 'MSFT', name: 'Microsoft', kind: 'stock', hue: 200,
+    px: { symbol: 'MSFT' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '1975-04-04', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '1986-03-13' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Satya Nadella', date: '1967-08-19', primary: true },
+      { key: 'company', label: 'Company', date: '1975-04-04', primary: true },
+      { key: 'ipo', label: 'IPO', date: '1986-03-13' },
+      { key: 'ceo', label: 'CEO', person: 'Satya Nadella', date: '1967-08-19', primary: true },
     ],
   },
   {
     ticker: 'AMZN', name: 'Amazon', kind: 'stock', hue: 35,
+    px: { symbol: 'AMZN' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '1994-07-05', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '1997-05-15' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Andy Jassy', date: '1968-01-13', primary: true },
+      { key: 'company', label: 'Company', date: '1994-07-05', primary: true },
+      { key: 'ipo', label: 'IPO', date: '1997-05-15' },
+      { key: 'ceo', label: 'CEO', person: 'Andy Jassy', date: '1968-01-13', primary: true },
     ],
   },
   {
     ticker: 'GOOGL', name: 'Alphabet', kind: 'stock', hue: 265,
+    px: { symbol: 'GOOGL' },
     anchors: [
-      { key: 'company', icon: '🏢', label: 'Company', date: '1998-09-04', primary: true },
-      { key: 'ipo', icon: '📈', label: 'IPO', date: '2004-08-19' },
-      { key: 'ceo', icon: '👤', label: 'CEO', person: 'Sundar Pichai', date: '1972-06-10', primary: true },
+      { key: 'company', label: 'Company', date: '1998-09-04', primary: true },
+      { key: 'ipo', label: 'IPO', date: '2004-08-19' },
+      { key: 'ceo', label: 'CEO', person: 'Sundar Pichai', date: '1972-06-10', primary: true },
     ],
   },
   {
     ticker: 'NQ', name: 'Nasdaq-100 E-mini', kind: 'futures', hue: 190,
+    px: { symbol: 'QQQ', note: 'via QQQ' },
     anchors: [
-      { key: 'launch', icon: '🚀', label: 'Contract Launch', date: '1999-06-21', primary: true },
-      { key: 'index', icon: '🧮', label: 'Index Born', date: '1985-01-31', primary: true },
+      // The exchange's own first trading day - owner-requested anchor.
+      { key: 'exchange', label: 'Nasdaq Born', date: '1971-02-08', primary: true },
+      { key: 'launch', label: 'Contract Launch', date: '1999-06-21', primary: true },
     ],
   },
   {
     ticker: 'ES', name: 'S&P 500 E-mini', kind: 'futures', hue: 150,
+    px: { symbol: 'SPY', note: 'via SPY' },
     anchors: [
-      { key: 'launch', icon: '🚀', label: 'Contract Launch', date: '1997-09-09', primary: true },
-      { key: 'index', icon: '🧮', label: 'Index Born', date: '1957-03-04', primary: true },
+      // Owner-specified anchor date (the index's own launch was 1957-03-04;
+      // this record follows the owner's 3/4/1971 instruction).
+      { key: 'index', label: 'Index Anchor', date: '1971-03-04', primary: true },
+      { key: 'launch', label: 'Contract Launch', date: '1997-09-09', primary: true },
     ],
   },
   {
     ticker: 'GC', name: 'Gold Futures', kind: 'commodity', hue: 45,
+    px: { symbol: 'XAU/USD', note: 'spot' },
     anchors: [
       // COMEX gold trading opened the day private gold ownership came back
       // (Dec 31, 1974) - a real, exact, well-documented birthdate.
-      { key: 'launch', icon: '🚀', label: 'COMEX Launch', date: '1974-12-31', primary: true },
+      { key: 'launch', label: 'COMEX Launch', date: '1974-12-31', primary: true },
     ],
   },
   {
     ticker: 'SI', name: 'Silver Futures', kind: 'commodity', hue: 220,
+    px: { symbol: 'XAG/USD', note: 'spot' },
     anchors: [
       // Only the launch YEAR is reliably documented - so only the zodiac
       // year is read. No invented month/day (see HONEST SCOPE above).
-      { key: 'launch', icon: '🚀', label: 'COMEX Launch', year: 1963, primary: true },
+      { key: 'launch', label: 'COMEX Launch', year: 1963, primary: true },
     ],
   },
   {
     ticker: 'BTC', name: 'Bitcoin', kind: 'crypto', hue: 28,
+    px: { symbol: 'BTC/USD' },
     anchors: [
-      { key: 'launch', icon: '🚀', label: 'Genesis Block', date: '2009-01-03', primary: true },
+      { key: 'launch', label: 'Genesis Block', date: '2009-01-03', primary: true },
     ],
   },
 ];
@@ -136,7 +152,7 @@ function stocksYearAnimal(year) {
 
 // Number meanings in the owner's own system (stated 2026-07-29): 7 =
 // weakness, 8 = strength, 28 = expansion, 11 = emotional / sporadic. These
-// four drive the cycle read - 7 leans short, 8 and 28 lean long, 11 flags
+// four drive the cycle reads - 7 leans short, 8 and 28 lean long, 11 flags
 // volatility without a direction. Numbers he hasn't defined stay unflagged
 // rather than guessed at, and the number is always shown next to its label
 // so the rule stays inspectable on every card.
@@ -147,7 +163,7 @@ const STOCKS_NUMBER_MEANINGS = {
   11: { label: 'Emotional · Sporadic', dir: 'volatile' },
 };
 
-// One anchor -> everything the card shows. relation comes straight off the
+// One anchor -> everything the cards show. relation comes straight off the
 // engine's VIETNAMESE_TABLE bands: the six clash pairs score exactly 10
 // (enemy year), trine partners 85+ (ally year), everything else neutral.
 function stocksAnchorRead(anchor, today, todayAnimal) {
@@ -178,14 +194,14 @@ function stocksAnchorRead(anchor, today, todayAnimal) {
     relation: score <= 10 ? 'enemy' : score >= 85 ? 'ally' : 'neutral',
     lifePath: getLifePath(d),
     // The permanent trait read for the number itself (a Life Path 8 company
-    // IS strength in this system), separate from the year's cycle below.
+    // IS strength in this system), separate from the year's cycle.
     lifePathMeaning: STOCKS_NUMBER_MEANINGS[getLifePathNumeric(d)] || null,
     personalYear,
     cycle: STOCKS_NUMBER_MEANINGS[personalYear] || null,
     // The deep today read - the exact engine behind the profile's Energy
     // Flow box: PY/PM/PD vs Universal Y/M/D (numerologyCompat per level)
     // AND birth year/month/day signs vs today's three signs
-    // (vietnameseCompat per level). Clashes at any level surface below.
+    // (vietnameseCompat per level).
     flow: computeEnergyFlow(d, today),
   };
 }
@@ -197,7 +213,7 @@ function stocksScoreCls(score) {
 }
 
 function stocksScoreMark(score) {
-  return score <= 29 ? ' ⚔️' : score >= 85 ? ' 🚀' : '';
+  return score <= 10 ? ' · clash' : score >= 85 ? ' · boost' : '';
 }
 
 // A number with one of the owner's meanings shows it everywhere it appears.
@@ -206,13 +222,62 @@ function stocksNumLabel(n) {
   return m ? `${n} · ${m.label}` : String(n);
 }
 
-// Watch verdict from the PRIMARY anchors only (company + CEO for a stock,
-// the instrument's own dates otherwise). Bear signals win: an enemy year or
-// a Personal Year 7 weakness cycle -> short-side watch. Then bull signals:
-// an ally year or a PY 8 strength / PY 28 expansion cycle -> long-side
-// watch (with a swings warning if a PY 11 rides along). PY 11 alone ->
-// sporadic caution, no direction. Plain rules, every input visible on the
-// cards above it.
+/* ===================== Year / Month / Day verdicts ===================== */
+// The same rule at every level, fed by that level's own signals. Bear
+// signals win: a zodiac clash (table score 10) or a 7-weakness cycle number
+// -> short lean. Then bull: a zodiac ally (85+) or an 8/28 cycle -> long
+// lean (with a swings note if an 11 rides along). An 11 alone -> sporadic.
+// Year uses PY + year animals, month uses PM + month signs, day uses PD +
+// day signs - "more than just the year", both systems, as instructed.
+
+function stocksLevelSignals(read, level) {
+  if (!read.flow) return null;
+  const f = read.flow;
+  if (level === 'year') {
+    return {
+      num: f.numerology.personalYear, numName: 'PY',
+      signScore: f.vietnamese.yearScore,
+      mySign: f.vietnamese.personalYearSign, nowSign: f.vietnamese.universalYearSign, signWord: 'year',
+    };
+  }
+  if (level === 'month') {
+    return {
+      num: f.numerology.personalMonth, numName: 'PM',
+      signScore: f.vietnamese.monthScore,
+      mySign: f.vietnamese.personalMonthSign, nowSign: f.vietnamese.universalMonthSign, signWord: 'month sign',
+    };
+  }
+  return {
+    num: f.numerology.personalDay, numName: 'PD',
+    signScore: f.vietnamese.daySignScore,
+    mySign: f.vietnamese.personalDaySign, nowSign: f.vietnamese.universalDaySign, signWord: 'day sign',
+  };
+}
+
+function stocksLevelVerdict(reads, level) {
+  const who = (r) => r.person || r.label;
+  const bears = [];
+  const bulls = [];
+  const swings = [];
+  reads.filter((r) => r.primary).forEach((r) => {
+    const s = stocksLevelSignals(r, level);
+    if (!s) return;
+    const meaning = STOCKS_NUMBER_MEANINGS[s.num];
+    if (s.signScore <= 10) bears.push(`${who(r)}'s ${s.mySign} clashes the ${s.nowSign} ${s.signWord}`);
+    if (meaning && meaning.dir === 'bear') bears.push(`${who(r)} runs a ${s.numName} ${s.num} weakness`);
+    if (s.signScore >= 85) bulls.push(`${who(r)}'s ${s.mySign} allies the ${s.nowSign} ${s.signWord}`);
+    if (meaning && meaning.dir === 'bull') bulls.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
+    if (meaning && meaning.dir === 'volatile') swings.push(`${who(r)} runs a ${s.numName} 11 - sporadic`);
+  });
+
+  if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; ') };
+  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; ') + (swings.length ? `; ${swings.join('; ')}` : '') };
+  if (swings.length) return { lean: 'caution', label: 'Sporadic', why: swings.join('; ') };
+  return { lean: 'neutral', label: 'Neutral', why: 'no signals at this level' };
+}
+
+// The year-level watch verdict that drives the grid pill - same precedence,
+// worded as the watchlist item (this is what sorts the board).
 function stocksVerdict(reads) {
   const primary = reads.filter((r) => r.primary);
   const who = (r) => r.person || r.label;
@@ -227,58 +292,40 @@ function stocksVerdict(reads) {
       ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
       ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} weakness cycle`),
     ];
-    return {
-      watch: 'short', label: 'High Short Watch',
-      text: `${parts.join('; ')}. Weakness cycle and/or enemy year detected — treat as a high-priority short-side watchlist item.`,
-    };
+    return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.` };
   }
   if (allies.length || strong.length) {
     const parts = [
       ...allies.map((r) => `${who(r)}'s ${r.animal} runs an ally year`),
       ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
     ];
-    const swings = sporadic.length
-      ? ` ${sporadic.map((r) => `${who(r)}'s Personal Year 11 runs emotional and sporadic — expect swings on the way`).join('; ')}.`
-      : '';
-    return {
-      watch: 'long', label: 'Long Watch',
-      text: `${parts.join('; ')} with no enemy years or weakness cycles against it. Favorable-cycle watchlist item.${swings}`,
-    };
+    return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.` };
   }
   if (sporadic.length) {
-    return {
-      watch: 'caution', label: 'Sporadic Year',
-      text: `${sporadic.map((r) => `${who(r)} runs a Personal Year 11 — emotional, sporadic energy`).join('; ')}.`
-        + ' No direction from the cycles, but expect erratic swings; size accordingly.',
-    };
+    return { watch: 'caution', label: 'Sporadic Year', text: `${sporadic.map((r) => `${who(r)} runs a Personal Year 11 - emotional, sporadic energy`).join('; ')}.` };
   }
-  return {
-    watch: 'neutral', label: 'Neutral',
-    text: 'No enemy or ally years and no defined cycle numbers on the primary anchors — nothing cyclical to lean on either way this year.',
-  };
+  return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.' };
 }
 
 function stocksInstrumentRead(inst, today, todayAnimal) {
   const reads = inst.anchors.map((a) => stocksAnchorRead(a, today, todayAnimal));
-  return { ...inst, reads, verdict: stocksVerdict(reads) };
+  return {
+    ...inst,
+    reads,
+    verdict: stocksVerdict(reads),
+    levels: {
+      year: stocksLevelVerdict(reads, 'year'),
+      month: stocksLevelVerdict(reads, 'month'),
+      day: stocksLevelVerdict(reads, 'day'),
+    },
+  };
 }
 
-/* ===================== Rendering ===================== */
+/* ===================== CEO portraits (popup only) ===================== */
+// Real faces, fetched at runtime from Wikipedia's page-summary API and
+// cached in localStorage. The GRID deliberately stays ticker monograms; the
+// portrait only appears inside an instrument's own popup (owner's choice).
 
-const STOCKS_WATCH_ORDER = { short: 0, caution: 1, long: 2, neutral: 3 };
-
-const STOCKS_RELATION_CHIP = {
-  enemy: { cls: 'bad', text: 'Enemy Year' },
-  ally: { cls: 'good', text: 'Ally Year' },
-  neutral: { cls: '', text: 'Neutral' },
-};
-
-/* ---------- CEO portraits ---------- */
-// Real faces, fetched at runtime from Wikipedia's page-summary API (same
-// family of sources the sports rosters use) and cached in localStorage, so
-// nothing is bundled and a changed thumbnail self-heals. The ticker monogram
-// is always rendered underneath as the fallback - offline or personless
-// instruments (NQ, gold, BTC) just keep the monogram.
 const STOCKS_PORTRAITS = new Map();
 const STOCKS_PORTRAIT_CACHE_KEY = 'numerology_stock_portraits_v1';
 
@@ -302,27 +349,38 @@ async function stocksLoadPortraits() {
     } catch (e) { /* offline - monogram fallback stays */ }
   }));
   try { localStorage.setItem(STOCKS_PORTRAIT_CACHE_KEY, JSON.stringify(cached)); } catch (e) { /* storage full - refetch next load */ }
-  // Photos usually land after the first paint - stamp them onto whatever is
-  // already on screen.
+  // If a popup is already open when the photo lands, stamp it in.
   document.querySelectorAll('[data-portrait]').forEach((el) => {
     const url = stocksPortraitFor(el.dataset.portrait);
-    if (url) { el.style.backgroundImage = `url(${url})`; el.classList.add('has-photo'); }
+    if (url) { el.style.backgroundImage = `url('${url}')`; el.classList.add('has-photo'); }
   });
 }
 
-function stocksMonogram(inst, large) {
-  const ceo = inst.anchors.find((a) => a.person);
+/* ===================== Rendering ===================== */
+
+const STOCKS_WATCH_ORDER = { short: 0, caution: 1, long: 2, neutral: 3 };
+
+const STOCKS_RELATION_CHIP = {
+  enemy: { cls: 'bad', text: 'Enemy Year' },
+  ally: { cls: 'good', text: 'Ally Year' },
+  neutral: { cls: '', text: 'Neutral' },
+};
+
+const STOCKS_CYCLE_CLS = { bear: 'bad', bull: 'good', volatile: 'warn' };
+
+// Grid monogram: always the plain ticker circle. The portrait version only
+// exists inside the popup hero.
+function stocksMonogram(inst, withPortrait) {
+  const ceo = withPortrait ? inst.anchors.find((a) => a.person) : null;
   const url = ceo ? stocksPortraitFor(ceo.person) : null;
-  const cls = `stock-monogram${large ? ' large' : ''}${url ? ' has-photo' : ''}`;
+  const cls = `stock-monogram${withPortrait ? ' large' : ''}${url ? ' has-photo' : ''}`;
   const style = `--stock-hue:${inst.hue};${url ? `background-image:url('${escapeHtml(url)}');` : ''}`;
   return `<div class="${cls}" style="${style}"${ceo ? ` data-portrait="${escapeHtml(ceo.person)}"` : ''}><span>${escapeHtml(inst.ticker)}</span></div>`;
 }
 
 function stocksWatchPill(verdict) {
-  return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '● ' : ''}${escapeHtml(verdict.label)}</span>`;
+  return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '<span class="stock-dot"></span>' : ''}${escapeHtml(verdict.label)}</span>`;
 }
-
-const STOCKS_CYCLE_CLS = { bear: 'bad', bull: 'good', volatile: 'warn' };
 
 function stocksAnchorFlagBadges(read) {
   const who = (read.person ? read.person.split(' ').pop() : read.label).toUpperCase();
@@ -337,20 +395,20 @@ function renderStocksGrid(instruments) {
   const grid = document.getElementById('stocksGrid');
   const sorted = [...instruments].sort((a, b) => STOCKS_WATCH_ORDER[a.verdict.watch] - STOCKS_WATCH_ORDER[b.verdict.watch]);
   grid.innerHTML = sorted.map((inst) => {
-    // Zodiac chips first, cycle chips after - two consistent groups instead
-    // of per-anchor interleaving, so every card scans the same way.
+    // Zodiac chips first, cycle chips after - two consistent groups so
+    // every card scans the same way.
     const primary = inst.reads.filter((r) => r.primary);
     const chips = [
       ...primary.map((r) => {
         const chip = STOCKS_RELATION_CHIP[r.relation];
-        return `<span class="stock-chip ${chip.cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
+        return `<span class="stock-chip ${chip.cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
       }),
       ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
     ].join('');
     return `
       <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
         <div class="stock-card-head">
-          ${stocksMonogram(inst)}
+          ${stocksMonogram(inst, false)}
           <div class="stock-card-title">
             <div class="stock-card-ticker">${escapeHtml(inst.ticker)}</div>
             <div class="stock-card-name">${escapeHtml(inst.name)}</div>
@@ -369,18 +427,17 @@ function renderStocksGrid(instruments) {
   });
 }
 
-// One anchor's deep today block: PY/PM/PD against the Universal numbers
-// (numerology side) and birth year/month/day signs against today's three
-// signs (Vietnamese side), every pair marked when it clashes (<=29, the
-// engine's fundamental-clash band) or boosts (85+).
+// One anchor's deep today block: PY/PM/PD against the Universal numbers and
+// birth year/month/day signs against today's three signs, every pair marked
+// in words when it clashes (table 10) or boosts (85+) - color carries the
+// rest, no icon noise.
 function stocksEnergyBlock(r) {
   const f = r.flow;
   const n = f.numerology;
   const v = f.vietnamese;
-  const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
   return `
     <div class="stock-energy-block">
-      <div class="stock-energy-title"><span>${r.icon} ${escapeHtml(r.person || r.label)}</span><span class="score-inline ${stocksScoreCls(f.finalScore)}">⚡ ${f.finalScore}</span></div>
+      <div class="stock-energy-title"><span>${escapeHtml(r.person || r.label)}</span><span class="score-inline ${stocksScoreCls(f.finalScore)}">${f.finalScore}</span></div>
       <div class="stock-energy-row">
         <span class="stock-energy-lab">Numbers</span>
         <span class="stock-energy-chips">
@@ -392,9 +449,9 @@ function stocksEnergyBlock(r) {
       <div class="stock-energy-row">
         <span class="stock-energy-lab">Zodiac</span>
         <span class="stock-energy-chips">
-          <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Y · ${e(v.personalYearSign)} vs ${e(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(v.monthScore)}">M · ${e(v.personalMonthSign)} vs ${e(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">D · ${e(v.personalDaySign)} vs ${e(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Year · ${escapeHtml(v.personalYearSign)} vs ${escapeHtml(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(v.monthScore)}">Month · ${escapeHtml(v.personalMonthSign)} vs ${escapeHtml(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">Day · ${escapeHtml(v.personalDaySign)} vs ${escapeHtml(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
         </span>
       </div>
     </div>`;
@@ -408,76 +465,231 @@ function openStockModal(inst) {
 
   const anchorCards = inst.reads.map((r) => `
     <div class="stock-anchor-card${r.primary ? ' primary' : ''}">
-      <div class="stock-anchor-label">${r.icon} ${escapeHtml(r.label)}</div>
-      <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(String(r.lifePath)) : VIETNAMESE_ZODIAC_EMOJI[r.animal] || '—'}</div>
+      <div class="stock-anchor-label">${escapeHtml(r.label)}</div>
+      <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(String(r.lifePath)) : escapeHtml(r.animal)}</div>
       <div class="stock-anchor-sub">${r.lifePath != null ? `Life Path${r.lifePathMeaning ? ' · ' + escapeHtml(r.lifePathMeaning.label) : ''}` : 'Zodiac only'}</div>
       <div class="stock-anchor-date">${escapeHtml(r.dateDisplay)}</div>
       <div class="stock-anchor-zodiac">
-        <span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${STOCKS_RELATION_CHIP[r.relation].text}` : ''}</span>
+        <span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${STOCKS_RELATION_CHIP[r.relation].text}` : ''}</span>
       </div>
       ${r.personalYear != null ? `<div class="stock-anchor-py${r.cycle ? ' ' + STOCKS_CYCLE_CLS[r.cycle.dir] : ''}">Personal Year ${r.personalYear}${r.cycle ? ` · ${escapeHtml(r.cycle.label)}` : ''}</div>` : ''}
     </div>`).join('');
 
-  // Universal side stated once (it's the same "today" for every anchor),
-  // then one deep block per dated anchor, then a clash/boost tally over the
-  // primary anchors. The year-only anchor (silver) has no flow - honest gap.
+  // Three-level verdict: the same rule engine at year, month, and day
+  // resolution - the stable year lean plus how this month and this day sit.
+  const levelRows = ['year', 'month', 'day'].map((level) => {
+    const v = inst.levels[level];
+    if (!v) return '';
+    const pillCls = v.lean === 'short' ? 'short' : v.lean === 'long' ? 'long' : v.lean === 'caution' ? 'caution' : 'neutral';
+    return `
+      <div class="stock-verdict-row">
+        <span class="stock-verdict-term">${level.toUpperCase()}</span>
+        <span class="stock-watch ${pillCls}">${escapeHtml(v.label)}</span>
+        <span class="stock-verdict-why">${escapeHtml(v.why)}</span>
+      </div>`;
+  }).join('');
+
   const flows = inst.reads.filter((r) => r.flow);
   const uni = flows.length ? flows[0].flow : null;
-  const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
   const uniLine = uni ? `
     <div class="stock-uni-row">
       <span class="stock-chip">UY ${stocksNumLabel(uni.numerology.universalYear)}</span>
       <span class="stock-chip">UM ${stocksNumLabel(uni.numerology.universalMonth)}</span>
       <span class="stock-chip">UD ${escapeHtml(String(uni.numerology.universalDay))}${STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)].label) : ''}</span>
-      <span class="stock-chip">${e(uni.vietnamese.universalYearSign)} ${escapeHtml(uni.vietnamese.universalYearSign)} year</span>
-      <span class="stock-chip">${e(uni.vietnamese.universalMonthSign)} ${escapeHtml(uni.vietnamese.universalMonthSign)} month</span>
-      <span class="stock-chip">${e(uni.vietnamese.universalDaySign)} ${escapeHtml(uni.vietnamese.universalDaySign)} day</span>
+      <span class="stock-chip">${escapeHtml(uni.vietnamese.universalYearSign)} year</span>
+      <span class="stock-chip">${escapeHtml(uni.vietnamese.universalMonthSign)} month</span>
+      <span class="stock-chip">${escapeHtml(uni.vietnamese.universalDaySign)} day</span>
     </div>` : '';
 
-  let clashes = 0;
-  let boosts = 0;
-  inst.reads.filter((r) => r.primary && r.flow).forEach((r) => {
-    const f = r.flow;
-    [f.numerology.yearScore, f.numerology.monthScore, f.numerology.dayScore,
-      f.vietnamese.yearScore, f.vietnamese.monthScore, f.vietnamese.daySignScore].forEach((s) => {
-      if (s <= 29) clashes += 1;
-      else if (s >= 85) boosts += 1;
-    });
-  });
-  const todayLine = uni ? `
-    <div class="stock-today-line">${clashes ? `⚔️ ${clashes} clashing energ${clashes === 1 ? 'y' : 'ies'}` : 'No clashing energies'} · ${boosts ? `🚀 ${boosts} boost${boosts === 1 ? '' : 's'}` : 'no boosts'} across the primary anchors today.</div>` : '';
-
-  // Centered hero (photo, name, ticker, badges), then labeled sections -
-  // Anchors / Verdict / Today's Energies - so the card reads top-to-bottom
-  // as a structure instead of a pile. The anchor grid always gets exactly
-  // one column per anchor, so a 3-anchor stock never leaves a 2+1 hole.
   document.getElementById('stockModalBody').innerHTML = `
     <div class="stock-modal-hero">
       ${stocksMonogram(inst, true)}
       <div class="stock-modal-headline">${escapeHtml(headline)}</div>
       <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
       <div class="stock-modal-badges">${stocksWatchPill(inst.verdict)}${badges}</div>
+      <button class="stock-trades-btn" id="stockTradesBtn">View Trades</button>
     </div>
+    <div id="stockTradesPanel"></div>
+    <div class="stock-section-label">Verdict</div>
+    <div class="stock-verdict-rows">${levelRows}</div>
     <div class="stock-section-label">Anchors</div>
     <div class="stock-anchor-row" style="grid-template-columns:repeat(${inst.reads.length},1fr);">${anchorCards}</div>
-    <div class="stock-section-label">Verdict</div>
-    <div class="stock-verdict ${inst.verdict.watch}">${escapeHtml(inst.verdict.text)}</div>
     ${uni ? `<div class="stock-section-label">Today's Energies</div>` : ''}
     ${uniLine}
-    ${flows.map(stocksEnergyBlock).join('')}
-    ${todayLine}`;
+    ${flows.map(stocksEnergyBlock).join('')}`;
+
+  document.getElementById('stockTradesBtn').addEventListener('click', () => renderStockTrades(inst));
   overlay.style.display = 'flex';
 }
+
+/* ===================== Trades (real prices) ===================== */
+// "What would this system's trades have been, and what did the stock
+// actually do" - replayed from real daily prices (Twelve Data, free API key
+// pasted once and kept in localStorage; browser-callable, CORS-verified).
+// Long-term = the current zodiac-year window under the YEAR lean; medium =
+// each of the last three months under that month's own lean (computed
+// as-of that month, not today's); short-term = the last completed session
+// under its day lean. Every row shows the real entry/exit prices and move.
+
+const STOCKS_TD_KEY = 'numerology_twelvedata_key';
+const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v1';
+
+async function stocksFetchSeries(symbol) {
+  const todayISO = new Date().toISOString().slice(0, 10);
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(STOCKS_PX_CACHE_KEY)) || {}; } catch (e) { cache = {}; }
+  const hit = cache[symbol];
+  if (hit && hit.fetched === todayISO) return hit.bars;
+
+  const key = localStorage.getItem(STOCKS_TD_KEY);
+  const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=260&apikey=${encodeURIComponent(key)}`);
+  const data = await res.json();
+  if (data.status !== 'ok' || !Array.isArray(data.values)) {
+    throw new Error(data.message || 'price feed unavailable');
+  }
+  // Twelve Data returns newest first; store oldest-first [date, open, close].
+  const bars = data.values.map((v) => [v.datetime, Number(v.open), Number(v.close)]).reverse();
+  cache[symbol] = { fetched: todayISO, bars };
+  try { localStorage.setItem(STOCKS_PX_CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
+  return bars;
+}
+
+// The lean this system would have given at a past date, at one level -
+// computed from the anchors' energy flow AS OF that date, so a month's
+// trade uses that month's numbers, not today's.
+function stocksLeanAt(inst, level, atDate) {
+  const reads = inst.anchors
+    .filter((a) => a.primary && a.date)
+    .map((a) => ({ ...a, primary: true, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
+  return stocksLevelVerdict(reads, level);
+}
+
+// First day of the current zodiac year, found with the engine's own
+// boundary: walk forward from Jan 20 until the year animal flips.
+function stocksZodiacYearStart(today) {
+  const animal = getChineseZodiacYear(today);
+  const d = new Date(today.getFullYear(), 0, 20);
+  while (d <= today && getChineseZodiacYear(d) !== animal) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function stocksTradeRow(term, windowLabel, lean, entryBar, exitBar) {
+  if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
+    return `
+      <tr>
+        <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
+        <td colspan="3" class="empty-state">${lean && lean.lean === 'caution' ? 'no trade - sporadic' : 'no trade - neutral'}</td>
+      </tr>`;
+  }
+  if (!entryBar || !exitBar) {
+    return `
+      <tr>
+        <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
+        <td>${lean.lean === 'short' ? 'Short' : 'Long'}</td>
+        <td colspan="2" class="empty-state">no price data</td>
+      </tr>`;
+  }
+  const entry = entryBar[1];
+  const exit = exitBar[2];
+  const movePct = ((exit - entry) / entry) * 100;
+  const hit = lean.lean === 'short' ? movePct < 0 : movePct > 0;
+  const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
+  return `
+    <tr>
+      <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
+      <td class="${lean.lean === 'short' ? 'bad' : 'good'}">${lean.lean === 'short' ? 'Short' : 'Long'}</td>
+      <td>${fmt(entry)} → ${fmt(exit)} <span class="score-inline ${movePct < 0 ? 'bad' : 'good'}">${movePct > 0 ? '+' : ''}${movePct.toFixed(1)}%</span></td>
+      <td class="${hit ? 'good' : 'bad'}">${hit ? 'HIT' : 'MISS'}</td>
+    </tr>`;
+}
+
+async function renderStockTrades(inst) {
+  const panel = document.getElementById('stockTradesPanel');
+  const key = localStorage.getItem(STOCKS_TD_KEY);
+  if (!key) {
+    panel.innerHTML = `
+      <div class="stock-trades-box">
+        <div class="stock-trades-note">Live prices need a free Twelve Data API key (twelvedata.com, free tier) - pasted once, kept only on this device.</div>
+        <div class="stock-trades-keyrow">
+          <input type="text" id="stockTdKeyInput" placeholder="Paste API key" autocomplete="off">
+          <button id="stockTdKeySave">Save</button>
+        </div>
+      </div>`;
+    document.getElementById('stockTdKeySave').addEventListener('click', () => {
+      const v = document.getElementById('stockTdKeyInput').value.trim();
+      if (!v) return;
+      localStorage.setItem(STOCKS_TD_KEY, v);
+      renderStockTrades(inst);
+    });
+    return;
+  }
+
+  panel.innerHTML = `<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} prices…</div></div>`;
+  let bars;
+  try {
+    bars = await stocksFetchSeries(inst.px.symbol);
+  } catch (err) {
+    panel.innerHTML = `
+      <div class="stock-trades-box">
+        <div class="stock-trades-note bad">Price feed error: ${escapeHtml(err.message || 'unknown')}.</div>
+        <div class="stock-trades-keyrow"><button id="stockTdKeyReset">Change API key</button></div>
+      </div>`;
+    document.getElementById('stockTdKeyReset').addEventListener('click', () => {
+      localStorage.removeItem(STOCKS_TD_KEY);
+      renderStockTrades(inst);
+    });
+    return;
+  }
+
+  const today = new Date();
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const rows = [];
+
+  // Short-term: the last completed session under its own day lean.
+  const doneBars = bars.filter((b) => b[0] < todayISO);
+  const lastBar = doneBars[doneBars.length - 1];
+  if (lastBar) {
+    const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
+    rows.push(stocksTradeRow('Day', lastBar[0], dayLean, lastBar, lastBar));
+  }
+
+  // Medium: each of the last three completed months under that month's lean.
+  for (let k = 1; k <= 3; k++) {
+    const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
+    const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
+    const monthBars = bars.filter((b) => b[0].startsWith(mISO));
+    const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
+    const label = m.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    rows.push(stocksTradeRow('Month', label, lean, monthBars[0], monthBars[monthBars.length - 1]));
+  }
+
+  // Long-term: the current zodiac-year window under the year lean.
+  const yStart = stocksZodiacYearStart(today);
+  const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
+  const yearBars = bars.filter((b) => b[0] >= yStartISO);
+  const yearLean = stocksLeanAt(inst, 'year', today);
+  rows.push(stocksTradeRow('Year', `since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars[0], yearBars[yearBars.length - 1]));
+
+  panel.innerHTML = `
+    <div class="stock-trades-box">
+      <div class="stock-trades-note">System trades replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''} - each window's lean is computed as of that window.</div>
+      <table class="astro-table stock-trades-table">
+        <thead><tr><th>Term</th><th>Window</th><th>Side</th><th>Entry → Exit</th><th>Result</th></tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ===================== Page init ===================== */
 
 function initStocksPage() {
   const today = new Date();
   const todayAnimal = getChineseZodiacYear(today);
-  document.getElementById('stocksYearChip').innerHTML =
-    `${VIETNAMESE_ZODIAC_EMOJI[todayAnimal] || ''} ${today.getFullYear()} · Year of the ${escapeHtml(todayAnimal)}`;
+  document.getElementById('stocksYearChip').textContent = `${today.getFullYear()} · Year of the ${todayAnimal}`;
 
   const instruments = STOCK_INSTRUMENTS.map((inst) => stocksInstrumentRead(inst, today, todayAnimal));
   renderStocksGrid(instruments);
-  stocksLoadPortraits(); // async - photos stamp onto the grid when they land
+  stocksLoadPortraits(); // async - popup portraits, grid stays ticker-only
 
   const overlay = document.getElementById('stockModalOverlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });

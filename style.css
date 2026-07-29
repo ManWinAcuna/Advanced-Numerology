@@ -5252,3 +5252,113 @@ body {
 }
 
 .stock-watch { font-size: 0.64rem; padding: 4px 9px; }
+
+/* ===================== Stock Cycles - verdict levels + trades ===================== */
+
+.stock-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bad);
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.stock-verdict-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stock-verdict-row {
+  display: grid;
+  grid-template-columns: 52px auto 1fr;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.stock-verdict-term {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.stock-verdict-why {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .stock-verdict-row { grid-template-columns: 52px auto; }
+  .stock-verdict-why { grid-column: 1 / -1; }
+}
+
+.stock-trades-btn {
+  margin-top: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.stock-trades-btn:hover { border-color: var(--yellow); }
+
+.stock-trades-box {
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.stock-trades-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.stock-trades-note.bad { color: var(--bad); }
+
+.stock-trades-keyrow {
+  display: flex;
+  gap: 8px;
+}
+
+.stock-trades-keyrow input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.stock-trades-keyrow button {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stock-trades-table { width: 100%; }
+.stock-trades-table td, .stock-trades-table th { font-size: 0.75rem; }
+.stock-trades-table td.good { color: var(--good); }
+.stock-trades-table td.bad { color: var(--bad); }
