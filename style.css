@@ -4886,6 +4886,84 @@ body {
   margin-bottom: 14px;
 }
 
+/* ===================== Stock Cycles - main-page dashboard ===================== */
+
+.stock-dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 720px) {
+  .stock-dashboard { grid-template-columns: 1fr; }
+}
+
+.stock-dashboard-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.stock-dashboard-box .stock-section-label { margin: 0 0 8px; }
+
+.stock-radar-row {
+  display: grid;
+  grid-template-columns: 52px auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+
+.stock-radar-row:first-child { border-top: none; }
+.stock-radar-row:hover { background: rgba(255, 255, 255, 0.04); }
+
+.stock-radar-ticker {
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.stock-radar-when {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.stock-radar-signals {
+  color: var(--muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.stock-combined-record-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.stock-combined-record-row:first-child { border-top: none; }
+.stock-combined-record-label { font-weight: 700; }
+
+.stock-combined-record-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.stock-combined-record-btn:hover { border-color: var(--yellow); }
+
 .stock-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
