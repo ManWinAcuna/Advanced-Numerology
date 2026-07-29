@@ -631,7 +631,10 @@ function openStockModal(inst) {
 // under its day lean. Every row shows the real entry/exit prices and move.
 
 const STOCKS_TD_KEY = 'numerology_twelvedata_key';
-const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v1';
+// v2: bars carry the full [date, open, high, low, close] - the high/low are
+// what let a single session be judged on its whole range instead of just
+// where the last print landed.
+const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v2';
 
 async function stocksFetchSeries(symbol) {
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -646,8 +649,8 @@ async function stocksFetchSeries(symbol) {
   if (data.status !== 'ok' || !Array.isArray(data.values)) {
     throw new Error(data.message || 'price feed unavailable');
   }
-  // Twelve Data returns newest first; store oldest-first [date, open, close].
-  const bars = data.values.map((v) => [v.datetime, Number(v.open), Number(v.close)]).reverse();
+  // Twelve Data returns newest first; store oldest-first [date, open, high, low, close].
+  const bars = data.values.map((v) => [v.datetime, Number(v.open), Number(v.high), Number(v.low), Number(v.close)]).reverse();
   cache[symbol] = { fetched: todayISO, bars };
   try { localStorage.setItem(STOCKS_PX_CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
   return bars;
@@ -705,17 +708,17 @@ function stocksZodiacYearStart(today) {
 // Multi-day windows route through here: pick the system's entry day first
 // (stocksEntryBarIndex), trade from there to the window's end, and say so
 // on the card. Neutral/sporadic windows fall straight through untimed.
-function stocksTimedTrade(inst, label, lean, bars) {
+function stocksTimedTrade(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
-    return stocksTradeCard(label, lean, bars, inst.px.symbol);
+    return stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts);
   }
   const ei = stocksEntryBarIndex(inst, lean, bars);
   const eDate = stocksParseDate(bars[ei][0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const note = `Entered ${eDate} - the window's ${lean.lean === 'short' ? 'weakest' : 'strongest'} energy day.`;
-  return stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note);
+  return stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note, opts);
 }
 
-function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
+function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
     return {
       html: `
@@ -744,12 +747,20 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
     };
   }
 
+  // Bars are [date, open, high, low, close]. Time-in-profit reads the
+  // session closes; the best exit reads the true extremes (a short's best
+  // exit is the lowest LOW, not the lowest close).
   const entry = bars[0][1];
-  const exit = bars[bars.length - 1][2];
+  const exit = bars[bars.length - 1][4];
   const fav = (px) => (lean.lean === 'short' ? ((entry - px) / entry) * 100 : ((px - entry) / entry) * 100);
-  const closes = bars.map((b) => ({ d: b[0], f: fav(b[2]) }));
+  const closes = bars.map((b) => ({ d: b[0], f: fav(b[4]) }));
   const held = closes[closes.length - 1].f;
-  const best = closes.reduce((m, x) => (x.f > m.f ? x : m));
+  const extremes = bars.map((b) => ({ d: b[0], f: fav(lean.lean === 'short' ? b[3] : b[2]) }));
+  const best = extremes.reduce((m, x) => (x.f > m.f ? x : m));
+  // The other side of the path: the worst the trade was ever against you,
+  // measured on the adverse extremes (a short's pain is the highest HIGH).
+  const adverse = bars.map((b) => ({ d: b[0], f: fav(lean.lean === 'short' ? b[2] : b[3]) }));
+  const worst = adverse.reduce((m, x) => (x.f < m.f ? x : m));
   const inProfit = closes.filter((x) => x.f > 0).length / closes.length;
 
   const movePct = ((exit - entry) / entry) * 100;
@@ -757,12 +768,18 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
   const moved = flat ? 'closed flat' : `${movePct > 0 ? 'rose' : 'fell'} ${Math.abs(movePct).toFixed(1)}%`;
   const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const singleDay = bars.length === 1;
+  const isOpen = !!(opts && opts.open);
 
   let grade;
   let badge;
   if (singleDay) {
-    grade = held > 0 ? 'right' : 'wrong';
-    badge = held > 0 ? 'WIN' : flat ? 'FLAT' : 'LOSS';
+    // One session, judged on its whole range: WIN if it closed in profit,
+    // WRONG only if it NEVER traded in profit (the favorable extreme stayed
+    // at or under entry), MIXED when the range offered profit but the close
+    // took it back - the "down all day, spiked at the bell" case.
+    if (held > 0) { grade = 'right'; badge = 'WIN'; }
+    else if (best.f <= 0) { grade = 'wrong'; badge = flat ? 'FLAT' : 'LOSS'; }
+    else { grade = 'mixed'; badge = 'MIXED'; }
   } else if (inProfit >= 0.6) {
     grade = 'right';
     badge = 'RIGHT';
@@ -773,17 +790,29 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
     grade = 'mixed';
     badge = 'MIXED';
   }
+  const cardCls = grade === 'right' ? 'win' : grade === 'wrong' ? 'loss' : 'mixed';
   const badgeCls = grade === 'right' ? 'good' : grade === 'wrong' ? 'bad' : 'warn';
+  // A window still running is a position, not a verdict - it reads AHEAD or
+  // BEHIND so far, and the record line counts it as open, never as settled.
+  if (isOpen) {
+    badge = `${grade === 'right' ? 'AHEAD' : grade === 'wrong' ? 'BEHIND' : 'MIXED'} SO FAR`;
+    grade = 'open';
+  }
 
-  const pathRow = singleDay ? '' : `
+  const pathRow = singleDay ? `
         <div class="stock-trade-path">
-          <span>in profit ${Math.round(inProfit * 100)}% of days</span>
+          <span>ranged ${fmt(Math.min(bars[0][3], entry))} – ${fmt(bars[0][2])}</span>
+          <span>best exit <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> intraday</span>
+        </div>` : `
+        <div class="stock-trade-path">
+          <span>in profit ${Math.round(inProfit * 100)}% of days${isOpen ? ' so far' : ''}</span>
           <span>best exit <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
+          <span>worst <span class="score-inline ${worst.f < 0 ? 'bad' : 'good'}">${worst.f > 0 ? '+' : ''}${worst.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(worst.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
         </div>`;
 
   return {
     html: `
-      <div class="stock-trade-card ${grade === 'right' ? 'win' : grade === 'wrong' ? 'loss' : 'mixed'}">
+      <div class="stock-trade-card ${cardCls}">
         <div class="stock-trade-top">
           <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
           <span class="stock-trade-chips">
@@ -791,10 +820,10 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}.${entryNote ? ` ${escapeHtml(entryNote)}` : ''} ${escapeHtml(symbol)} ${moved}.</div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}.${entryNote ? ` ${escapeHtml(entryNote)}` : ''} ${escapeHtml(symbol)} ${moved}${isOpen ? ' so far' : ''}.</div>
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
-          <span class="score-inline ${held > 0 ? 'good' : 'bad'}">held to end ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
+          <span class="score-inline ${held > 0 ? 'good' : 'bad'}">${isOpen ? 'running' : 'held to end'} ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
         </div>${pathRow}
       </div>`,
     grade,
@@ -867,17 +896,20 @@ async function renderStockTrades(inst) {
   const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
   const yearBars = bars.filter((b) => b[0] >= yStartISO);
   const yearLean = stocksLeanAt(inst, 'year', today);
-  cards.push(stocksTimedTrade(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars));
+  // The zodiac year runs until the next Lunar New Year - it's an OPEN
+  // position, shown as ahead/behind so far, never graded as settled.
+  cards.push(stocksTimedTrade(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves.
-  const graded = cards.filter((c) => c.grade != null);
+  const graded = cards.filter((c) => c.grade != null && c.grade !== 'open');
+  const openCount = cards.filter((c) => c.grade === 'open').length;
   const right = graded.filter((c) => c.grade === 'right').length;
   const wrong = graded.filter((c) => c.grade === 'wrong').length;
   const mixed = graded.filter((c) => c.grade === 'mixed').length;
   const recordCls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
-  const summary = graded.length
-    ? `<div class="stock-trades-summary">Record on these calls: <span class="score-inline ${recordCls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span></div>`
+  const summary = (graded.length || openCount)
+    ? `<div class="stock-trades-summary">Record on settled calls: <span class="score-inline ${recordCls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} still open` : ''}</div>`
     : `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
 
   panel.innerHTML = `
