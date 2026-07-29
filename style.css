@@ -4952,18 +4952,6 @@ body {
 .stock-combined-record-row:first-child { border-top: none; }
 .stock-combined-record-label { font-weight: 700; }
 
-.stock-combined-record-btn {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.stock-combined-record-btn:hover { border-color: var(--yellow); }
-
 .stock-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));

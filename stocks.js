@@ -1684,35 +1684,35 @@ async function stocksLoadCycleStatsForVerdict(inst, today, todayAnimal) {
 }
 
 /* ===================== Combined Track Record (main-page dashboard) =====
- * "One win-rate across everything we've actually traded, the last couple
- * of years" - owner's ask. Walks every completed calendar month (not
- * zodiac years - those are a different holding-period concept, kept
- * separate in each instrument's own Trades panel) across all 16
- * instruments' long price history, grading each under Calendar and
- * Cal + Price - the two modes that need nothing beyond the daily bars
- * already fetched, so this runs automatically once a key is saved.
- * Intraday is NOT part of this automatic pass: grading it needs one extra
- * 15m fetch per confirmed month, and 16 instruments x 24 months would be
- * hundreds of extra API calls - past the free tier's per-minute limit no
- * matter how it's spread out. It lives behind its own on-demand button,
- * scoped to a shorter recent window instead. */
+ * "One win-rate across everything we've actually traded" - refined a few
+ * times since the first pass: Intraday dropped from this box entirely (too
+ * expensive to keep current automatically - it still lives as a mode
+ * inside each instrument's own Trades panel, just not summed here); shows
+ * whichever of Calendar/Cal+Price actually won, not both stacked; Month
+ * and Year are separate, picked one at a time, not shown together; and the
+ * graded result is now a persisted ledger in localStorage that only grows
+ * when a new month or zodiac year actually completes - not recomputed
+ * from scratch on every visit. */
 
-// How far back the automatic Calendar/Cal+Price record looks.
+// Rolling windows kept for each horizon.
 const STOCKS_COMBINED_MONTHS_BACK = 24;
-// How far back the on-demand Intraday record looks - short on purpose,
-// since each month here costs one extra 15m fetch per instrument.
-const STOCKS_INTRADAY_COMBINED_MONTHS = 3;
-// Space between real (non-cached) history fetches while building the
-// combined record, so a cold run for 16 instruments never exceeds Twelve
-// Data's 8-credits-a-minute free-tier cap no matter how the timing lands.
+const STOCKS_COMBINED_YEARS_BACK = 3;
+// Space between real (non-cached) history fetches while extending the
+// record, so a cold run for 16 instruments never exceeds Twelve Data's
+// 8-credits-a-minute free-tier cap no matter how the timing lands.
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v2';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function stocksDateToISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Peeks at the long-history cache without fetching - lets the throttled
-// loaders below skip the delay after a cache hit (which cost no API call)
+// loader below skip the delay after a cache hit (which cost no API call)
 // and only pace out real network fetches.
 function stocksCyclesCacheHit(symbol) {
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -1723,9 +1723,9 @@ function stocksCyclesCacheHit(symbol) {
 }
 
 // Grades one window under Calendar and Cal + Price only - synchronous,
-// since neither mode needs anything beyond the daily bars already in hand
-// (unlike Intraday, which needs its own 15m fetch). Returns each mode's
-// grade ('right'/'wrong'/'mixed') or null (not directional, or no fill).
+// since neither mode needs anything beyond the daily bars already in hand.
+// Returns each mode's grade ('right'/'wrong'/'mixed') or null (not
+// directional, or no fill).
 function stocksGradeWindowTwoModes(inst, lean, bars) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: null, calPrice: null };
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
@@ -1735,50 +1735,106 @@ function stocksGradeWindowTwoModes(inst, lean, bars) {
   return { calendar, calPrice };
 }
 
-// One instrument's contribution to the combined record: every completed
-// month in the last STOCKS_COMBINED_MONTHS_BACK months, graded and summed.
-function stocksWalkCombinedRecord(inst, bars, today) {
-  const agg = { calendar: { right: 0, wrong: 0, mixed: 0 }, calPrice: { right: 0, wrong: 0, mixed: 0 } };
-  for (let k = 1; k <= STOCKS_COMBINED_MONTHS_BACK; k++) {
+/* ---- persisted ledger: one entry per instrument per completed period ---- */
+
+function stocksLoadCombinedStore() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STOCKS_COMBINED_STORE_KEY));
+    if (raw && Array.isArray(raw.monthEntries) && Array.isArray(raw.yearEntries)) return raw;
+  } catch (e) { /* corrupt or missing - start fresh */ }
+  return { monthEntries: [], yearEntries: [] };
+}
+
+function stocksSaveCombinedStore(store) {
+  try { localStorage.setItem(STOCKS_COMBINED_STORE_KEY, JSON.stringify(store)); } catch (e) { /* storage full - still works in-memory this session */ }
+}
+
+// The 'YYYY-MM' keys currently inside the rolling month window (oldest
+// first) - completed months only, this month itself isn't done yet.
+function stocksRelevantMonthKeys(today) {
+  const keys = [];
+  for (let k = STOCKS_COMBINED_MONTHS_BACK; k >= 1; k--) {
     const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
-    const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
-    const monthBars = bars.filter((b) => b[0].startsWith(mISO));
-    if (!monthBars.length) continue;
-    const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
-    const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, lean, monthBars);
-    if (calendar) agg.calendar[calendar]++;
-    if (calPrice) agg.calPrice[calPrice]++;
+    keys.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`);
   }
+  return keys;
+}
+
+// The last N completed zodiac years (the current one is still running and
+// stays excluded) - found by walking the engine's own boundary backward
+// one flip at a time, so there's no calendar-drift risk from approximating
+// "a year" as 365 days.
+function stocksCompletedZodiacYearRanges(today, count) {
+  const ranges = [];
+  let boundary = stocksZodiacYearStart(today);
+  for (let i = 0; i < count; i++) {
+    const end = new Date(boundary);
+    end.setDate(end.getDate() - 1);
+    const start = stocksZodiacYearStart(end);
+    ranges.push({ start, end, key: `${start.getFullYear()}-${getChineseZodiacYear(start)}` });
+    boundary = start;
+  }
+  return ranges;
+}
+
+function stocksAggregateEntries(entries) {
+  const agg = { calendar: { right: 0, wrong: 0, mixed: 0 }, calPrice: { right: 0, wrong: 0, mixed: 0 } };
+  entries.forEach((e) => {
+    if (e.calendar) agg.calendar[e.calendar]++;
+    if (e.calPrice) agg.calPrice[e.calPrice]++;
+  });
   return agg;
 }
 
-function stocksWinRateLine(modeLabel, agg) {
-  const settled = agg.right + agg.wrong + agg.mixed;
-  if (!settled) return `<div class="stock-combined-record-row"><span class="stock-combined-record-label">${escapeHtml(modeLabel)}</span><span class="stock-trades-note" style="margin:0;">no graded trades yet</span></div>`;
-  const rate = Math.round((agg.right / settled) * 100);
-  const cls = rate >= 55 ? 'good' : rate <= 45 ? 'bad' : '';
+// Shows whichever of Calendar/Cal + Price actually performed better - one
+// number, the one that's actually working, not both stacked.
+function stocksBestModeLine(agg) {
+  const rate = (m) => { const s = m.right + m.wrong + m.mixed; return s ? m.right / s : -1; };
+  const calRate = rate(agg.calendar);
+  const cpRate = rate(agg.calPrice);
+  if (calRate < 0 && cpRate < 0) return `<div class="stock-trades-note">No graded trades yet in this window.</div>`;
+  const best = cpRate >= calRate ? { label: 'Cal + Price', m: agg.calPrice, rate: cpRate } : { label: 'Calendar', m: agg.calendar, rate: calRate };
+  const settled = best.m.right + best.m.wrong + best.m.mixed;
+  const pct = Math.round(best.rate * 100);
+  const cls = pct >= 55 ? 'good' : pct <= 45 ? 'bad' : '';
   return `
     <div class="stock-combined-record-row">
-      <span class="stock-combined-record-label">${escapeHtml(modeLabel)}</span>
-      <span class="score-inline ${cls}">${rate}% <span style="font-weight:400;">(${agg.right}/${agg.wrong}/${agg.mixed} of ${settled})</span></span>
+      <span class="stock-combined-record-label">${escapeHtml(best.label)} <span style="font-weight:400;color:var(--muted);">best of the two</span></span>
+      <span class="score-inline ${cls}">${pct}% <span style="font-weight:400;">(${best.m.right}/${best.m.wrong}/${best.m.mixed} of ${settled})</span></span>
     </div>`;
 }
 
-function renderStocksCombinedRecordBody(box, totals, loaded, total, instruments, today) {
+// Which stored horizon the box shows - session-scoped, resets to Month on
+// page load, same idea as the other Day/Month/Year toggles on this page.
+let stocksCombinedHorizon = 'month';
+
+function stocksCombinedHorizonFilterHtml() {
+  const opt = (h, label) => `<button class="stocks-filter-btn${stocksCombinedHorizon === h ? ' active' : ''}" data-horizon="${h}">${label}</button>`;
+  return `<div class="stocks-filter-seg" id="stockCombinedHorizonFilter">${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
+}
+
+function renderStocksCombinedRecordBody(box, store) {
+  const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
+  const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} zodiac years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
   box.innerHTML = `
-    <div class="stock-trades-note">Every completed month, last ${STOCKS_COMBINED_MONTHS_BACK} months, all ${loaded}/${total} instruments that loaded.</div>
-    ${stocksWinRateLine('Calendar', totals.calendar)}
-    ${stocksWinRateLine('Cal + Price', totals.calPrice)}
-    <div class="stock-combined-record-row">
-      <span class="stock-combined-record-label">Intraday</span>
-      <button class="stock-combined-record-btn" id="stocksCombinedIntradayBtn">Compute (last ${STOCKS_INTRADAY_COMBINED_MONTHS} mo · takes a few min)</button>
-    </div>`;
-  const btn = document.getElementById('stocksCombinedIntradayBtn');
-  if (btn) btn.addEventListener('click', () => stocksLoadCombinedIntraday(instruments, today, btn));
+    ${stocksCombinedHorizonFilterHtml()}
+    <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments. Updates only when a new one completes.</div>
+    ${stocksBestModeLine(stocksAggregateEntries(entries))}`;
+  document.querySelectorAll('#stockCombinedHorizonFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksCombinedHorizon === btn.dataset.horizon) return;
+      stocksCombinedHorizon = btn.dataset.horizon;
+      renderStocksCombinedRecordBody(box, store);
+    });
+  });
 }
 
-// Automatic pass: Calendar + Cal + Price only, across all 16 instruments,
-// throttled so a cold cache never exceeds the per-minute API cap.
+// Only grades what's actually new: diffs the current rolling windows
+// against what's already stored, and if nothing has completed since last
+// time, renders straight from the ledger with zero fetches. When something
+// has completed, fetches each instrument's (cached-per-day) history once,
+// grades just the new month(s)/year(s), prunes anything that's rolled out
+// of the window, and persists the result.
 async function stocksLoadCombinedRecord(instruments, today) {
   const box = document.getElementById('stocksCombinedRecord');
   if (!box) return;
@@ -1787,49 +1843,55 @@ async function stocksLoadCombinedRecord(instruments, today) {
     box.innerHTML = `<div class="stock-trades-note">Needs the same Twelve Data API key as Trades/Day Cycles - open any instrument's Trades panel once to save one, then reload this page.</div>`;
     return;
   }
-  const totals = { calendar: { right: 0, wrong: 0, mixed: 0 }, calPrice: { right: 0, wrong: 0, mixed: 0 } };
-  let loaded = 0;
+
+  const store = stocksLoadCombinedStore();
+  const relevantMonthKeys = stocksRelevantMonthKeys(today);
+  const relevantYearRanges = stocksCompletedZodiacYearRanges(today, STOCKS_COMBINED_YEARS_BACK);
+  const gradedMonthKeys = new Set(store.monthEntries.map((e) => e.month));
+  const gradedYearKeys = new Set(store.yearEntries.map((e) => e.year));
+  const newMonthKeys = relevantMonthKeys.filter((k) => !gradedMonthKeys.has(k));
+  const newYearRanges = relevantYearRanges.filter((r) => !gradedYearKeys.has(r.key));
+
+  if (!newMonthKeys.length && !newYearRanges.length) {
+    renderStocksCombinedRecordBody(box, store); // fully up to date - no fetches, no recompute
+    return;
+  }
+
+  let processed = 0;
   for (const inst of instruments) {
-    box.innerHTML = `<div class="stock-trades-note">Loading history - ${loaded}/${instruments.length} instruments…</div>`;
+    box.innerHTML = `<div class="stock-trades-note">Updating track record - ${processed}/${instruments.length} instruments…</div>`;
     const wasCached = stocksCyclesCacheHit(inst.px.symbol);
     try {
       const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
-      const agg = stocksWalkCombinedRecord(inst, bars, today);
-      ['calendar', 'calPrice'].forEach((mode) => {
-        totals[mode].right += agg[mode].right;
-        totals[mode].wrong += agg[mode].wrong;
-        totals[mode].mixed += agg[mode].mixed;
+      newMonthKeys.forEach((monthKey) => {
+        const [y, m] = monthKey.split('-').map(Number);
+        const monthBars = bars.filter((b) => b[0].startsWith(monthKey));
+        if (!monthBars.length) return;
+        const lean = stocksLeanAt(inst, 'month', new Date(y, m - 1, 15));
+        const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, lean, monthBars);
+        store.monthEntries.push({ month: monthKey, ticker: inst.ticker, calendar, calPrice });
       });
-      loaded++;
+      newYearRanges.forEach((range) => {
+        const startISO = stocksDateToISO(range.start);
+        const endISO = stocksDateToISO(range.end);
+        const yearBars = bars.filter((b) => b[0] >= startISO && b[0] <= endISO);
+        if (!yearBars.length) return;
+        const mid = new Date((range.start.getTime() + range.end.getTime()) / 2);
+        const lean = stocksLeanAt(inst, 'year', mid);
+        const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, lean, yearBars);
+        store.yearEntries.push({ year: range.key, ticker: inst.ticker, calendar, calPrice });
+      });
     } catch (e) { /* one bad symbol or a rate-limit hiccup shouldn't block the rest */ }
+    processed++;
     if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
   }
-  renderStocksCombinedRecordBody(box, totals, loaded, instruments.length, instruments, today);
-}
 
-// On-demand: Intraday only, short recent window, one instrument at a time -
-// the button itself is the user's explicit opt-in to the extra API cost.
-async function stocksLoadCombinedIntraday(instruments, today, btn) {
-  btn.disabled = true;
-  btn.textContent = 'Computing…';
-  const totals = { right: 0, wrong: 0, mixed: 0 };
-  for (const inst of instruments) {
-    let bars;
-    try { bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY }); } catch (e) { continue; }
-    for (let k = 1; k <= STOCKS_INTRADAY_COMBINED_MONTHS; k++) {
-      const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
-      const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
-      const monthBars = bars.filter((b) => b[0].startsWith(mISO));
-      if (!monthBars.length) continue;
-      const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
-      let cards;
-      try { cards = await stocksTimedTrades(inst, '', lean, monthBars); } catch (e) { continue; }
-      const intradayCard = cards.find((c) => c.mode === 'Intraday');
-      if (intradayCard && !intradayCard.nofill && intradayCard.grade) totals[intradayCard.grade] = (totals[intradayCard.grade] || 0) + 1;
-      await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
-    }
-  }
-  btn.parentElement.outerHTML = stocksWinRateLine('Intraday', totals);
+  const relevantMonthSet = new Set(relevantMonthKeys);
+  const relevantYearSet = new Set(relevantYearRanges.map((r) => r.key));
+  store.monthEntries = store.monthEntries.filter((e) => relevantMonthSet.has(e.month));
+  store.yearEntries = store.yearEntries.filter((e) => relevantYearSet.has(e.year));
+  stocksSaveCombinedStore(store);
+  renderStocksCombinedRecordBody(box, store);
 }
 
 function stocksCycleLean(row, baseline) {
