@@ -10,10 +10,12 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Compatibility Calculator</title>
+<title>Stock Cycles</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Same owner-only gate as the Sports Betting section - runs before content renders -->
+<script src="sports-gate.js"></script>
 <div class="page">
 
   <nav class="topnav">
@@ -23,47 +25,36 @@
     <a href="calendar.html" class="nav-link">Calendar</a>
     <a href="astrology.html" class="nav-link">Astrology</a>
     <a href="database.html" class="nav-link">Database</a>
-    <a href="compatibility.html" class="nav-link active">Compatibility Calculator</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
     <a href="sports-betting.html" class="nav-link">Sports Betting</a>
-    <a href="stocks.html" class="nav-link">Stocks</a>
+    <a href="stocks.html" class="nav-link active">Stocks</a>
   </nav>
   <script src="nav-scroll.js"></script>
 
-
-  <div class="compat-mode-select" id="modeSelect">
-    <button class="mode-card" data-mode="today">
-      <div class="mode-icon">📅</div>
-      <div class="mode-title">Compatibility with Today</div>
-      <div class="mode-desc">See how a birthday lines up with today's date.</div>
-    </button>
-    <button class="mode-card" data-mode="date">
-      <div class="mode-icon">🔗</div>
-      <div class="mode-title">Compatibility with Another Date</div>
-      <div class="mode-desc">Compare two birthdays against each other.</div>
-    </button>
+  <div class="stocks-header">
+    <div class="stocks-title">📈 Stock Cycles</div>
+    <div class="stocks-year-chip" id="stocksYearChip"></div>
   </div>
+  <div class="stocks-hint">Company founding, IPO, and CEO birthdates read through the same engine as everything else:
+    life path, zodiac year animal, this year's ally/enemy relationship, and each anchor's personal-year cycle.
+    Tap an instrument for its full card. Watchlist lens only &mdash; there is no tracked record behind these reads yet.</div>
 
-  <div class="compat-form" id="compatForm">
-    <a href="#" class="back-link" id="backToModes">&larr; Change mode</a>
+  <div class="stock-grid" id="stocksGrid"></div>
 
-    <div class="person-inputs" id="personInputs"></div>
-
-    <button class="btn btn-large" id="calculateBtn">Calculate Compatibility</button>
+  <div class="stock-modal-overlay" id="stockModalOverlay">
+    <div class="stock-modal">
+      <button class="stock-modal-close" id="stockModalClose">&times;</button>
+      <div id="stockModalBody"></div>
+    </div>
   </div>
-
-  <div class="compat-results" id="compatResults"></div>
 
 </div>
 
-<script src="astronomy.browser.min.js"></script>
-<script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
-<script src="compat-engine.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
-<script src="compat-render.js"></script>
-<script src="compatibility.js"></script>
+<script src="stocks.js"></script>
 </body>
 </html>
