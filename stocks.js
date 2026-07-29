@@ -697,6 +697,23 @@ function stocksConfirmedEntryIndex(inst, lean, bars) {
   return -1;
 }
 
+// Calendar + price mode: the energy confirmation says when to START
+// LOOKING, then the tape has to agree - the first session at/after the
+// energy trigger that CLOSES in the trade's direction (red close for a
+// short, green for a long) confirms, and the entry is the NEXT session's
+// open. Stricter and later than calendar-only (you give up the confirming
+// day's move), but it never trades a lean the price never validated.
+// Returns the ENTRY bar index, or -1 when price never agreed in time.
+function stocksPriceConfirmedEntryIndex(inst, lean, bars) {
+  const ci = stocksConfirmedEntryIndex(inst, lean, bars);
+  if (ci < 0) return -1;
+  for (let i = ci; i < bars.length - 1; i++) { // needs a next session to enter at
+    const agrees = lean.lean === 'short' ? bars[i][4] < bars[i][1] : bars[i][4] > bars[i][1];
+    if (agrees) return i + 1;
+  }
+  return -1;
+}
+
 // The window's peak-signal day (deepest weakness for a short, peak strength
 // for a long) - no longer the entry, but the pressure point the trade rides
 // toward; shown on the card and a natural exit target.
@@ -744,28 +761,53 @@ function stocksZodiacYearStart(today) {
 // Multi-day windows route through here: pick the system's entry day first
 // (stocksEntryBarIndex), trade from there to the window's end, and say so
 // on the card. Neutral/sporadic windows fall straight through untimed.
-function stocksTimedTrade(inst, label, lean, bars, opts) {
+// Every directional multi-day window produces BOTH entry modes as separate
+// cards, so their records can be compared on identical windows: 'Calendar'
+// (enter at the first energy-confirming day's open) and 'Cal + Price'
+// (energy trigger, then the first agreeing close, entry next open).
+function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
-    return stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts);
+    return [stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts)];
   }
   const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const ei = stocksConfirmedEntryIndex(inst, lean, bars);
-  if (ei < 0) {
-    return {
-      html: `
+  const noFill = (mode, why) => ({
+    html: `
       <div class="stock-trade-card skip">
         <div class="stock-trade-top">
           <span class="stock-trade-window">${escapeHtml(label)}</span>
-          <span class="stock-chip">No fill</span>
+          <span class="stock-trade-chips"><span class="stock-chip">${escapeHtml(mode)}</span><span class="stock-chip">No fill</span></span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}. The ${lean.lean} lean never got a daily confirmation - no trade taken.</div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}. ${escapeHtml(why)}</div>
       </div>`,
-      grade: null,
-    };
-  }
+    grade: null,
+    mode,
+    nofill: true,
+  });
+
+  const cards = [];
   const pi = stocksPeakBarIndex(inst, lean, bars);
-  const note = `Entered ${fmtD(bars[ei][0])} - first daily confirmation of the ${lean.lean} lean (peak ${lean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(bars[pi][0])}).`;
-  return stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note, opts);
+  const peakNote = `peak ${lean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(bars[pi][0])}`;
+
+  // Mode 1: calendar only.
+  const ei = stocksConfirmedEntryIndex(inst, lean, bars);
+  if (ei < 0) {
+    cards.push(noFill('Calendar', `The ${lean.lean} lean never got a daily energy confirmation - no trade taken.`));
+  } else {
+    const note = `Entered ${fmtD(bars[ei][0])} - first daily confirmation of the ${lean.lean} lean (${peakNote}).`;
+    cards.push({ ...stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note, { ...opts, mode: 'Calendar' }), mode: 'Calendar' });
+  }
+
+  // Mode 2: calendar + price.
+  const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
+  if (pei < 0) {
+    cards.push(noFill('Cal + Price', ei < 0
+      ? 'No energy confirmation, so price was never consulted - no trade taken.'
+      : `Price never closed ${lean.lean === 'short' ? 'red' : 'green'} after the energy trigger - no trade taken.`));
+  } else {
+    const note = `Energy trigger ${fmtD(bars[ei][0])}; first ${lean.lean === 'short' ? 'red' : 'green'} close ${fmtD(bars[pei - 1][0])}; entered next open ${fmtD(bars[pei][0])} (${peakNote}).`;
+    cards.push({ ...stocksTradeCard(label, lean, bars.slice(pei), inst.px.symbol, note, { ...opts, mode: 'Cal + Price' }), mode: 'Cal + Price' });
+  }
+  return cards;
 }
 
 function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts) {
@@ -870,6 +912,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
         <div class="stock-trade-top">
           <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
           <span class="stock-trade-chips">
+            ${opts && opts.mode ? `<span class="stock-chip">${escapeHtml(opts.mode)}</span>` : ''}
             <span class="stock-chip">${lean.lean === 'short' ? 'Short' : 'Long'}</span>
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
@@ -1014,7 +1057,7 @@ async function renderStockTrades(inst) {
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(stocksTimedTrade(inst, label, lean, monthBars));
+    cards.push(...stocksTimedTrades(inst, label, lean, monthBars));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -1024,23 +1067,31 @@ async function renderStockTrades(inst) {
   const yearLean = stocksLeanAt(inst, 'year', today);
   // The zodiac year runs until the next Lunar New Year - it's an OPEN
   // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(stocksTimedTrade(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }));
+  cards.push(...stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves.
-  const graded = cards.filter((c) => c.grade != null && c.grade !== 'open');
-  const openCount = cards.filter((c) => c.grade === 'open').length;
-  const right = graded.filter((c) => c.grade === 'right').length;
-  const wrong = graded.filter((c) => c.grade === 'wrong').length;
-  const mixed = graded.filter((c) => c.grade === 'mixed').length;
-  const recordCls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
-  const summary = (graded.length || openCount)
-    ? `<div class="stock-trades-summary">Record on settled calls: <span class="score-inline ${recordCls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} still open` : ''}</div>`
-    : `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
+  // One record line per entry mode, judged on identical windows - this is
+  // the whole point of running both: same leans, different triggers, let
+  // the records argue it out. The lone Day card counts under Calendar.
+  const modeLine = (modeLabel, list) => {
+    const settled = list.filter((c) => c.grade != null && c.grade !== 'open');
+    const openCount = list.filter((c) => c.grade === 'open').length;
+    const nofills = list.filter((c) => c.nofill).length;
+    if (!settled.length && !openCount && !nofills) return '';
+    const right = settled.filter((c) => c.grade === 'right').length;
+    const wrong = settled.filter((c) => c.grade === 'wrong').length;
+    const mixed = settled.filter((c) => c.grade === 'mixed').length;
+    const cls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
+    return `<div class="stock-trades-summary">${escapeHtml(modeLabel)}: <span class="score-inline ${cls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} open` : ''}${nofills ? ` · ${nofills} no-fill` : ''}</div>`;
+  };
+  const summary = (modeLine('Calendar', cards.filter((c) => !c.mode || c.mode === 'Calendar'))
+    + modeLine('Cal + price', cards.filter((c) => c.mode === 'Cal + Price')))
+    || `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
 
   panel.innerHTML = `${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window; the window sets the bias and the first daily confirmation pulls the trigger (pure calendar math - knowable in advance, never price-picked); and multi-day calls are graded on the whole path from entry, not just where the last print landed.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each directional window is traded both ways: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open - later, but never trades a lean the tape didn't validate. Multi-day calls are graded on the whole path from entry.</div>
       ${summary}
       ${cards.map((c) => c.html).join('')}
     </div>`;
