@@ -573,11 +573,16 @@ function stocksZodiacYearStart(today) {
   return d;
 }
 
-// One trade, one card, told from the TRADE's point of view. The single
-// number shown is what the trade returned: a short that watched the price
-// rise 6.8% reads "trade -6.8%" in red - never a green price move under a
-// red miss. The lean's own reasons ride along so every call explains itself.
-function stocksTradeCard(windowLabel, lean, entryBar, exitBar, symbol) {
+// One trade, one card, told from the TRADE's point of view - and graded on
+// the WHOLE PATH, not just the endpoints. Endpoint grading is path-blind: a
+// short that was in profit all month gets called wrong because of one
+// last-session rebound. So a multi-day call is graded by how much of its
+// window the trade spent in profit vs the entry (60%+ of days = RIGHT, 40%
+// or less = WRONG, in between = MIXED), and every card also shows the best
+// exit the window offered and what holding to the end actually returned -
+// the endpoint number stays as a fact, it just no longer gets to be the
+// judge. A one-session call has no path, so it stays a plain WIN/LOSS.
+function stocksTradeCard(windowLabel, lean, windowBars, symbol) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
     return {
       html: `
@@ -588,10 +593,11 @@ function stocksTradeCard(windowLabel, lean, entryBar, exitBar, symbol) {
         </div>
         <div class="stock-trade-story">${lean && lean.lean === 'caution' ? 'Sporadic energy - the system stands aside.' : 'No signals - nothing to act on.'}</div>
       </div>`,
-      win: null,
+      grade: null,
     };
   }
-  if (!entryBar || !exitBar) {
+  const bars = windowBars || [];
+  if (!bars.length) {
     return {
       html: `
       <div class="stock-trade-card skip">
@@ -601,34 +607,64 @@ function stocksTradeCard(windowLabel, lean, entryBar, exitBar, symbol) {
         </div>
         <div class="stock-trade-story">No price data for this window.</div>
       </div>`,
-      win: null,
+      grade: null,
     };
   }
-  const entry = entryBar[1];
-  const exit = exitBar[2];
+
+  const entry = bars[0][1];
+  const exit = bars[bars.length - 1][2];
+  const fav = (px) => (lean.lean === 'short' ? ((entry - px) / entry) * 100 : ((px - entry) / entry) * 100);
+  const closes = bars.map((b) => ({ d: b[0], f: fav(b[2]) }));
+  const held = closes[closes.length - 1].f;
+  const best = closes.reduce((m, x) => (x.f > m.f ? x : m));
+  const inProfit = closes.filter((x) => x.f > 0).length / closes.length;
+
   const movePct = ((exit - entry) / entry) * 100;
-  const tradePct = lean.lean === 'short' ? -movePct : movePct;
-  const win = tradePct > 0;
   const flat = Math.abs(movePct) < 0.05;
-  const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const moved = flat ? 'closed flat' : `${movePct > 0 ? 'rose' : 'fell'} ${Math.abs(movePct).toFixed(1)}%`;
+  const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
+  const singleDay = bars.length === 1;
+
+  let grade;
+  let badge;
+  if (singleDay) {
+    grade = held > 0 ? 'right' : 'wrong';
+    badge = held > 0 ? 'WIN' : flat ? 'FLAT' : 'LOSS';
+  } else if (inProfit >= 0.6) {
+    grade = 'right';
+    badge = 'RIGHT';
+  } else if (inProfit <= 0.4) {
+    grade = 'wrong';
+    badge = 'WRONG';
+  } else {
+    grade = 'mixed';
+    badge = 'MIXED';
+  }
+  const badgeCls = grade === 'right' ? 'good' : grade === 'wrong' ? 'bad' : 'warn';
+
+  const pathRow = singleDay ? '' : `
+        <div class="stock-trade-path">
+          <span>in profit ${Math.round(inProfit * 100)}% of days</span>
+          <span>best exit <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
+        </div>`;
+
   return {
     html: `
-      <div class="stock-trade-card ${win ? 'win' : 'loss'}">
+      <div class="stock-trade-card ${grade === 'right' ? 'win' : grade === 'wrong' ? 'loss' : 'mixed'}">
         <div class="stock-trade-top">
           <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
           <span class="stock-trade-chips">
             <span class="stock-chip">${lean.lean === 'short' ? 'Short' : 'Long'}</span>
-            <span class="stock-badge ${win ? 'good' : 'bad'}">${win ? 'WIN' : flat ? 'FLAT' : 'LOSS'}</span>
+            <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
         <div class="stock-trade-story">${escapeHtml(lean.why)}. ${escapeHtml(symbol)} ${moved}.</div>
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
-          <span class="score-inline ${win ? 'good' : 'bad'}">trade ${tradePct > 0 ? '+' : ''}${tradePct.toFixed(1)}%</span>
-        </div>
+          <span class="score-inline ${held > 0 ? 'good' : 'bad'}">held to end ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
+        </div>${pathRow}
       </div>`,
-    win,
+    grade,
   };
 }
 
@@ -680,7 +716,7 @@ async function renderStockTrades(inst) {
   if (lastBar) {
     const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
     const dayLabel = stocksParseDate(lastBar[0]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    cards.push(stocksTradeCard(dayLabel, dayLean, lastBar, lastBar, inst.px.symbol));
+    cards.push(stocksTradeCard(dayLabel, dayLean, [lastBar], inst.px.symbol));
   }
 
   // Medium: each of the last three completed months under that month's lean.
@@ -690,7 +726,7 @@ async function renderStockTrades(inst) {
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(stocksTradeCard(label, lean, monthBars[0], monthBars[monthBars.length - 1], inst.px.symbol));
+    cards.push(stocksTradeCard(label, lean, monthBars, inst.px.symbol));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -698,21 +734,22 @@ async function renderStockTrades(inst) {
   const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
   const yearBars = bars.filter((b) => b[0] >= yStartISO);
   const yearLean = stocksLeanAt(inst, 'year', today);
-  cards.push(stocksTradeCard(`Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars[0], yearBars[yearBars.length - 1], inst.px.symbol));
+  cards.push(stocksTradeCard(`Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, inst.px.symbol));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves.
-  const graded = cards.filter((c) => c.win != null);
-  const wins = graded.filter((c) => c.win).length;
-  const losses = graded.length - wins;
-  const recordCls = wins > losses ? 'good' : losses > wins ? 'bad' : '';
+  const graded = cards.filter((c) => c.grade != null);
+  const right = graded.filter((c) => c.grade === 'right').length;
+  const wrong = graded.filter((c) => c.grade === 'wrong').length;
+  const mixed = graded.filter((c) => c.grade === 'mixed').length;
+  const recordCls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
   const summary = graded.length
-    ? `<div class="stock-trades-summary">Record on these calls: <span class="score-inline ${recordCls}">${wins} win${wins === 1 ? '' : 's'} · ${losses} loss${losses === 1 ? '' : 'es'}</span></div>`
+    ? `<div class="stock-trades-summary">Record on these calls: <span class="score-inline ${recordCls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span></div>`
     : `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
 
   panel.innerHTML = `
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window, and multi-day calls are graded on the whole path - how much of the window the trade spent in profit - not just where the last print landed.</div>
       ${summary}
       ${cards.map((c) => c.html).join('')}
     </div>`;
