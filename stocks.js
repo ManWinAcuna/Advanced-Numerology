@@ -647,11 +647,13 @@ const STOCKS_TD_KEY = 'numerology_twelvedata_key';
 // where the last print landed.
 const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v2';
 
-// Which entry mode the Trades panel displays. Both modes are still computed
-// on every render (cheap - prices are day-cached), but only one is shown at
-// a time so the panel doesn't double every multi-day window into a pair of
-// near-identical cards. Resets to Calendar on page load, same as the grid
-// filters below.
+// Which entry mode the Trades panel displays. All three modes are still
+// computed on every render (daily bars are day-cached, and the intraday
+// fetch only ever runs for the one confirmed day per window), but only one
+// is shown at a time so the panel doesn't triple every multi-day window into
+// a stack of near-identical cards. Resets to Calendar on page load, same as
+// the grid filters below.
+const STOCKS_TRADE_MODES = ['Calendar', 'Cal + Price', 'Intraday'];
 let stocksTradeMode = 'Calendar';
 
 // Which resolution the Trades panel shows - day/month/year narrows both the
@@ -677,6 +679,95 @@ async function stocksFetchSeries(symbol) {
   cache[symbol] = { fetched: todayISO, bars };
   try { localStorage.setItem(STOCKS_PX_CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
   return bars;
+}
+
+// v1: one trading day's 15-minute bars [datetime, open, high, low, close].
+// A past day's intraday session never changes, so it caches forever; TODAY's
+// is never cached since it's still forming.
+const STOCKS_INTRADAY_CACHE_KEY = 'numerology_stock_intraday_v1';
+
+async function stocksFetchIntradayBars(symbol, dateISO) {
+  const todayISO = new Date().toISOString().slice(0, 10);
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(STOCKS_INTRADAY_CACHE_KEY)) || {}; } catch (e) { cache = {}; }
+  const cacheKey = `${symbol}|${dateISO}`;
+  if (dateISO !== todayISO && cache[cacheKey]) return cache[cacheKey];
+
+  const key = localStorage.getItem(STOCKS_TD_KEY);
+  const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=15min&start_date=${encodeURIComponent(dateISO + ' 00:00:00')}&end_date=${encodeURIComponent(dateISO + ' 23:59:59')}&outputsize=100&apikey=${encodeURIComponent(key)}`);
+  const data = await res.json();
+  if (data.status !== 'ok' || !Array.isArray(data.values)) {
+    throw new Error(data.message || 'intraday feed unavailable');
+  }
+  const bars = data.values.map((v) => [v.datetime, Number(v.open), Number(v.high), Number(v.low), Number(v.close)]).reverse();
+  cache[cacheKey] = bars;
+  try { localStorage.setItem(STOCKS_INTRADAY_CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
+  return bars;
+}
+
+// CISD (Change in State of Delivery): track the most recent 15m candle
+// AGAINST the trade direction; the trigger fires on the first later candle
+// that CLOSES back through that candle's open - a short-term order-flow
+// shift in the trade's favor. Our own reading of the ICT concept; if this
+// doesn't match how you define it, say so and it gets adjusted.
+function stocksCisdIndex(lean, bars) {
+  let refOpen = null;
+  for (let i = 0; i < bars.length; i++) {
+    const o = bars[i][1];
+    const c = bars[i][4];
+    if (lean.lean === 'long') {
+      if (refOpen != null && c > refOpen) return i;
+      if (c < o) refOpen = o; // bearish candle - the reference to reclaim
+    } else {
+      if (refOpen != null && c < refOpen) return i;
+      if (c > o) refOpen = o; // bullish candle - the reference to lose
+    }
+  }
+  return -1;
+}
+
+// IFVG (Inversion Fair Value Gap): a 3-candle imbalance that price later
+// closes through (inverting a bearish gap to support, or a bullish gap to
+// resistance), then price wicks back into that same zone and closes beyond
+// it again in the trade's favor - the reclaim. Bar shape matches CISD:
+// [datetime, open, high, low, close].
+function stocksIfvgIndex(lean, bars) {
+  const gaps = []; // { top, bottom, dir: 'bull'|'bear', inverted }
+  for (let i = 0; i < bars.length; i++) {
+    const hi = bars[i][2];
+    const lo = bars[i][3];
+    const close = bars[i][4];
+    for (const g of gaps) {
+      if (!g.inverted) continue;
+      const touchedZone = lo <= g.top && hi >= g.bottom;
+      if (!touchedZone) continue;
+      if (lean.lean === 'long' && g.dir === 'bear' && close > g.bottom) return i;
+      if (lean.lean === 'short' && g.dir === 'bull' && close < g.top) return i;
+    }
+    gaps.forEach((g) => {
+      if (g.inverted) return;
+      if (g.dir === 'bear' && close > g.top) g.inverted = true;
+      if (g.dir === 'bull' && close < g.bottom) g.inverted = true;
+    });
+    if (i >= 2) {
+      const c1 = bars[i - 2];
+      const c3 = bars[i];
+      if (c1[2] < c3[3]) gaps.push({ top: c3[3], bottom: c1[2], dir: 'bull', inverted: false });
+      if (c1[3] > c3[2]) gaps.push({ top: c1[3], bottom: c3[2], dir: 'bear', inverted: false });
+    }
+  }
+  return -1;
+}
+
+// Whichever of the two fires first within the session - the intraday
+// trigger is one precise moment, not two competing ones.
+function stocksIntradayTriggerIndex(lean, bars) {
+  const ci = stocksCisdIndex(lean, bars);
+  const fi = stocksIfvgIndex(lean, bars);
+  if (ci < 0 && fi < 0) return { index: -1, which: null };
+  if (ci < 0) return { index: fi, which: 'IFVG' };
+  if (fi < 0) return { index: ci, which: 'CISD' };
+  return ci <= fi ? { index: ci, which: 'CISD' } : { index: fi, which: 'IFVG' };
 }
 
 // The lean this system would have given at a past date, at one level -
@@ -784,15 +875,19 @@ function stocksZodiacYearStart(today) {
 // Multi-day windows route through here: pick the system's entry day first
 // (stocksEntryBarIndex), trade from there to the window's end, and say so
 // on the card. Neutral/sporadic windows fall straight through untimed.
-// Every directional multi-day window produces BOTH entry modes as separate
-// cards, so their records can be compared on identical windows: 'Calendar'
-// (enter at the first energy-confirming day's open) and 'Cal + Price'
-// (energy trigger, then the first agreeing close, entry next open).
-function stocksTimedTrades(inst, label, lean, bars, opts) {
+// Every directional multi-day window produces THREE entry-mode cards, so
+// their records can be compared on identical windows: 'Calendar' (enter at
+// the first energy-confirming day's open), 'Cal + Price' (energy trigger,
+// then the first agreeing close, entry next open), and 'Intraday' (same
+// energy-confirmed day as Calendar, but zoomed into that day's 15m chart for
+// a precise CISD/IFVG trigger instead of blindly buying the open).
+async function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
     return [stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts)];
   }
   const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtT = (iso) => iso.slice(11, 16);
+  const fmtPx = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const noFill = (mode, why) => ({
     html: `
       <div class="stock-trade-card skip">
@@ -830,6 +925,39 @@ function stocksTimedTrades(inst, label, lean, bars, opts) {
     const note = `Energy trigger ${fmtD(bars[ei][0])}; first ${lean.lean === 'short' ? 'red' : 'green'} close ${fmtD(bars[pei - 1][0])}; entered next open ${fmtD(bars[pei][0])} (${peakNote}).`;
     cards.push({ ...stocksTradeCard(label, lean, bars.slice(pei), inst.px.symbol, note, { ...opts, mode: 'Cal + Price' }), mode: 'Cal + Price' });
   }
+
+  // Mode 3: intraday (CISD/IFVG). Needs a day to zoom into, so it rides the
+  // SAME confirmed day Calendar mode found - fetching 15m bars for every day
+  // in a multi-month window isn't feasible on a free API tier, but one day's
+  // worth is cheap and this is the day the system actually said to act on.
+  if (ei < 0) {
+    cards.push(noFill('Intraday', 'No energy confirmation, so there was no day to zoom into intraday.'));
+  } else {
+    const dayISO = bars[ei][0];
+    let ibars = null;
+    let fetchErr = null;
+    try { ibars = await stocksFetchIntradayBars(inst.px.symbol, dayISO); } catch (err) { fetchErr = err; }
+    if (fetchErr) {
+      cards.push(noFill('Intraday', `15m data for ${fmtD(dayISO)} unavailable - ${fetchErr.message || 'feed error'}.`));
+    } else if (!ibars || ibars.length < 3) {
+      cards.push(noFill('Intraday', `No 15m session data for ${fmtD(dayISO)} - no trade taken.`));
+    } else {
+      const { index: ti, which } = stocksIntradayTriggerIndex(lean, ibars);
+      if (ti < 0 || ti >= ibars.length - 1) {
+        cards.push(noFill('Intraday', `Neither a 15m CISD nor an IFVG confirmed on ${fmtD(dayISO)} - no trade taken.`));
+      } else {
+        const entryBar = ibars[ti + 1];
+        const rest = ibars.slice(ti + 1);
+        const remHigh = Math.max(...rest.map((b) => b[2]));
+        const remLow = Math.min(...rest.map((b) => b[3]));
+        const dayClose = ibars[ibars.length - 1][4];
+        const windowBars = [[dayISO, entryBar[1], remHigh, remLow, dayClose], ...bars.slice(ei + 1)];
+        const note = `Energy trigger ${fmtD(dayISO)}; 15m ${which} confirmed ${fmtT(ibars[ti][0])}; entered ${fmtT(entryBar[0])} at ${fmtPx(entryBar[1])} (${peakNote}).`;
+        cards.push({ ...stocksTradeCard(label, lean, windowBars, inst.px.symbol, note, { ...opts, mode: 'Intraday' }), mode: 'Intraday' });
+      }
+    }
+  }
+
   return cards;
 }
 
@@ -1120,7 +1248,7 @@ async function renderStockTrades(inst) {
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(...stocksTimedTrades(inst, label, lean, monthBars).map((c) => ({ ...c, level: 'month' })));
+    cards.push(...(await stocksTimedTrades(inst, label, lean, monthBars)).map((c) => ({ ...c, level: 'month' })));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -1130,14 +1258,15 @@ async function renderStockTrades(inst) {
   const yearLean = stocksLeanAt(inst, 'year', today);
   // The zodiac year runs until the next Lunar New Year - it's an OPEN
   // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(...stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }).map((c) => ({ ...c, level: 'year' })));
+  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true })).map((c) => ({ ...c, level: 'year' })));
 
   // Record over the calls that actually traded - stated up front so the
-  // reader never has to count for themselves. Both modes are computed on
-  // every render so the toggle below is instant, but only the active mode's
-  // record and cards are shown. The lone Day card has no mode and counts
-  // under Calendar, same as it always has. The level filter narrows this the
-  // same way it narrows the cards below - the record always matches what's shown.
+  // reader never has to count for themselves. All three modes are computed
+  // on every render so the toggle below is instant, but only the active
+  // mode's record and cards are shown. The lone Day card has no mode and
+  // counts under Calendar, same as it always has. The level filter narrows
+  // this the same way it narrows the cards below - the record always
+  // matches what's shown.
   const modeLine = (modeLabel, list) => {
     const settled = list.filter((c) => c.grade != null && c.grade !== 'open');
     const openCount = list.filter((c) => c.grade === 'open').length;
@@ -1151,17 +1280,17 @@ async function renderStockTrades(inst) {
   };
   const levelCards = cards.filter((c) => stocksTradesLevel === 'all' || c.level === stocksTradesLevel);
   const visibleCards = levelCards.filter((c) => !c.mode || c.mode === stocksTradeMode);
-  const summary = modeLine(stocksTradeMode, levelCards.filter((c) => stocksTradeMode === 'Calendar' ? (!c.mode || c.mode === 'Calendar') : c.mode === 'Cal + Price'))
+  const modeCards = (mode) => levelCards.filter((c) => (mode === 'Calendar' ? (!c.mode || c.mode === 'Calendar') : c.mode === mode));
+  const summary = modeLine(stocksTradeMode, modeCards(stocksTradeMode))
     || `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
   const modeToggle = `
     <div class="stocks-filter-seg" id="stockTradeModeToggle">
-      <button class="stocks-filter-btn${stocksTradeMode === 'Calendar' ? ' active' : ''}" data-mode="Calendar">Calendar</button>
-      <button class="stocks-filter-btn${stocksTradeMode === 'Cal + Price' ? ' active' : ''}" data-mode="Cal + Price">Cal + Price</button>
+      ${STOCKS_TRADE_MODES.map((m) => `<button class="stocks-filter-btn${stocksTradeMode === m ? ' active' : ''}" data-mode="${escapeHtml(m)}">${escapeHtml(m)}</button>`).join('')}
     </div>`;
 
   panel.innerHTML = `${levelFilter}${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Every directional window can be traded two ways - toggle to compare: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open - later, but never trades a lean the tape didn't validate. Multi-day calls are graded on the whole path from entry.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Every directional window can be traded three ways - toggle to compare: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open; <b>Intraday</b> zooms into that same confirmed day's 15-minute chart and enters on the first 15m CISD or IFVG - whichever fires first - the most precise of the three, checkable only on days with 15m data. Multi-day calls are graded on the whole path from entry.</div>
       ${modeToggle}
       ${summary}
       ${visibleCards.map((c) => c.html).join('')}

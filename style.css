@@ -5461,6 +5461,7 @@ body {
 
 .stocks-filter-seg {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
