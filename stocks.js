@@ -926,7 +926,7 @@ function stocksZodiacYearStart(today) {
 // a precise CISD/IFVG trigger instead of blindly buying the open).
 async function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
-    return [stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts)];
+    return [stocksTradeCard(label, lean, bars, null, opts)];
   }
   const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const fmtT = (iso) => iso.slice(11, 16);
@@ -947,15 +947,15 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
 
   const cards = [];
   const pi = stocksPeakBarIndex(inst, lean, bars);
-  const peakNote = `peak ${lean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(bars[pi][0])}`;
+  const peakStat = { label: 'Peak', value: fmtD(bars[pi][0]) };
 
   // Mode 1: calendar only.
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
   if (ei < 0) {
     cards.push(noFill('Calendar', `The ${lean.lean} lean never got a daily energy confirmation - no trade taken.`));
   } else {
-    const note = `Entered ${fmtD(bars[ei][0])} - first daily confirmation of the ${lean.lean} lean (${peakNote}).`;
-    cards.push({ ...stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note, { ...opts, mode: 'Calendar' }), mode: 'Calendar' });
+    const stats = [{ label: 'Entry', value: fmtD(bars[ei][0]) }, peakStat];
+    cards.push({ ...stocksTradeCard(label, lean, bars.slice(ei), stats, { ...opts, mode: 'Calendar' }), mode: 'Calendar' });
   }
 
   // Mode 2: calendar + price.
@@ -965,8 +965,13 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
       ? 'No energy confirmation, so price was never consulted - no trade taken.'
       : `Price never closed ${lean.lean === 'short' ? 'red' : 'green'} after the energy trigger - no trade taken.`));
   } else {
-    const note = `Energy trigger ${fmtD(bars[ei][0])}; first ${lean.lean === 'short' ? 'red' : 'green'} close ${fmtD(bars[pei - 1][0])}; entered next open ${fmtD(bars[pei][0])} (${peakNote}).`;
-    cards.push({ ...stocksTradeCard(label, lean, bars.slice(pei), inst.px.symbol, note, { ...opts, mode: 'Cal + Price' }), mode: 'Cal + Price' });
+    const stats = [
+      { label: 'Trigger', value: fmtD(bars[ei][0]) },
+      { label: 'Confirmed', value: fmtD(bars[pei - 1][0]) },
+      { label: 'Entry', value: fmtD(bars[pei][0]) },
+      peakStat,
+    ];
+    cards.push({ ...stocksTradeCard(label, lean, bars.slice(pei), stats, { ...opts, mode: 'Cal + Price' }), mode: 'Cal + Price' });
   }
 
   // Mode 3: intraday (CISD/IFVG). Needs a day to zoom into, so it rides the
@@ -995,8 +1000,13 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
         const remLow = Math.min(...rest.map((b) => b[3]));
         const dayClose = ibars[ibars.length - 1][4];
         const windowBars = [[dayISO, entryBar[1], remHigh, remLow, dayClose], ...bars.slice(ei + 1)];
-        const note = `Energy trigger ${fmtD(dayISO)}; 15m ${which} confirmed ${fmtT(ibars[ti][0])}; entered ${fmtT(entryBar[0])} at ${fmtPx(entryBar[1])} (${peakNote}).`;
-        cards.push({ ...stocksTradeCard(label, lean, windowBars, inst.px.symbol, note, { ...opts, mode: 'Intraday' }), mode: 'Intraday' });
+        const stats = [
+          { label: 'Trigger', value: fmtD(dayISO) },
+          { label: which, value: fmtT(ibars[ti][0]) },
+          { label: 'Entry', value: `${fmtT(entryBar[0])} @ ${fmtPx(entryBar[1])}` },
+          peakStat,
+        ];
+        cards.push({ ...stocksTradeCard(label, lean, windowBars, stats, { ...opts, mode: 'Intraday' }), mode: 'Intraday' });
       }
     }
   }
@@ -1004,7 +1014,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   return cards;
 }
 
-function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts) {
+function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
     return {
       html: `
@@ -1054,7 +1064,6 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
 
   const movePct = ((exit - entry) / entry) * 100;
   const flat = Math.abs(movePct) < 0.05;
-  const moved = flat ? 'closed flat' : `${movePct > 0 ? 'rose' : 'fell'} ${Math.abs(movePct).toFixed(1)}%`;
   const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const singleDay = bars.length === 1;
   const isOpen = !!(opts && opts.open);
@@ -1100,6 +1109,14 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
           <span>worst <span class="score-inline ${worst.f < 0 ? 'bad' : 'good'}">${worst.f > 0 ? '+' : ''}${worst.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(worst.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
         </div>`;
 
+  // Entry/trigger/confirm/peak as labeled fragments instead of a run-on
+  // sentence - same treatment as the Upcoming rows: the direction is
+  // already the chip above, the reasoning is its own line below, this is
+  // just the dates.
+  const entryStatsRow = (entryStats && entryStats.length)
+    ? `<div class="stock-trade-path">${entryStats.map((s) => `<span>${escapeHtml(s.label)} <b>${escapeHtml(s.value)}</b></span>`).join('')}</div>`
+    : '';
+
   return {
     html: `
       <div class="stock-trade-card ${cardCls}">
@@ -1111,7 +1128,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}.${entryNote ? ` ${escapeHtml(entryNote)}` : ''} ${escapeHtml(symbol)} ${moved}${isOpen ? ' so far' : ''}.</div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}.</div>${entryStatsRow}
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
           <span class="score-inline ${held > 0 ? 'good' : 'bad'}">${isOpen ? 'running' : 'held to end'} ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
@@ -1278,7 +1295,7 @@ async function renderStockTrades(inst) {
   if (lastBar) {
     const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
     const dayLabel = stocksParseDate(lastBar[0]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar], inst.px.symbol), level: 'day' });
+    cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar]), level: 'day' });
   }
 
   // Medium: each of the last three completed months under that month's lean.
