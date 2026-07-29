@@ -226,7 +226,8 @@ function stocksAnchorRead(anchor, today, todayAnimal) {
   const d = stocksParseDate(anchor.date);
   const animal = getChineseZodiacYear(d);
   const score = vietnameseCompat(animal, todayAnimal);
-  const personalYear = reduceNumber(personalYearRawForYear(d, getActiveBirthYear(d, today)));
+  let personalYear = reduceNumber(personalYearRawForYear(d, getActiveBirthYear(d, today)));
+  if (personalYear === 2) personalYear = 11; // no standalone 2 - same doctrine as universalDayNumber
   return {
     ...anchor,
     yearOnly: false,

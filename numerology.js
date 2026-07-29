@@ -448,13 +448,19 @@ function getPersonalDayRaw(personalMonthReduced, today) {
 /* ===================== Universal Year / Month / Day ===================== */
 
 // Universal Year: the calendar year's own digits, reduced (e.g. 2026 -> 10 -> 1).
+// No standalone 2 - a summed year has no day-of-month to legitimately be 2,
+// so a raw 2 here is always an 11 (same doctrine as universalDayNumber in
+// db-core.js and bettingPersonalDayFor in betting-core.js).
 function getUniversalYear(date) {
-  return reduceNumber(date.getFullYear());
+  const n = reduceNumber(date.getFullYear());
+  return n === 2 ? 11 : n;
 }
 
-// Universal Month: Universal Year + the current month number, reduced.
+// Universal Month: Universal Year + the current month number, reduced. Same
+// no-standalone-2 rule - this sum has no day component either.
 function getUniversalMonth(date) {
-  return reduceNumber(getUniversalYear(date) + (date.getMonth() + 1));
+  const n = reduceNumber(getUniversalYear(date) + (date.getMonth() + 1));
+  return n === 2 ? 11 : n;
 }
 
 // Universal Day intentionally lives in compat-engine.js as compatLifePathInfo -
@@ -496,7 +502,8 @@ function getMonthsTable(birthDate, today) {
     const cycleYear = i < birthMonth ? displayYear - 1 : displayYear;
     const rawPY = personalYearRawForYear(birthDate, cycleYear);
     const unreduced = rawPY + i;
-    const reduced = reduceNumber(unreduced);
+    let reduced = reduceNumber(unreduced);
+    if (reduced === 2) reduced = 11; // no standalone 2 - this is a Personal Month, not a day-of-month
     const universalMonth = getUniversalMonth(new Date(cycleYear, idx, 1));
     const animal = CHINESE_MONTH_SIGNS[i];
     return { name, index: i, unreduced, reduced, universalMonth, animal, cycleYear };
@@ -610,11 +617,14 @@ function computeAll(birthDate, today) {
   const pinnacles = getPinnacles(birthDate);
 
   const rawPY = getPersonalYearRaw(birthDate, today);
-  const reducedPY = reduceNumber(rawPY);
+  let reducedPY = reduceNumber(rawPY);
+  if (reducedPY === 2) reducedPY = 11; // no standalone 2 - same doctrine as universalDayNumber
   const rawPM = getPersonalMonthRaw(birthDate, today);
-  const reducedPM = reduceNumber(rawPM);
+  let reducedPM = reduceNumber(rawPM);
+  if (reducedPM === 2) reducedPM = 11;
   const rawPD = getPersonalDayRaw(reducedPM, today);
-  const reducedPD = reduceNumber(rawPD);
+  let reducedPD = reduceNumber(rawPD);
+  if (reducedPD === 2) reducedPD = 11;
 
   const daysLeft = getDaysLeftBlock(birthDate, today);
   const monthsTable = getMonthsTable(birthDate, today);

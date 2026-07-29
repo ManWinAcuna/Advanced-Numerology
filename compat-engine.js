@@ -319,11 +319,14 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
 
 function computeEnergyFlow(birthDate, today) {
   const rawPY = getPersonalYearRaw(birthDate, today);
-  const personalYear = reduceNumber(rawPY);
+  let personalYear = reduceNumber(rawPY);
+  if (personalYear === 2) personalYear = 11; // no standalone 2 - same doctrine as universalDayNumber
   const rawPM = getPersonalMonthRaw(birthDate, today);
-  const personalMonth = reduceNumber(rawPM);
+  let personalMonth = reduceNumber(rawPM);
+  if (personalMonth === 2) personalMonth = 11;
   const rawPD = getPersonalDayRaw(personalMonth, today);
-  const personalDay = reduceNumber(rawPD);
+  let personalDay = reduceNumber(rawPD);
+  if (personalDay === 2) personalDay = 11;
 
   const universalYear = getUniversalYear(today);
   const universalMonth = getUniversalMonth(today);
