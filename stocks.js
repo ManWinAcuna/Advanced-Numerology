@@ -1324,20 +1324,20 @@ async function renderStockTrades(inst) {
  *           else in the app, just walked across real price history).
  *   YEAR  - same split: Universal Year and Vietnamese Zodiac Year
  *           (calendar-only) alongside Personal Year per primary anchor.
- * Every session in the fetched history is scored close-to-close and sorted
- * into whichever bucket is showing. HONEST SCOPE, same as the header of
- * this file: raw historical frequency over one price history, no fitted
- * weights, and testing this many buckets at once means some of them clear
- * the "lean" bar by chance alone - every table shows its own N so that's
- * checkable, never hidden. */
+ * Every session in the fetched history is scored open-to-close (that
+ * session's own range, same definition used in the Trades panel - not
+ * day-over-day momentum) and sorted into whichever bucket is showing.
+ * HONEST SCOPE, same as the header of this file: raw historical frequency
+ * over one price history, no fitted weights, and testing this many buckets
+ * at once means some of them clear the "lean" bar by chance alone - every
+ * table shows its own N so that's checkable, never hidden. */
 
 const STOCKS_CYCLES_PX_CACHE_KEY = 'numerology_stock_px_cycles_v1';
 const STOCKS_CYCLES_OUTPUTSIZE = 5000; // as much daily history as one Twelve Data call returns
 
-// A session's close lands within this band of the prior close -> read as
+// A session's close lands within this band of its own open -> read as
 // Consolidate (no clear resolution either way) rather than forced into
-// Up or Down. Same spirit as the existing "flat" dead zone in stocksTradeCard,
-// widened slightly since this judges a full session, not an intraday move.
+// Up or Down. Same spirit as the existing "flat" dead zone in stocksTradeCard.
 const STOCKS_CYCLE_FLAT_PCT = 0.15;
 // Fewer historical hits than this and a bucket's read is noise, not a lean -
 // shown in the table (never hidden), just never tagged.
@@ -1397,10 +1397,10 @@ function stocksFinalizeCycleBucket(key, label, b) {
   };
 }
 
-// Every session from index 1 on (index 0 has no prior close to compare
-// against) gets classified once and dropped into every bucket at every
-// resolution in the same pass - one fetch, one walk over the bars.
-// inst is needed here (unlike the old day-only version) because Personal
+// Every session gets classified once (open-to-close, its own range - no
+// prior-day reference needed, so every fetched bar counts) and dropped into
+// every bucket at every resolution in the same pass - one fetch, one walk
+// over the bars. inst is needed here (unlike the old day-only version) because Personal
 // Month/Year are anchor-relative: each primary anchor with a real date
 // (ES's Index Anchor + Contract Launch; NQ's Nasdaq Born + Contract
 // Launch) gets its own Personal Month and Personal Year read on every
@@ -1423,11 +1423,11 @@ function stocksComputeCycles(inst, bars) {
   const personalMonthMaps = anchors.map(() => new Map());
   const personalYearMaps = anchors.map(() => new Map());
 
-  for (let i = 1; i < bars.length; i++) {
+  for (let i = 0; i < bars.length; i++) {
+    const open = bars[i][1];
     const close = bars[i][4];
-    const prevClose = bars[i - 1][4];
-    if (!(prevClose > 0)) continue;
-    const pct = ((close - prevClose) / prevClose) * 100;
+    if (!(open > 0)) continue;
+    const pct = ((close - open) / open) * 100;
     const outcome = stocksClassifyOutcome(pct);
     const date = stocksParseDate(bars[i][0]);
     const l = stocksDayCycleLabels(date);
@@ -1600,7 +1600,7 @@ function stocksCyclesBodyHtml(inst, stats) {
     <div class="stock-trades-box">
       <div class="stock-cycles-note">
         <b>${escapeHtml(inst.ticker)} Day Cycles</b> — ${escapeHtml(inst.px.symbol)}${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}, ${stats.n} sessions, ${escapeHtml(fmtD(stats.firstDate))} &rarr; ${escapeHtml(fmtD(stats.lastDate))}.
-        Every session is Up / Down / Consolidate off its close vs. the prior close, with a &plusmn;${STOCKS_CYCLE_FLAT_PCT}% dead zone read as Consolidate.
+        Every session is Up / Down / Consolidate off its close vs. its own open, with a &plusmn;${STOCKS_CYCLE_FLAT_PCT}% dead zone read as Consolidate.
         Baseline over the whole window: <span class="score-inline good">${stats.baseline.upPct}% up</span> &middot; <span class="score-inline bad">${stats.baseline.downPct}% down</span> &middot; <span class="score-inline mid">${stats.baseline.consolidatePct}% consolidate</span>.
         A Read only appears once a bucket clears both a minimum sample (N&ge;${STOCKS_CYCLE_MIN_N}) and a ${STOCKS_CYCLE_LEAN_MARGIN}-point edge over that baseline &mdash; raw historical frequency on one price history, not a proven edge, and testing this many buckets at once means some reads clear that bar by chance alone.
       </div>
