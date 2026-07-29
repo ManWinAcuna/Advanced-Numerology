@@ -618,8 +618,10 @@ function openStockModal(inst) {
       <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
       <div class="stock-modal-badges">${stocksWatchPill(inst.verdict)}${badges}</div>
       <button class="stock-trades-btn" id="stockTradesBtn">View Trades</button>
+      ${inst.kind === 'futures' ? '<button class="stock-trades-btn" id="stockCyclesBtn">Day Cycles</button>' : ''}
     </div>
     <div id="stockTradesPanel"></div>
+    ${inst.kind === 'futures' ? '<div id="stockCyclesPanel"></div>' : ''}
     <div class="stock-section-label">Verdict</div>
     <div class="stock-verdict-rows">${levelRows}</div>
     <div class="stock-section-label">Anchors</div>
@@ -629,6 +631,9 @@ function openStockModal(inst) {
     ${flows.map(stocksEnergyBlock).join('')}`;
 
   document.getElementById('stockTradesBtn').addEventListener('click', () => renderStockTrades(inst));
+  if (inst.kind === 'futures') {
+    document.getElementById('stockCyclesBtn').addEventListener('click', () => renderStockDayCycles(inst));
+  }
   overlay.style.display = 'flex';
 }
 
@@ -661,15 +666,20 @@ let stocksTradeMode = 'Calendar';
 // doesn't have to scroll past windows you don't care about right now.
 let stocksTradesLevel = 'all';
 
-async function stocksFetchSeries(symbol) {
+// opts lets a second caller (the Day Cycles backtest below) pull a much
+// longer history into its own cache slot without disturbing the Trades
+// panel's 260-day window/cache.
+async function stocksFetchSeries(symbol, opts) {
+  const outputsize = (opts && opts.outputsize) || 260;
+  const cacheKey = (opts && opts.cacheKey) || STOCKS_PX_CACHE_KEY;
   const todayISO = new Date().toISOString().slice(0, 10);
   let cache = {};
-  try { cache = JSON.parse(localStorage.getItem(STOCKS_PX_CACHE_KEY)) || {}; } catch (e) { cache = {}; }
+  try { cache = JSON.parse(localStorage.getItem(cacheKey)) || {}; } catch (e) { cache = {}; }
   const hit = cache[symbol];
   if (hit && hit.fetched === todayISO) return hit.bars;
 
   const key = localStorage.getItem(STOCKS_TD_KEY);
-  const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=260&apikey=${encodeURIComponent(key)}`);
+  const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${encodeURIComponent(key)}`);
   const data = await res.json();
   if (data.status !== 'ok' || !Array.isArray(data.values)) {
     throw new Error(data.message || 'price feed unavailable');
@@ -677,7 +687,7 @@ async function stocksFetchSeries(symbol) {
   // Twelve Data returns newest first; store oldest-first [date, open, high, low, close].
   const bars = data.values.map((v) => [v.datetime, Number(v.open), Number(v.high), Number(v.low), Number(v.close)]).reverse();
   cache[symbol] = { fetched: todayISO, bars };
-  try { localStorage.setItem(STOCKS_PX_CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
+  try { localStorage.setItem(cacheKey, JSON.stringify(cache)); } catch (e) { /* cache full - live fetch still worked */ }
   return bars;
 }
 
@@ -1304,6 +1314,259 @@ async function renderStockTrades(inst) {
     });
   });
   stocksWireTradesLevelFilter(inst);
+}
+
+/* ===================== Day Cycles (day-level seasonality backtest) =====
+ * ES and NQ only (the two 'futures' instruments) - the owner's specific ask:
+ * does the CALENDAR ITSELF, independent of any birth chart, lean the tape
+ * up, down, or sideways? Four day-level numbers, each already computed
+ * elsewhere in the app for other purposes, get pointed at real price
+ * history instead of a birth date:
+ *   - Universal Day: compatLifePathInfo(date).lookupValue - the same
+ *     life-path-style pool of the date's own month+day+year digits used as
+ *     "Universal Day" throughout Today's Energies, purity-checked (22/4 etc)
+ *     the same way. Reuses the owner's own number meanings (7/8/28/11).
+ *   - Calendar Day: the plain day-of-month (1-31).
+ *   - Calendar Day Reduced: that day-of-month run through reduceNumber().
+ *   - Chinese Zodiac Day: getChineseDaySign(date) - the repeating 12-day
+ *     animal cycle (independent of the zodiac YEAR read elsewhere).
+ * Every session in the fetched history is scored close-to-close and sorted
+ * into one of these four buckets, plus a fifth cross-tab of Universal Month
+ * x Universal Day. HONEST SCOPE, same as the header of this file: raw
+ * historical frequency over one price history, no fitted weights, and
+ * testing this many buckets at once means some of them clear the "lean"
+ * bar by chance alone - every table shows its own N so that's checkable,
+ * never hidden. */
+
+const STOCKS_CYCLES_PX_CACHE_KEY = 'numerology_stock_px_cycles_v1';
+const STOCKS_CYCLES_OUTPUTSIZE = 5000; // as much daily history as one Twelve Data call returns
+
+// A session's close lands within this band of the prior close -> read as
+// Consolidate (no clear resolution either way) rather than forced into
+// Up or Down. Same spirit as the existing "flat" dead zone in stocksTradeCard,
+// widened slightly since this judges a full session, not an intraday move.
+const STOCKS_CYCLE_FLAT_PCT = 0.15;
+// Fewer historical hits than this and a bucket's read is noise, not a lean -
+// shown in the table (never hidden), just never tagged.
+const STOCKS_CYCLE_MIN_N = 8;
+// A bucket needs to beat the baseline by this many percentage points (on
+// whichever of up/down/consolidate is its best case) to earn a lean tag.
+const STOCKS_CYCLE_LEAN_MARGIN = 10;
+
+const STOCKS_CYCLE_UNIVERSAL_DAY_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28, 33];
+const STOCKS_CYCLE_CAL_DAY_REDUCED_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22];
+
+function stocksClassifyOutcome(pctChange) {
+  if (pctChange > STOCKS_CYCLE_FLAT_PCT) return 'up';
+  if (pctChange < -STOCKS_CYCLE_FLAT_PCT) return 'down';
+  return 'consolidate';
+}
+
+// One date -> all four bucket keys at once, straight off numerology.js /
+// compat-engine.js - nothing here is a new numerology rule, just a new lens
+// pointed at each of them.
+function stocksDayCycleLabels(date) {
+  const u = compatLifePathInfo(date);
+  return {
+    calendarDay: getRawDay(date),
+    calendarDayReduced: getReducedDay(date),
+    universalDay: u.lookupValue,
+    universalMonth: getUniversalMonth(date),
+    zodiacDay: getChineseDaySign(date),
+  };
+}
+
+function stocksNewCycleBucket() {
+  return { n: 0, up: 0, down: 0, consolidate: 0, sumPct: 0 };
+}
+
+function stocksBumpCycleBucket(map, key, outcome, pct) {
+  if (!map.has(key)) map.set(key, stocksNewCycleBucket());
+  const b = map.get(key);
+  b.n++;
+  b[outcome]++;
+  b.sumPct += pct;
+}
+
+function stocksFinalizeCycleBucket(key, label, b) {
+  return {
+    key,
+    label,
+    n: b.n,
+    upPct: b.n ? Math.round((b.up / b.n) * 100) : 0,
+    downPct: b.n ? Math.round((b.down / b.n) * 100) : 0,
+    consolidatePct: b.n ? Math.round((b.consolidate / b.n) * 100) : 0,
+    avgPct: b.n ? b.sumPct / b.n : 0,
+  };
+}
+
+// Every session from index 1 on (index 0 has no prior close to compare
+// against) gets classified once and dropped into all five buckets.
+function stocksComputeDayCycles(bars) {
+  const calendarDay = new Map();
+  const calendarDayReduced = new Map();
+  const universalDay = new Map();
+  const zodiacDay = new Map();
+  const monthDay = new Map(); // key `${universalMonth}|${universalDay}`
+  const overall = stocksNewCycleBucket();
+
+  for (let i = 1; i < bars.length; i++) {
+    const close = bars[i][4];
+    const prevClose = bars[i - 1][4];
+    if (!(prevClose > 0)) continue;
+    const pct = ((close - prevClose) / prevClose) * 100;
+    const outcome = stocksClassifyOutcome(pct);
+    const l = stocksDayCycleLabels(stocksParseDate(bars[i][0]));
+
+    overall.n++; overall[outcome]++; overall.sumPct += pct;
+    stocksBumpCycleBucket(calendarDay, l.calendarDay, outcome, pct);
+    stocksBumpCycleBucket(calendarDayReduced, l.calendarDayReduced, outcome, pct);
+    stocksBumpCycleBucket(universalDay, l.universalDay, outcome, pct);
+    stocksBumpCycleBucket(zodiacDay, l.zodiacDay, outcome, pct);
+    stocksBumpCycleBucket(monthDay, `${l.universalMonth}|${l.universalDay}`, outcome, pct);
+  }
+
+  const baseline = stocksFinalizeCycleBucket('all', 'All sessions', overall);
+
+  const toRows = (map, order, labelFn) => order
+    .filter((k) => map.has(k))
+    .map((k) => stocksFinalizeCycleBucket(k, labelFn ? labelFn(k) : String(k), map.get(k)));
+
+  const edgeOverBaseline = (r) => Math.max(
+    r.upPct - baseline.upPct,
+    r.downPct - baseline.downPct,
+    r.consolidatePct - baseline.consolidatePct,
+  );
+
+  const monthDayAll = [...monthDay.entries()].map(([key, b]) => {
+    const [um, ud] = key.split('|').map(Number);
+    return stocksFinalizeCycleBucket(key, `UM ${um} × UD ${stocksNumLabel(ud)}`, b);
+  });
+  const monthDayQualified = monthDayAll
+    .filter((r) => r.n >= STOCKS_CYCLE_MIN_N)
+    .sort((a, b) => edgeOverBaseline(b) - edgeOverBaseline(a));
+
+  return {
+    baseline,
+    n: overall.n,
+    firstDate: bars.length ? bars[0][0] : null,
+    lastDate: bars.length ? bars[bars.length - 1][0] : null,
+    calendarDayRows: toRows(calendarDay, Array.from({ length: 31 }, (_, i) => i + 1)),
+    calendarDayReducedRows: toRows(calendarDayReduced, STOCKS_CYCLE_CAL_DAY_REDUCED_ORDER),
+    universalDayRows: toRows(universalDay, STOCKS_CYCLE_UNIVERSAL_DAY_ORDER, (k) => stocksNumLabel(k)),
+    zodiacDayRows: toRows(zodiacDay, CHINESE_ANIMALS),
+    monthDayRows: monthDayQualified,
+    monthDayTotalCombos: monthDayAll.length,
+    monthDayDropped: monthDayAll.length - monthDayQualified.length,
+  };
+}
+
+function stocksCycleLean(row, baseline) {
+  if (row.n < STOCKS_CYCLE_MIN_N) return { tag: `n<${STOCKS_CYCLE_MIN_N}`, cls: '', dim: true };
+  const upEdge = row.upPct - baseline.upPct;
+  const downEdge = row.downPct - baseline.downPct;
+  const consolidateEdge = row.consolidatePct - baseline.consolidatePct;
+  const best = Math.max(upEdge, downEdge, consolidateEdge);
+  if (best < STOCKS_CYCLE_LEAN_MARGIN) return { tag: '—', cls: '', dim: false };
+  if (best === upEdge) return { tag: 'Bullish lean', cls: 'lean-up', dim: false };
+  if (best === downEdge) return { tag: 'Bearish lean', cls: 'lean-down', dim: false };
+  return { tag: 'Choppy lean', cls: 'lean-flat', dim: false };
+}
+
+function stocksCycleRowHtml(row, baseline) {
+  const lean = stocksCycleLean(row, baseline);
+  return `
+    <tr class="${lean.cls}">
+      <td>${escapeHtml(row.label)}</td>
+      <td>${row.n}</td>
+      <td class="${row.upPct - baseline.upPct >= STOCKS_CYCLE_LEAN_MARGIN ? 'good' : ''}">${row.upPct}%</td>
+      <td class="${row.downPct - baseline.downPct >= STOCKS_CYCLE_LEAN_MARGIN ? 'bad' : ''}">${row.downPct}%</td>
+      <td>${row.consolidatePct}%</td>
+      <td class="${row.avgPct >= 0 ? 'good' : 'bad'}">${row.avgPct >= 0 ? '+' : ''}${row.avgPct.toFixed(2)}%</td>
+      <td class="lean-cell${lean.dim ? ' dim' : ''}">${escapeHtml(lean.tag)}</td>
+    </tr>`;
+}
+
+function stocksCycleTableHtml(title, headerLabel, note, rows, baseline) {
+  if (!rows.length) return '';
+  return `
+    <div class="stock-section-label">${escapeHtml(title)}</div>
+    ${note ? `<div class="stock-cycles-note">${escapeHtml(note)}</div>` : ''}
+    <div class="pm-table-scroll">
+      <table class="stock-cycles-table">
+        <thead><tr><th>${escapeHtml(headerLabel)}</th><th>N</th><th>Up</th><th>Down</th><th>Consolidate</th><th>Avg &Delta;</th><th>Read</th></tr></thead>
+        <tbody>${rows.map((r) => stocksCycleRowHtml(r, baseline)).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+async function renderStockDayCycles(inst) {
+  const panel = document.getElementById('stockCyclesPanel');
+  if (!panel) return;
+  const key = localStorage.getItem(STOCKS_TD_KEY);
+  if (!key) {
+    panel.innerHTML = `
+      <div class="stock-trades-box">
+        <div class="stock-trades-note">Day Cycles needs the same Twelve Data API key as Trades - a free key (twelvedata.com), pasted once, kept only on this device.</div>
+        <div class="stock-trades-keyrow">
+          <input type="text" id="stockCyclesKeyInput" placeholder="Paste API key" autocomplete="off">
+          <button id="stockCyclesKeySave">Save</button>
+        </div>
+      </div>`;
+    document.getElementById('stockCyclesKeySave').addEventListener('click', () => {
+      const v = document.getElementById('stockCyclesKeyInput').value.trim();
+      if (!v) return;
+      localStorage.setItem(STOCKS_TD_KEY, v);
+      renderStockDayCycles(inst);
+    });
+    return;
+  }
+
+  panel.innerHTML = `<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} history…</div></div>`;
+  let bars;
+  try {
+    bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+  } catch (err) {
+    panel.innerHTML = `
+      <div class="stock-trades-box">
+        <div class="stock-trades-note bad">Price feed error: ${escapeHtml(err.message || 'unknown')}.</div>
+        <div class="stock-trades-keyrow"><button id="stockCyclesKeyReset">Change API key</button></div>
+      </div>`;
+    document.getElementById('stockCyclesKeyReset').addEventListener('click', () => {
+      localStorage.removeItem(STOCKS_TD_KEY);
+      renderStockDayCycles(inst);
+    });
+    return;
+  }
+  if (bars.length < STOCKS_CYCLE_MIN_N * 2) {
+    panel.innerHTML = `<div class="stock-trades-box"><div class="stock-trades-note bad">Only ${bars.length} sessions came back - not enough history for a day-cycle read.</div></div>`;
+    return;
+  }
+
+  const stats = stocksComputeDayCycles(bars);
+  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+  panel.innerHTML = `
+    <div class="stock-trades-box">
+      <div class="stock-cycles-note">
+        <b>${escapeHtml(inst.ticker)} Day Cycles</b> — ${escapeHtml(inst.px.symbol)}${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}, ${stats.n} sessions, ${escapeHtml(fmtD(stats.firstDate))} &rarr; ${escapeHtml(fmtD(stats.lastDate))}.
+        Every session is Up / Down / Consolidate off its close vs. the prior close, with a &plusmn;${STOCKS_CYCLE_FLAT_PCT}% dead zone read as Consolidate.
+        Baseline over the whole window: <span class="score-inline good">${stats.baseline.upPct}% up</span> &middot; <span class="score-inline bad">${stats.baseline.downPct}% down</span> &middot; <span class="score-inline mid">${stats.baseline.consolidatePct}% consolidate</span>.
+        A Read only appears once a bucket clears both a minimum sample (N&ge;${STOCKS_CYCLE_MIN_N}) and a ${STOCKS_CYCLE_LEAN_MARGIN}-point edge over that baseline &mdash; raw historical frequency on one price history, not a proven edge, and testing this many buckets at once means some reads clear that bar by chance alone.
+      </div>
+      ${stocksCycleTableHtml('Universal Day', 'Universal Day', 'Life-path-style pool of the date itself (1-9, 11, 22, 28, 33) - the same number and owner-defined meanings (7 weak, 8 strong, 28 expansion, 11 volatile) used across the app.', stats.universalDayRows, stats.baseline)}
+      ${stocksCycleTableHtml('Calendar Day', 'Day of Month', 'Plain day-of-month, 1-31.', stats.calendarDayRows, stats.baseline)}
+      ${stocksCycleTableHtml('Calendar Day Reduced', 'Reduced', 'Day-of-month reduced to a single digit (11/22 held as master numbers).', stats.calendarDayReducedRows, stats.baseline)}
+      ${stocksCycleTableHtml('Chinese Zodiac Day', 'Animal', "The date's own day-animal in the repeating 12-day cycle - independent of the zodiac YEAR read elsewhere in this app.", stats.zodiacDayRows, stats.baseline)}
+      <div class="stock-section-label">Universal Month &times; Universal Day</div>
+      <div class="stock-cycles-note">Top ${Math.min(30, stats.monthDayRows.length)} of ${stats.monthDayTotalCombos} combos with N&ge;${STOCKS_CYCLE_MIN_N} (${stats.monthDayDropped} combos dropped for too few sessions), ranked by size of edge over baseline.</div>
+      <div class="pm-table-scroll">
+        <table class="stock-cycles-table">
+          <thead><tr><th>Combo</th><th>N</th><th>Up</th><th>Down</th><th>Consolidate</th><th>Avg &Delta;</th><th>Read</th></tr></thead>
+          <tbody>${stats.monthDayRows.slice(0, 30).map((r) => stocksCycleRowHtml(r, stats.baseline)).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 /* ===================== Page init ===================== */
