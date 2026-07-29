@@ -189,17 +189,19 @@ function stocksYearAnimal(year) {
   return getChineseZodiacYear(new Date(year, 6, 1));
 }
 
-// Number meanings in the owner's own system (stated 2026-07-29): 7 =
-// weakness, 8 = strength, 28 = expansion, 11 = emotional / sporadic. These
-// four drive the cycle reads - 7 leans short, 8 and 28 lean long, 11 flags
-// volatility without a direction. Numbers he hasn't defined stay unflagged
-// rather than guessed at, and the number is always shown next to its label
-// so the rule stays inspectable on every card.
+// Number meanings in the owner's own system (stated 2026-07-29, 11's
+// direction corrected 2026-07-29): 7 = weakness, 8 = strength, 28 =
+// expansion, 11 = emotional / sporadic - and leans DOWN, not up ("more
+// likely to go down than up"), not a directionless wildcard. All four now
+// drive the cycle reads the same way - short for 7 and 11, long for 8 and
+// 28. Numbers he hasn't defined stay unflagged rather than guessed at, and
+// the number is always shown next to its label so the rule stays
+// inspectable on every card.
 const STOCKS_NUMBER_MEANINGS = {
   7: { label: 'Weakness', dir: 'bear' },
   8: { label: 'Strength', dir: 'bull' },
   28: { label: 'Expansion', dir: 'bull' },
-  11: { label: 'Emotional · Sporadic', dir: 'volatile' },
+  11: { label: 'Emotional · Sporadic', dir: 'bear' },
 };
 
 // One anchor -> everything the cards show. relation comes straight off the
@@ -297,21 +299,18 @@ function stocksLevelVerdict(reads, level) {
   const who = (r) => r.person || r.label;
   const bears = [];
   const bulls = [];
-  const swings = [];
   reads.filter((r) => r.primary).forEach((r) => {
     const s = stocksLevelSignals(r, level);
     if (!s) return;
     const meaning = STOCKS_NUMBER_MEANINGS[s.num];
     if (s.signScore <= 10) bears.push(`${who(r)}'s ${s.mySign} clashes the ${s.nowSign} ${s.signWord}`);
-    if (meaning && meaning.dir === 'bear') bears.push(`${who(r)} runs a ${s.numName} ${s.num} weakness`);
+    if (meaning && meaning.dir === 'bear') bears.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
     if (s.signScore >= 85) bulls.push(`${who(r)}'s ${s.mySign} allies the ${s.nowSign} ${s.signWord}`);
     if (meaning && meaning.dir === 'bull') bulls.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
-    if (meaning && meaning.dir === 'volatile') swings.push(`${who(r)} runs a ${s.numName} 11 - sporadic`);
   });
 
   if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; ') };
-  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; ') + (swings.length ? `; ${swings.join('; ')}` : '') };
-  if (swings.length) return { lean: 'caution', label: 'Sporadic', why: swings.join('; ') };
+  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; ') };
   return { lean: 'neutral', label: 'Neutral', why: 'no signals at this level' };
 }
 
@@ -323,13 +322,12 @@ function stocksVerdict(reads) {
   const enemies = primary.filter((r) => r.relation === 'enemy');
   const weak = primary.filter((r) => r.cycle && r.cycle.dir === 'bear');
   const strong = primary.filter((r) => r.cycle && r.cycle.dir === 'bull');
-  const sporadic = primary.filter((r) => r.cycle && r.cycle.dir === 'volatile');
   const allies = primary.filter((r) => r.relation === 'ally');
 
   if (enemies.length || weak.length) {
     const parts = [
       ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
-      ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} weakness cycle`),
+      ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
     ];
     return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.` };
   }
@@ -339,9 +337,6 @@ function stocksVerdict(reads) {
       ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
     ];
     return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.` };
-  }
-  if (sporadic.length) {
-    return { watch: 'caution', label: 'Sporadic Year', text: `${sporadic.map((r) => `${who(r)} runs a Personal Year 11 - emotional, sporadic energy`).join('; ')}.` };
   }
   return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.' };
 }
@@ -404,10 +399,13 @@ async function stocksLoadPortraits() {
 
 const STOCKS_WATCH_ORDER = { short: 0, caution: 1, long: 2, neutral: 3 };
 
+// Color alone carries enemy/ally - red or green already says it, so the
+// chip text stays just the animal name (no "· Enemy Year" repeating what
+// the border/fill already shout).
 const STOCKS_RELATION_CHIP = {
-  enemy: { cls: 'bad', text: 'Enemy Year' },
-  ally: { cls: 'good', text: 'Ally Year' },
-  neutral: { cls: '', text: 'Neutral' },
+  enemy: { cls: 'bad' },
+  ally: { cls: 'good' },
+  neutral: { cls: '' },
 };
 
 const STOCKS_CYCLE_CLS = { bear: 'bad', bull: 'good', volatile: 'warn' };
@@ -449,10 +447,7 @@ function stocksCardHtml(inst) {
   // card scans the same way.
   const primary = inst.reads.filter((r) => r.primary);
   const chips = [
-    ...primary.map((r) => {
-      const chip = STOCKS_RELATION_CHIP[r.relation];
-      return `<span class="stock-chip ${chip.cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
-    }),
+    ...primary.map((r) => `<span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${escapeHtml(r.animal)}</span>`),
     ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
   ].join('');
   return `
@@ -563,7 +558,6 @@ function stocksEnergyBlock(r) {
 function stocksAnchorTone(r) {
   if (r.relation === 'enemy' || (r.cycle && r.cycle.dir === 'bear')) return 'bad';
   if (r.relation === 'ally' || (r.cycle && r.cycle.dir === 'bull')) return 'good';
-  if (r.cycle && r.cycle.dir === 'volatile') return 'warn';
   return '';
 }
 
@@ -580,7 +574,7 @@ function openStockModal(inst) {
       <div class="stock-anchor-sub">${r.lifePath != null ? `Life Path${r.lifePathMeaning ? ' · ' + escapeHtml(r.lifePathMeaning.label) : ''}` : 'Zodiac only'}</div>
       <div class="stock-anchor-date">${escapeHtml(r.dateDisplay)}</div>
       <div class="stock-anchor-zodiac">
-        <span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${STOCKS_RELATION_CHIP[r.relation].text}` : ''}</span>
+        <span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${escapeHtml(r.animal)}</span>
       </div>
       ${r.personalYear != null ? `<div class="stock-anchor-py${r.cycle ? ' ' + STOCKS_CYCLE_CLS[r.cycle.dir] : ''}">Personal Year ${r.personalYear}${r.cycle ? ` · ${escapeHtml(r.cycle.label)}` : ''}</div>` : ''}
     </div>`).join('');
@@ -1103,60 +1097,57 @@ function stocksUpcomingRows(inst) {
     const cls = lean.lean === 'short' ? 'short' : lean.lean === 'long' ? 'long' : lean.lean === 'caution' ? 'caution' : 'neutral';
     return `<span class="stock-watch ${cls}">${escapeHtml(lean.label)}</span>`;
   };
-  const row = (label, lean, note) => `
+  // Compact label:value pairs instead of a prose sentence - the pill above
+  // already says the direction and why (hover/inspect the Anchors section
+  // for the reasoning), so this row is just the dates that matter.
+  const row = (label, lean, stats) => `
     <div class="stock-trade-card upcoming">
       <div class="stock-trade-top">
         <span class="stock-trade-window">${escapeHtml(label)}</span>
         <span class="stock-trade-chips">${pill(lean)}</span>
       </div>
-      <div class="stock-trade-story">${escapeHtml(lean.why)}.${note ? ` ${escapeHtml(note)}` : ''}</div>
+      ${stats && stats.length ? `<div class="stock-trade-path">${stats.map((s) => `<span>${escapeHtml(s.label)} <b>${escapeHtml(s.value)}</b></span>`).join('')}</div>` : ''}
     </div>`;
 
   // Tomorrow, at day resolution - a single session has no separate take
   // profit day, it lives and dies on that day's own range.
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  rows.push({ level: 'day', html: row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), '') });
+  rows.push({ level: 'day', html: row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), null) });
 
   // First future date in `dates` whose own day-level lean agrees with the
   // window's - the same trigger the replay uses, pointed forward.
   const firstConfirming = (lean, dates) => dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
 
-  // Next calendar month: its entry trigger, pressure point, and take profit
-  // day, all named in advance.
+  const horizonStats = (lean, days) => {
+    if (lean.lean !== 'short' && lean.lean !== 'long') return null;
+    const trigger = firstConfirming(lean, days);
+    if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
+    const peak = stocksPeakDay(inst, lean, days);
+    const reversal = stocksReversalDay(inst, lean, trigger, days);
+    return [
+      { label: 'Entry', value: fmtD(trigger) },
+      ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
+      ...(reversal ? [{ label: 'TP', value: fmtD(reversal) }] : []),
+    ];
+  };
+
+  // Next calendar month.
   const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
-  let monthNote = '';
-  if (monthLean.lean === 'short' || monthLean.lean === 'long') {
-    const days = [];
-    for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
-    const trigger = firstConfirming(monthLean, days);
-    const peak = stocksPeakDay(inst, monthLean, days);
-    const reversal = trigger ? stocksReversalDay(inst, monthLean, trigger, days) : null;
-    monthNote = trigger
-      ? `Enter ${fmtD(trigger)} - first daily confirmation${peak ? ` (peak ${monthLean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(peak)})` : ''}.${reversal ? ` Take profit day: ${fmtD(reversal)} - lean flips against the trade.` : ''}`
-      : 'No daily confirmation all month - no fill.';
-  }
-  rows.push({ level: 'month', html: row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, monthNote) });
+  const monthDays = [];
+  for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) monthDays.push(new Date(d));
+  rows.push({ level: 'month', html: row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, horizonStats(monthLean, monthDays)) });
 
-  // Next confirmation inside the current zodiac year.
+  // Rest of the current zodiac year.
   const yearLean = stocksLeanAt(inst, 'year', today);
-  let yearNote = '';
-  if (yearLean.lean === 'short' || yearLean.lean === 'long') {
-    const animal = getChineseZodiacYear(today);
-    const days = [];
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
-      days.push(new Date(d));
-      d.setDate(d.getDate() + 1);
-    }
-    const trigger = firstConfirming(yearLean, days);
-    const peak = stocksPeakDay(inst, yearLean, days);
-    const reversal = trigger ? stocksReversalDay(inst, yearLean, trigger, days) : null;
-    yearNote = trigger
-      ? `Next confirmation ${fmtD(trigger)}${peak ? ` (peak ${yearLean.lean === 'short' ? 'weakness' : 'strength'} day left: ${fmtD(peak)})` : ''}.${reversal ? ` Take profit day: ${fmtD(reversal)} - lean flips against the trade.` : ''}`
-      : 'No daily confirmation left this zodiac year.';
+  const yearDays = [];
+  const animal = getChineseZodiacYear(today);
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
+    yearDays.push(new Date(d));
+    d.setDate(d.getDate() + 1);
   }
-  rows.push({ level: 'year', html: row('Rest of the zodiac year', yearLean, yearNote) });
+  rows.push({ level: 'year', html: row('Rest of the zodiac year', yearLean, horizonStats(yearLean, yearDays)) });
 
   return rows;
 }
@@ -1290,7 +1281,7 @@ async function renderStockTrades(inst) {
 
   panel.innerHTML = `${levelFilter}${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Every directional window can be traded three ways - toggle to compare: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open; <b>Intraday</b> zooms into that same confirmed day's 15-minute chart and enters on the first 15m CISD or IFVG - whichever fires first - the most precise of the three, checkable only on days with 15m data. Multi-day calls are graded on the whole path from entry.</div>
+      <div class="stock-trades-note">Replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}.</div>
       ${modeToggle}
       ${summary}
       ${visibleCards.map((c) => c.html).join('')}
