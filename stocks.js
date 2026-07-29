@@ -573,34 +573,63 @@ function stocksZodiacYearStart(today) {
   return d;
 }
 
-function stocksTradeRow(term, windowLabel, lean, entryBar, exitBar) {
+// One trade, one card, told from the TRADE's point of view. The single
+// number shown is what the trade returned: a short that watched the price
+// rise 6.8% reads "trade -6.8%" in red - never a green price move under a
+// red miss. The lean's own reasons ride along so every call explains itself.
+function stocksTradeCard(windowLabel, lean, entryBar, exitBar, symbol) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
-    return `
-      <tr>
-        <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
-        <td colspan="3" class="empty-state">${lean && lean.lean === 'caution' ? 'no trade - sporadic' : 'no trade - neutral'}</td>
-      </tr>`;
+    return {
+      html: `
+      <div class="stock-trade-card skip">
+        <div class="stock-trade-top">
+          <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
+          <span class="stock-chip">No trade</span>
+        </div>
+        <div class="stock-trade-story">${lean && lean.lean === 'caution' ? 'Sporadic energy - the system stands aside.' : 'No signals - nothing to act on.'}</div>
+      </div>`,
+      win: null,
+    };
   }
   if (!entryBar || !exitBar) {
-    return `
-      <tr>
-        <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
-        <td>${lean.lean === 'short' ? 'Short' : 'Long'}</td>
-        <td colspan="2" class="empty-state">no price data</td>
-      </tr>`;
+    return {
+      html: `
+      <div class="stock-trade-card skip">
+        <div class="stock-trade-top">
+          <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
+          <span class="stock-chip">${lean.lean === 'short' ? 'Short' : 'Long'}</span>
+        </div>
+        <div class="stock-trade-story">No price data for this window.</div>
+      </div>`,
+      win: null,
+    };
   }
   const entry = entryBar[1];
   const exit = exitBar[2];
   const movePct = ((exit - entry) / entry) * 100;
-  const hit = lean.lean === 'short' ? movePct < 0 : movePct > 0;
+  const tradePct = lean.lean === 'short' ? -movePct : movePct;
+  const win = tradePct > 0;
+  const flat = Math.abs(movePct) < 0.05;
   const fmt = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
-  return `
-    <tr>
-      <td>${escapeHtml(term)}</td><td>${escapeHtml(windowLabel)}</td>
-      <td class="${lean.lean === 'short' ? 'bad' : 'good'}">${lean.lean === 'short' ? 'Short' : 'Long'}</td>
-      <td>${fmt(entry)} → ${fmt(exit)} <span class="score-inline ${movePct < 0 ? 'bad' : 'good'}">${movePct > 0 ? '+' : ''}${movePct.toFixed(1)}%</span></td>
-      <td class="${hit ? 'good' : 'bad'}">${hit ? 'HIT' : 'MISS'}</td>
-    </tr>`;
+  const moved = flat ? 'closed flat' : `${movePct > 0 ? 'rose' : 'fell'} ${Math.abs(movePct).toFixed(1)}%`;
+  return {
+    html: `
+      <div class="stock-trade-card ${win ? 'win' : 'loss'}">
+        <div class="stock-trade-top">
+          <span class="stock-trade-window">${escapeHtml(windowLabel)}</span>
+          <span class="stock-trade-chips">
+            <span class="stock-chip">${lean.lean === 'short' ? 'Short' : 'Long'}</span>
+            <span class="stock-badge ${win ? 'good' : 'bad'}">${win ? 'WIN' : flat ? 'FLAT' : 'LOSS'}</span>
+          </span>
+        </div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}. ${escapeHtml(symbol)} ${moved}.</div>
+        <div class="stock-trade-nums">
+          <span>${fmt(entry)} → ${fmt(exit)}</span>
+          <span class="score-inline ${win ? 'good' : 'bad'}">trade ${tradePct > 0 ? '+' : ''}${tradePct.toFixed(1)}%</span>
+        </div>
+      </div>`,
+    win,
+  };
 }
 
 async function renderStockTrades(inst) {
@@ -643,14 +672,15 @@ async function renderStockTrades(inst) {
 
   const today = new Date();
   const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const rows = [];
+  const cards = [];
 
   // Short-term: the last completed session under its own day lean.
   const doneBars = bars.filter((b) => b[0] < todayISO);
   const lastBar = doneBars[doneBars.length - 1];
   if (lastBar) {
     const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
-    rows.push(stocksTradeRow('Day', lastBar[0], dayLean, lastBar, lastBar));
+    const dayLabel = stocksParseDate(lastBar[0]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    cards.push(stocksTradeCard(dayLabel, dayLean, lastBar, lastBar, inst.px.symbol));
   }
 
   // Medium: each of the last three completed months under that month's lean.
@@ -659,8 +689,8 @@ async function renderStockTrades(inst) {
     const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
-    const label = m.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-    rows.push(stocksTradeRow('Month', label, lean, monthBars[0], monthBars[monthBars.length - 1]));
+    const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    cards.push(stocksTradeCard(label, lean, monthBars[0], monthBars[monthBars.length - 1], inst.px.symbol));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -668,15 +698,23 @@ async function renderStockTrades(inst) {
   const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
   const yearBars = bars.filter((b) => b[0] >= yStartISO);
   const yearLean = stocksLeanAt(inst, 'year', today);
-  rows.push(stocksTradeRow('Year', `since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars[0], yearBars[yearBars.length - 1]));
+  cards.push(stocksTradeCard(`Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars[0], yearBars[yearBars.length - 1], inst.px.symbol));
+
+  // Record over the calls that actually traded - stated up front so the
+  // reader never has to count for themselves.
+  const graded = cards.filter((c) => c.win != null);
+  const wins = graded.filter((c) => c.win).length;
+  const losses = graded.length - wins;
+  const recordCls = wins > losses ? 'good' : losses > wins ? 'bad' : '';
+  const summary = graded.length
+    ? `<div class="stock-trades-summary">Record on these calls: <span class="score-inline ${recordCls}">${wins} win${wins === 1 ? '' : 's'} · ${losses} loss${losses === 1 ? '' : 'es'}</span></div>`
+    : `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
 
   panel.innerHTML = `
     <div class="stock-trades-box">
-      <div class="stock-trades-note">System trades replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''} - each window's lean is computed as of that window.</div>
-      <table class="astro-table stock-trades-table">
-        <thead><tr><th>Term</th><th>Window</th><th>Side</th><th>Entry → Exit</th><th>Result</th></tr></thead>
-        <tbody>${rows.join('')}</tbody>
-      </table>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window.</div>
+      ${summary}
+      ${cards.map((c) => c.html).join('')}
     </div>`;
 }
 

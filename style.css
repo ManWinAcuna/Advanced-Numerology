@@ -5362,3 +5362,59 @@ body {
 .stock-trades-table td, .stock-trades-table th { font-size: 0.75rem; }
 .stock-trades-table td.good { color: var(--good); }
 .stock-trades-table td.bad { color: var(--bad); }
+
+/* ===================== Stock Cycles - trade cards ===================== */
+
+.stock-trades-summary {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.stock-trade-card {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.stock-trade-card.win { border-left-color: var(--good); }
+.stock-trade-card.loss { border-left-color: var(--bad); }
+.stock-trade-card.skip { opacity: 0.75; }
+
+.stock-trade-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stock-trade-window {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.stock-trade-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stock-trade-story {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.stock-trade-nums {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
