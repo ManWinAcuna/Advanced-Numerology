@@ -556,6 +556,17 @@ function stocksEnergyBlock(r) {
     </div>`;
 }
 
+// Which signal an anchor card should shout with, if any - a real
+// clash/enemy-year or bear cycle reads louder than an ally/bull cycle, which
+// reads louder than a plain neutral card. Drives a top accent border so the
+// anchor that actually matters doesn't get lost among the others.
+function stocksAnchorTone(r) {
+  if (r.relation === 'enemy' || (r.cycle && r.cycle.dir === 'bear')) return 'bad';
+  if (r.relation === 'ally' || (r.cycle && r.cycle.dir === 'bull')) return 'good';
+  if (r.cycle && r.cycle.dir === 'volatile') return 'warn';
+  return '';
+}
+
 function openStockModal(inst) {
   const overlay = document.getElementById('stockModalOverlay');
   const ceo = inst.reads.find((r) => r.key === 'ceo');
@@ -563,7 +574,7 @@ function openStockModal(inst) {
   const badges = inst.reads.flatMap(stocksAnchorFlagBadges).join('');
 
   const anchorCards = inst.reads.map((r) => `
-    <div class="stock-anchor-card${r.primary ? ' primary' : ''}">
+    <div class="stock-anchor-card${r.primary ? ' primary' : ''}${stocksAnchorTone(r) ? ' ' + stocksAnchorTone(r) : ''}">
       <div class="stock-anchor-label">${escapeHtml(r.label)}</div>
       <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(String(r.lifePath)) : escapeHtml(r.animal)}</div>
       <div class="stock-anchor-sub">${r.lifePath != null ? `Life Path${r.lifePathMeaning ? ' · ' + escapeHtml(r.lifePathMeaning.label) : ''}` : 'Zodiac only'}</div>
@@ -642,6 +653,11 @@ const STOCKS_PX_CACHE_KEY = 'numerology_stock_px_v2';
 // near-identical cards. Resets to Calendar on page load, same as the grid
 // filters below.
 let stocksTradeMode = 'Calendar';
+
+// Which resolution the Trades panel shows - day/month/year narrows both the
+// Upcoming rows and the replayed cards to one horizon so a quick look
+// doesn't have to scroll past windows you don't care about right now.
+let stocksTradesLevel = 'all';
 
 async function stocksFetchSeries(symbol) {
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -934,11 +950,23 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote, opts)
   };
 }
 
+// The take-profit day, forward-pointed: the first date after entry whose
+// own day-level lean flips to the OPPOSITE direction (not just "no longer
+// agrees" - a real reversal). Same calendar-only math as the entry trigger,
+// so it's just as knowable in advance; bounded to the same date list the
+// window already searched, never reaching past it.
+function stocksReversalDay(inst, lean, afterDate, dates) {
+  const opposite = lean.lean === 'short' ? 'long' : 'short';
+  return dates.find((d) => d > afterDate && stocksLeanAt(inst, 'day', d).lean === opposite) || null;
+}
+
 // The forward view: where the system says the NEXT entries are. Pure
 // calendar - no prices, no API key - so it renders for everyone, first.
-// Tomorrow's day lean, next month's lean with its pre-computed entry day,
-// and the best remaining entry day of the current zodiac year.
-function stocksUpcomingHtml(inst) {
+// Tomorrow's day lean, next month's lean with its pre-computed entry + take
+// profit days, and the best remaining entry of the current zodiac year.
+// Returns rows tagged with a level so the Trades panel filter can narrow to
+// just one horizon.
+function stocksUpcomingRows(inst) {
   const today = new Date();
   const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const rows = [];
@@ -956,15 +984,17 @@ function stocksUpcomingHtml(inst) {
       <div class="stock-trade-story">${escapeHtml(lean.why)}.${note ? ` ${escapeHtml(note)}` : ''}</div>
     </div>`;
 
-  // Tomorrow, at day resolution.
+  // Tomorrow, at day resolution - a single session has no separate take
+  // profit day, it lives and dies on that day's own range.
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  rows.push(row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), ''));
+  rows.push({ level: 'day', html: row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), '') });
 
   // First future date in `dates` whose own day-level lean agrees with the
   // window's - the same trigger the replay uses, pointed forward.
   const firstConfirming = (lean, dates) => dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
 
-  // Next calendar month: its entry trigger and pressure point, named in advance.
+  // Next calendar month: its entry trigger, pressure point, and take profit
+  // day, all named in advance.
   const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
   let monthNote = '';
@@ -973,11 +1003,12 @@ function stocksUpcomingHtml(inst) {
     for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
     const trigger = firstConfirming(monthLean, days);
     const peak = stocksPeakDay(inst, monthLean, days);
+    const reversal = trigger ? stocksReversalDay(inst, monthLean, trigger, days) : null;
     monthNote = trigger
-      ? `Enter ${fmtD(trigger)} - first daily confirmation${peak ? ` (peak ${monthLean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(peak)})` : ''}.`
+      ? `Enter ${fmtD(trigger)} - first daily confirmation${peak ? ` (peak ${monthLean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(peak)})` : ''}.${reversal ? ` Take profit day: ${fmtD(reversal)} - lean flips against the trade.` : ''}`
       : 'No daily confirmation all month - no fill.';
   }
-  rows.push(row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, monthNote));
+  rows.push({ level: 'month', html: row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, monthNote) });
 
   // Next confirmation inside the current zodiac year.
   const yearLean = stocksLeanAt(inst, 'year', today);
@@ -992,25 +1023,48 @@ function stocksUpcomingHtml(inst) {
     }
     const trigger = firstConfirming(yearLean, days);
     const peak = stocksPeakDay(inst, yearLean, days);
+    const reversal = trigger ? stocksReversalDay(inst, yearLean, trigger, days) : null;
     yearNote = trigger
-      ? `Next confirmation ${fmtD(trigger)}${peak ? ` (peak ${yearLean.lean === 'short' ? 'weakness' : 'strength'} day left: ${fmtD(peak)})` : ''}.`
+      ? `Next confirmation ${fmtD(trigger)}${peak ? ` (peak ${yearLean.lean === 'short' ? 'weakness' : 'strength'} day left: ${fmtD(peak)})` : ''}.${reversal ? ` Take profit day: ${fmtD(reversal)} - lean flips against the trade.` : ''}`
       : 'No daily confirmation left this zodiac year.';
   }
-  rows.push(row('Rest of the zodiac year', yearLean, yearNote));
+  rows.push({ level: 'year', html: row('Rest of the zodiac year', yearLean, yearNote) });
 
+  return rows;
+}
+
+function stocksTradesLevelFilterHtml() {
+  const opt = (level, label) => `<button class="stocks-filter-btn${stocksTradesLevel === level ? ' active' : ''}" data-level="${level}">${label}</button>`;
   return `
-    <div class="stock-trades-box">
-      <div class="stock-trades-note">Upcoming entries - pure calendar math, computed in advance, no prices involved.</div>
-      ${rows.join('')}
+    <div class="stocks-filter-seg" id="stockTradesLevelFilter">
+      ${opt('all', 'All')}${opt('day', 'Day')}${opt('month', 'Month')}${opt('year', 'Year')}
     </div>`;
+}
+
+function stocksWireTradesLevelFilter(inst) {
+  const el = document.getElementById('stockTradesLevelFilter');
+  if (!el) return;
+  el.querySelectorAll('.stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksTradesLevel === btn.dataset.level) return;
+      stocksTradesLevel = btn.dataset.level;
+      renderStockTrades(inst);
+    });
+  });
 }
 
 async function renderStockTrades(inst) {
   const panel = document.getElementById('stockTradesPanel');
-  const upcoming = stocksUpcomingHtml(inst);
+  const levelFilter = stocksTradesLevelFilterHtml();
+  const upcomingRows = stocksUpcomingRows(inst).filter((r) => stocksTradesLevel === 'all' || r.level === stocksTradesLevel);
+  const upcoming = `
+    <div class="stock-trades-box">
+      <div class="stock-trades-note">Upcoming entries - pure calendar math, computed in advance, no prices involved.</div>
+      ${upcomingRows.map((r) => r.html).join('')}
+    </div>`;
   const key = localStorage.getItem(STOCKS_TD_KEY);
   if (!key) {
-    panel.innerHTML = `${upcoming}
+    panel.innerHTML = `${levelFilter}${upcoming}
       <div class="stock-trades-box">
         <div class="stock-trades-note">Replayed trades need live prices - a free Twelve Data API key (twelvedata.com, free tier), pasted once, kept only on this device.</div>
         <div class="stock-trades-keyrow">
@@ -1024,15 +1078,16 @@ async function renderStockTrades(inst) {
       localStorage.setItem(STOCKS_TD_KEY, v);
       renderStockTrades(inst);
     });
+    stocksWireTradesLevelFilter(inst);
     return;
   }
 
-  panel.innerHTML = `${upcoming}<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} prices…</div></div>`;
+  panel.innerHTML = `${levelFilter}${upcoming}<div class="stock-trades-box"><div class="stock-trades-note">Loading ${escapeHtml(inst.px.symbol)} prices…</div></div>`;
   let bars;
   try {
     bars = await stocksFetchSeries(inst.px.symbol);
   } catch (err) {
-    panel.innerHTML = `${upcoming}
+    panel.innerHTML = `${levelFilter}${upcoming}
       <div class="stock-trades-box">
         <div class="stock-trades-note bad">Price feed error: ${escapeHtml(err.message || 'unknown')}.</div>
         <div class="stock-trades-keyrow"><button id="stockTdKeyReset">Change API key</button></div>
@@ -1041,6 +1096,7 @@ async function renderStockTrades(inst) {
       localStorage.removeItem(STOCKS_TD_KEY);
       renderStockTrades(inst);
     });
+    stocksWireTradesLevelFilter(inst);
     return;
   }
 
@@ -1054,7 +1110,7 @@ async function renderStockTrades(inst) {
   if (lastBar) {
     const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
     const dayLabel = stocksParseDate(lastBar[0]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    cards.push(stocksTradeCard(dayLabel, dayLean, [lastBar], inst.px.symbol));
+    cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar], inst.px.symbol), level: 'day' });
   }
 
   // Medium: each of the last three completed months under that month's lean.
@@ -1064,7 +1120,7 @@ async function renderStockTrades(inst) {
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(...stocksTimedTrades(inst, label, lean, monthBars));
+    cards.push(...stocksTimedTrades(inst, label, lean, monthBars).map((c) => ({ ...c, level: 'month' })));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -1074,13 +1130,14 @@ async function renderStockTrades(inst) {
   const yearLean = stocksLeanAt(inst, 'year', today);
   // The zodiac year runs until the next Lunar New Year - it's an OPEN
   // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(...stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }));
+  cards.push(...stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true }).map((c) => ({ ...c, level: 'year' })));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves. Both modes are computed on
   // every render so the toggle below is instant, but only the active mode's
   // record and cards are shown. The lone Day card has no mode and counts
-  // under Calendar, same as it always has.
+  // under Calendar, same as it always has. The level filter narrows this the
+  // same way it narrows the cards below - the record always matches what's shown.
   const modeLine = (modeLabel, list) => {
     const settled = list.filter((c) => c.grade != null && c.grade !== 'open');
     const openCount = list.filter((c) => c.grade === 'open').length;
@@ -1092,8 +1149,9 @@ async function renderStockTrades(inst) {
     const cls = right > wrong ? 'good' : wrong > right ? 'bad' : '';
     return `<div class="stock-trades-summary">${escapeHtml(modeLabel)}: <span class="score-inline ${cls}">${right} right · ${wrong} wrong${mixed ? ` · ${mixed} mixed` : ''}</span>${openCount ? ` · ${openCount} open` : ''}${nofills ? ` · ${nofills} no-fill` : ''}</div>`;
   };
-  const visibleCards = cards.filter((c) => !c.mode || c.mode === stocksTradeMode);
-  const summary = modeLine(stocksTradeMode, cards.filter((c) => stocksTradeMode === 'Calendar' ? (!c.mode || c.mode === 'Calendar') : c.mode === 'Cal + Price'))
+  const levelCards = cards.filter((c) => stocksTradesLevel === 'all' || c.level === stocksTradesLevel);
+  const visibleCards = levelCards.filter((c) => !c.mode || c.mode === stocksTradeMode);
+  const summary = modeLine(stocksTradeMode, levelCards.filter((c) => stocksTradeMode === 'Calendar' ? (!c.mode || c.mode === 'Calendar') : c.mode === 'Cal + Price'))
     || `<div class="stock-trades-summary">No tradeable calls in these windows.</div>`;
   const modeToggle = `
     <div class="stocks-filter-seg" id="stockTradeModeToggle">
@@ -1101,7 +1159,7 @@ async function renderStockTrades(inst) {
       <button class="stocks-filter-btn${stocksTradeMode === 'Cal + Price' ? ' active' : ''}" data-mode="Cal + Price">Cal + Price</button>
     </div>`;
 
-  panel.innerHTML = `${upcoming}
+  panel.innerHTML = `${levelFilter}${upcoming}
     <div class="stock-trades-box">
       <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Every directional window can be traded two ways - toggle to compare: <b>Calendar</b> enters at the first daily energy confirmation's open (knowable in advance); <b>Cal&nbsp;+&nbsp;Price</b> waits for the first close that agrees after the energy trigger and enters the next open - later, but never trades a lean the tape didn't validate. Multi-day calls are graded on the whole path from entry.</div>
       ${modeToggle}
@@ -1116,6 +1174,7 @@ async function renderStockTrades(inst) {
       renderStockTrades(inst);
     });
   });
+  stocksWireTradesLevelFilter(inst);
 }
 
 /* ===================== Page init ===================== */

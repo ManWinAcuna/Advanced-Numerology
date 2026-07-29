@@ -4949,11 +4949,16 @@ body {
   background: rgba(255, 255, 255, 0.03);
   font-size: 0.72rem;
   color: var(--muted);
+  opacity: 0.7;
 }
 
-.stock-chip.bad { color: var(--bad); border-color: rgba(229, 57, 63, 0.5); }
-.stock-chip.good { color: var(--good); border-color: rgba(139, 195, 74, 0.5); }
-.stock-chip.warn { color: var(--orange); border-color: rgba(255, 138, 61, 0.5); }
+/* Clashes and boosts carry a filled background + bold weight so they read
+   as the loud signal against a page of otherwise-neutral gray pills -
+   color alone (the old plain-outline treatment) didn't stand out enough. */
+.stock-chip.bad, .stock-chip.good, .stock-chip.warn { opacity: 1; font-weight: 700; }
+.stock-chip.bad { color: var(--bad); border-color: rgba(229, 57, 63, 0.6); background: rgba(229, 57, 63, 0.14); text-shadow: 0 0 6px rgba(229, 57, 63, 0.3); }
+.stock-chip.good { color: var(--good); border-color: rgba(139, 195, 74, 0.6); background: rgba(139, 195, 74, 0.14); text-shadow: 0 0 6px rgba(139, 195, 74, 0.3); }
+.stock-chip.warn { color: var(--orange); border-color: rgba(255, 138, 61, 0.6); background: rgba(255, 138, 61, 0.14); text-shadow: 0 0 6px rgba(255, 138, 61, 0.3); }
 
 .stock-badge {
   padding: 4px 10px;
@@ -5048,6 +5053,12 @@ body {
 
 .stock-anchor-card.primary { border-color: rgba(245, 197, 66, 0.45); }
 
+/* Top accent stripe - the anchor actually driving the verdict shouts in
+   color; a plain neutral anchor stays quiet gray. */
+.stock-anchor-card.bad { border-top: 3px solid var(--bad); }
+.stock-anchor-card.good { border-top: 3px solid var(--good); }
+.stock-anchor-card.warn { border-top: 3px solid var(--orange); }
+
 .stock-anchor-label {
   color: var(--muted);
   font-size: 0.72rem;
@@ -5080,9 +5091,9 @@ body {
   color: var(--muted);
 }
 
-.stock-anchor-py.warn { color: var(--orange); }
-.stock-anchor-py.bad { color: var(--bad); }
-.stock-anchor-py.good { color: var(--good); }
+.stock-anchor-py.warn { color: var(--orange); font-weight: 700; }
+.stock-anchor-py.bad { color: var(--bad); font-weight: 700; }
+.stock-anchor-py.good { color: var(--good); font-weight: 700; }
 
 .stock-verdict {
   border-left: 3px solid var(--border);
@@ -5372,6 +5383,7 @@ body {
 }
 
 .stock-trades-box .stocks-filter-seg { margin-bottom: 10px; }
+#stockTradesPanel > .stocks-filter-seg { margin-bottom: 10px; }
 
 .stock-trade-card {
   border: 1px solid var(--border);
