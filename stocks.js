@@ -1359,10 +1359,17 @@ function stocksClassifyOutcome(pctChange) {
 // pointed at each of them.
 function stocksDayCycleLabels(date) {
   const u = compatLifePathInfo(date);
+  // lookupValue only ever reads 2 via one path: the 20th-of-month/day
+  // exception collapsing a master 11 down to 2 for the COMPATIBILITY
+  // TABLE's own lookup purposes (display "11/2"). That's an artifact of
+  // scoring, not a real day - per the app's own "2 doesn't exist, becomes
+  // 11" rule (numerology.js/compat-engine.js, same rule the Life Path box
+  // and Personal Hours already enforce), this is still an 11 day.
+  const universalDay = u.lookupValue === 2 ? 11 : u.lookupValue;
   return {
     calendarDay: getRawDay(date),
     calendarDayReduced: getReducedDay(date),
-    universalDay: u.lookupValue,
+    universalDay,
     universalMonth: getUniversalMonth(date),
     zodiacDay: getChineseDaySign(date),
   };
