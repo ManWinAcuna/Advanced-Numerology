@@ -682,8 +682,25 @@ function stocksSignalScoreAt(inst, lean, date) {
   return lean.lean === 'short' ? -avg : avg;
 }
 
-function stocksEntryBarIndex(inst, lean, bars) {
-  if (bars.length <= 1) return 0;
+// Entry trigger, two-timeframe style (the global-extreme rule failed in the
+// obvious way: NVDA's weakest June day landed on Jun 29, turning a "month
+// trade" into a two-session stub with no runway). The window sets the BIAS;
+// the first session whose own DAY-level lean agrees pulls the trigger. If no
+// day in the window ever confirms, there is no trade - the system said the
+// month was weak but never gave a daily go-signal, and that's an honest
+// no-fill, not a forced one. Still pure calendar math, knowable in advance.
+function stocksConfirmedEntryIndex(inst, lean, bars) {
+  for (let i = 0; i < bars.length; i++) {
+    const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(bars[i][0]));
+    if (dayLean.lean === lean.lean) return i;
+  }
+  return -1;
+}
+
+// The window's peak-signal day (deepest weakness for a short, peak strength
+// for a long) - no longer the entry, but the pressure point the trade rides
+// toward; shown on the card and a natural exit target.
+function stocksPeakBarIndex(inst, lean, bars) {
   let bestI = 0;
   let best = null;
   bars.forEach((b, i) => {
@@ -731,9 +748,23 @@ function stocksTimedTrade(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
     return stocksTradeCard(label, lean, bars, inst.px.symbol, '', opts);
   }
-  const ei = stocksEntryBarIndex(inst, lean, bars);
-  const eDate = stocksParseDate(bars[ei][0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const note = `Entered ${eDate} - the window's ${lean.lean === 'short' ? 'weakest' : 'strongest'} energy day.`;
+  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const ei = stocksConfirmedEntryIndex(inst, lean, bars);
+  if (ei < 0) {
+    return {
+      html: `
+      <div class="stock-trade-card skip">
+        <div class="stock-trade-top">
+          <span class="stock-trade-window">${escapeHtml(label)}</span>
+          <span class="stock-chip">No fill</span>
+        </div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}. The ${lean.lean} lean never got a daily confirmation - no trade taken.</div>
+      </div>`,
+      grade: null,
+    };
+  }
+  const pi = stocksPeakBarIndex(inst, lean, bars);
+  const note = `Entered ${fmtD(bars[ei][0])} - first daily confirmation of the ${lean.lean} lean (peak ${lean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(bars[pi][0])}).`;
   return stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note, opts);
 }
 
@@ -879,19 +910,26 @@ function stocksUpcomingHtml(inst) {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   rows.push(row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), ''));
 
-  // Next calendar month, with its entry day picked in advance.
+  // First future date in `dates` whose own day-level lean agrees with the
+  // window's - the same trigger the replay uses, pointed forward.
+  const firstConfirming = (lean, dates) => dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
+
+  // Next calendar month: its entry trigger and pressure point, named in advance.
   const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
   let monthNote = '';
   if (monthLean.lean === 'short' || monthLean.lean === 'long') {
     const days = [];
     for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
+    const trigger = firstConfirming(monthLean, days);
     const peak = stocksPeakDay(inst, monthLean, days);
-    if (peak) monthNote = `Enter ${fmtD(peak)} - the month's ${monthLean.lean === 'short' ? 'weakest' : 'strongest'} energy day.`;
+    monthNote = trigger
+      ? `Enter ${fmtD(trigger)} - first daily confirmation${peak ? ` (peak ${monthLean.lean === 'short' ? 'weakness' : 'strength'} day: ${fmtD(peak)})` : ''}.`
+      : 'No daily confirmation all month - no fill.';
   }
   rows.push(row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, monthNote));
 
-  // Best remaining entry inside the current zodiac year.
+  // Next confirmation inside the current zodiac year.
   const yearLean = stocksLeanAt(inst, 'year', today);
   let yearNote = '';
   if (yearLean.lean === 'short' || yearLean.lean === 'long') {
@@ -902,8 +940,11 @@ function stocksUpcomingHtml(inst) {
       days.push(new Date(d));
       d.setDate(d.getDate() + 1);
     }
+    const trigger = firstConfirming(yearLean, days);
     const peak = stocksPeakDay(inst, yearLean, days);
-    if (peak) yearNote = `Best remaining entry ${fmtD(peak)} - the ${yearLean.lean === 'short' ? 'weakest' : 'strongest'} energy day left this zodiac year.`;
+    yearNote = trigger
+      ? `Next confirmation ${fmtD(trigger)}${peak ? ` (peak ${yearLean.lean === 'short' ? 'weakness' : 'strength'} day left: ${fmtD(peak)})` : ''}.`
+      : 'No daily confirmation left this zodiac year.';
   }
   rows.push(row('Rest of the zodiac year', yearLean, yearNote));
 
@@ -999,7 +1040,7 @@ async function renderStockTrades(inst) {
 
   panel.innerHTML = `${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window; entries land on the window's peak-signal energy day (pure calendar math - knowable before the window opened, never price-picked); and multi-day calls are graded on the whole path from entry, not just where the last print landed.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window; the window sets the bias and the first daily confirmation pulls the trigger (pure calendar math - knowable in advance, never price-picked); and multi-day calls are graded on the whole path from entry, not just where the last print landed.</div>
       ${summary}
       ${cards.map((c) => c.html).join('')}
     </div>`;
