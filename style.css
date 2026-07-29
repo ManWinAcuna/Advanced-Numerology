@@ -4861,6 +4861,24 @@ body {
   font-weight: 600;
 }
 
+.stocks-cycles-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.stocks-cycles-shortcut span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stocks-cycles-shortcut .stock-trades-btn {
+  margin-top: 0;
+  padding: 6px 16px;
+}
+
 .stocks-hint {
   color: var(--muted);
   font-size: 0.85rem;

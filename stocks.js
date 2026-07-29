@@ -1673,6 +1673,16 @@ async function renderStockDayCycles(inst) {
   stocksWireCyclesLevelFilter(inst, stats);
 }
 
+// Header shortcut: jump straight to an instrument's Day Cycles panel
+// without first finding its card and opening "Day Cycles" from inside -
+// opens the same modal, then immediately renders the same panel.
+function stocksOpenDayCycles(ticker) {
+  const inst = stocksAllInstruments.find((i) => i.ticker === ticker);
+  if (!inst) return;
+  openStockModal(inst);
+  renderStockDayCycles(inst);
+}
+
 /* ===================== Page init ===================== */
 
 function initStocksPage() {
@@ -1693,6 +1703,9 @@ function initStocksPage() {
       renderStocksGrid(stocksAllInstruments);
     });
   });
+  document.getElementById('stocksCyclesEsBtn').addEventListener('click', () => stocksOpenDayCycles('ES'));
+  document.getElementById('stocksCyclesNqBtn').addEventListener('click', () => stocksOpenDayCycles('NQ'));
+
   document.querySelectorAll('#stocksLevelFilter .stocks-filter-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       stocksFilter.level = btn.dataset.level;
