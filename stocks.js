@@ -85,7 +85,17 @@ const STOCK_INSTRUMENTS = [
     ],
   },
   {
-    ticker: 'NQ', name: 'Nasdaq-100 E-mini', kind: 'futures', hue: 190,
+    ticker: 'WMT', name: 'Walmart', kind: 'stock', hue: 208,
+    px: { symbol: 'WMT' },
+    anchors: [
+      // First Walmart store opened Rogers, Arkansas, July 2, 1962.
+      { key: 'company', label: 'Company', date: '1962-07-02', primary: true },
+      { key: 'ipo', label: 'IPO', date: '1970-10-01' },
+      { key: 'ceo', label: 'CEO', person: 'Doug McMillon', date: '1966-10-17', primary: true },
+    ],
+  },
+  {
+    ticker: 'NQ', name: 'Nasdaq-100 E-mini', kind: 'futures', hue: 190, image: 'Nasdaq',
     px: { symbol: 'QQQ', note: 'via QQQ' },
     anchors: [
       // The exchange's own first trading day - owner-requested anchor.
@@ -94,7 +104,7 @@ const STOCK_INSTRUMENTS = [
     ],
   },
   {
-    ticker: 'ES', name: 'S&P 500 E-mini', kind: 'futures', hue: 150,
+    ticker: 'ES', name: 'S&P 500 E-mini', kind: 'futures', hue: 150, image: "Standard & Poor's",
     px: { symbol: 'SPY', note: 'via SPY' },
     anchors: [
       // Owner-specified anchor date (the index's own launch was 1957-03-04;
@@ -104,7 +114,7 @@ const STOCK_INSTRUMENTS = [
     ],
   },
   {
-    ticker: 'GC', name: 'Gold Futures', kind: 'commodity', hue: 45,
+    ticker: 'GC', name: 'Gold Futures', kind: 'commodity', hue: 45, image: 'Gold',
     px: { symbol: 'XAU/USD', note: 'spot' },
     anchors: [
       // COMEX gold trading opened the day private gold ownership came back
@@ -113,7 +123,7 @@ const STOCK_INSTRUMENTS = [
     ],
   },
   {
-    ticker: 'SI', name: 'Silver Futures', kind: 'commodity', hue: 220,
+    ticker: 'SI', name: 'Silver Futures', kind: 'commodity', hue: 220, image: 'Silver',
     px: { symbol: 'XAG/USD', note: 'spot' },
     anchors: [
       // Only the launch YEAR is reliably documented - so only the zodiac
@@ -122,12 +132,41 @@ const STOCK_INSTRUMENTS = [
     ],
   },
   {
-    ticker: 'BTC', name: 'Bitcoin', kind: 'crypto', hue: 28,
+    ticker: 'BTC', name: 'Bitcoin', kind: 'crypto', hue: 28, image: 'Bitcoin',
     px: { symbol: 'BTC/USD' },
     anchors: [
       { key: 'launch', label: 'Genesis Block', date: '2009-01-03', primary: true },
     ],
   },
+  {
+    ticker: 'ETH', name: 'Ethereum', kind: 'crypto', hue: 250, image: 'Ethereum',
+    px: { symbol: 'ETH/USD' },
+    anchors: [
+      { key: 'launch', label: 'Genesis Block', date: '2015-07-30', primary: true },
+    ],
+  },
+  {
+    ticker: 'XLM', name: 'Stellar', kind: 'crypto', hue: 185, image: 'Stellar (payment network)',
+    px: { symbol: 'XLM/USD' },
+    anchors: [
+      { key: 'launch', label: 'Network Launch', date: '2014-07-31', primary: true },
+    ],
+  },
+  {
+    ticker: 'ZEC', name: 'Zcash', kind: 'crypto', hue: 48, image: 'Zcash',
+    px: { symbol: 'ZEC/USD' },
+    anchors: [
+      { key: 'launch', label: 'Genesis Block', date: '2016-10-28', primary: true },
+    ],
+  },
+];
+
+// Grid sections, in display order. kind is the grouping key.
+const STOCKS_GROUPS = [
+  { kind: 'stock', label: 'Stocks' },
+  { kind: 'futures', label: 'Indices' },
+  { kind: 'commodity', label: 'Metals' },
+  { kind: 'crypto', label: 'Crypto' },
 ];
 
 /* ===================== Anchor reads ===================== */
@@ -336,16 +375,21 @@ function stocksPortraitFor(person) {
 async function stocksLoadPortraits() {
   let cached = {};
   try { cached = JSON.parse(localStorage.getItem(STOCKS_PORTRAIT_CACHE_KEY)) || {}; } catch (e) { cached = {}; }
-  const people = [...new Set(STOCK_INSTRUMENTS.flatMap((i) => i.anchors.filter((a) => a.person).map((a) => a.person)))];
-  await Promise.all(people.map(async (person) => {
-    if (Object.prototype.hasOwnProperty.call(cached, person)) { STOCKS_PORTRAITS.set(person, cached[person]); return; }
+  // CEO faces for stocks, the subject's own page image for everything else
+  // (Bitcoin's logo, the Nasdaq logo, gold itself) - one loader, one cache.
+  const titles = [...new Set(STOCK_INSTRUMENTS.flatMap((i) => [
+    ...i.anchors.filter((a) => a.person).map((a) => a.person),
+    ...(i.image ? [i.image] : []),
+  ]))];
+  await Promise.all(titles.map(async (title) => {
+    if (Object.prototype.hasOwnProperty.call(cached, title)) { STOCKS_PORTRAITS.set(title, cached[title]); return; }
     try {
-      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(person.replace(/ /g, '_'))}`);
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`);
       if (!res.ok) return; // leave uncached so a later load retries
       const data = await res.json();
       const url = (data.thumbnail && data.thumbnail.source) || null;
-      cached[person] = url;
-      STOCKS_PORTRAITS.set(person, url);
+      cached[title] = url;
+      STOCKS_PORTRAITS.set(title, url);
     } catch (e) { /* offline - monogram fallback stays */ }
   }));
   try { localStorage.setItem(STOCKS_PORTRAIT_CACHE_KEY, JSON.stringify(cached)); } catch (e) { /* storage full - refetch next load */ }
@@ -369,13 +413,15 @@ const STOCKS_RELATION_CHIP = {
 const STOCKS_CYCLE_CLS = { bear: 'bad', bull: 'good', volatile: 'warn' };
 
 // Grid monogram: always the plain ticker circle. The portrait version only
-// exists inside the popup hero.
+// exists inside the popup hero - the CEO's face for a stock, the subject's
+// own page image (coin logo, exchange logo, the metal) for the rest.
 function stocksMonogram(inst, withPortrait) {
-  const ceo = withPortrait ? inst.anchors.find((a) => a.person) : null;
-  const url = ceo ? stocksPortraitFor(ceo.person) : null;
+  const ceo = inst.anchors.find((a) => a.person);
+  const title = withPortrait ? ((ceo && ceo.person) || inst.image || null) : null;
+  const url = title ? stocksPortraitFor(title) : null;
   const cls = `stock-monogram${withPortrait ? ' large' : ''}${url ? ' has-photo' : ''}`;
   const style = `--stock-hue:${inst.hue};${url ? `background-image:url('${escapeHtml(url)}');` : ''}`;
-  return `<div class="${cls}" style="${style}"${ceo ? ` data-portrait="${escapeHtml(ceo.person)}"` : ''}><span>${escapeHtml(inst.ticker)}</span></div>`;
+  return `<div class="${cls}" style="${style}"${title ? ` data-portrait="${escapeHtml(title)}"` : ''}><span>${escapeHtml(inst.ticker)}</span></div>`;
 }
 
 function stocksWatchPill(verdict) {
@@ -391,33 +437,66 @@ function stocksAnchorFlagBadges(read) {
   return badges;
 }
 
+// Direction/level filter state ("only longs at the month level") and which
+// sections are folded shut. Session-scoped on purpose - a filter is a way of
+// looking, not a setting.
+const stocksFilter = { dir: 'all', level: 'year' };
+const stocksCollapsedGroups = new Set();
+let stocksAllInstruments = [];
+
+function stocksCardHtml(inst) {
+  // Zodiac chips first, cycle chips after - two consistent groups so every
+  // card scans the same way.
+  const primary = inst.reads.filter((r) => r.primary);
+  const chips = [
+    ...primary.map((r) => {
+      const chip = STOCKS_RELATION_CHIP[r.relation];
+      return `<span class="stock-chip ${chip.cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
+    }),
+    ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
+  ].join('');
+  return `
+    <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
+      <div class="stock-card-head">
+        ${stocksMonogram(inst, false)}
+        <div class="stock-card-title">
+          <div class="stock-card-ticker">${escapeHtml(inst.ticker)}</div>
+          <div class="stock-card-name">${escapeHtml(inst.name)}</div>
+        </div>
+        ${stocksWatchPill(inst.verdict)}
+      </div>
+      <div class="stock-card-chips">${chips}</div>
+    </div>`;
+}
+
 function renderStocksGrid(instruments) {
   const grid = document.getElementById('stocksGrid');
-  const sorted = [...instruments].sort((a, b) => STOCKS_WATCH_ORDER[a.verdict.watch] - STOCKS_WATCH_ORDER[b.verdict.watch]);
-  grid.innerHTML = sorted.map((inst) => {
-    // Zodiac chips first, cycle chips after - two consistent groups so
-    // every card scans the same way.
-    const primary = inst.reads.filter((r) => r.primary);
-    const chips = [
-      ...primary.map((r) => {
-        const chip = STOCKS_RELATION_CHIP[r.relation];
-        return `<span class="stock-chip ${chip.cls}">${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
-      }),
-      ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
-    ].join('');
+  const matches = (inst) => stocksFilter.dir === 'all'
+    || (inst.levels[stocksFilter.level] && inst.levels[stocksFilter.level].lean === stocksFilter.dir);
+
+  const sections = STOCKS_GROUPS.map((g) => {
+    const list = instruments
+      .filter((i) => i.kind === g.kind && matches(i))
+      .sort((a, b) => STOCKS_WATCH_ORDER[a.verdict.watch] - STOCKS_WATCH_ORDER[b.verdict.watch]);
+    // While filtering, an emptied section disappears instead of sitting
+    // there as a header over nothing.
+    if (!list.length && stocksFilter.dir !== 'all') return '';
+    const collapsed = stocksCollapsedGroups.has(g.kind);
     return `
-      <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
-        <div class="stock-card-head">
-          ${stocksMonogram(inst, false)}
-          <div class="stock-card-title">
-            <div class="stock-card-ticker">${escapeHtml(inst.ticker)}</div>
-            <div class="stock-card-name">${escapeHtml(inst.name)}</div>
-          </div>
-          ${stocksWatchPill(inst.verdict)}
+      <div class="stock-group${collapsed ? ' collapsed' : ''}" data-group="${g.kind}">
+        <div class="stock-group-head">
+          <span>${escapeHtml(g.label)}</span>
+          <span class="stock-group-count">${list.length}</span>
+          <span class="stock-group-chev">▾</span>
         </div>
-        <div class="stock-card-chips">${chips}</div>
+        <div class="stock-group-grid">${list.length ? list.map(stocksCardHtml).join('') : '<div class="empty-state">Nothing in this group.</div>'}</div>
       </div>`;
   }).join('');
+
+  grid.innerHTML = sections || '';
+  if (stocksFilter.dir !== 'all' && !grid.querySelector('.stock-card')) {
+    grid.innerHTML = `<div class="empty-state" style="margin-top:16px;">No ${stocksFilter.dir === 'long' ? 'long' : 'short'} leans at the ${stocksFilter.level} level right now.</div>`;
+  }
 
   grid.querySelectorAll('.stock-card').forEach((card) => {
     card.addEventListener('click', () => {
@@ -425,6 +504,26 @@ function renderStocksGrid(instruments) {
       if (inst) openStockModal(inst);
     });
   });
+  grid.querySelectorAll('.stock-group-head').forEach((head) => {
+    head.addEventListener('click', () => {
+      const section = head.parentElement;
+      const kind = section.dataset.group;
+      if (stocksCollapsedGroups.has(kind)) stocksCollapsedGroups.delete(kind);
+      else stocksCollapsedGroups.add(kind);
+      section.classList.toggle('collapsed');
+    });
+  });
+}
+
+function stocksSyncFilterButtons() {
+  document.querySelectorAll('#stocksDirFilter .stocks-filter-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.dir === stocksFilter.dir);
+  });
+  document.querySelectorAll('#stocksLevelFilter .stocks-filter-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.level === stocksFilter.level);
+  });
+  // Level only matters once a direction is chosen.
+  document.getElementById('stocksLevelFilter').classList.toggle('muted', stocksFilter.dir === 'all');
 }
 
 // One anchor's deep today block: PY/PM/PD against the Universal numbers and
@@ -763,8 +862,25 @@ function initStocksPage() {
   document.getElementById('stocksYearChip').textContent = `${today.getFullYear()} · Year of the ${todayAnimal}`;
 
   const instruments = STOCK_INSTRUMENTS.map((inst) => stocksInstrumentRead(inst, today, todayAnimal));
+  stocksAllInstruments = instruments;
   renderStocksGrid(instruments);
+  stocksSyncFilterButtons();
   stocksLoadPortraits(); // async - popup portraits, grid stays ticker-only
+
+  document.querySelectorAll('#stocksDirFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      stocksFilter.dir = btn.dataset.dir;
+      stocksSyncFilterButtons();
+      renderStocksGrid(stocksAllInstruments);
+    });
+  });
+  document.querySelectorAll('#stocksLevelFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      stocksFilter.level = btn.dataset.level;
+      stocksSyncFilterButtons();
+      renderStocksGrid(stocksAllInstruments);
+    });
+  });
 
   const overlay = document.getElementById('stockModalOverlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });

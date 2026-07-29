@@ -5432,3 +5432,81 @@ body {
   color: var(--muted);
   font-size: 0.74rem;
 }
+
+/* ===================== Stock Cycles - groups + filters ===================== */
+
+.stocks-filterbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 4px;
+}
+
+.stocks-filter-seg {
+  display: flex;
+  gap: 6px;
+}
+
+.stocks-filter-seg.muted { opacity: 0.4; pointer-events: none; }
+
+.stocks-filter-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stocks-filter-btn.active {
+  color: var(--text);
+  border-color: var(--yellow);
+}
+
+.stock-group { margin-top: 14px; }
+
+.stock-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 2px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  user-select: none;
+}
+
+.stock-group-count {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.stock-group-chev {
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.stock-group.collapsed .stock-group-chev { transform: rotate(-90deg); }
+.stock-group.collapsed .stock-group-grid { display: none; }
+
+.stock-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 10px;
+}
+
+.stocks-footnote {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin: 20px 0 10px;
+}

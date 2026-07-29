@@ -35,14 +35,22 @@
     <div class="stocks-title">Stock Cycles</div>
     <div class="stocks-year-chip" id="stocksYearChip"></div>
   </div>
-  <div class="stocks-hint">Company founding, IPO, and CEO birthdates read through the same engine as everything else:
-    life path, zodiac signs at year/month/day depth, and personal cycles
-    (7 weakness &middot; 8 strength &middot; 28 expansion &middot; 11 emotional/sporadic).
-    Tap an instrument for its card: year / month / day verdicts, the anchors, today's deep energies,
-    and View Trades &mdash; the system's recent calls replayed on real prices.
-    Watchlist lens only &mdash; there is no tracked record behind these reads yet.</div>
+  <div class="stocks-filterbar">
+    <div class="stocks-filter-seg" id="stocksDirFilter">
+      <button class="stocks-filter-btn active" data-dir="all">All</button>
+      <button class="stocks-filter-btn" data-dir="long">Longs</button>
+      <button class="stocks-filter-btn" data-dir="short">Shorts</button>
+    </div>
+    <div class="stocks-filter-seg" id="stocksLevelFilter">
+      <button class="stocks-filter-btn active" data-level="year">Year</button>
+      <button class="stocks-filter-btn" data-level="month">Month</button>
+      <button class="stocks-filter-btn" data-level="day">Day</button>
+    </div>
+  </div>
 
-  <div class="stock-grid" id="stocksGrid"></div>
+  <div id="stocksGrid"></div>
+
+  <div class="stocks-footnote">Watchlist lens only &mdash; no tracked record behind these reads yet.</div>
 
   <div class="stock-modal-overlay" id="stockModalOverlay">
     <div class="stock-modal">
