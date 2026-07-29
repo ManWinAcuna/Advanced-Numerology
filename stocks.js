@@ -1316,27 +1316,28 @@ async function renderStockTrades(inst) {
   stocksWireTradesLevelFilter(inst);
 }
 
-/* ===================== Day Cycles (day-level seasonality backtest) =====
+/* ===================== Day Cycles (calendar seasonality backtest) =====
  * ES and NQ only (the two 'futures' instruments) - the owner's specific ask:
  * does the CALENDAR ITSELF, independent of any birth chart, lean the tape
- * up, down, or sideways? Four day-level numbers, each already computed
- * elsewhere in the app for other purposes, get pointed at real price
- * history instead of a birth date:
- *   - Universal Day: compatLifePathInfo(date).lookupValue - the same
- *     life-path-style pool of the date's own month+day+year digits used as
- *     "Universal Day" throughout Today's Energies, purity-checked (22/4 etc)
- *     the same way. Reuses the owner's own number meanings (7/8/28/11).
- *   - Calendar Day: the plain day-of-month (1-31).
- *   - Calendar Day Reduced: that day-of-month run through reduceNumber().
- *   - Chinese Zodiac Day: getChineseDaySign(date) - the repeating 12-day
- *     animal cycle (independent of the zodiac YEAR read elsewhere).
+ * up, down, or sideways? Three resolutions, toggled in the panel:
+ *   DAY   - Universal Day (compatLifePathInfo lookupValue - the life-path-
+ *           style pool of the date's own digits, reusing the owner's own
+ *           number meanings 7/8/28/11), Calendar Day (1-31), Calendar Day
+ *           Reduced, Chinese Zodiac Day (the repeating 12-day animal
+ *           cycle) - plus a Universal Month x Universal Day cross-tab.
+ *   MONTH - Universal Month (calendar-only), Vietnamese Zodiac Month (the
+ *           calendar's own month-animal, also calendar-only), and Personal
+ *           Month per PRIMARY anchor (needs a birth/launch date - this one
+ *           IS anchor-relative, same Personal Month cell used everywhere
+ *           else in the app, just walked across real price history).
+ *   YEAR  - same split: Universal Year and Vietnamese Zodiac Year
+ *           (calendar-only) alongside Personal Year per primary anchor.
  * Every session in the fetched history is scored close-to-close and sorted
- * into one of these four buckets, plus a fifth cross-tab of Universal Month
- * x Universal Day. HONEST SCOPE, same as the header of this file: raw
- * historical frequency over one price history, no fitted weights, and
- * testing this many buckets at once means some of them clear the "lean"
- * bar by chance alone - every table shows its own N so that's checkable,
- * never hidden. */
+ * into whichever bucket is showing. HONEST SCOPE, same as the header of
+ * this file: raw historical frequency over one price history, no fitted
+ * weights, and testing this many buckets at once means some of them clear
+ * the "lean" bar by chance alone - every table shows its own N so that's
+ * checkable, never hidden. */
 
 const STOCKS_CYCLES_PX_CACHE_KEY = 'numerology_stock_px_cycles_v1';
 const STOCKS_CYCLES_OUTPUTSIZE = 5000; // as much daily history as one Twelve Data call returns
@@ -1401,14 +1402,30 @@ function stocksFinalizeCycleBucket(key, label, b) {
 }
 
 // Every session from index 1 on (index 0 has no prior close to compare
-// against) gets classified once and dropped into all five buckets.
-function stocksComputeDayCycles(bars) {
+// against) gets classified once and dropped into every bucket at every
+// resolution in the same pass - one fetch, one walk over the bars.
+// inst is needed here (unlike the old day-only version) because Personal
+// Month/Year are anchor-relative: each primary anchor with a real date
+// (ES's Index Anchor + Contract Launch; NQ's Nasdaq Born + Contract
+// Launch) gets its own Personal Month and Personal Year read on every
+// session date, via the exact same getPersonalMonthRaw/getPersonalYearRaw
+// cells the rest of the app already uses - just walked across history
+// instead of evaluated once for today.
+function stocksComputeCycles(inst, bars) {
   const calendarDay = new Map();
   const calendarDayReduced = new Map();
   const universalDay = new Map();
   const zodiacDay = new Map();
   const monthDay = new Map(); // key `${universalMonth}|${universalDay}`
+  const universalMonth = new Map();
+  const zodiacMonth = new Map();
+  const universalYear = new Map();
+  const zodiacYear = new Map();
   const overall = stocksNewCycleBucket();
+
+  const anchors = inst.anchors.filter((a) => a.primary && a.date);
+  const personalMonthMaps = anchors.map(() => new Map());
+  const personalYearMaps = anchors.map(() => new Map());
 
   for (let i = 1; i < bars.length; i++) {
     const close = bars[i][4];
@@ -1416,7 +1433,8 @@ function stocksComputeDayCycles(bars) {
     if (!(prevClose > 0)) continue;
     const pct = ((close - prevClose) / prevClose) * 100;
     const outcome = stocksClassifyOutcome(pct);
-    const l = stocksDayCycleLabels(stocksParseDate(bars[i][0]));
+    const date = stocksParseDate(bars[i][0]);
+    const l = stocksDayCycleLabels(date);
 
     overall.n++; overall[outcome]++; overall.sumPct += pct;
     stocksBumpCycleBucket(calendarDay, l.calendarDay, outcome, pct);
@@ -1424,6 +1442,18 @@ function stocksComputeDayCycles(bars) {
     stocksBumpCycleBucket(universalDay, l.universalDay, outcome, pct);
     stocksBumpCycleBucket(zodiacDay, l.zodiacDay, outcome, pct);
     stocksBumpCycleBucket(monthDay, `${l.universalMonth}|${l.universalDay}`, outcome, pct);
+    stocksBumpCycleBucket(universalMonth, l.universalMonth, outcome, pct);
+    stocksBumpCycleBucket(zodiacMonth, getChineseMonth(date), outcome, pct);
+    stocksBumpCycleBucket(universalYear, getUniversalYear(date), outcome, pct);
+    stocksBumpCycleBucket(zodiacYear, getChineseZodiacYear(date), outcome, pct);
+
+    anchors.forEach((a, idx) => {
+      const birthDate = stocksParseDate(a.date);
+      const personalMonth = reduceNumber(getPersonalMonthRaw(birthDate, date));
+      const personalYear = reduceNumber(getPersonalYearRaw(birthDate, date));
+      stocksBumpCycleBucket(personalMonthMaps[idx], personalMonth, outcome, pct);
+      stocksBumpCycleBucket(personalYearMaps[idx], personalYear, outcome, pct);
+    });
   }
 
   const baseline = stocksFinalizeCycleBucket('all', 'All sessions', overall);
@@ -1431,6 +1461,8 @@ function stocksComputeDayCycles(bars) {
   const toRows = (map, order, labelFn) => order
     .filter((k) => map.has(k))
     .map((k) => stocksFinalizeCycleBucket(k, labelFn ? labelFn(k) : String(k), map.get(k)));
+  const numLabelRows = (map) => toRows(map, STOCKS_CYCLE_UNIVERSAL_DAY_ORDER, (k) => stocksNumLabel(k));
+  const zodiacLabelRows = (map) => toRows(map, CHINESE_ANIMALS);
 
   const edgeOverBaseline = (r) => Math.max(
     r.upPct - baseline.upPct,
@@ -1446,18 +1478,32 @@ function stocksComputeDayCycles(bars) {
     .filter((r) => r.n >= STOCKS_CYCLE_MIN_N)
     .sort((a, b) => edgeOverBaseline(b) - edgeOverBaseline(a));
 
+  const anchorLabel = (a) => a.person || a.label;
+
   return {
     baseline,
     n: overall.n,
     firstDate: bars.length ? bars[0][0] : null,
     lastDate: bars.length ? bars[bars.length - 1][0] : null,
-    calendarDayRows: toRows(calendarDay, Array.from({ length: 31 }, (_, i) => i + 1)),
-    calendarDayReducedRows: toRows(calendarDayReduced, STOCKS_CYCLE_CAL_DAY_REDUCED_ORDER),
-    universalDayRows: toRows(universalDay, STOCKS_CYCLE_UNIVERSAL_DAY_ORDER, (k) => stocksNumLabel(k)),
-    zodiacDayRows: toRows(zodiacDay, CHINESE_ANIMALS),
-    monthDayRows: monthDayQualified,
-    monthDayTotalCombos: monthDayAll.length,
-    monthDayDropped: monthDayAll.length - monthDayQualified.length,
+    day: {
+      calendarDayRows: toRows(calendarDay, Array.from({ length: 31 }, (_, i) => i + 1)),
+      calendarDayReducedRows: toRows(calendarDayReduced, STOCKS_CYCLE_CAL_DAY_REDUCED_ORDER),
+      universalDayRows: numLabelRows(universalDay),
+      zodiacDayRows: zodiacLabelRows(zodiacDay),
+      monthDayRows: monthDayQualified,
+      monthDayTotalCombos: monthDayAll.length,
+      monthDayDropped: monthDayAll.length - monthDayQualified.length,
+    },
+    month: {
+      universalMonthRows: numLabelRows(universalMonth),
+      zodiacMonthRows: zodiacLabelRows(zodiacMonth),
+      perAnchor: anchors.map((a, idx) => ({ label: anchorLabel(a), rows: numLabelRows(personalMonthMaps[idx]) })),
+    },
+    year: {
+      universalYearRows: numLabelRows(universalYear),
+      zodiacYearRows: zodiacLabelRows(zodiacYear),
+      perAnchor: anchors.map((a, idx) => ({ label: anchorLabel(a), rows: numLabelRows(personalYearMaps[idx]) })),
+    },
   };
 }
 
@@ -1498,6 +1544,85 @@ function stocksCycleTableHtml(title, headerLabel, note, rows, baseline) {
         <tbody>${rows.map((r) => stocksCycleRowHtml(r, baseline)).join('')}</tbody>
       </table>
     </div>`;
+}
+
+// Which resolution the panel is showing - Day/Month/Year. Session-scoped,
+// same idea as stocksTradesLevel; reset to Day on page load.
+let stocksCyclesLevel = 'day';
+
+function stocksCyclesLevelFilterHtml() {
+  const opt = (level, label) => `<button class="stocks-filter-btn${stocksCyclesLevel === level ? ' active' : ''}" data-level="${level}">${label}</button>`;
+  return `<div class="stocks-filter-seg" id="stockCyclesLevelFilter">${opt('day', 'Day')}${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
+}
+
+function stocksCyclesDayHtml(stats) {
+  return `
+    ${stocksCycleTableHtml('Universal Day', 'Universal Day', 'Life-path-style pool of the date itself (1-9, 11, 22, 28, 33) - the same number and owner-defined meanings (7 weak, 8 strong, 28 expansion, 11 volatile) used across the app.', stats.day.universalDayRows, stats.baseline)}
+    ${stocksCycleTableHtml('Calendar Day', 'Day of Month', 'Plain day-of-month, 1-31.', stats.day.calendarDayRows, stats.baseline)}
+    ${stocksCycleTableHtml('Calendar Day Reduced', 'Reduced', 'Day-of-month reduced to a single digit (11/22 held as master numbers).', stats.day.calendarDayReducedRows, stats.baseline)}
+    ${stocksCycleTableHtml('Chinese Zodiac Day', 'Animal', "The date's own day-animal in the repeating 12-day cycle - independent of the zodiac YEAR below.", stats.day.zodiacDayRows, stats.baseline)}
+    <div class="stock-section-label">Universal Month &times; Universal Day</div>
+    <div class="stock-cycles-note">Top ${Math.min(30, stats.day.monthDayRows.length)} of ${stats.day.monthDayTotalCombos} combos with N&ge;${STOCKS_CYCLE_MIN_N} (${stats.day.monthDayDropped} combos dropped for too few sessions), ranked by size of edge over baseline.</div>
+    <div class="pm-table-scroll">
+      <table class="stock-cycles-table">
+        <thead><tr><th>Combo</th><th>N</th><th>Up</th><th>Down</th><th>Consolidate</th><th>Avg &Delta;</th><th>Read</th></tr></thead>
+        <tbody>${stats.day.monthDayRows.slice(0, 30).map((r) => stocksCycleRowHtml(r, stats.baseline)).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function stocksCyclesMonthHtml(stats) {
+  return `
+    ${stocksCycleTableHtml('Universal Month', 'Universal Month', 'Universal Year + calendar month, reduced - calendar-only, the same number used in Today\'s Energies.', stats.month.universalMonthRows, stats.baseline)}
+    ${stocksCycleTableHtml('Vietnamese Zodiac Month', 'Animal', "The calendar's own month-animal (calendar-only, not tied to any anchor).", stats.month.zodiacMonthRows, stats.baseline)}
+    ${stats.month.perAnchor.map((a) => stocksCycleTableHtml(
+      `Personal Month — ${a.label}`, 'Personal Month',
+      `${a.label}'s own Personal Month (its Life Path cycle vs. each session's date) - anchor-relative, unlike the two calendar-only tables above.`,
+      a.rows, stats.baseline,
+    )).join('')}`;
+}
+
+function stocksCyclesYearHtml(stats) {
+  return `
+    ${stocksCycleTableHtml('Universal Year', 'Universal Year', 'Calendar year, reduced - calendar-only.', stats.year.universalYearRows, stats.baseline)}
+    ${stocksCycleTableHtml('Vietnamese Zodiac Year', 'Animal', "The calendar's own zodiac year-animal (calendar-only).", stats.year.zodiacYearRows, stats.baseline)}
+    ${stats.year.perAnchor.map((a) => stocksCycleTableHtml(
+      `Personal Year — ${a.label}`, 'Personal Year',
+      `${a.label}'s own Personal Year on each session's date - anchor-relative, same cell the Verdict/Trades panels already lean on.`,
+      a.rows, stats.baseline,
+    )).join('')}`;
+}
+
+function stocksCyclesBodyHtml(inst, stats) {
+  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const sections = stocksCyclesLevel === 'month' ? stocksCyclesMonthHtml(stats)
+    : stocksCyclesLevel === 'year' ? stocksCyclesYearHtml(stats)
+    : stocksCyclesDayHtml(stats);
+  return `
+    <div class="stock-trades-box">
+      <div class="stock-cycles-note">
+        <b>${escapeHtml(inst.ticker)} Day Cycles</b> — ${escapeHtml(inst.px.symbol)}${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}, ${stats.n} sessions, ${escapeHtml(fmtD(stats.firstDate))} &rarr; ${escapeHtml(fmtD(stats.lastDate))}.
+        Every session is Up / Down / Consolidate off its close vs. the prior close, with a &plusmn;${STOCKS_CYCLE_FLAT_PCT}% dead zone read as Consolidate.
+        Baseline over the whole window: <span class="score-inline good">${stats.baseline.upPct}% up</span> &middot; <span class="score-inline bad">${stats.baseline.downPct}% down</span> &middot; <span class="score-inline mid">${stats.baseline.consolidatePct}% consolidate</span>.
+        A Read only appears once a bucket clears both a minimum sample (N&ge;${STOCKS_CYCLE_MIN_N}) and a ${STOCKS_CYCLE_LEAN_MARGIN}-point edge over that baseline &mdash; raw historical frequency on one price history, not a proven edge, and testing this many buckets at once means some reads clear that bar by chance alone.
+      </div>
+      ${stocksCyclesLevelFilterHtml()}
+      ${sections}
+    </div>`;
+}
+
+function stocksWireCyclesLevelFilter(inst, stats) {
+  const el = document.getElementById('stockCyclesLevelFilter');
+  if (!el) return;
+  el.querySelectorAll('.stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksCyclesLevel === btn.dataset.level) return;
+      stocksCyclesLevel = btn.dataset.level;
+      const panel = document.getElementById('stockCyclesPanel');
+      if (panel) panel.innerHTML = stocksCyclesBodyHtml(inst, stats);
+      stocksWireCyclesLevelFilter(inst, stats);
+    });
+  });
 }
 
 async function renderStockDayCycles(inst) {
@@ -1543,30 +1668,9 @@ async function renderStockDayCycles(inst) {
     return;
   }
 
-  const stats = stocksComputeDayCycles(bars);
-  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-
-  panel.innerHTML = `
-    <div class="stock-trades-box">
-      <div class="stock-cycles-note">
-        <b>${escapeHtml(inst.ticker)} Day Cycles</b> — ${escapeHtml(inst.px.symbol)}${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}, ${stats.n} sessions, ${escapeHtml(fmtD(stats.firstDate))} &rarr; ${escapeHtml(fmtD(stats.lastDate))}.
-        Every session is Up / Down / Consolidate off its close vs. the prior close, with a &plusmn;${STOCKS_CYCLE_FLAT_PCT}% dead zone read as Consolidate.
-        Baseline over the whole window: <span class="score-inline good">${stats.baseline.upPct}% up</span> &middot; <span class="score-inline bad">${stats.baseline.downPct}% down</span> &middot; <span class="score-inline mid">${stats.baseline.consolidatePct}% consolidate</span>.
-        A Read only appears once a bucket clears both a minimum sample (N&ge;${STOCKS_CYCLE_MIN_N}) and a ${STOCKS_CYCLE_LEAN_MARGIN}-point edge over that baseline &mdash; raw historical frequency on one price history, not a proven edge, and testing this many buckets at once means some reads clear that bar by chance alone.
-      </div>
-      ${stocksCycleTableHtml('Universal Day', 'Universal Day', 'Life-path-style pool of the date itself (1-9, 11, 22, 28, 33) - the same number and owner-defined meanings (7 weak, 8 strong, 28 expansion, 11 volatile) used across the app.', stats.universalDayRows, stats.baseline)}
-      ${stocksCycleTableHtml('Calendar Day', 'Day of Month', 'Plain day-of-month, 1-31.', stats.calendarDayRows, stats.baseline)}
-      ${stocksCycleTableHtml('Calendar Day Reduced', 'Reduced', 'Day-of-month reduced to a single digit (11/22 held as master numbers).', stats.calendarDayReducedRows, stats.baseline)}
-      ${stocksCycleTableHtml('Chinese Zodiac Day', 'Animal', "The date's own day-animal in the repeating 12-day cycle - independent of the zodiac YEAR read elsewhere in this app.", stats.zodiacDayRows, stats.baseline)}
-      <div class="stock-section-label">Universal Month &times; Universal Day</div>
-      <div class="stock-cycles-note">Top ${Math.min(30, stats.monthDayRows.length)} of ${stats.monthDayTotalCombos} combos with N&ge;${STOCKS_CYCLE_MIN_N} (${stats.monthDayDropped} combos dropped for too few sessions), ranked by size of edge over baseline.</div>
-      <div class="pm-table-scroll">
-        <table class="stock-cycles-table">
-          <thead><tr><th>Combo</th><th>N</th><th>Up</th><th>Down</th><th>Consolidate</th><th>Avg &Delta;</th><th>Read</th></tr></thead>
-          <tbody>${stats.monthDayRows.slice(0, 30).map((r) => stocksCycleRowHtml(r, stats.baseline)).join('')}</tbody>
-        </table>
-      </div>
-    </div>`;
+  const stats = stocksComputeCycles(inst, bars);
+  panel.innerHTML = stocksCyclesBodyHtml(inst, stats);
+  stocksWireCyclesLevelFilter(inst, stats);
 }
 
 /* ===================== Page init ===================== */
