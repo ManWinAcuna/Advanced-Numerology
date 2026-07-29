@@ -663,6 +663,27 @@ function stocksLeanAt(inst, level, atDate) {
   return stocksLevelVerdict(reads, level);
 }
 
+// Entry timing (owner's idea): instead of blindly entering at the window's
+// first session, enter where the SYSTEM's signal peaks - the window's
+// weakest energy day for a short, strongest for a long, measured as the
+// primary anchors' average energy-flow score on each session date. This is
+// NOT hindsight: energies are pure calendar math (no prices involved), so
+// the peak day was knowable before the window ever opened.
+function stocksEntryBarIndex(inst, lean, bars) {
+  if (bars.length <= 1) return 0;
+  const anchorDates = inst.anchors.filter((a) => a.primary && a.date).map((a) => stocksParseDate(a.date));
+  if (!anchorDates.length) return 0;
+  let bestI = 0;
+  let best = null;
+  bars.forEach((b, i) => {
+    const d = stocksParseDate(b[0]);
+    const avg = anchorDates.reduce((s, ad) => s + computeEnergyFlow(ad, d).finalScore, 0) / anchorDates.length;
+    const signal = lean.lean === 'short' ? -avg : avg; // deepest weakness / peak strength
+    if (best == null || signal > best) { best = signal; bestI = i; }
+  });
+  return bestI;
+}
+
 // First day of the current zodiac year, found with the engine's own
 // boundary: walk forward from Jan 20 until the year animal flips.
 function stocksZodiacYearStart(today) {
@@ -681,7 +702,20 @@ function stocksZodiacYearStart(today) {
 // exit the window offered and what holding to the end actually returned -
 // the endpoint number stays as a fact, it just no longer gets to be the
 // judge. A one-session call has no path, so it stays a plain WIN/LOSS.
-function stocksTradeCard(windowLabel, lean, windowBars, symbol) {
+// Multi-day windows route through here: pick the system's entry day first
+// (stocksEntryBarIndex), trade from there to the window's end, and say so
+// on the card. Neutral/sporadic windows fall straight through untimed.
+function stocksTimedTrade(inst, label, lean, bars) {
+  if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
+    return stocksTradeCard(label, lean, bars, inst.px.symbol);
+  }
+  const ei = stocksEntryBarIndex(inst, lean, bars);
+  const eDate = stocksParseDate(bars[ei][0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const note = `Entered ${eDate} - the window's ${lean.lean === 'short' ? 'weakest' : 'strongest'} energy day.`;
+  return stocksTradeCard(label, lean, bars.slice(ei), inst.px.symbol, note);
+}
+
+function stocksTradeCard(windowLabel, lean, windowBars, symbol, entryNote) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
     return {
       html: `
@@ -757,7 +791,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, symbol) {
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}. ${escapeHtml(symbol)} ${moved}.</div>
+        <div class="stock-trade-story">${escapeHtml(lean.why)}.${entryNote ? ` ${escapeHtml(entryNote)}` : ''} ${escapeHtml(symbol)} ${moved}.</div>
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
           <span class="score-inline ${held > 0 ? 'good' : 'bad'}">held to end ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
@@ -825,7 +859,7 @@ async function renderStockTrades(inst) {
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
     const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(stocksTradeCard(label, lean, monthBars, inst.px.symbol));
+    cards.push(stocksTimedTrade(inst, label, lean, monthBars));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -833,7 +867,7 @@ async function renderStockTrades(inst) {
   const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
   const yearBars = bars.filter((b) => b[0] >= yStartISO);
   const yearLean = stocksLeanAt(inst, 'year', today);
-  cards.push(stocksTradeCard(`Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, inst.px.symbol));
+  cards.push(stocksTimedTrade(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves.
@@ -848,7 +882,7 @@ async function renderStockTrades(inst) {
 
   panel.innerHTML = `
     <div class="stock-trades-box">
-      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window, and multi-day calls are graded on the whole path - how much of the window the trade spent in profit - not just where the last print landed.</div>
+      <div class="stock-trades-note">The system's recent calls, replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Each call uses the numbers as they stood in its own window; entries land on the window's peak-signal energy day (pure calendar math - knowable before the window opened, never price-picked); and multi-day calls are graded on the whole path from entry, not just where the last print landed.</div>
       ${summary}
       ${cards.map((c) => c.html).join('')}
     </div>`;
