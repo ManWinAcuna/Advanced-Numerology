@@ -134,11 +134,18 @@ function stocksYearAnimal(year) {
   return getChineseZodiacYear(new Date(year, 6, 1));
 }
 
-// Personal Years that read as pressure phases in the cycle content the app
-// already uses: 4 (restriction/grind), 7 (pullback, low external reward),
-// 9 (endings/clearing). Display always names the number, so the rule is
-// inspectable on every card rather than a hidden judgment.
-const STOCKS_PRESSURE_YEARS = [4, 7, 9];
+// Number meanings in the owner's own system (stated 2026-07-29): 7 =
+// weakness, 8 = strength, 28 = expansion, 11 = emotional / sporadic. These
+// four drive the cycle read - 7 leans short, 8 and 28 lean long, 11 flags
+// volatility without a direction. Numbers he hasn't defined stay unflagged
+// rather than guessed at, and the number is always shown next to its label
+// so the rule stays inspectable on every card.
+const STOCKS_NUMBER_MEANINGS = {
+  7: { label: 'Weakness', dir: 'bear' },
+  8: { label: 'Strength', dir: 'bull' },
+  28: { label: 'Expansion', dir: 'bull' },
+  11: { label: 'Emotional · Sporadic', dir: 'volatile' },
+};
 
 // One anchor -> everything the card shows. relation comes straight off the
 // engine's VIETNAMESE_TABLE bands: the six clash pairs score exactly 10
@@ -154,8 +161,9 @@ function stocksAnchorRead(anchor, today, todayAnimal) {
       animal,
       relation: score <= 10 ? 'enemy' : score >= 85 ? 'ally' : 'neutral',
       lifePath: null,
+      lifePathMeaning: null,
       personalYear: null,
-      pressure: false,
+      cycle: null,
     };
   }
   const d = stocksParseDate(anchor.date);
@@ -169,46 +177,63 @@ function stocksAnchorRead(anchor, today, todayAnimal) {
     animal,
     relation: score <= 10 ? 'enemy' : score >= 85 ? 'ally' : 'neutral',
     lifePath: getLifePath(d),
+    // The permanent trait read for the number itself (a Life Path 8 company
+    // IS strength in this system), separate from the year's cycle below.
+    lifePathMeaning: STOCKS_NUMBER_MEANINGS[getLifePathNumeric(d)] || null,
     personalYear,
-    pressure: STOCKS_PRESSURE_YEARS.includes(personalYear),
+    cycle: STOCKS_NUMBER_MEANINGS[personalYear] || null,
   };
 }
 
 // Watch verdict from the PRIMARY anchors only (company + CEO for a stock,
-// the instrument's own dates otherwise): any enemy year -> short-side watch;
-// pressure without an enemy year -> caution; allies with a clean slate ->
-// long-side watch. Plain rules, every input visible on the cards above it.
+// the instrument's own dates otherwise). Bear signals win: an enemy year or
+// a Personal Year 7 weakness cycle -> short-side watch. Then bull signals:
+// an ally year or a PY 8 strength / PY 28 expansion cycle -> long-side
+// watch (with a swings warning if a PY 11 rides along). PY 11 alone ->
+// sporadic caution, no direction. Plain rules, every input visible on the
+// cards above it.
 function stocksVerdict(reads) {
   const primary = reads.filter((r) => r.primary);
+  const who = (r) => r.person || r.label;
   const enemies = primary.filter((r) => r.relation === 'enemy');
-  const pressured = primary.filter((r) => r.pressure);
+  const weak = primary.filter((r) => r.cycle && r.cycle.dir === 'bear');
+  const strong = primary.filter((r) => r.cycle && r.cycle.dir === 'bull');
+  const sporadic = primary.filter((r) => r.cycle && r.cycle.dir === 'volatile');
   const allies = primary.filter((r) => r.relation === 'ally');
 
-  if (enemies.length) {
+  if (enemies.length || weak.length) {
+    const parts = [
+      ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
+      ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} weakness cycle`),
+    ];
     return {
       watch: 'short', label: 'High Short Watch',
-      text: `${enemies.map((r) => `${r.person || r.label}'s ${r.animal} runs its enemy year`).join('; ')}`
-        + `${pressured.length ? `, and ${pressured.map((r) => `${r.person || r.label} sits in a Personal Year ${r.personalYear} pressure cycle`).join('; ')}` : ''}.`
-        + ' Pressure cycle and/or enemy year detected — treat as a high-priority short-side watchlist item.',
+      text: `${parts.join('; ')}. Weakness cycle and/or enemy year detected — treat as a high-priority short-side watchlist item.`,
     };
   }
-  if (pressured.length) {
-    return {
-      watch: 'caution', label: 'Pressure Cycle',
-      text: `${pressured.map((r) => `${r.person || r.label} sits in a Personal Year ${r.personalYear} pressure cycle`).join('; ')}.`
-        + ' No enemy year, but the cycle argues against chasing strength here.',
-    };
-  }
-  if (allies.length) {
+  if (allies.length || strong.length) {
+    const parts = [
+      ...allies.map((r) => `${who(r)}'s ${r.animal} runs an ally year`),
+      ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
+    ];
+    const swings = sporadic.length
+      ? ` ${sporadic.map((r) => `${who(r)}'s Personal Year 11 runs emotional and sporadic — expect swings on the way`).join('; ')}.`
+      : '';
     return {
       watch: 'long', label: 'Long Watch',
-      text: `${allies.map((r) => `${r.person || r.label}'s ${r.animal} runs an ally year`).join('; ')}`
-        + ` with no enemy years or pressure cycles against it. Favorable-cycle watchlist item.`,
+      text: `${parts.join('; ')} with no enemy years or weakness cycles against it. Favorable-cycle watchlist item.${swings}`,
+    };
+  }
+  if (sporadic.length) {
+    return {
+      watch: 'caution', label: 'Sporadic Year',
+      text: `${sporadic.map((r) => `${who(r)} runs a Personal Year 11 — emotional, sporadic energy`).join('; ')}.`
+        + ' No direction from the cycles, but expect erratic swings; size accordingly.',
     };
   }
   return {
     watch: 'neutral', label: 'Neutral',
-    text: 'No enemy years, ally years, or pressure cycles on the primary anchors — nothing cyclical to lean on either way this year.',
+    text: 'No enemy or ally years and no defined cycle numbers on the primary anchors — nothing cyclical to lean on either way this year.',
   };
 }
 
@@ -235,12 +260,14 @@ function stocksWatchPill(verdict) {
   return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '● ' : ''}${escapeHtml(verdict.label)}</span>`;
 }
 
+const STOCKS_CYCLE_CLS = { bear: 'bad', bull: 'good', volatile: 'warn' };
+
 function stocksAnchorFlagBadges(read) {
   const who = (read.person ? read.person.split(' ').pop() : read.label).toUpperCase();
   const badges = [];
   if (read.relation === 'enemy') badges.push(`<span class="stock-badge bad">${escapeHtml(who)} ${escapeHtml(read.animal.toUpperCase())} · ENEMY YEAR</span>`);
   if (read.relation === 'ally') badges.push(`<span class="stock-badge good">${escapeHtml(who)} ${escapeHtml(read.animal.toUpperCase())} · ALLY YEAR</span>`);
-  if (read.pressure) badges.push(`<span class="stock-badge warn">${escapeHtml(who)} · PY ${read.personalYear} PRESSURE</span>`);
+  if (read.cycle) badges.push(`<span class="stock-badge ${STOCKS_CYCLE_CLS[read.cycle.dir]}">${escapeHtml(who)} · PY ${read.personalYear} ${escapeHtml(read.cycle.label.toUpperCase())}</span>`);
   return badges;
 }
 
@@ -248,9 +275,11 @@ function renderStocksGrid(instruments) {
   const grid = document.getElementById('stocksGrid');
   const sorted = [...instruments].sort((a, b) => STOCKS_WATCH_ORDER[a.verdict.watch] - STOCKS_WATCH_ORDER[b.verdict.watch]);
   grid.innerHTML = sorted.map((inst) => {
-    const chips = inst.reads.filter((r) => r.primary).map((r) => {
+    const chips = inst.reads.filter((r) => r.primary).flatMap((r) => {
       const chip = STOCKS_RELATION_CHIP[r.relation];
-      return `<span class="stock-chip ${chip.cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}${r.pressure ? ' · PY ' + r.personalYear : ''}</span>`;
+      const out = [`<span class="stock-chip ${chip.cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`];
+      if (r.cycle) out.push(`<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`);
+      return out;
     }).join('');
     return `
       <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
@@ -284,12 +313,12 @@ function openStockModal(inst) {
     <div class="stock-anchor-card${r.primary ? ' primary' : ''}">
       <div class="stock-anchor-label">${r.icon} ${escapeHtml(r.label)}</div>
       <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(String(r.lifePath)) : VIETNAMESE_ZODIAC_EMOJI[r.animal] || '—'}</div>
-      <div class="stock-anchor-sub">${r.lifePath != null ? 'Life Path' : 'Zodiac only'}</div>
+      <div class="stock-anchor-sub">${r.lifePath != null ? `Life Path${r.lifePathMeaning ? ' · ' + escapeHtml(r.lifePathMeaning.label) : ''}` : 'Zodiac only'}</div>
       <div class="stock-anchor-date">${escapeHtml(r.dateDisplay)}</div>
       <div class="stock-anchor-zodiac">
         <span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${STOCKS_RELATION_CHIP[r.relation].text}` : ''}</span>
       </div>
-      ${r.personalYear != null ? `<div class="stock-anchor-py${r.pressure ? ' warn' : ''}">Personal Year ${r.personalYear}${r.pressure ? ' ⚠️' : ''}</div>` : ''}
+      ${r.personalYear != null ? `<div class="stock-anchor-py${r.cycle ? ' ' + STOCKS_CYCLE_CLS[r.cycle.dir] : ''}">Personal Year ${r.personalYear}${r.cycle ? ` · ${escapeHtml(r.cycle.label)}` : ''}</div>` : ''}
     </div>`).join('');
 
   document.getElementById('stockModalBody').innerHTML = `

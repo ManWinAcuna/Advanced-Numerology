@@ -4953,6 +4953,7 @@ body {
 
 .stock-chip.bad { color: var(--bad); border-color: rgba(229, 57, 63, 0.5); }
 .stock-chip.good { color: var(--good); border-color: rgba(139, 195, 74, 0.5); }
+.stock-chip.warn { color: var(--orange); border-color: rgba(255, 138, 61, 0.5); }
 
 .stock-badge {
   padding: 4px 10px;
@@ -5080,6 +5081,8 @@ body {
 }
 
 .stock-anchor-py.warn { color: var(--orange); }
+.stock-anchor-py.bad { color: var(--bad); }
+.stock-anchor-py.good { color: var(--good); }
 
 .stock-verdict {
   border-left: 3px solid var(--border);
