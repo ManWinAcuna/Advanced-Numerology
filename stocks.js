@@ -296,7 +296,13 @@ function stocksLevelSignals(read, level) {
   };
 }
 
-function stocksLevelVerdict(reads, level) {
+// historical (optional): this level's Day Cycles backtest read for TODAY
+// specifically (see stocksHistoricalLeanFor below) - counts as one more
+// vote in the same bears/bulls list, same weight as a zodiac clash or a
+// 7/8/11/28 cycle number. Only ever present for ES/NQ, and only once their
+// price history has loaded; every other instrument/level behaves exactly
+// as before.
+function stocksLevelVerdict(reads, level, historical) {
   const who = (r) => r.person || r.label;
   const bears = [];
   const bulls = [];
@@ -309,6 +315,7 @@ function stocksLevelVerdict(reads, level) {
     if (s.signScore >= 85) bulls.push(`${who(r)}'s ${s.mySign} allies the ${s.nowSign} ${s.signWord}`);
     if (meaning && meaning.dir === 'bull') bulls.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
   });
+  if (historical) (historical.dir === 'bear' ? bears : bulls).push(historical.why);
 
   if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; ') };
   if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; ') };
@@ -316,42 +323,73 @@ function stocksLevelVerdict(reads, level) {
 }
 
 // The year-level watch verdict that drives the grid pill - same precedence,
-// worded as the watchlist item (this is what sorts the board).
-function stocksVerdict(reads) {
+// worded as the watchlist item (this is what sorts the board). historicalYear
+// is the same Day Cycles vote stocksLevelVerdict takes, at the year level.
+function stocksVerdict(reads, historicalYear) {
   const primary = reads.filter((r) => r.primary);
   const who = (r) => r.person || r.label;
   const enemies = primary.filter((r) => r.relation === 'enemy');
   const weak = primary.filter((r) => r.cycle && r.cycle.dir === 'bear');
   const strong = primary.filter((r) => r.cycle && r.cycle.dir === 'bull');
   const allies = primary.filter((r) => r.relation === 'ally');
+  const histBear = historicalYear && historicalYear.dir === 'bear';
+  const histBull = historicalYear && historicalYear.dir === 'bull';
 
-  if (enemies.length || weak.length) {
+  if (enemies.length || weak.length || histBear) {
     const parts = [
       ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
       ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
+      ...(histBear ? [historicalYear.why] : []),
     ];
     return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.` };
   }
-  if (allies.length || strong.length) {
+  if (allies.length || strong.length || histBull) {
     const parts = [
       ...allies.map((r) => `${who(r)}'s ${r.animal} runs an ally year`),
       ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
+      ...(histBull ? [historicalYear.why] : []),
     ];
     return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.` };
   }
   return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.' };
 }
 
-function stocksInstrumentRead(inst, today, todayAnimal) {
+// Today's own Day Cycles backtest read, at one resolution - reuses the
+// EXACT rows and lean rule (N + margin) the Day Cycles panel itself shows,
+// so this vote is never stronger or looser than what that panel would tell
+// you if you opened it. cycleStats is the plain object stocksComputeCycles
+// returns (or null/undefined before it's loaded - callers just get no vote).
+function stocksHistoricalLeanFor(cycleStats, level, today) {
+  if (!cycleStats) return null;
+  const l = stocksDayCycleLabels(today);
+  let row = null;
+  if (level === 'day') {
+    const comboKey = `${l.universalMonth}|${l.universalDay}`;
+    row = cycleStats.day.monthDayRows.find((r) => r.key === comboKey) || null;
+  } else if (level === 'month') {
+    row = cycleStats.month.universalMonthRows.find((r) => r.key === l.universalMonth) || null;
+  } else if (level === 'year') {
+    row = cycleStats.year.universalYearRows.find((r) => r.key === getUniversalYear(today)) || null;
+  }
+  if (!row) return null;
+  const lean = stocksCycleLean(row, cycleStats.baseline);
+  if (lean.cls !== 'lean-up' && lean.cls !== 'lean-down') return null;
+  const dir = lean.cls === 'lean-up' ? 'bull' : 'bear';
+  const pct = dir === 'bull' ? row.upPct : row.downPct;
+  return { dir, why: `history leans ${dir === 'bull' ? 'up' : 'down'} ${pct}% on ${row.label} (N=${row.n})` };
+}
+
+function stocksInstrumentRead(inst, today, todayAnimal, cycleStats) {
   const reads = inst.anchors.map((a) => stocksAnchorRead(a, today, todayAnimal));
+  const histYear = stocksHistoricalLeanFor(cycleStats, 'year', today);
   return {
     ...inst,
     reads,
-    verdict: stocksVerdict(reads),
+    verdict: stocksVerdict(reads, histYear),
     levels: {
-      year: stocksLevelVerdict(reads, 'year'),
-      month: stocksLevelVerdict(reads, 'month'),
-      day: stocksLevelVerdict(reads, 'day'),
+      year: stocksLevelVerdict(reads, 'year', histYear),
+      month: stocksLevelVerdict(reads, 'month', stocksHistoricalLeanFor(cycleStats, 'month', today)),
+      day: stocksLevelVerdict(reads, 'day', stocksHistoricalLeanFor(cycleStats, 'day', today)),
     },
   };
 }
@@ -1505,6 +1543,34 @@ function stocksComputeCycles(inst, bars) {
   };
 }
 
+// Cache of computed Day Cycles stats per ticker, so the grid/modal Verdict
+// and the Day Cycles panel itself never fetch or recompute twice in one
+// visit. Only ever populated for ES/NQ, and only once a Twelve Data key is
+// on file - everything else about the page works exactly as before this.
+const stocksCycleStatsCache = new Map();
+
+// Background load for the Verdict's historical vote: fetches the same
+// long history the Day Cycles panel uses, computes the same stats, caches
+// them, then re-derives and re-renders just this instrument so its pill
+// picks up the vote. Silent no-op without a saved API key or on a fetch
+// error - the grid already rendered its zodiac/number-only read a moment
+// earlier, so there's nothing to roll back, it just never gets the extra
+// vote. No loading spinner, same as how CEO portraits fill in later.
+async function stocksLoadCycleStatsForVerdict(inst, today, todayAnimal) {
+  const key = localStorage.getItem(STOCKS_TD_KEY);
+  if (!key) return;
+  try {
+    const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+    if (bars.length < STOCKS_CYCLE_MIN_N * 2) return;
+    const stats = stocksComputeCycles(inst, bars);
+    stocksCycleStatsCache.set(inst.ticker, stats);
+    const idx = stocksAllInstruments.findIndex((i) => i.ticker === inst.ticker);
+    if (idx < 0) return;
+    stocksAllInstruments[idx] = stocksInstrumentRead(inst, today, todayAnimal, stats);
+    renderStocksGrid(stocksAllInstruments);
+  } catch (e) { /* offline or bad key - stays zodiac/number-only, no error shown on the grid */ }
+}
+
 function stocksCycleLean(row, baseline) {
   if (row.n < STOCKS_CYCLE_MIN_N) return { tag: `n<${STOCKS_CYCLE_MIN_N}`, cls: '', dim: true };
   const upEdge = row.upPct - baseline.upPct;
@@ -1693,6 +1759,10 @@ function initStocksPage() {
   renderStocksGrid(instruments);
   stocksSyncFilterButtons();
   stocksLoadPortraits(); // async - popup portraits, grid stays ticker-only
+  // ES/NQ only: background-load their Day Cycles history so the Verdict's
+  // historical vote can fold in once it lands - the grid already rendered
+  // instantly above with the zodiac/number-only read, this just refines it.
+  instruments.filter((i) => i.kind === 'futures').forEach((inst) => stocksLoadCycleStatsForVerdict(inst, today, todayAnimal));
 
   document.querySelectorAll('#stocksDirFilter .stocks-filter-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
