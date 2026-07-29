@@ -182,7 +182,28 @@ function stocksAnchorRead(anchor, today, todayAnimal) {
     lifePathMeaning: STOCKS_NUMBER_MEANINGS[getLifePathNumeric(d)] || null,
     personalYear,
     cycle: STOCKS_NUMBER_MEANINGS[personalYear] || null,
+    // The deep today read - the exact engine behind the profile's Energy
+    // Flow box: PY/PM/PD vs Universal Y/M/D (numerologyCompat per level)
+    // AND birth year/month/day signs vs today's three signs
+    // (vietnameseCompat per level). Clashes at any level surface below.
+    flow: computeEnergyFlow(d, today),
   };
+}
+
+// Score bands straight from the app's own clash language (clashTypeForScore
+// in db-core.js): under 30 reads as a fundamental clash, 85+ as synergy.
+function stocksScoreCls(score) {
+  return score <= 29 ? 'bad' : score >= 85 ? 'good' : '';
+}
+
+function stocksScoreMark(score) {
+  return score <= 29 ? ' ⚔️' : score >= 85 ? ' 🚀' : '';
+}
+
+// A number with one of the owner's meanings shows it everywhere it appears.
+function stocksNumLabel(n) {
+  const m = STOCKS_NUMBER_MEANINGS[n];
+  return m ? `${n} · ${m.label}` : String(n);
 }
 
 // Watch verdict from the PRIMARY anchors only (company + CEO for a stock,
@@ -303,6 +324,31 @@ function renderStocksGrid(instruments) {
   });
 }
 
+// One anchor's deep today block: PY/PM/PD against the Universal numbers
+// (numerology side) and birth year/month/day signs against today's three
+// signs (Vietnamese side), every pair marked when it clashes (<=29, the
+// engine's fundamental-clash band) or boosts (85+).
+function stocksEnergyBlock(r) {
+  const f = r.flow;
+  const n = f.numerology;
+  const v = f.vietnamese;
+  const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
+  return `
+    <div class="stock-energy-block">
+      <div class="stock-energy-title">${r.icon} ${escapeHtml(r.person || r.label)} <span class="score-inline ${stocksScoreCls(f.finalScore)}">⚡ ${f.finalScore}</span></div>
+      <div class="stock-energy-chips">
+        <span class="stock-chip ${stocksScoreCls(n.yearScore)}">PY ${stocksNumLabel(n.personalYear)} vs UY ${n.universalYear}${stocksScoreMark(n.yearScore)}</span>
+        <span class="stock-chip ${stocksScoreCls(n.monthScore)}">PM ${stocksNumLabel(n.personalMonth)} vs UM ${n.universalMonth}${stocksScoreMark(n.monthScore)}</span>
+        <span class="stock-chip ${stocksScoreCls(n.dayScore)}">PD ${stocksNumLabel(n.personalDay)} vs UD ${escapeHtml(String(n.universalDay))}${stocksScoreMark(n.dayScore)}</span>
+      </div>
+      <div class="stock-energy-chips">
+        <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Year ${e(v.personalYearSign)} ${escapeHtml(v.personalYearSign)} vs ${e(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
+        <span class="stock-chip ${stocksScoreCls(v.monthScore)}">Month ${e(v.personalMonthSign)} ${escapeHtml(v.personalMonthSign)} vs ${e(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
+        <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">Day ${e(v.personalDaySign)} ${escapeHtml(v.personalDaySign)} vs ${e(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
+      </div>
+    </div>`;
+}
+
 function openStockModal(inst) {
   const overlay = document.getElementById('stockModalOverlay');
   const ceo = inst.reads.find((r) => r.key === 'ceo');
@@ -321,6 +367,29 @@ function openStockModal(inst) {
       ${r.personalYear != null ? `<div class="stock-anchor-py${r.cycle ? ' ' + STOCKS_CYCLE_CLS[r.cycle.dir] : ''}">Personal Year ${r.personalYear}${r.cycle ? ` · ${escapeHtml(r.cycle.label)}` : ''}</div>` : ''}
     </div>`).join('');
 
+  // Universal side stated once (it's the same "today" for every anchor),
+  // then one deep block per dated anchor, then a clash/boost tally over the
+  // primary anchors. The year-only anchor (silver) has no flow - honest gap.
+  const flows = inst.reads.filter((r) => r.flow);
+  const uni = flows.length ? flows[0].flow : null;
+  const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
+  const uniLine = uni ? `
+    <div class="stock-energy-head">⚡ Today's Energies — Universal Y ${stocksNumLabel(uni.numerology.universalYear)} · M ${stocksNumLabel(uni.numerology.universalMonth)} · D ${escapeHtml(String(uni.numerology.universalDay))}${STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)].label) : ''}
+    · ${e(uni.vietnamese.universalYearSign)} ${escapeHtml(uni.vietnamese.universalYearSign)} year · ${e(uni.vietnamese.universalMonthSign)} ${escapeHtml(uni.vietnamese.universalMonthSign)} month · ${e(uni.vietnamese.universalDaySign)} ${escapeHtml(uni.vietnamese.universalDaySign)} day</div>` : '';
+
+  let clashes = 0;
+  let boosts = 0;
+  inst.reads.filter((r) => r.primary && r.flow).forEach((r) => {
+    const f = r.flow;
+    [f.numerology.yearScore, f.numerology.monthScore, f.numerology.dayScore,
+      f.vietnamese.yearScore, f.vietnamese.monthScore, f.vietnamese.daySignScore].forEach((s) => {
+      if (s <= 29) clashes += 1;
+      else if (s >= 85) boosts += 1;
+    });
+  });
+  const todayLine = uni ? `
+    <div class="stock-today-line">${clashes ? `⚔️ ${clashes} clashing energ${clashes === 1 ? 'y' : 'ies'}` : 'No clashing energies'} · ${boosts ? `🚀 ${boosts} boost${boosts === 1 ? '' : 's'}` : 'no boosts'} across the primary anchors today.</div>` : '';
+
   document.getElementById('stockModalBody').innerHTML = `
     <div class="stock-modal-top">
       <div class="stock-modal-badges">${stocksWatchPill(inst.verdict)}${badges}</div>
@@ -329,7 +398,10 @@ function openStockModal(inst) {
     <div class="stock-modal-headline">${escapeHtml(headline)}</div>
     <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
     <div class="stock-anchor-row">${anchorCards}</div>
-    <div class="stock-verdict ${inst.verdict.watch}">${escapeHtml(inst.verdict.text)}</div>`;
+    <div class="stock-verdict ${inst.verdict.watch}">${escapeHtml(inst.verdict.text)}</div>
+    ${uniLine}
+    ${flows.map(stocksEnergyBlock).join('')}
+    ${todayLine}`;
   overlay.style.display = 'flex';
 }
 

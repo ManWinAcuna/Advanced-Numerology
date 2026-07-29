@@ -5097,3 +5097,44 @@ body {
 .stock-verdict.short { border-left-color: var(--bad); color: var(--text); }
 .stock-verdict.long { border-left-color: var(--good); color: var(--text); }
 .stock-verdict.caution { border-left-color: var(--orange); color: var(--text); }
+
+.stock-energy-head {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--yellow);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.stock-energy-block {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.stock-energy-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stock-energy-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.stock-today-line {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
