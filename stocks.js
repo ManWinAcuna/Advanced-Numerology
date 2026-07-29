@@ -273,8 +273,49 @@ const STOCKS_RELATION_CHIP = {
   neutral: { cls: '', text: 'Neutral' },
 };
 
-function stocksMonogram(inst) {
-  return `<div class="stock-monogram" style="--stock-hue:${inst.hue};">${escapeHtml(inst.ticker)}</div>`;
+/* ---------- CEO portraits ---------- */
+// Real faces, fetched at runtime from Wikipedia's page-summary API (same
+// family of sources the sports rosters use) and cached in localStorage, so
+// nothing is bundled and a changed thumbnail self-heals. The ticker monogram
+// is always rendered underneath as the fallback - offline or personless
+// instruments (NQ, gold, BTC) just keep the monogram.
+const STOCKS_PORTRAITS = new Map();
+const STOCKS_PORTRAIT_CACHE_KEY = 'numerology_stock_portraits_v1';
+
+function stocksPortraitFor(person) {
+  return (person && STOCKS_PORTRAITS.get(person)) || null;
+}
+
+async function stocksLoadPortraits() {
+  let cached = {};
+  try { cached = JSON.parse(localStorage.getItem(STOCKS_PORTRAIT_CACHE_KEY)) || {}; } catch (e) { cached = {}; }
+  const people = [...new Set(STOCK_INSTRUMENTS.flatMap((i) => i.anchors.filter((a) => a.person).map((a) => a.person)))];
+  await Promise.all(people.map(async (person) => {
+    if (Object.prototype.hasOwnProperty.call(cached, person)) { STOCKS_PORTRAITS.set(person, cached[person]); return; }
+    try {
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(person.replace(/ /g, '_'))}`);
+      if (!res.ok) return; // leave uncached so a later load retries
+      const data = await res.json();
+      const url = (data.thumbnail && data.thumbnail.source) || null;
+      cached[person] = url;
+      STOCKS_PORTRAITS.set(person, url);
+    } catch (e) { /* offline - monogram fallback stays */ }
+  }));
+  try { localStorage.setItem(STOCKS_PORTRAIT_CACHE_KEY, JSON.stringify(cached)); } catch (e) { /* storage full - refetch next load */ }
+  // Photos usually land after the first paint - stamp them onto whatever is
+  // already on screen.
+  document.querySelectorAll('[data-portrait]').forEach((el) => {
+    const url = stocksPortraitFor(el.dataset.portrait);
+    if (url) { el.style.backgroundImage = `url(${url})`; el.classList.add('has-photo'); }
+  });
+}
+
+function stocksMonogram(inst, large) {
+  const ceo = inst.anchors.find((a) => a.person);
+  const url = ceo ? stocksPortraitFor(ceo.person) : null;
+  const cls = `stock-monogram${large ? ' large' : ''}${url ? ' has-photo' : ''}`;
+  const style = `--stock-hue:${inst.hue};${url ? `background-image:url('${escapeHtml(url)}');` : ''}`;
+  return `<div class="${cls}" style="${style}"${ceo ? ` data-portrait="${escapeHtml(ceo.person)}"` : ''}><span>${escapeHtml(inst.ticker)}</span></div>`;
 }
 
 function stocksWatchPill(verdict) {
@@ -296,12 +337,16 @@ function renderStocksGrid(instruments) {
   const grid = document.getElementById('stocksGrid');
   const sorted = [...instruments].sort((a, b) => STOCKS_WATCH_ORDER[a.verdict.watch] - STOCKS_WATCH_ORDER[b.verdict.watch]);
   grid.innerHTML = sorted.map((inst) => {
-    const chips = inst.reads.filter((r) => r.primary).flatMap((r) => {
-      const chip = STOCKS_RELATION_CHIP[r.relation];
-      const out = [`<span class="stock-chip ${chip.cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`];
-      if (r.cycle) out.push(`<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`);
-      return out;
-    }).join('');
+    // Zodiac chips first, cycle chips after - two consistent groups instead
+    // of per-anchor interleaving, so every card scans the same way.
+    const primary = inst.reads.filter((r) => r.primary);
+    const chips = [
+      ...primary.map((r) => {
+        const chip = STOCKS_RELATION_CHIP[r.relation];
+        return `<span class="stock-chip ${chip.cls}">${VIETNAMESE_ZODIAC_EMOJI[r.animal] || ''} ${escapeHtml(r.animal)}${r.relation !== 'neutral' ? ` · ${chip.text}` : ''}</span>`;
+      }),
+      ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
+    ].join('');
     return `
       <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
         <div class="stock-card-head">
@@ -335,16 +380,22 @@ function stocksEnergyBlock(r) {
   const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
   return `
     <div class="stock-energy-block">
-      <div class="stock-energy-title">${r.icon} ${escapeHtml(r.person || r.label)} <span class="score-inline ${stocksScoreCls(f.finalScore)}">⚡ ${f.finalScore}</span></div>
-      <div class="stock-energy-chips">
-        <span class="stock-chip ${stocksScoreCls(n.yearScore)}">PY ${stocksNumLabel(n.personalYear)} vs UY ${n.universalYear}${stocksScoreMark(n.yearScore)}</span>
-        <span class="stock-chip ${stocksScoreCls(n.monthScore)}">PM ${stocksNumLabel(n.personalMonth)} vs UM ${n.universalMonth}${stocksScoreMark(n.monthScore)}</span>
-        <span class="stock-chip ${stocksScoreCls(n.dayScore)}">PD ${stocksNumLabel(n.personalDay)} vs UD ${escapeHtml(String(n.universalDay))}${stocksScoreMark(n.dayScore)}</span>
+      <div class="stock-energy-title"><span>${r.icon} ${escapeHtml(r.person || r.label)}</span><span class="score-inline ${stocksScoreCls(f.finalScore)}">⚡ ${f.finalScore}</span></div>
+      <div class="stock-energy-row">
+        <span class="stock-energy-lab">Numbers</span>
+        <span class="stock-energy-chips">
+          <span class="stock-chip ${stocksScoreCls(n.yearScore)}">PY ${stocksNumLabel(n.personalYear)} vs ${n.universalYear}${stocksScoreMark(n.yearScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(n.monthScore)}">PM ${stocksNumLabel(n.personalMonth)} vs ${n.universalMonth}${stocksScoreMark(n.monthScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(n.dayScore)}">PD ${stocksNumLabel(n.personalDay)} vs ${escapeHtml(String(n.universalDay))}${stocksScoreMark(n.dayScore)}</span>
+        </span>
       </div>
-      <div class="stock-energy-chips">
-        <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Year ${e(v.personalYearSign)} ${escapeHtml(v.personalYearSign)} vs ${e(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
-        <span class="stock-chip ${stocksScoreCls(v.monthScore)}">Month ${e(v.personalMonthSign)} ${escapeHtml(v.personalMonthSign)} vs ${e(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
-        <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">Day ${e(v.personalDaySign)} ${escapeHtml(v.personalDaySign)} vs ${e(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
+      <div class="stock-energy-row">
+        <span class="stock-energy-lab">Zodiac</span>
+        <span class="stock-energy-chips">
+          <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Y · ${e(v.personalYearSign)} vs ${e(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(v.monthScore)}">M · ${e(v.personalMonthSign)} vs ${e(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
+          <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">D · ${e(v.personalDaySign)} vs ${e(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
+        </span>
       </div>
     </div>`;
 }
@@ -374,8 +425,14 @@ function openStockModal(inst) {
   const uni = flows.length ? flows[0].flow : null;
   const e = (a) => VIETNAMESE_ZODIAC_EMOJI[a] || '';
   const uniLine = uni ? `
-    <div class="stock-energy-head">⚡ Today's Energies — Universal Y ${stocksNumLabel(uni.numerology.universalYear)} · M ${stocksNumLabel(uni.numerology.universalMonth)} · D ${escapeHtml(String(uni.numerology.universalDay))}${STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)].label) : ''}
-    · ${e(uni.vietnamese.universalYearSign)} ${escapeHtml(uni.vietnamese.universalYearSign)} year · ${e(uni.vietnamese.universalMonthSign)} ${escapeHtml(uni.vietnamese.universalMonthSign)} month · ${e(uni.vietnamese.universalDaySign)} ${escapeHtml(uni.vietnamese.universalDaySign)} day</div>` : '';
+    <div class="stock-uni-row">
+      <span class="stock-chip">UY ${stocksNumLabel(uni.numerology.universalYear)}</span>
+      <span class="stock-chip">UM ${stocksNumLabel(uni.numerology.universalMonth)}</span>
+      <span class="stock-chip">UD ${escapeHtml(String(uni.numerology.universalDay))}${STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[Number(uni.numerology.universalDay)].label) : ''}</span>
+      <span class="stock-chip">${e(uni.vietnamese.universalYearSign)} ${escapeHtml(uni.vietnamese.universalYearSign)} year</span>
+      <span class="stock-chip">${e(uni.vietnamese.universalMonthSign)} ${escapeHtml(uni.vietnamese.universalMonthSign)} month</span>
+      <span class="stock-chip">${e(uni.vietnamese.universalDaySign)} ${escapeHtml(uni.vietnamese.universalDaySign)} day</span>
+    </div>` : '';
 
   let clashes = 0;
   let boosts = 0;
@@ -390,15 +447,22 @@ function openStockModal(inst) {
   const todayLine = uni ? `
     <div class="stock-today-line">${clashes ? `⚔️ ${clashes} clashing energ${clashes === 1 ? 'y' : 'ies'}` : 'No clashing energies'} · ${boosts ? `🚀 ${boosts} boost${boosts === 1 ? '' : 's'}` : 'no boosts'} across the primary anchors today.</div>` : '';
 
+  // Centered hero (photo, name, ticker, badges), then labeled sections -
+  // Anchors / Verdict / Today's Energies - so the card reads top-to-bottom
+  // as a structure instead of a pile. The anchor grid always gets exactly
+  // one column per anchor, so a 3-anchor stock never leaves a 2+1 hole.
   document.getElementById('stockModalBody').innerHTML = `
-    <div class="stock-modal-top">
+    <div class="stock-modal-hero">
+      ${stocksMonogram(inst, true)}
+      <div class="stock-modal-headline">${escapeHtml(headline)}</div>
+      <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
       <div class="stock-modal-badges">${stocksWatchPill(inst.verdict)}${badges}</div>
-      ${stocksMonogram(inst)}
     </div>
-    <div class="stock-modal-headline">${escapeHtml(headline)}</div>
-    <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
-    <div class="stock-anchor-row">${anchorCards}</div>
+    <div class="stock-section-label">Anchors</div>
+    <div class="stock-anchor-row" style="grid-template-columns:repeat(${inst.reads.length},1fr);">${anchorCards}</div>
+    <div class="stock-section-label">Verdict</div>
     <div class="stock-verdict ${inst.verdict.watch}">${escapeHtml(inst.verdict.text)}</div>
+    ${uni ? `<div class="stock-section-label">Today's Energies</div>` : ''}
     ${uniLine}
     ${flows.map(stocksEnergyBlock).join('')}
     ${todayLine}`;
@@ -413,6 +477,7 @@ function initStocksPage() {
 
   const instruments = STOCK_INSTRUMENTS.map((inst) => stocksInstrumentRead(inst, today, todayAnimal));
   renderStocksGrid(instruments);
+  stocksLoadPortraits(); // async - photos stamp onto the grid when they land
 
   const overlay = document.getElementById('stockModalOverlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });

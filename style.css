@@ -5138,3 +5138,117 @@ body {
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+/* ===================== Stock Cycles - layout polish ===================== */
+/* Second pass over the rules above (cascade overrides): centered hero +
+   labeled sections in the modal, center-aligned anchor cards, and
+   photo-capable monograms - structure instead of a pile. */
+
+.stock-monogram {
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center top;
+}
+
+.stock-monogram span { position: relative; z-index: 1; }
+.stock-monogram.has-photo span { visibility: hidden; }
+
+.stock-monogram.large {
+  width: 96px;
+  height: 96px;
+  font-size: 1.05rem;
+  border: 2px solid var(--border);
+  box-shadow: 0 0 0 3px rgba(245, 197, 66, 0.12);
+}
+
+.stock-modal-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 10px 0 2px;
+}
+
+.stock-modal-hero .stock-modal-headline { line-height: 1.1; }
+.stock-modal-hero .stock-modal-subline { margin: 0; }
+
+.stock-modal-hero .stock-modal-badges {
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.stock-section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.stock-section-label::before,
+.stock-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.stock-anchor-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 12px 6px;
+}
+
+.stock-anchor-number { margin: 2px 0 0; }
+.stock-anchor-sub { margin-bottom: 4px; }
+.stock-anchor-date { font-size: 0.72rem; margin-bottom: 4px; }
+.stock-anchor-zodiac { margin-bottom: 4px; }
+
+.stock-uni-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.stock-energy-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.stock-energy-lab {
+  flex: 0 0 58px;
+  text-align: right;
+  padding-top: 5px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stock-energy-row .stock-energy-chips { margin-top: 0; flex: 1; }
+
+.stock-today-line { text-align: center; }
+
+/* Grid cards: a divider between identity and chips so every card scans the
+   same two-part way, and a watch pill that doesn't shout over the ticker. */
+.stock-card-chips {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stock-watch { font-size: 0.64rem; padding: 4px 9px; }
