@@ -4861,6 +4861,24 @@ body {
   font-weight: 600;
 }
 
+.stocks-cycles-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.stocks-cycles-shortcut span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stocks-cycles-shortcut .stock-trades-btn {
+  margin-top: 0;
+  padding: 6px 16px;
+}
+
 .stocks-hint {
   color: var(--muted);
   font-size: 0.85rem;
@@ -5531,3 +5549,57 @@ body {
   border-left-color: var(--purple);
   border-style: dashed;
 }
+
+/* ===================== Stock Cycles - Day Cycles backtest ===================== */
+
+.stock-cycles-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.stock-cycles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 18px;
+}
+
+.stock-cycles-table th {
+  background: #1c1c1c;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 7px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.stock-cycles-table th:first-child { text-align: left; }
+
+.stock-cycles-table td {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.stock-cycles-table td:first-child { text-align: left; }
+
+.stock-cycles-table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.stock-cycles-table td.good { color: var(--good); font-weight: 700; }
+.stock-cycles-table td.bad { color: var(--bad); font-weight: 700; }
+.stock-cycles-table td.dim { color: var(--muted); }
+
+.stock-cycles-table tr.lean-up td.lean-cell { color: var(--good); font-weight: 700; }
+.stock-cycles-table tr.lean-down td.lean-cell { color: var(--bad); font-weight: 700; }
+.stock-cycles-table tr.lean-flat td.lean-cell { color: var(--orange); font-weight: 700; }
