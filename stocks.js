@@ -616,6 +616,18 @@ function stocksEnergyBlock(r) {
     </div>`;
 }
 
+// The same per-anchor breakdown "Today's Energies" shows in the main
+// modal, just computed as of whatever date actually produced a trade
+// card's lean, instead of today. This is the click-to-expand "why" detail
+// on replayed trade cards - the tier already counts how many signals
+// agreed vs dissented, this shows exactly which ones and what they read.
+function stocksTradeDetailBlocks(inst, atDate) {
+  const reads = inst.anchors
+    .filter((a) => a.primary && a.date)
+    .map((a) => ({ ...a, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
+  return reads.map(stocksEnergyBlock).join('');
+}
+
 // Which signal an anchor card should shout with, if any - a real
 // clash/enemy-year or bear cycle reads louder than an ally/bull cycle, which
 // reads louder than a plain neutral card. Drives a top accent border so the
@@ -724,6 +736,12 @@ let stocksTradeMode = 'Calendar';
 // Upcoming rows and the replayed cards to one horizon so a quick look
 // doesn't have to scroll past windows you don't care about right now.
 let stocksTradesLevel = 'all';
+
+// Which exit rule the replayed cards use - 'reversal' (default) actually
+// exits there; 'end' rides to the window's natural end regardless. Owner's
+// call: taking profit as a stat shouldn't force everyone to stop tracking
+// the full term, so both are real options, not a hardcoded answer.
+let stocksTradesExitMode = 'reversal';
 
 // opts lets a second caller (the Day Cycles backtest below) pull a much
 // longer history into its own cache slot without disturbing the Trades
@@ -962,8 +980,13 @@ function stocksZodiacYearStart(today) {
 // real exit, so "held"/"peak"/"worst"/"take profit" all get graded over
 // what actually happened, not an arbitrary month/year boundary ridden past
 // the good exit.
-function stocksApplyExitRule(inst, lean, entryBars, wasOpen, triggerAnchor) {
-  if (entryBars.length <= 1) return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
+// exitMode: 'reversal' (default) actually exits there; 'end' rides to the
+// window's natural end regardless - owner's ask, since "take profit" as a
+// stat shouldn't force-stop the calculation for everyone who'd rather see
+// the full term played out. Both are real, comparable options, not a
+// right answer/wrong answer - hence the toggle instead of picking one.
+function stocksApplyExitRule(inst, lean, entryBars, wasOpen, triggerAnchor, exitMode) {
+  if (entryBars.length <= 1 || exitMode === 'end') return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
   const afterDate = stocksParseDate(entryBars[0][0]);
   const laterDates = entryBars.slice(1).map((b) => stocksParseDate(b[0]));
   const reversal = triggerAnchor
@@ -1019,6 +1042,9 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   const cards = [];
   const pi = stocksPeakBarIndex(inst, lean, bars);
   const peakStat = { label: 'Peak', value: fmtD(bars[pi][0]) };
+  // Click-to-expand detail, built once - same for all three modes since
+  // they share this window's own lean/date, just different entry timing.
+  const detailHtml = opts && opts.atDate ? stocksTradeDetailBlocks(inst, opts.atDate) : null;
 
   // Mode 1: calendar only.
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
@@ -1028,13 +1054,13 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (ei < 0) {
     cards.push(noFill('Calendar', `The ${lean.lean} lean never got a daily energy confirmation - no trade taken.`));
   } else {
-    const exit = stocksApplyExitRule(inst, lean, bars.slice(ei), opts && opts.open, triggerAnchor);
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(ei), opts && opts.open, triggerAnchor, opts && opts.exitMode);
     const stats = [
       { label: 'Entry', value: fmtD(bars[ei][0]) },
       ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
       peakStat,
     ];
-    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Calendar', open: exit.stillOpen }), mode: 'Calendar' });
+    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Calendar', open: exit.stillOpen }, detailHtml), mode: 'Calendar' });
   }
 
   // Mode 2: calendar + price.
@@ -1044,7 +1070,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
       ? 'No energy confirmation, so price was never consulted - no trade taken.'
       : `Price never closed ${lean.lean === 'short' ? 'red' : 'green'} after the energy trigger - no trade taken.`));
   } else {
-    const exit = stocksApplyExitRule(inst, lean, bars.slice(pei), opts && opts.open, triggerAnchor);
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(pei), opts && opts.open, triggerAnchor, opts && opts.exitMode);
     const stats = [
       { label: 'Trigger', value: fmtD(bars[ei][0]) },
       { label: 'Confirmed', value: fmtD(bars[pei - 1][0]) },
@@ -1052,7 +1078,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
       ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
       peakStat,
     ];
-    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Cal + Price', open: exit.stillOpen }), mode: 'Cal + Price' });
+    cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Cal + Price', open: exit.stillOpen }, detailHtml), mode: 'Cal + Price' });
   }
 
   // Mode 3: intraday (CISD/IFVG). Needs a day to zoom into, so it rides the
@@ -1081,7 +1107,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
         const remLow = Math.min(...rest.map((b) => b[3]));
         const dayClose = ibars[ibars.length - 1][4];
         const windowBars = [[dayISO, entryBar[1], remHigh, remLow, dayClose], ...bars.slice(ei + 1)];
-        const exit = stocksApplyExitRule(inst, lean, windowBars, opts && opts.open, triggerAnchor);
+        const exit = stocksApplyExitRule(inst, lean, windowBars, opts && opts.open, triggerAnchor, opts && opts.exitMode);
         const stats = [
           { label: 'Trigger', value: fmtD(dayISO) },
           { label: which, value: fmtT(ibars[ti][0]) },
@@ -1089,7 +1115,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
           ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
           peakStat,
         ];
-        cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Intraday', open: exit.stillOpen }), mode: 'Intraday' });
+        cards.push({ ...stocksTradeCard(label, lean, exit.bars, stats, { ...opts, mode: 'Intraday', open: exit.stillOpen }, detailHtml), mode: 'Intraday' });
       }
     }
   }
@@ -1097,7 +1123,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   return cards;
 }
 
-function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts) {
+function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts, detailHtml) {
   if (!lean || lean.lean === 'neutral' || lean.lean === 'caution') {
     return {
       html: `
@@ -1199,6 +1225,12 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts) {
   const entryStatsRow = (entryStats && entryStats.length)
     ? `<div class="stock-trade-path">${entryStats.map((s) => `<span>${escapeHtml(s.label)} <b>${escapeHtml(s.value)}</b></span>`).join('')}</div>`
     : '';
+  // Click-to-expand detail: the full per-anchor breakdown behind the "why"
+  // sentence - which signals agreed, which dissented (the tier already
+  // counts them, this shows exactly what they read).
+  const detailSection = detailHtml ? `
+        <button class="stock-trade-detail-toggle" type="button">Why<span class="stock-trade-detail-chev">▾</span></button>
+        <div class="stock-trade-detail" hidden>${detailHtml}</div>` : '';
 
   return {
     html: `
@@ -1216,7 +1248,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts) {
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
           <span class="score-inline ${held > 0 ? 'good' : 'bad'}">${isOpen ? 'running' : 'held to end'} ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
-        </div>${pathRow}
+        </div>${pathRow}${detailSection}
       </div>`,
     grade,
   };
@@ -1403,6 +1435,22 @@ function stocksWireTradesLevelFilter(inst) {
   });
 }
 
+// Click a trade card's "Why" toggle to expand/collapse its per-anchor
+// energy detail - pure show/hide, no re-render needed since the detail
+// HTML is already built into the card.
+function stocksWireTradeDetailToggles() {
+  document.querySelectorAll('#stockTradesPanel .stock-trade-detail-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const detail = btn.nextElementSibling;
+      if (!detail) return;
+      const opening = detail.hasAttribute('hidden');
+      if (opening) detail.removeAttribute('hidden'); else detail.setAttribute('hidden', '');
+      const chev = btn.querySelector('.stock-trade-detail-chev');
+      if (chev) chev.textContent = opening ? '▴' : '▾';
+    });
+  });
+}
+
 async function renderStockTrades(inst) {
   const panel = document.getElementById('stockTradesPanel');
   const levelFilter = stocksTradesLevelFilterHtml();
@@ -1458,9 +1506,10 @@ async function renderStockTrades(inst) {
   const doneBars = bars.filter((b) => b[0] < todayISO);
   const lastBar = doneBars[doneBars.length - 1];
   if (lastBar) {
-    const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(lastBar[0]));
-    const dayLabel = stocksParseDate(lastBar[0]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar]), level: 'day' });
+    const dayDate = stocksParseDate(lastBar[0]);
+    const dayLean = stocksLeanAt(inst, 'day', dayDate);
+    const dayLabel = dayDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar], null, null, stocksTradeDetailBlocks(inst, dayDate)), level: 'day' });
   }
 
   // Medium: each of the last three completed months under that month's lean.
@@ -1468,9 +1517,10 @@ async function renderStockTrades(inst) {
     const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
     const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
     const monthBars = bars.filter((b) => b[0].startsWith(mISO));
-    const lean = stocksLeanAt(inst, 'month', new Date(m.getFullYear(), m.getMonth(), 15));
+    const monthAtDate = new Date(m.getFullYear(), m.getMonth(), 15);
+    const lean = stocksLeanAt(inst, 'month', monthAtDate);
     const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(...(await stocksTimedTrades(inst, label, lean, monthBars)).map((c) => ({ ...c, level: 'month' })));
+    cards.push(...(await stocksTimedTrades(inst, label, lean, monthBars, { exitMode: stocksTradesExitMode, atDate: monthAtDate })).map((c) => ({ ...c, level: 'month' })));
   }
 
   // Long-term: the current zodiac-year window under the year lean.
@@ -1480,7 +1530,7 @@ async function renderStockTrades(inst) {
   const yearLean = stocksLeanAt(inst, 'year', today);
   // The zodiac year runs until the next Lunar New Year - it's an OPEN
   // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true })).map((c) => ({ ...c, level: 'year' })));
+  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true, exitMode: stocksTradesExitMode, atDate: today })).map((c) => ({ ...c, level: 'year' })));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves. All three modes are computed
@@ -1509,11 +1559,17 @@ async function renderStockTrades(inst) {
     <div class="stocks-filter-seg" id="stockTradeModeToggle">
       ${STOCKS_TRADE_MODES.map((m) => `<button class="stocks-filter-btn${stocksTradeMode === m ? ' active' : ''}" data-mode="${escapeHtml(m)}">${escapeHtml(m)}</button>`).join('')}
     </div>`;
+  const exitToggle = `
+    <div class="stocks-filter-seg" id="stockTradesExitFilter">
+      <button class="stocks-filter-btn${stocksTradesExitMode === 'reversal' ? ' active' : ''}" data-exit="reversal">Reversal</button>
+      <button class="stocks-filter-btn${stocksTradesExitMode === 'end' ? ' active' : ''}" data-exit="end">Full Term</button>
+    </div>`;
 
   panel.innerHTML = `${levelFilter}${upcoming}
     <div class="stock-trades-box">
-      <div class="stock-trades-note">Replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}.</div>
+      <div class="stock-trades-note">Replayed on real ${escapeHtml(inst.px.symbol)} prices${inst.px.note ? ` (${escapeHtml(inst.px.note)})` : ''}. Exit: ${stocksTradesExitMode === 'end' ? 'holds to the window’s end' : 'exits at the reversal signal'}.</div>
       ${modeToggle}
+      ${exitToggle}
       ${summary}
       ${visibleCards.map((c) => c.html).join('')}
     </div>`;
@@ -1525,7 +1581,15 @@ async function renderStockTrades(inst) {
       renderStockTrades(inst);
     });
   });
+  document.querySelectorAll('#stockTradesExitFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksTradesExitMode === btn.dataset.exit) return;
+      stocksTradesExitMode = btn.dataset.exit;
+      renderStockTrades(inst);
+    });
+  });
   stocksWireTradesLevelFilter(inst);
+  stocksWireTradeDetailToggles();
 }
 
 /* ===================== Day Cycles (calendar seasonality backtest) =====
@@ -1771,7 +1835,9 @@ const STOCKS_COMBINED_YEARS_BACK = 3;
 // record, so a cold run for 16 instruments never exceeds Twelve Data's
 // 8-credits-a-minute free-tier cap no matter how the timing lands.
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v2';
+// v3: entries now carry BOTH exit modes per grade (was one grade per
+// mode) - old v2 data is simply superseded, not migrated.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v3';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1794,15 +1860,25 @@ function stocksCyclesCacheHit(symbol) {
 
 // Grades one window under Calendar and Cal + Price only - synchronous,
 // since neither mode needs anything beyond the daily bars already in hand.
-// Returns each mode's grade ('right'/'wrong'/'mixed') or null (not
-// directional, or no fill).
+// Computes BOTH exit modes (reversal and full-term) at once, since the
+// price data's already in hand either way - lets the Combined Track
+// Record's toggle switch instantly with no re-fetch. Returns
+// { calendar: { reversal, end }, calPrice: { reversal, end } }, each a
+// grade ('right'/'wrong'/'mixed') or null (not directional, or no fill).
 function stocksGradeWindowTwoModes(inst, lean, bars) {
-  if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: null, calPrice: null };
+  const none = { reversal: null, end: null };
+  if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: none, calPrice: none };
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
   const triggerAnchor = ei >= 0 ? stocksTriggeringAnchor(inst, lean, stocksParseDate(bars[ei][0])) : null;
-  const calendar = ei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor).bars).grade;
+  const calendar = ei < 0 ? none : {
+    reversal: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor, 'reversal').bars).grade,
+    end: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor, 'end').bars).grade,
+  };
   const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
-  const calPrice = pei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor).bars).grade;
+  const calPrice = pei < 0 ? none : {
+    reversal: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor, 'reversal').bars).grade,
+    end: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor, 'end').bars).grade,
+  };
   return { calendar, calPrice };
 }
 
@@ -1848,11 +1924,13 @@ function stocksCompletedZodiacYearRanges(today, count) {
   return ranges;
 }
 
-function stocksAggregateEntries(entries) {
+function stocksAggregateEntries(entries, exitMode) {
   const agg = { calendar: { right: 0, wrong: 0, mixed: 0 }, calPrice: { right: 0, wrong: 0, mixed: 0 } };
   entries.forEach((e) => {
-    if (e.calendar) agg.calendar[e.calendar]++;
-    if (e.calPrice) agg.calPrice[e.calPrice]++;
+    const cal = e.calendar && e.calendar[exitMode];
+    const cp = e.calPrice && e.calPrice[exitMode];
+    if (cal) agg.calendar[cal]++;
+    if (cp) agg.calPrice[cp]++;
   });
   return agg;
 }
@@ -1878,23 +1956,41 @@ function stocksBestModeLine(agg) {
 // Which stored horizon the box shows - session-scoped, resets to Month on
 // page load, same idea as the other Day/Month/Year toggles on this page.
 let stocksCombinedHorizon = 'month';
+// Which exit rule the box grades by - 'reversal' (default) or 'end' (ride
+// to the window's natural end). Both are pre-computed per entry, so this
+// switches instantly with no re-fetch.
+let stocksCombinedExitMode = 'reversal';
 
 function stocksCombinedHorizonFilterHtml() {
   const opt = (h, label) => `<button class="stocks-filter-btn${stocksCombinedHorizon === h ? ' active' : ''}" data-horizon="${h}">${label}</button>`;
   return `<div class="stocks-filter-seg" id="stockCombinedHorizonFilter">${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
 }
 
+function stocksCombinedExitFilterHtml() {
+  const opt = (m, label) => `<button class="stocks-filter-btn${stocksCombinedExitMode === m ? ' active' : ''}" data-exit="${m}">${label}</button>`;
+  return `<div class="stocks-filter-seg" id="stockCombinedExitFilter">${opt('reversal', 'Reversal')}${opt('end', 'Full Term')}</div>`;
+}
+
 function renderStocksCombinedRecordBody(box, store) {
   const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
   const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} zodiac years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
+  const exitLabel = stocksCombinedExitMode === 'end' ? 'holding to the window’s end' : 'exiting at the reversal signal';
   box.innerHTML = `
     ${stocksCombinedHorizonFilterHtml()}
-    <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments. Updates only when a new one completes.</div>
-    ${stocksBestModeLine(stocksAggregateEntries(entries))}`;
+    ${stocksCombinedExitFilterHtml()}
+    <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new one completes.</div>
+    ${stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode))}`;
   document.querySelectorAll('#stockCombinedHorizonFilter .stocks-filter-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (stocksCombinedHorizon === btn.dataset.horizon) return;
       stocksCombinedHorizon = btn.dataset.horizon;
+      renderStocksCombinedRecordBody(box, store);
+    });
+  });
+  document.querySelectorAll('#stockCombinedExitFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksCombinedExitMode === btn.dataset.exit) return;
+      stocksCombinedExitMode = btn.dataset.exit;
       renderStocksCombinedRecordBody(box, store);
     });
   });
