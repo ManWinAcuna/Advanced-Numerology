@@ -873,33 +873,17 @@ function openStockModal(inst) {
   // The sentence-length reasoning is a tap away now (same toggle pattern as
   // the trade cards' "Why"), not printed inline for every level every time.
   // Entry/Peak/TP dates (Year/Month only - a single day has no separate
-  // take-profit day) use the exact same forward-looking calendar math as the
-  // Upcoming rows, just windowed to "rest of this month"/"rest of this
-  // zodiac year" instead of "next calendar month" - this is what THIS lean
-  // (not next month's) would actually do.
+  // take-profit day) use stocksLevelWindowDays - the real window this exact
+  // call stays true for, not a calendar-month or zodiac-year cutoff (which
+  // has nothing to do with when Personal Month/Year, Vietnamese Month/Year,
+  // western, or transits actually change - see stocksLevelWindowDays).
   const today = new Date();
-  const restOfYearDays = [];
-  {
-    const animal = getChineseZodiacYear(today);
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
-      restOfYearDays.push(new Date(d));
-      d.setDate(d.getDate() + 1);
-    }
-  }
-  const restOfMonthDays = [];
-  {
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    for (let d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); d <= monthEnd; d.setDate(d.getDate() + 1)) {
-      restOfMonthDays.push(new Date(d));
-    }
-  }
-  const levelStatsDays = { year: restOfYearDays, month: restOfMonthDays, day: null };
-
   const levelRows = ['year', 'month', 'day'].map((level) => {
     const v = inst.levels[level];
     if (!v) return '';
-    const days = levelStatsDays[level];
+    const days = (level !== 'day' && (v.lean === 'short' || v.lean === 'long'))
+      ? stocksLevelWindowDays(inst, level, v, today)
+      : null;
     const stats = days ? stocksHorizonStats(inst, v, days) : null;
     return `
       <div class="stock-verdict-row">
@@ -1104,11 +1088,23 @@ function stocksIntradayTriggerIndex(lean, bars) {
 // The lean this system would have given at a past date, at one level -
 // computed from the anchors' energy flow AS OF that date, so a month's
 // trade uses that month's numbers, not today's.
+// Memoized: stocksLeanAt is a pure function of (instrument config, level,
+// date) - anchors never change mid-session - and stocksLevelWindowDays now
+// calls it up to hundreds of times per window scan (real transit/ephemeris
+// math per call, not free). Two windows for the same instrument (Year and
+// Month) scan heavily overlapping date ranges, so this cache turns what
+// would be thousands of redundant recomputations into a handful.
+const stocksLeanAtCache = new Map();
 function stocksLeanAt(inst, level, atDate) {
+  const key = `${inst.ticker}|${level}|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
+  const hit = stocksLeanAtCache.get(key);
+  if (hit) return hit;
   const reads = inst.anchors
     .filter((a) => a.primary && a.date)
     .map((a) => ({ ...a, primary: true, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
-  return stocksLevelVerdict(reads, level, null, atDate);
+  const result = stocksLevelVerdict(reads, level, null, atDate);
+  stocksLeanAtCache.set(key, result);
+  return result;
 }
 
 // ONE anchor's own day-level lean, independent of every other anchor -
@@ -1533,6 +1529,28 @@ function stocksFirstConfirmingDate(inst, lean, dates) {
   return dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
 }
 
+// How many days into the future this exact level call stays true, before
+// the blended signal set itself flips - the real, non-arbitrary window for
+// "how long is this call good for." A calendar-month or zodiac-year cutoff
+// has nothing to do with when any of the underlying cycles actually change:
+// Personal Month/Year is anchored to each ANCHOR's own birth day-of-month
+// (Company and the CEO don't even agree with each other), Vietnamese
+// Month/Year flips on a different fixed boundary, western sun-sign on
+// another, and transits on none at all. Scanning until the level's own
+// blended verdict changes sidesteps all of that - it's exactly as long (or
+// short) as the actual conviction behind today's call warrants: a lopsided,
+// stable read naturally scans far; a borderline one flips fast.
+function stocksLevelWindowDays(inst, level, lean, today, maxDays) {
+  const days = [];
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  for (let i = 0; i < (maxDays || 400); i++) {
+    if (stocksLeanAt(inst, level, d).lean !== lean.lean) break;
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
 // Entry/Peak/TP preview for one lean over one forward window of dates - pure
 // calendar math, no prices. Shared by the Upcoming rows and the Verdict
 // section's own level rows, so "when would this actually enter/exit" reads
@@ -1596,16 +1614,13 @@ function stocksUpcomingRows(inst) {
   for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) monthDays.push(new Date(d));
   rows.push({ level: 'month', html: row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, horizonStats(monthLean, monthDays)) });
 
-  // Rest of the current zodiac year.
+  // As long as this exact Year call stays true (see stocksLevelWindowDays) -
+  // not "the rest of the zodiac year," which has nothing to do with when
+  // Personal Year (birthday-anchored, different per anchor) or the other
+  // Year-timeframe signals actually change.
   const yearLean = stocksLeanAt(inst, 'year', today);
-  const yearDays = [];
-  const animal = getChineseZodiacYear(today);
-  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
-    yearDays.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  rows.push({ level: 'year', html: row('Rest of the zodiac year', yearLean, horizonStats(yearLean, yearDays)) });
+  const yearDays = stocksLevelWindowDays(inst, 'year', yearLean, today);
+  rows.push({ level: 'year', html: row('This Year call', yearLean, horizonStats(yearLean, yearDays)) });
 
   return rows;
 }
