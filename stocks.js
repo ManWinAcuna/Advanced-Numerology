@@ -612,16 +612,24 @@ function stocksMonogram(inst, withPortrait) {
   return `<div class="${cls}" style="${style}"${title ? ` data-portrait="${escapeHtml(title)}"` : ''}><span>${escapeHtml(inst.ticker)}</span></div>`;
 }
 
-function stocksWatchPill(verdict) {
-  return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '<span class="stock-dot"></span>' : ''}${escapeHtml(verdict.label)}</span>${stocksTierChip(verdict.tier)}`;
-}
-
 // Conviction badge shown next to a lean/verdict wherever it appears - how
 // many signals actually agree, not just which side won (see stocksTierFor).
 const STOCKS_TIER_LABEL = { unanimous: 'Unanimous', majority: 'Majority', solo: 'Solo' };
 function stocksTierChip(tier) {
   if (!tier) return '';
   return `<span class="stock-tier stock-tier-${tier}">${STOCKS_TIER_LABEL[tier]}</span>`;
+}
+
+// Compact lean badge: an arrow + LONG/SHORT/FLAT, used everywhere a
+// direction appears (Grid, Modal, Radar, Upcoming) - replaces the old wordy
+// "Long Watch"/"High Short Watch"/"Long Lean" labels. The direction + tier
+// is the whole story at a glance; the sentence-length reasoning lives behind
+// a tap now (see the modal's verdict rows and stocksWireDetailToggles).
+const STOCKS_LEAN_WORD = { long: 'LONG', short: 'SHORT', neutral: 'FLAT', caution: 'FLAT' };
+const STOCKS_LEAN_ARROW = { long: '▲', short: '▼', neutral: '–', caution: '–' };
+function stocksLeanBadge(lean, tier) {
+  const cls = lean === 'short' ? 'short' : lean === 'long' ? 'long' : 'neutral';
+  return `<span class="stock-lean stock-lean-${cls}"><span class="stock-lean-arrow">${STOCKS_LEAN_ARROW[lean] || '–'}</span>${STOCKS_LEAN_WORD[lean] || 'FLAT'}</span>${stocksTierChip(tier)}`;
 }
 
 function stocksAnchorFlagBadges(read) {
@@ -640,25 +648,18 @@ const stocksFilter = { dir: 'all', level: 'year' };
 const stocksCollapsedGroups = new Set();
 let stocksAllInstruments = [];
 
+// Glanceable only: ticker, name, direction, tier. The zodiac/cycle detail
+// that used to sit here as a chip row now lives one tap away in the modal -
+// the grid's job is "which way, how sure," nothing else.
 function stocksCardHtml(inst) {
-  // Zodiac chips first, cycle chips after - two consistent groups so every
-  // card scans the same way.
-  const primary = inst.reads.filter((r) => r.primary);
-  const chips = [
-    ...primary.map((r) => `<span class="stock-chip ${STOCKS_RELATION_CHIP[r.relation].cls}">${escapeHtml(r.animal)}</span>`),
-    ...primary.filter((r) => r.cycle).map((r) => `<span class="stock-chip ${STOCKS_CYCLE_CLS[r.cycle.dir]}">PY ${r.personalYear} · ${escapeHtml(r.cycle.label)}</span>`),
-  ].join('');
   return `
-    <div class="stock-card" data-ticker="${escapeHtml(inst.ticker)}">
-      <div class="stock-card-head">
-        ${stocksMonogram(inst, false)}
-        <div class="stock-card-title">
-          <div class="stock-card-ticker">${escapeHtml(inst.ticker)}</div>
-          <div class="stock-card-name">${escapeHtml(inst.name)}</div>
-        </div>
-        ${stocksWatchPill(inst.verdict)}
+    <div class="stock-card stock-card-${inst.verdict.watch}" data-ticker="${escapeHtml(inst.ticker)}">
+      ${stocksMonogram(inst, false)}
+      <div class="stock-card-title">
+        <div class="stock-card-ticker">${escapeHtml(inst.ticker)}</div>
+        <div class="stock-card-name">${escapeHtml(inst.name)}</div>
       </div>
-      <div class="stock-card-chips">${chips}</div>
+      ${stocksLeanBadge(inst.verdict.watch, inst.verdict.tier)}
     </div>`;
 }
 
@@ -798,15 +799,19 @@ function openStockModal(inst) {
 
   // Three-level verdict: the same rule engine at year, month, and day
   // resolution - the stable year lean plus how this month and this day sit.
+  // The sentence-length reasoning is a tap away now (same toggle pattern as
+  // the trade cards' "Why"), not printed inline for every level every time.
   const levelRows = ['year', 'month', 'day'].map((level) => {
     const v = inst.levels[level];
     if (!v) return '';
-    const pillCls = v.lean === 'short' ? 'short' : v.lean === 'long' ? 'long' : v.lean === 'caution' ? 'caution' : 'neutral';
     return `
       <div class="stock-verdict-row">
-        <span class="stock-verdict-term">${level.toUpperCase()}</span>
-        <span class="stock-verdict-pillwrap"><span class="stock-watch ${pillCls}">${escapeHtml(v.label)}</span>${stocksTierChip(v.tier)}</span>
-        <span class="stock-verdict-why">${escapeHtml(v.why)}</span>
+        <div class="stock-verdict-top">
+          <span class="stock-verdict-term">${level.toUpperCase()}</span>
+          ${stocksLeanBadge(v.lean, v.tier)}
+        </div>
+        <button class="stock-trade-detail-toggle" type="button">Why<span class="stock-trade-detail-chev">▾</span></button>
+        <div class="stock-trade-detail" hidden>${escapeHtml(v.why)}</div>
       </div>`;
   }).join('');
 
@@ -827,7 +832,7 @@ function openStockModal(inst) {
       ${stocksMonogram(inst, true)}
       <div class="stock-modal-headline">${escapeHtml(headline)}</div>
       <div class="stock-modal-subline">${escapeHtml(inst.name)} · ${escapeHtml(inst.ticker)}</div>
-      <div class="stock-modal-badges">${stocksWatchPill(inst.verdict)}${badges}</div>
+      <div class="stock-modal-badges">${stocksLeanBadge(inst.verdict.watch, inst.verdict.tier)}${badges}</div>
       <button class="stock-trades-btn" id="stockTradesBtn">View Trades</button>
       ${inst.kind === 'futures' ? '<button class="stock-trades-btn" id="stockCyclesBtn">Day Cycles</button>' : ''}
     </div>
@@ -845,6 +850,7 @@ function openStockModal(inst) {
   if (inst.kind === 'futures') {
     document.getElementById('stockCyclesBtn').addEventListener('click', () => renderStockDayCycles(inst));
   }
+  stocksWireDetailToggles(document.getElementById('stockModalBody'));
   overlay.style.display = 'flex';
 }
 
@@ -1436,10 +1442,7 @@ function stocksUpcomingRows(inst) {
   const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const rows = [];
 
-  const pill = (lean) => {
-    const cls = lean.lean === 'short' ? 'short' : lean.lean === 'long' ? 'long' : lean.lean === 'caution' ? 'caution' : 'neutral';
-    return `<span class="stock-watch ${cls}">${escapeHtml(lean.label)}</span>${stocksTierChip(lean.tier)}`;
-  };
+  const pill = (lean) => stocksLeanBadge(lean.lean, lean.tier);
   // Compact label:value pairs instead of a prose sentence - the pill above
   // already says the direction and why (hover/inspect the Anchors section
   // for the reasoning), so this row is just the dates that matter.
@@ -1549,9 +1552,8 @@ function stocksRadarHtml(instruments, today) {
   return ranked.map(({ inst, opp }) => `
     <div class="stock-radar-row" data-ticker="${escapeHtml(inst.ticker)}">
       <span class="stock-radar-ticker">${escapeHtml(inst.ticker)}</span>
-      <span class="stock-watch ${opp.lean.lean}">${escapeHtml(opp.lean.label)}</span>
+      <span class="stock-radar-lean">${stocksLeanBadge(opp.lean.lean, opp.lean.tier)}</span>
       <span class="stock-radar-when">${escapeHtml(opp.level.toUpperCase())} · ${escapeHtml(fmtD(opp.date))}</span>
-      ${stocksTierChip(opp.lean.tier)}
     </div>`).join('');
 }
 
@@ -1575,11 +1577,13 @@ function stocksWireTradesLevelFilter(inst) {
   });
 }
 
-// Click a trade card's "Why" toggle to expand/collapse its per-anchor
-// energy detail - pure show/hide, no re-render needed since the detail
-// HTML is already built into the card.
-function stocksWireTradeDetailToggles() {
-  document.querySelectorAll('#stockTradesPanel .stock-trade-detail-toggle').forEach((btn) => {
+// Click a "Why" toggle to expand/collapse its detail - pure show/hide, no
+// re-render needed since the detail HTML is already built into the card.
+// Shared by the Trades panel's per-card detail AND the modal's verdict rows,
+// so tap-to-expand behaves identically everywhere it appears on the page.
+function stocksWireDetailToggles(container) {
+  if (!container) return;
+  container.querySelectorAll('.stock-trade-detail-toggle').forEach((btn) => {
     btn.addEventListener('click', () => {
       const detail = btn.nextElementSibling;
       if (!detail) return;
@@ -1729,7 +1733,7 @@ async function renderStockTrades(inst) {
     });
   });
   stocksWireTradesLevelFilter(inst);
-  stocksWireTradeDetailToggles();
+  stocksWireDetailToggles(document.getElementById('stockTradesPanel'));
 }
 
 /* ===================== Day Cycles (calendar seasonality backtest) =====
