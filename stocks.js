@@ -264,6 +264,19 @@ function stocksNumLabel(n) {
   return m ? `${n} · ${m.label}` : String(n);
 }
 
+// Boom/bust vs steady read for this entity's own Life Path number, independent
+// of bull/bear lean - reuses the CUE-sourced research (NUMEROLOGY_RESEARCH.md)
+// already powering the Sports Betting Insight tab (LIFE_PATH_VOLATILITY /
+// VOLATILITY_BADGES in db-core.js) instead of inventing a stocks-only scale.
+// A fixed trait of the anchor's own date - never changes with level or "today".
+// Text only, no icon glyph: Stock Cycles' modal is deliberately emoji-free
+// (color/weight carries meaning instead), same doctrine as the tier chips.
+function stocksVolatilityBadge(date) {
+  const key = numerologyLookupKey(getLifePathNumeric(date));
+  const tier = LIFE_PATH_VOLATILITY[key];
+  return tier ? { tier, label: VOLATILITY_BADGES[tier].label } : null;
+}
+
 /* ===================== Year / Month / Day verdicts ===================== */
 // The same rule at every level, fed by that level's own signals. Bear
 // signals win: a zodiac clash (table score 10) or a 7-weakness cycle number
@@ -594,9 +607,16 @@ function stocksEnergyBlock(r) {
   const f = r.flow;
   const n = f.numerology;
   const v = f.vietnamese;
+  const vol = stocksVolatilityBadge(stocksParseDate(r.date));
   return `
     <div class="stock-energy-block">
-      <div class="stock-energy-title"><span>${escapeHtml(r.person || r.label)}</span><span class="score-inline ${stocksScoreCls(f.finalScore)}">${f.finalScore}</span></div>
+      <div class="stock-energy-title">
+        <span class="stock-energy-title-main">
+          <span>${escapeHtml(r.person || r.label)}</span>
+          ${vol ? `<span class="stock-volatility-badge stock-volatility-${vol.tier}" title="This entity's own Life Path risk profile, independent of the bull/bear lean">${escapeHtml(vol.label)}</span>` : ''}
+        </span>
+        <span class="score-inline ${stocksScoreCls(f.finalScore)}">${f.finalScore}</span>
+      </div>
       <div class="stock-energy-row">
         <span class="stock-energy-lab">Numbers</span>
         <span class="stock-energy-chips">
