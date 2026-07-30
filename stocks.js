@@ -875,18 +875,20 @@ function openStockModal(inst) {
   // The sentence-length reasoning is a tap away now (same toggle pattern as
   // the trade cards' "Why"), not printed inline for every level every time.
   // Entry/Peak/TP dates (Year/Month only - a single day has no separate
-  // take-profit day) use stocksLevelWindowDays - the real window this exact
-  // call stays true for, not a calendar-month or zodiac-year cutoff (which
-  // has nothing to do with when Personal Month/Year, Vietnamese Month/Year,
-  // western, or transits actually change - see stocksLevelWindowDays).
+  // take-profit day) come from the level's ACTIVE cycle window - shown only
+  // when the window's own direction agrees with the blended verdict badge
+  // above it (they can disagree: the badge blends all three timeframes,
+  // the window is this timeframe's own state; showing a short window's
+  // entry under a LONG badge would just confuse).
   const today = new Date();
   const levelRows = ['year', 'month', 'day'].map((level) => {
     const v = inst.levels[level];
     if (!v) return '';
-    const days = (level !== 'day' && (v.lean === 'short' || v.lean === 'long'))
-      ? stocksLevelWindowDays(inst, level, v, today)
-      : null;
-    const stats = days ? stocksHorizonStats(inst, v, days) : null;
+    let stats = null;
+    if (level !== 'day' && (v.lean === 'short' || v.lean === 'long')) {
+      const w = stocksCycleWindow(inst, level, today, { needStart: false, maxAhead: level === 'month' ? 120 : 400 });
+      if (w && w.dir === v.lean) stats = stocksHorizonStats(inst, stocksWindowLean(w), stocksWindowFutureDays(w, today));
+    }
     return `
       <div class="stock-verdict-row">
         <div class="stock-verdict-top">
@@ -1091,11 +1093,9 @@ function stocksIntradayTriggerIndex(lean, bars) {
 // computed from the anchors' energy flow AS OF that date, so a month's
 // trade uses that month's numbers, not today's.
 // Memoized: stocksLeanAt is a pure function of (instrument config, level,
-// date) - anchors never change mid-session - and stocksLevelWindowDays now
-// calls it up to hundreds of times per window scan (real transit/ephemeris
-// math per call, not free). Two windows for the same instrument (Year and
-// Month) scan heavily overlapping date ranges, so this cache turns what
-// would be thousands of redundant recomputations into a handful.
+// date) - anchors never change mid-session - and the window/entry scans
+// call it repeatedly over overlapping date ranges (real transit/ephemeris
+// math per call, not free).
 const stocksLeanAtCache = new Map();
 function stocksLeanAt(inst, level, atDate) {
   const key = `${inst.ticker}|${level}|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
@@ -1112,45 +1112,197 @@ function stocksLeanAt(inst, level, atDate) {
 // ONE anchor's own day-level lean, independent of every other anchor -
 // reuses the exact same bear/bull rule (stocksLevelVerdict), just fed a
 // single-anchor list instead of every primary anchor blended together.
+// ONE anchor's own day-timeframe read (PD meaning-number, day zodiac sign,
+// Moon transit - nothing else), plus its PD meaning direction separately:
+// the entry doctrine requires an agreeing PD meaning-number specifically
+// (owner's rule - zodiac/Moon only deepen the stack, never trigger alone),
+// and the exit doctrine requires an OPPOSITE PD meaning-number.
+const stocksAnchorDayCache = new Map();
 function stocksAnchorDayLeanAt(anchor, atDate) {
+  const key = `${anchor.date}|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
+  const hit = stocksAnchorDayCache.get(key);
+  if (hit) return hit;
   const read = { ...anchor, primary: true, flow: computeEnergyFlow(stocksParseDate(anchor.date), atDate) };
   const s = stocksTimeframeSignals([read], 'day', null, atDate);
   const net = s.bulls.length - s.bears.length;
-  return { lean: net > 0 ? 'long' : net < 0 ? 'short' : 'neutral', net };
+  const pdMeaning = STOCKS_NUMBER_MEANINGS[read.flow.numerology.personalDay];
+  const result = {
+    lean: net > 0 ? 'long' : net < 0 ? 'short' : 'neutral',
+    net,
+    pdDir: pdMeaning ? pdMeaning.dir : null,
+    bullCount: s.bulls.length,
+    bearCount: s.bears.length,
+  };
+  stocksAnchorDayCache.set(key, result);
+  return result;
 }
 
-// The DAY TIMEFRAME's own pooled read (PD meaning-number, day zodiac sign,
-// Moon transit - nothing else) across every primary anchor. This, not the
-// blended day-level verdict, is what entry confirmation keys off: the
-// blended verdict inherits the month/year bias through the 60/30/10
-// weights, so on a day with NO day signals at all it still "agrees" with
-// the month call by construction - which made "first confirming day"
-// nearly always tomorrow, for every instrument at once (verified: NVDA/
-// GOOGL/GC/XLM all "confirmed" with zero day-timeframe signals of their
-// own). Confirmation means the day itself actually fired something.
-const stocksDayTfCache = new Map();
-function stocksDayTimeframeLeanAt(inst, atDate) {
-  const key = `${inst.ticker}|dayTF|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
-  const hit = stocksDayTfCache.get(key);
+// The pooled TIMEFRAME-OWN net for one instrument at one date, at any of
+// the three timeframes - only that timeframe's signals (e.g. month = PM
+// meaning-number + Vietnamese month relation + western sun-sign +
+// Mercury/Venus/Mars aspects), no cross-level blending. This is what
+// cycle windows are built from: the net can only change on real cycle
+// boundaries (an anchor's own PM/PY rollover day, the zodiac month/year
+// flip, a sun-sign season change, an aspect entering/leaving orb), so runs
+// of constant sign ARE the anchor-cycle windows the owner described - and
+// two instruments only share a boundary when their cycles genuinely align.
+const stocksTfNetCache = new Map();
+function stocksTfNetAt(inst, level, atDate) {
+  const key = `${inst.ticker}|${level}|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
+  const hit = stocksTfNetCache.get(key);
   if (hit) return hit;
   const reads = inst.anchors
     .filter((a) => a.primary && a.date)
     .map((a) => ({ ...a, primary: true, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
-  const s = stocksTimeframeSignals(reads, 'day', null, atDate);
+  const s = stocksTimeframeSignals(reads, level, null, atDate);
   const net = s.bulls.length - s.bears.length;
-  const result = { lean: net > 0 ? 'long' : net < 0 ? 'short' : 'neutral', net };
-  stocksDayTfCache.set(key, result);
+  const result = { net, bulls: s.bulls, bears: s.bears };
+  stocksTfNetCache.set(key, result);
   return result;
 }
 
-// Which primary anchor is actually responsible for a day matching the
-// window's lean - the first one (in the anchors' own order) whose OWN day
-// lean agrees. This is "the pair" the exit rule then tracks on its own,
-// instead of the blended verdict (which can flip because some OTHER
-// anchor or zodiac reading changed, not the one that actually triggered).
-function stocksTriggeringAnchor(inst, lean, date) {
+// Kept as the day-level wrapper (harness + day-card call sites use it).
+function stocksDayTimeframeLeanAt(inst, atDate) {
+  const s = stocksTfNetAt(inst, 'day', atDate);
+  return { lean: s.net > 0 ? 'long' : s.net < 0 ? 'short' : 'neutral', net: s.net };
+}
+
+/* ===================== Cycle-anchored windows ===================== */
+// A window is a maximal run of consecutive calendar days where a level's
+// timeframe-own net keeps the same nonzero sign - e.g. a PM 7 month opens
+// a bear window on the anchor's own rollover day and closes when the next
+// cycle event flips or clears the net (net magnitude decides conflicted
+// stretches, same rule as the verdict engine). This replaces every
+// "calendar month"/"zodiac year" window in the app: those boundaries have
+// nothing to do with when any anchor's actual cycles roll over.
+
+function stocksAddDays(d, n) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+// The window ACTIVE on fromDate, or the next one to open (scanning ahead) -
+// { dir, start, end, endsOpen, why } or null if nothing directional within
+// maxAhead. needStart=false skips the backward scan (the Radar only needs
+// direction + remaining days; the replay label wants the true start).
+function stocksCycleWindow(inst, level, fromDate, opts) {
+  const maxAhead = (opts && opts.maxAhead) || 400;
+  const needStart = !opts || opts.needStart !== false;
+  let day = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+  let sign = Math.sign(stocksTfNetAt(inst, level, day).net);
+  let ahead = 0;
+  while (sign === 0 && ahead < maxAhead) {
+    day = stocksAddDays(day, 1);
+    ahead++;
+    sign = Math.sign(stocksTfNetAt(inst, level, day).net);
+  }
+  if (sign === 0) return null;
+
+  let start = new Date(day);
+  if (needStart) {
+    for (let back = 0; back < 400; back++) {
+      const prev = stocksAddDays(start, -1);
+      if (Math.sign(stocksTfNetAt(inst, level, prev).net) !== sign) break;
+      start = prev;
+    }
+  }
+  let end = new Date(day);
+  let endsOpen = true; // still running past the scan horizon
+  for (let fwd = 0; fwd < maxAhead; fwd++) {
+    const next = stocksAddDays(end, 1);
+    if (Math.sign(stocksTfNetAt(inst, level, next).net) !== sign) { endsOpen = false; break; }
+    end = next;
+  }
+  const at = stocksTfNetAt(inst, level, day);
+  return {
+    dir: sign > 0 ? 'long' : 'short',
+    start, end, endsOpen,
+    why: sign > 0 ? at.bulls : at.bears,
+  };
+}
+
+// The most recent COMPLETED windows at a level, newest first - walks
+// backward from yesterday, skipping the still-open window containing today
+// (open trades are never graded as settled) and any neutral gaps between
+// runs. maxBackDays bounds the walk; count bounds how many windows come back.
+function stocksRecentCompletedWindows(inst, level, today, count, maxBackDays) {
+  const wins = [];
+  let cursor = stocksAddDays(today, -1);
+  let guard = 0;
+  const todaySign = Math.sign(stocksTfNetAt(inst, level, today).net);
+  if (todaySign !== 0) {
+    while (guard < maxBackDays && Math.sign(stocksTfNetAt(inst, level, cursor).net) === todaySign) {
+      cursor = stocksAddDays(cursor, -1);
+      guard++;
+    }
+  }
+  while (wins.length < count && guard < maxBackDays) {
+    while (guard < maxBackDays && Math.sign(stocksTfNetAt(inst, level, cursor).net) === 0) {
+      cursor = stocksAddDays(cursor, -1);
+      guard++;
+    }
+    if (guard >= maxBackDays) break;
+    const sign = Math.sign(stocksTfNetAt(inst, level, cursor).net);
+    const end = new Date(cursor);
+    while (guard < maxBackDays && Math.sign(stocksTfNetAt(inst, level, cursor).net) === sign) {
+      cursor = stocksAddDays(cursor, -1);
+      guard++;
+    }
+    const start = stocksAddDays(cursor, 1);
+    const at = stocksTfNetAt(inst, level, start);
+    wins.push({ dir: sign > 0 ? 'long' : 'short', start, end, endsOpen: false, why: sign > 0 ? at.bulls : at.bears });
+  }
+  return wins;
+}
+
+// A lean-shaped object for a window, so the existing trade-card renderers
+// (which want lean.lean/whyLead/signalCount/tier) can grade a window trade
+// without a parallel card pipeline. tier is null on purpose: conviction
+// tiers measure cross-timeframe agreement, and a window is by definition a
+// single timeframe's own state.
+function stocksWindowLean(w) {
+  return {
+    lean: w.dir,
+    label: w.dir === 'short' ? 'Short Lean' : 'Long Lean',
+    why: w.why.join('; '),
+    whyLead: w.why[0] || (w.dir === 'short' ? 'bear window' : 'bull window'),
+    whyItems: [],
+    signalCount: w.why.length,
+    opposingCount: 0,
+    tier: null,
+  };
+}
+
+/* ===================== Stacked PD entry ===================== */
+// The entry trigger inside a directional window (owner's doctrine): the
+// day must carry an agreeing PD meaning-number for SOME primary anchor -
+// mandatory, a day zodiac clash or Moon aspect alone never triggers. Among
+// qualifying days, the DEEPEST stack wins (a PD 7 landing on an enemy
+// zodiac day outranks an earlier lone PD 11); ties go to the earliest.
+// Returns { date, anchor, depth } or null - the anchor is the trigger
+// anchor the exit rule then tracks.
+function stocksStackedEntry(inst, dir, dates) {
   const anchors = inst.anchors.filter((a) => a.primary && a.date);
-  return anchors.find((a) => stocksAnchorDayLeanAt(a, date).lean === lean.lean) || null;
+  const wantPd = dir === 'long' ? 'bull' : 'bear';
+  let best = null;
+  dates.forEach((date) => {
+    anchors.forEach((anchor) => {
+      const r = stocksAnchorDayLeanAt(anchor, date);
+      if (r.pdDir !== wantPd) return;
+      const depth = dir === 'long' ? r.bullCount : r.bearCount;
+      if (!best || depth > best.depth) best = { date, anchor, depth };
+    });
+  });
+  return best;
+}
+
+// Which primary anchor is actually responsible for an entry day - the one
+// whose agreeing PD meaning-number (deepest stack on ties) fired there.
+// This is "the pair" the exit rule then tracks on its own, instead of the
+// blended verdict (which can flip because some OTHER anchor or zodiac
+// reading changed, not the one that actually triggered).
+function stocksTriggeringAnchor(inst, lean, date) {
+  const pick = stocksStackedEntry(inst, lean.lean, [date]);
+  return pick ? pick.anchor : null;
 }
 
 // Entry timing (owner's idea): instead of blindly entering at the window's
@@ -1177,11 +1329,9 @@ function stocksSignalScoreAt(inst, lean, date) {
 // month was weak but never gave a daily go-signal, and that's an honest
 // no-fill, not a forced one. Still pure calendar math, knowable in advance.
 function stocksConfirmedEntryIndex(inst, lean, bars) {
-  for (let i = 0; i < bars.length; i++) {
-    const dayLean = stocksDayTimeframeLeanAt(inst, stocksParseDate(bars[i][0]));
-    if (dayLean.lean === lean.lean) return i;
-  }
-  return -1;
+  const dates = bars.map((b) => stocksParseDate(b[0]));
+  const pick = stocksStackedEntry(inst, lean.lean, dates);
+  return pick ? dates.findIndex((d) => d.getTime() === pick.date.getTime()) : -1;
 }
 
 // Calendar + price mode: the energy confirmation says when to START
@@ -1225,15 +1375,6 @@ function stocksPeakDay(inst, lean, dates) {
     if (signal != null && (best == null || signal > best)) { best = signal; bestD = d; }
   });
   return bestD;
-}
-
-// First day of the current zodiac year, found with the engine's own
-// boundary: walk forward from Jan 20 until the year animal flips.
-function stocksZodiacYearStart(today) {
-  const animal = getChineseZodiacYear(today);
-  const d = new Date(today.getFullYear(), 0, 20);
-  while (d <= today && getChineseZodiacYear(d) !== animal) d.setDate(d.getDate() + 1);
-  return d;
 }
 
 // The actual exit: hold from entry until the SAME anchor that triggered
@@ -1529,7 +1670,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts, detail
 // window already searched, never reaching past it.
 function stocksReversalDay(inst, lean, afterDate, dates) {
   const opposite = lean.lean === 'short' ? 'long' : 'short';
-  return dates.find((d) => d > afterDate && stocksLeanAt(inst, 'day', d).lean === opposite) || null;
+  return dates.find((d) => d > afterDate && stocksDayTimeframeLeanAt(inst, d).lean === opposite) || null;
 }
 
 // Same idea, scoped to ONE anchor instead of every primary anchor blended
@@ -1540,69 +1681,45 @@ function stocksReversalDay(inst, lean, afterDate, dates) {
 // (stocksApplyExitRule) and the Upcoming section's forward-looking "TP"
 // day, so the preview and the real exit use the same rule.
 function stocksAnchorReversalDay(anchor, lean, afterDate, dates) {
-  const opposite = lean.lean === 'short' ? 'long' : 'short';
+  // PD-mandatory, mirroring the entry doctrine: the exit day must carry an
+  // OPPOSITE PD meaning-number for the trigger anchor (entered on a 7-day,
+  // exits on that anchor's own 8/28-day) - a zodiac/Moon flip alone doesn't
+  // close the trade, same as it can't open one.
+  const oppositePd = lean.lean === 'short' ? 'bull' : 'bear';
   const minGapMs = 2 * 24 * 60 * 60 * 1000;
-  return dates.find((d) => (d - afterDate) >= minGapMs && stocksAnchorDayLeanAt(anchor, d).lean === opposite) || null;
+  return dates.find((d) => (d - afterDate) >= minGapMs && stocksAnchorDayLeanAt(anchor, d).pdDir === oppositePd) || null;
 }
 
-// The forward view: where the system says the NEXT entries are. Pure
-// calendar - no prices, no API key - so it renders for everyone, first.
-// Tomorrow's day lean, next month's lean with its pre-computed entry + take
-// profit days, and the best remaining entry of the current zodiac year.
-// First future date in `dates` whose own day-level lean agrees with the
-// window's - the same trigger the replay uses, pointed forward. Shared
-// between the Upcoming rows and the main-page radar (stocksNextOpportunity)
-// so both use the exact same definition of "when does this confirm."
-function stocksFirstConfirmingDate(inst, lean, dates) {
-  return dates.find((d) => stocksDayTimeframeLeanAt(inst, d).lean === lean.lean) || null;
-}
-
-// How many days into the future this exact level call stays true, before
-// the blended signal set itself flips - the real, non-arbitrary window for
-// "how long is this call good for." A calendar-month or zodiac-year cutoff
-// has nothing to do with when any of the underlying cycles actually change:
-// Personal Month/Year is anchored to each ANCHOR's own birth day-of-month
-// (Company and the CEO don't even agree with each other), Vietnamese
-// Month/Year flips on a different fixed boundary, western sun-sign on
-// another, and transits on none at all. Scanning until the level's own
-// blended verdict changes sidesteps all of that - it's exactly as long (or
-// short) as the actual conviction behind today's call warrants: a lopsided,
-// stable read naturally scans far; a borderline one flips fast.
-function stocksLevelWindowDays(inst, level, lean, today, maxDays) {
+// All calendar days of a window that are strictly after `after` (the entry
+// search never looks backward from today on forward surfaces) AND inside
+// the window itself - a not-yet-open window contributes nothing before its
+// own start day.
+function stocksWindowFutureDays(w, after) {
   const days = [];
-  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  for (let i = 0; i < (maxDays || 400); i++) {
-    if (stocksLeanAt(inst, level, d).lean !== lean.lean) break;
-    days.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
+  let d = stocksAddDays(after, 1);
+  if (d < w.start) d = new Date(w.start);
+  for (; d <= w.end; d = stocksAddDays(d, 1)) days.push(new Date(d));
   return days;
 }
 
-// Entry/Peak/TP preview for one lean over one forward window of dates - pure
-// calendar math, no prices. Shared by the Upcoming rows and the Verdict
-// section's own level rows, so "when would this actually enter/exit" reads
-// the same wherever it's shown instead of two versions quietly drifting.
-// Null for a neutral lean (nothing to enter) or before there IS a window
-// (the day resolution has no separate take-profit day - see stocksUpcomingRows).
+// Entry/Peak/TP preview for one directional window - pure calendar math,
+// no prices. Shared by the Upcoming rows and the Verdict section's level
+// rows, so "when would this actually enter/exit" reads the same wherever
+// it's shown. Entry is the stacked PD-mandatory pick; TP is the trigger
+// anchor's first opposite PD (the exact replay exit rule, pointed forward).
+// "No fill"/"Held to end" are real results said explicitly, not omissions:
+// a window whose remaining days never carry an agreeing PD has no entry,
+// and an entry with no later opposite-PD day inside the window just rides
+// to the window's own end.
 function stocksHorizonStats(inst, lean, days) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long')) return null;
   const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  const trigger = stocksFirstConfirmingDate(inst, lean, days);
-  if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
+  const pick = stocksStackedEntry(inst, lean.lean, days);
+  if (!pick) return [{ label: 'Entry', value: 'No fill' }];
   const peak = stocksPeakDay(inst, lean, days);
-  // Same anchor-scoped rule the actual replay exit uses (stocksApplyExitRule)
-  // - so this preview and what the system would really do line up. The
-  // reversal search is bounded to `days` (this window only) same as the
-  // real replay - if entry lands near the end of the window there may be no
-  // day left afterward to find a reversal in, which is a real result (the
-  // position would just ride to the window's own end), not a bug. Said
-  // explicitly ("Held to end") instead of silently dropping the TP label,
-  // same as "No fill" is said explicitly rather than omitted above.
-  const triggerAnchor = stocksTriggeringAnchor(inst, lean, trigger);
-  const reversal = triggerAnchor ? stocksAnchorReversalDay(triggerAnchor, lean, trigger, days) : null;
+  const reversal = stocksAnchorReversalDay(pick.anchor, lean, pick.date, days);
   return [
-    { label: 'Entry', value: fmtD(trigger) },
+    { label: 'Entry', value: fmtD(pick.date) },
     ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
     { label: 'TP', value: reversal ? fmtD(reversal) : 'Held to end' },
   ];
@@ -1633,22 +1750,21 @@ function stocksUpcomingRows(inst) {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   rows.push({ level: 'day', html: row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), null) });
 
-  const horizonStats = (lean, days) => stocksHorizonStats(inst, lean, days);
-
-  // Next calendar month.
-  const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
-  const monthDays = [];
-  for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) monthDays.push(new Date(d));
-  rows.push({ level: 'month', html: row(nm.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), monthLean, horizonStats(monthLean, monthDays)) });
-
-  // As long as this exact Year call stays true (see stocksLevelWindowDays) -
-  // not "the rest of the zodiac year," which has nothing to do with when
-  // Personal Year (birthday-anchored, different per anchor) or the other
-  // Year-timeframe signals actually change.
-  const yearLean = stocksLeanAt(inst, 'year', today);
-  const yearDays = stocksLevelWindowDays(inst, 'year', yearLean, today);
-  rows.push({ level: 'year', html: row('This Year call', yearLean, horizonStats(yearLean, yearDays)) });
+  // Month and Year: the active-or-next cycle window for that timeframe -
+  // its boundaries ARE the anchors' own PM/PY rollovers, zodiac flips,
+  // season changes, and aspect onsets, so the label says exactly which
+  // real span this trade lives in. Entry/Peak/TP inside it via the stacked
+  // PD rule (stocksHorizonStats).
+  ['month', 'year'].forEach((level) => {
+    const w = stocksCycleWindow(inst, level, tomorrow, { maxAhead: level === 'month' ? 120 : 400 });
+    if (!w) {
+      rows.push({ level, html: row(`No ${level} window ahead`, { lean: 'neutral', tier: null }, null) });
+      return;
+    }
+    const wLean = stocksWindowLean(w);
+    const label = `${level === 'month' ? 'Month' : 'Year'} window · ${fmtD(w.start)} – ${w.endsOpen ? 'open' : fmtD(w.end)}`;
+    rows.push({ level, html: row(label, wLean, stocksHorizonStats(inst, wLean, stocksWindowFutureDays(w, today))) });
+  });
 
   return rows;
 }
@@ -1665,39 +1781,31 @@ function stocksUpcomingRows(inst) {
 // the other two levels entirely before the toggle existed).
 function stocksNextOpportunity(inst, today, levelFilter) {
   const candidates = [];
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
   if (!levelFilter || levelFilter === 'day') {
-    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    const dayLean = stocksLeanAt(inst, 'day', tomorrow);
-    if (dayLean.lean === 'short' || dayLean.lean === 'long') {
-      candidates.push({ level: 'day', date: tomorrow, lean: dayLean });
+    // Day opportunity = the next date some anchor's own PD meaning-number
+    // fires (PD-mandatory doctrine, same as every entry) - direction from
+    // that day's pooled day-timeframe net. Bounded scan; a PD 7/8/11/28
+    // shows up within days for any anchor, so 45 is generous.
+    for (let d = new Date(tomorrow), i = 0; i < 45; d = stocksAddDays(d, 1), i++) {
+      const dayTf = stocksDayTimeframeLeanAt(inst, d);
+      if (dayTf.lean === 'neutral') continue;
+      const pick = stocksStackedEntry(inst, dayTf.lean, [d]);
+      if (pick) { candidates.push({ level: 'day', date: new Date(d), lean: { lean: dayTf.lean, tier: null, signalCount: pick.depth } }); break; }
     }
   }
 
-  if (!levelFilter || levelFilter === 'month') {
-    // TODAY's own Month call and its real window (stocksLevelWindowDays),
-    // same as Year below - NOT "next calendar month starting the 1st",
-    // which used to fence the search off from days that already qualified
-    // (if the signal had been running since, say, Jul 25, the search could
-    // never see that - it always started counting from Aug 1 regardless,
-    // making Aug 1 look like a meaningful trigger when it was really just
-    // the first day the search was allowed to check).
-    const monthLean = stocksLeanAt(inst, 'month', today);
-    if (monthLean.lean === 'short' || monthLean.lean === 'long') {
-      const days = stocksLevelWindowDays(inst, 'month', monthLean, today);
-      const trigger = stocksFirstConfirmingDate(inst, monthLean, days);
-      if (trigger) candidates.push({ level: 'month', date: trigger, lean: monthLean });
-    }
-  }
-
-  if (!levelFilter || levelFilter === 'year') {
-    const yearLean = stocksLeanAt(inst, 'year', today);
-    if (yearLean.lean === 'short' || yearLean.lean === 'long') {
-      const days = stocksLevelWindowDays(inst, 'year', yearLean, today);
-      const trigger = stocksFirstConfirmingDate(inst, yearLean, days);
-      if (trigger) candidates.push({ level: 'year', date: trigger, lean: yearLean });
-    }
-  }
+  ['month', 'year'].forEach((level) => {
+    if (levelFilter && levelFilter !== level) return;
+    // needStart:false - the Radar only needs the entry date within the
+    // remaining window, not the (possibly long-past) window start.
+    const w = stocksCycleWindow(inst, level, tomorrow, { needStart: false, maxAhead: level === 'month' ? 120 : 400 });
+    if (!w) return;
+    const wLean = stocksWindowLean(w);
+    const pick = stocksStackedEntry(inst, w.dir, stocksWindowFutureDays(w, today));
+    if (pick) candidates.push({ level, date: pick.date, lean: { ...wLean, signalCount: pick.depth } });
+  });
 
   if (!candidates.length) return null;
   candidates.sort((a, b) => a.date - b.date);
@@ -1854,25 +1962,31 @@ async function renderStockTrades(inst) {
     cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar], null, null, stocksTradeDetailBlocks(inst, dayDate)), level: 'day' });
   }
 
-  // Medium: each of the last three completed months under that month's lean.
-  for (let k = 1; k <= 3; k++) {
-    const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
-    const mISO = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
-    const monthBars = bars.filter((b) => b[0].startsWith(mISO));
-    const monthAtDate = new Date(m.getFullYear(), m.getMonth(), 15);
-    const lean = stocksLeanAt(inst, 'month', monthAtDate);
-    const label = m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    cards.push(...(await stocksTimedTrades(inst, label, lean, monthBars, { exitMode: stocksTradesExitMode, atDate: monthAtDate })).map((c) => ({ ...c, level: 'month' })));
+  // Medium: the last three COMPLETED month-timeframe cycle windows - each
+  // one's boundaries are the anchors' own PM rollovers / zodiac flips /
+  // season changes / aspect onsets, not calendar months (which have nothing
+  // to do with when any anchor's cycles actually change).
+  const fmtWD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const monthWindows = stocksRecentCompletedWindows(inst, 'month', today, 3, 240);
+  for (const w of monthWindows) {
+    const startISO = stocksDateToISO(w.start);
+    const endISO = stocksDateToISO(w.end);
+    const wBars = bars.filter((b) => b[0] >= startISO && b[0] <= endISO);
+    const label = `Month window · ${fmtWD(w.start)} – ${fmtWD(w.end)}`;
+    cards.push(...(await stocksTimedTrades(inst, label, stocksWindowLean(w), wBars, { exitMode: stocksTradesExitMode, atDate: w.start })).map((c) => ({ ...c, level: 'month' })));
   }
 
-  // Long-term: the current zodiac-year window under the year lean.
-  const yStart = stocksZodiacYearStart(today);
-  const yStartISO = `${yStart.getFullYear()}-${String(yStart.getMonth() + 1).padStart(2, '0')}-${String(yStart.getDate()).padStart(2, '0')}`;
-  const yearBars = bars.filter((b) => b[0] >= yStartISO);
-  const yearLean = stocksLeanAt(inst, 'year', today);
-  // The zodiac year runs until the next Lunar New Year - it's an OPEN
-  // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`, yearLean, yearBars, { open: true, exitMode: stocksTradesExitMode, atDate: today })).map((c) => ({ ...c, level: 'year' })));
+  // Long-term: the ACTIVE year-timeframe window, replayed from its own
+  // start - an OPEN position, shown as ahead/behind so far, never graded
+  // as settled. No active window is a real state, said plainly.
+  const yw = stocksCycleWindow(inst, 'year', today, { maxAhead: 400 });
+  if (yw && yw.start <= today) {
+    const ywStartISO = stocksDateToISO(yw.start);
+    const yearBars = bars.filter((b) => b[0] >= ywStartISO);
+    cards.push(...(await stocksTimedTrades(inst, `Year window · since ${fmtWD(yw.start)}`, stocksWindowLean(yw), yearBars, { open: true, exitMode: stocksTradesExitMode, atDate: today })).map((c) => ({ ...c, level: 'year' })));
+  } else {
+    cards.push({ ...stocksTradeCard('Year window', null, [], null, null), level: 'year' });
+  }
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves. All three modes are computed
@@ -2177,13 +2291,12 @@ const STOCKS_COMBINED_YEARS_BACK = 3;
 // record, so a cold run for 16 instruments never exceeds Twelve Data's
 // 8-credits-a-minute free-tier cap no matter how the timing lands.
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
-// v3: entries now carry BOTH exit modes per grade (was one grade per
-// mode) - old v2 data is simply superseded, not migrated.
-// v5: entry confirmation/trigger/reversal now key off the day timeframe's
-// OWN signals instead of the blended day verdict (which inherited the
-// month/year bias and confirmed vacuously) - entries and exits land on
-// different days than v4 graded, so the ledger must rebuild.
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v5';
+// v6: periods are now per-instrument cycle windows (constant-sign runs of
+// the timeframe-own net, keyed by window start date) instead of calendar
+// months / zodiac years, entries are PD-mandatory stacked picks, and exits
+// are the trigger anchor's opposite PD - nothing graded under earlier
+// window definitions is comparable, so the ledger rebuilds.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v6';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2242,32 +2355,11 @@ function stocksSaveCombinedStore(store) {
   try { localStorage.setItem(STOCKS_COMBINED_STORE_KEY, JSON.stringify(store)); } catch (e) { /* storage full - still works in-memory this session */ }
 }
 
-// The 'YYYY-MM' keys currently inside the rolling month window (oldest
-// first) - completed months only, this month itself isn't done yet.
-function stocksRelevantMonthKeys(today) {
-  const keys = [];
-  for (let k = STOCKS_COMBINED_MONTHS_BACK; k >= 1; k--) {
-    const m = new Date(today.getFullYear(), today.getMonth() - k, 1);
-    keys.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return keys;
-}
-
-// The last N completed zodiac years (the current one is still running and
-// stays excluded) - found by walking the engine's own boundary backward
-// one flip at a time, so there's no calendar-drift risk from approximating
-// "a year" as 365 days.
-function stocksCompletedZodiacYearRanges(today, count) {
-  const ranges = [];
-  let boundary = stocksZodiacYearStart(today);
-  for (let i = 0; i < count; i++) {
-    const end = new Date(boundary);
-    end.setDate(end.getDate() - 1);
-    const start = stocksZodiacYearStart(end);
-    ranges.push({ start, end, key: `${start.getFullYear()}-${getChineseZodiacYear(start)}` });
-    boundary = start;
-  }
-  return ranges;
+// A window's stable ledger key - the start date is unique per instrument
+// per level (two runs can't share a start), and it never changes once the
+// window has completed, so already-graded entries diff cleanly against it.
+function stocksWindowKey(w) {
+  return stocksDateToISO(w.start);
 }
 
 function stocksAggregateEntries(entries, exitMode) {
@@ -2323,7 +2415,7 @@ let stocksCombinedCollapsed = true;
 
 function renderStocksCombinedRecordBody(box, store) {
   const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
-  const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} zodiac years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
+  const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
   const exitLabel = stocksCombinedExitMode === 'end' ? 'holding to the window’s end' : 'exiting at the reversal signal';
   box.innerHTML = `
     <div class="stock-group${stocksCombinedCollapsed ? ' collapsed' : ''}" id="stockCombinedGroup">
@@ -2334,7 +2426,7 @@ function renderStocksCombinedRecordBody(box, store) {
       <div class="stock-group-grid">
         ${stocksCombinedHorizonFilterHtml()}
         ${stocksCombinedExitFilterHtml()}
-        <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new one completes.</div>
+        <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}-cycle window (each instrument's own boundaries), ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new window completes.</div>
         ${stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode))}
       </div>
     </div>`;
@@ -2360,12 +2452,13 @@ function renderStocksCombinedRecordBody(box, store) {
   });
 }
 
-// Only grades what's actually new: diffs the current rolling windows
-// against what's already stored, and if nothing has completed since last
-// time, renders straight from the ledger with zero fetches. When something
-// has completed, fetches each instrument's (cached-per-day) history once,
-// grades just the new month(s)/year(s), prunes anything that's rolled out
-// of the window, and persists the result.
+// Only grades what's actually new: each instrument's completed cycle
+// windows (per-instrument boundaries - see stocksRecentCompletedWindows)
+// are diffed against the ledger by window key, and only ungraded ones get
+// graded. Window discovery itself is real ephemeris math over hundreds of
+// days per instrument, so it runs at most once per calendar day
+// (lastCheckedISO) - every other visit renders straight from the ledger
+// with zero computation and zero fetches.
 async function stocksLoadCombinedRecord(instruments, today) {
   const box = document.getElementById('stocksCombinedRecord');
   if (!box) return;
@@ -2376,51 +2469,52 @@ async function stocksLoadCombinedRecord(instruments, today) {
   }
 
   const store = stocksLoadCombinedStore();
-  const relevantMonthKeys = stocksRelevantMonthKeys(today);
-  const relevantYearRanges = stocksCompletedZodiacYearRanges(today, STOCKS_COMBINED_YEARS_BACK);
-  const gradedMonthKeys = new Set(store.monthEntries.map((e) => e.month));
-  const gradedYearKeys = new Set(store.yearEntries.map((e) => e.year));
-  const newMonthKeys = relevantMonthKeys.filter((k) => !gradedMonthKeys.has(k));
-  const newYearRanges = relevantYearRanges.filter((r) => !gradedYearKeys.has(r.key));
-
-  if (!newMonthKeys.length && !newYearRanges.length) {
-    renderStocksCombinedRecordBody(box, store); // fully up to date - no fetches, no recompute
+  const todayISO = stocksDateToISO(today);
+  if (store.lastCheckedISO === todayISO) {
+    renderStocksCombinedRecordBody(box, store); // already checked today - ledger is current
     return;
   }
 
+  const gradedKeys = new Set([
+    ...store.monthEntries.map((e) => `${e.ticker}|M|${e.key}`),
+    ...store.yearEntries.map((e) => `${e.ticker}|Y|${e.key}`),
+  ]);
+  const monthBackDays = Math.round(STOCKS_COMBINED_MONTHS_BACK * 30.5);
+  const yearBackDays = STOCKS_COMBINED_YEARS_BACK * 366;
+  const relevantKeys = new Set();
   let processed = 0;
   for (const inst of instruments) {
     box.innerHTML = `<div class="stock-trades-note">Updating track record - ${processed}/${instruments.length} instruments…</div>`;
-    const wasCached = stocksCyclesCacheHit(inst.px.symbol);
+    await stocksDelay(0); // let the note paint before this instrument's window scan
     try {
-      const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
-      newMonthKeys.forEach((monthKey) => {
-        const [y, m] = monthKey.split('-').map(Number);
-        const monthBars = bars.filter((b) => b[0].startsWith(monthKey));
-        if (!monthBars.length) return;
-        const lean = stocksLeanAt(inst, 'month', new Date(y, m - 1, 15));
-        const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, lean, monthBars);
-        store.monthEntries.push({ month: monthKey, ticker: inst.ticker, calendar, calPrice });
-      });
-      newYearRanges.forEach((range) => {
-        const startISO = stocksDateToISO(range.start);
-        const endISO = stocksDateToISO(range.end);
-        const yearBars = bars.filter((b) => b[0] >= startISO && b[0] <= endISO);
-        if (!yearBars.length) return;
-        const mid = new Date((range.start.getTime() + range.end.getTime()) / 2);
-        const lean = stocksLeanAt(inst, 'year', mid);
-        const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, lean, yearBars);
-        store.yearEntries.push({ year: range.key, ticker: inst.ticker, calendar, calPrice });
-      });
+      const monthWins = stocksRecentCompletedWindows(inst, 'month', today, 999, monthBackDays);
+      const yearWins = stocksRecentCompletedWindows(inst, 'year', today, 99, yearBackDays);
+      monthWins.forEach((w) => relevantKeys.add(`${inst.ticker}|M|${stocksWindowKey(w)}`));
+      yearWins.forEach((w) => relevantKeys.add(`${inst.ticker}|Y|${stocksWindowKey(w)}`));
+      const newMonthWins = monthWins.filter((w) => !gradedKeys.has(`${inst.ticker}|M|${stocksWindowKey(w)}`));
+      const newYearWins = yearWins.filter((w) => !gradedKeys.has(`${inst.ticker}|Y|${stocksWindowKey(w)}`));
+      if (newMonthWins.length || newYearWins.length) {
+        const wasCached = stocksCyclesCacheHit(inst.px.symbol);
+        const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+        const gradeInto = (wins, entries) => wins.forEach((w) => {
+          const startISO = stocksDateToISO(w.start);
+          const endISO = stocksDateToISO(w.end);
+          const wBars = bars.filter((b) => b[0] >= startISO && b[0] <= endISO);
+          if (!wBars.length) return; // window predates available price history - retried daily, cheap on the cached bars
+          const { calendar, calPrice } = stocksGradeWindowTwoModes(inst, stocksWindowLean(w), wBars);
+          entries.push({ key: stocksWindowKey(w), ticker: inst.ticker, calendar, calPrice });
+        });
+        gradeInto(newMonthWins, store.monthEntries);
+        gradeInto(newYearWins, store.yearEntries);
+        if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
+      }
     } catch (e) { /* one bad symbol or a rate-limit hiccup shouldn't block the rest */ }
     processed++;
-    if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
   }
 
-  const relevantMonthSet = new Set(relevantMonthKeys);
-  const relevantYearSet = new Set(relevantYearRanges.map((r) => r.key));
-  store.monthEntries = store.monthEntries.filter((e) => relevantMonthSet.has(e.month));
-  store.yearEntries = store.yearEntries.filter((e) => relevantYearSet.has(e.year));
+  store.monthEntries = store.monthEntries.filter((e) => relevantKeys.has(`${e.ticker}|M|${e.key}`));
+  store.yearEntries = store.yearEntries.filter((e) => relevantKeys.has(`${e.ticker}|Y|${e.key}`));
+  store.lastCheckedISO = todayISO;
   stocksSaveCombinedStore(store);
   renderStocksCombinedRecordBody(box, store);
 }
