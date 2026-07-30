@@ -1649,11 +1649,16 @@ function stocksNextOpportunity(inst, today, levelFilter) {
   }
 
   if (!levelFilter || levelFilter === 'month') {
-    const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
+    // TODAY's own Month call and its real window (stocksLevelWindowDays),
+    // same as Year below - NOT "next calendar month starting the 1st",
+    // which used to fence the search off from days that already qualified
+    // (if the signal had been running since, say, Jul 25, the search could
+    // never see that - it always started counting from Aug 1 regardless,
+    // making Aug 1 look like a meaningful trigger when it was really just
+    // the first day the search was allowed to check).
+    const monthLean = stocksLeanAt(inst, 'month', today);
     if (monthLean.lean === 'short' || monthLean.lean === 'long') {
-      const days = [];
-      for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
+      const days = stocksLevelWindowDays(inst, 'month', monthLean, today);
       const trigger = stocksFirstConfirmingDate(inst, monthLean, days);
       if (trigger) candidates.push({ level: 'month', date: trigger, lean: monthLean });
     }
