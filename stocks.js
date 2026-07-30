@@ -1797,19 +1797,7 @@ function stocksNextOpportunity(inst, today, levelFilter) {
   const candidates = [];
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
-  if (!levelFilter || levelFilter === 'day') {
-    // Day opportunity = the next date some anchor's own PD meaning-number
-    // fires (PD-mandatory doctrine, same as every entry) - direction from
-    // that day's pooled day-timeframe net. Bounded scan; a PD 7/8/11/28
-    // shows up within days for any anchor, so 45 is generous.
-    for (let d = new Date(tomorrow), i = 0; i < 45; d = stocksAddDays(d, 1), i++) {
-      const dayTf = stocksDayTimeframeLeanAt(inst, d);
-      if (dayTf.lean === 'neutral') continue;
-      const pick = stocksStackedEntry(inst, dayTf.lean, [d]);
-      if (pick) { candidates.push({ level: 'day', date: new Date(d), lean: { lean: dayTf.lean, tier: null, signalCount: pick.depth } }); break; }
-    }
-  }
-
+  // Day dropped from the Radar entirely (owner's call) - Month/Year only.
   ['month', 'year'].forEach((level) => {
     if (levelFilter && levelFilter !== level) return;
     // needStart:false - the Radar only needs the entry date within the
@@ -1826,15 +1814,14 @@ function stocksNextOpportunity(inst, today, levelFilter) {
   return candidates[0];
 }
 
-// Which single horizon the Radar shows - 'all' picks each instrument's
-// soonest across all three levels (Day usually wins, since tomorrow is
-// always sooner than any Month/Year trigger); Day/Month/Year narrows to
-// just that one so the other horizons aren't permanently drowned out.
+// Which single horizon the Radar shows - Day dropped entirely (owner's
+// call, too noisy/near-term to be useful here); 'all' picks each
+// instrument's soonest of Month/Year, or narrow to just one.
 let stocksRadarLevel = 'all';
 
 function stocksRadarLevelFilterHtml() {
   const opt = (level, label) => `<button class="stocks-filter-btn${stocksRadarLevel === level ? ' active' : ''}" data-level="${level}">${label}</button>`;
-  return `<div class="stocks-filter-seg" id="stockRadarLevelFilter">${opt('all', 'All')}${opt('day', 'Day')}${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
+  return `<div class="stocks-filter-seg" id="stockRadarLevelFilter">${opt('all', 'All')}${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
 }
 
 // Ranks every instrument by its soonest opportunity at the selected horizon
