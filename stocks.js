@@ -823,6 +823,24 @@ function stocksLeanAt(inst, level, atDate) {
   return stocksLevelVerdict(reads, level);
 }
 
+// ONE anchor's own day-level lean, independent of every other anchor -
+// reuses the exact same bear/bull rule (stocksLevelVerdict), just fed a
+// single-anchor list instead of every primary anchor blended together.
+function stocksAnchorDayLeanAt(anchor, atDate) {
+  const read = { ...anchor, primary: true, flow: computeEnergyFlow(stocksParseDate(anchor.date), atDate) };
+  return stocksLevelVerdict([read], 'day');
+}
+
+// Which primary anchor is actually responsible for a day matching the
+// window's lean - the first one (in the anchors' own order) whose OWN day
+// lean agrees. This is "the pair" the exit rule then tracks on its own,
+// instead of the blended verdict (which can flip because some OTHER
+// anchor or zodiac reading changed, not the one that actually triggered).
+function stocksTriggeringAnchor(inst, lean, date) {
+  const anchors = inst.anchors.filter((a) => a.primary && a.date);
+  return anchors.find((a) => stocksAnchorDayLeanAt(a, date).lean === lean.lean) || null;
+}
+
 // Entry timing (owner's idea): instead of blindly entering at the window's
 // first session, enter where the SYSTEM's signal peaks - the window's
 // weakest energy day for a short, strongest for a long, measured as the
@@ -906,19 +924,25 @@ function stocksZodiacYearStart(today) {
   return d;
 }
 
-// The actual exit: hold from entry until the first day whose own day-lean
-// flips to the OPPOSITE direction (the exact same signal that already
-// computes the Upcoming section's "TP" day, just pointed at bars already in
-// hand instead of the future) - or the window's natural end if that never
-// fires. A take-profit day the system never actually acted on is just a
-// look-back stat; this is what turns it into a real exit, so "held"/
-// "peak"/"worst"/"take profit" all get graded over what actually happened,
-// not an arbitrary month/year boundary ridden past the good exit.
-function stocksApplyExitRule(inst, lean, entryBars, wasOpen) {
+// The actual exit: hold from entry until the SAME anchor that triggered
+// entry has its OWN day-lean flip to the OPPOSITE direction - or the
+// window's natural end if that never fires. Deliberately scoped to that
+// one anchor rather than the blended day-lean: a Personal Day number steps
+// by about 1 most days (entering on a 7 very often means the very next
+// calendar day reads 8 - just the digit counting up, not a real shift), so
+// stocksAnchorReversalDay also requires at least a 2-day gap before it'll
+// count anything as a genuine reversal. A take-profit day the system never
+// actually acted on is just a look-back stat; this is what turns it into a
+// real exit, so "held"/"peak"/"worst"/"take profit" all get graded over
+// what actually happened, not an arbitrary month/year boundary ridden past
+// the good exit.
+function stocksApplyExitRule(inst, lean, entryBars, wasOpen, triggerAnchor) {
   if (entryBars.length <= 1) return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
   const afterDate = stocksParseDate(entryBars[0][0]);
   const laterDates = entryBars.slice(1).map((b) => stocksParseDate(b[0]));
-  const reversal = stocksReversalDay(inst, lean, afterDate, laterDates);
+  const reversal = triggerAnchor
+    ? stocksAnchorReversalDay(triggerAnchor, lean, afterDate, laterDates)
+    : stocksReversalDay(inst, lean, afterDate, laterDates); // safety net - shouldn't normally happen, entry always has a triggering anchor
   if (!reversal) return { bars: entryBars, stillOpen: !!wasOpen, exitDate: null };
   const exitIdx = entryBars.findIndex((b) => stocksParseDate(b[0]).getTime() === reversal.getTime());
   return { bars: entryBars.slice(0, exitIdx + 1), stillOpen: false, exitDate: reversal };
@@ -972,10 +996,13 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
 
   // Mode 1: calendar only.
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
+  // Whichever anchor's own day-signal actually confirmed entry - the exit
+  // rule tracks this SAME anchor going forward, not every anchor blended.
+  const triggerAnchor = ei >= 0 ? stocksTriggeringAnchor(inst, lean, stocksParseDate(bars[ei][0])) : null;
   if (ei < 0) {
     cards.push(noFill('Calendar', `The ${lean.lean} lean never got a daily energy confirmation - no trade taken.`));
   } else {
-    const exit = stocksApplyExitRule(inst, lean, bars.slice(ei), opts && opts.open);
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(ei), opts && opts.open, triggerAnchor);
     const stats = [
       { label: 'Entry', value: fmtD(bars[ei][0]) },
       ...(exit.exitDate ? [{ label: 'Exit', value: fmtDate(exit.exitDate) }] : []),
@@ -991,7 +1018,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
       ? 'No energy confirmation, so price was never consulted - no trade taken.'
       : `Price never closed ${lean.lean === 'short' ? 'red' : 'green'} after the energy trigger - no trade taken.`));
   } else {
-    const exit = stocksApplyExitRule(inst, lean, bars.slice(pei), opts && opts.open);
+    const exit = stocksApplyExitRule(inst, lean, bars.slice(pei), opts && opts.open, triggerAnchor);
     const stats = [
       { label: 'Trigger', value: fmtD(bars[ei][0]) },
       { label: 'Confirmed', value: fmtD(bars[pei - 1][0]) },
@@ -1028,7 +1055,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
         const remLow = Math.min(...rest.map((b) => b[3]));
         const dayClose = ibars[ibars.length - 1][4];
         const windowBars = [[dayISO, entryBar[1], remHigh, remLow, dayClose], ...bars.slice(ei + 1)];
-        const exit = stocksApplyExitRule(inst, lean, windowBars, opts && opts.open);
+        const exit = stocksApplyExitRule(inst, lean, windowBars, opts && opts.open, triggerAnchor);
         const stats = [
           { label: 'Trigger', value: fmtD(dayISO) },
           { label: which, value: fmtT(ibars[ti][0]) },
@@ -1178,6 +1205,19 @@ function stocksReversalDay(inst, lean, afterDate, dates) {
   return dates.find((d) => d > afterDate && stocksLeanAt(inst, 'day', d).lean === opposite) || null;
 }
 
+// Same idea, scoped to ONE anchor instead of every primary anchor blended
+// together - and requiring at least a 2-calendar-day gap from entry, since
+// a Personal Day number steps by about 1 most days (a 7 is very often
+// followed by an 8 the very next calendar day purely from the digit
+// counting up, not any real shift). Used for both the actual replay exit
+// (stocksApplyExitRule) and the Upcoming section's forward-looking "TP"
+// day, so the preview and the real exit use the same rule.
+function stocksAnchorReversalDay(anchor, lean, afterDate, dates) {
+  const opposite = lean.lean === 'short' ? 'long' : 'short';
+  const minGapMs = 2 * 24 * 60 * 60 * 1000;
+  return dates.find((d) => (d - afterDate) >= minGapMs && stocksAnchorDayLeanAt(anchor, d).lean === opposite) || null;
+}
+
 // The forward view: where the system says the NEXT entries are. Pure
 // calendar - no prices, no API key - so it renders for everyone, first.
 // Tomorrow's day lean, next month's lean with its pre-computed entry + take
@@ -1223,7 +1263,10 @@ function stocksUpcomingRows(inst) {
     const trigger = stocksFirstConfirmingDate(inst, lean, days);
     if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
     const peak = stocksPeakDay(inst, lean, days);
-    const reversal = stocksReversalDay(inst, lean, trigger, days);
+    // Same anchor-scoped rule the actual replay exit uses (stocksApplyExitRule)
+    // - so this preview and what the system would really do line up.
+    const triggerAnchor = stocksTriggeringAnchor(inst, lean, trigger);
+    const reversal = triggerAnchor ? stocksAnchorReversalDay(triggerAnchor, lean, trigger, days) : null;
     return [
       { label: 'Entry', value: fmtD(trigger) },
       ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
@@ -1729,9 +1772,10 @@ function stocksCyclesCacheHit(symbol) {
 function stocksGradeWindowTwoModes(inst, lean, bars) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: null, calPrice: null };
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
-  const calendar = ei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei)).bars).grade;
+  const triggerAnchor = ei >= 0 ? stocksTriggeringAnchor(inst, lean, stocksParseDate(bars[ei][0])) : null;
+  const calendar = ei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor).bars).grade;
   const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
-  const calPrice = pei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei)).bars).grade;
+  const calPrice = pei < 0 ? null : stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor).bars).grade;
   return { calendar, calPrice };
 }
 
