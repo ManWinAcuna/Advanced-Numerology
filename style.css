@@ -5587,6 +5587,36 @@ body {
 }
 .stock-trade-detail .stock-energy-block:first-child { margin-top: 0; }
 
+/* Bulleted, per-timeframe breakdown inside a verdict row's "Why" - replaces
+   a single semicolon-joined sentence, which read as one run-on wall of text
+   once a level could carry several reasons at once. */
+.stock-why-group + .stock-why-group { margin-top: 10px; }
+
+.stock-why-group-label {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.stock-why-list {
+  margin: 0;
+  padding-left: 1.1em;
+  list-style: disc;
+}
+
+.stock-why-list li {
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.stock-why-empty {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 /* ===================== Stock Cycles - groups + filters ===================== */
 
 .stocks-filterbar {

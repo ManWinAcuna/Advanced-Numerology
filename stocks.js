@@ -489,7 +489,7 @@ function stocksLevelVerdict(reads, level, historicalByLevel, today) {
   const allBulls = [...byTimeframe.year.bulls, ...byTimeframe.month.bulls, ...byTimeframe.day.bulls];
   const allBears = [...byTimeframe.year.bears, ...byTimeframe.month.bears, ...byTimeframe.day.bears];
 
-  if (score === 0) return { lean: 'neutral', label: 'Neutral', why: 'no net signal at this level', signalCount: 0, opposingCount: 0, tier: null, score: 0 };
+  if (score === 0) return { lean: 'neutral', label: 'Neutral', why: 'no net signal at this level', whyItems: [], whyLead: 'no net signal at this level', signalCount: 0, opposingCount: 0, tier: null, score: 0 };
 
   const dirSign = score > 0 ? 1 : -1;
   const timeframes = ['year', 'month', 'day'];
@@ -497,8 +497,18 @@ function stocksLevelVerdict(reads, level, historicalByLevel, today) {
   const opposing = timeframes.filter((tf) => Math.sign(nets[tf]) === -dirSign).length;
   const tier = stocksTierFor(agreeing, opposing);
 
-  if (dirSign < 0) return { lean: 'short', label: 'Short Lean', why: allBears.join('; ') || 'weighted bear signals outweigh bulls', signalCount: allBears.length, opposingCount: allBulls.length, tier, score };
-  return { lean: 'long', label: 'Long Lean', why: allBulls.join('; ') || 'weighted bull signals outweigh bears', signalCount: allBulls.length, opposingCount: allBears.length, tier, score };
+  // whyItems: the same reasons, grouped by timeframe instead of run together
+  // in one sentence - what the tap-to-expand detail actually renders as a
+  // bulleted list. whyLead: just the first reason, for the one-line teaser
+  // spots that were never meant to hold the full breakdown.
+  const list = dirSign < 0 ? allBears : allBulls;
+  const whyItems = timeframes
+    .map((tf) => ({ tf, items: dirSign < 0 ? byTimeframe[tf].bears : byTimeframe[tf].bulls }))
+    .filter((g) => g.items.length);
+  const whyLead = list[0] || (dirSign < 0 ? 'weighted bear signals outweigh bulls' : 'weighted bull signals outweigh bears');
+
+  if (dirSign < 0) return { lean: 'short', label: 'Short Lean', why: allBears.join('; ') || whyLead, whyItems, whyLead, signalCount: allBears.length, opposingCount: allBulls.length, tier, score };
+  return { lean: 'long', label: 'Long Lean', why: allBulls.join('; ') || whyLead, whyItems, whyLead, signalCount: allBulls.length, opposingCount: allBears.length, tier, score };
 }
 
 // The year-level watch verdict that drives the grid pill - now just the
@@ -643,6 +653,20 @@ const STOCKS_LEAN_ARROW = { long: '▲', short: '▼', neutral: '–', caution: 
 function stocksLeanBadge(lean, tier) {
   const cls = lean === 'short' ? 'short' : lean === 'long' ? 'long' : 'neutral';
   return `<span class="stock-lean stock-lean-${cls}"><span class="stock-lean-arrow">${STOCKS_LEAN_ARROW[lean] || '–'}</span>${STOCKS_LEAN_WORD[lean] || 'FLAT'}</span>${stocksTierChip(tier)}`;
+}
+
+// Renders a verdict's whyItems (see stocksLevelVerdict) as an actual
+// bulleted list, grouped under a small timeframe header - replaces the old
+// single semicolon-joined sentence, which read as one run-on wall of text
+// once transits/western/cross-level blending gave a level several reasons
+// instead of just one or two.
+function stocksWhyListHtml(whyItems) {
+  if (!whyItems || !whyItems.length) return '<div class="stock-why-empty">No signals fired at this level.</div>';
+  return whyItems.map((g) => `
+    <div class="stock-why-group">
+      <div class="stock-why-group-label">${escapeHtml(g.tf.toUpperCase())}</div>
+      <ul class="stock-why-list">${g.items.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+    </div>`).join('');
 }
 
 function stocksAnchorFlagBadges(read) {
@@ -824,7 +848,7 @@ function openStockModal(inst) {
           ${stocksLeanBadge(v.lean, v.tier)}
         </div>
         <button class="stock-trade-detail-toggle" type="button">Why<span class="stock-trade-detail-chev">▾</span></button>
-        <div class="stock-trade-detail" hidden>${escapeHtml(v.why)}</div>
+        <div class="stock-trade-detail" hidden>${stocksWhyListHtml(v.whyItems)}</div>
       </div>`;
   }).join('');
 
@@ -1191,7 +1215,7 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
           <span class="stock-trade-window">${escapeHtml(label)}</span>
           <span class="stock-trade-chips"><span class="stock-chip">${escapeHtml(mode)}</span><span class="stock-chip">No fill</span></span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}. ${escapeHtml(why)}</div>
+        <div class="stock-trade-story">${escapeHtml(lean.whyLead)}${lean.signalCount > 1 ? ` +${lean.signalCount - 1} more` : ''}. ${escapeHtml(why)}</div>
       </div>`,
     grade: null,
     mode,
@@ -1403,7 +1427,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts, detail
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
-        <div class="stock-trade-story">${escapeHtml(lean.why)}.</div>${entryStatsRow}
+        <div class="stock-trade-story">${escapeHtml(lean.whyLead)}${lean.signalCount > 1 ? ` +${lean.signalCount - 1} more${detailHtml ? ' (see Why)' : ''}` : ''}.</div>${entryStatsRow}
         <div class="stock-trade-nums">
           <span>${fmt(entry)} → ${fmt(exit)}</span>
           <span class="score-inline ${held > 0 ? 'good' : 'bad'}">${isOpen ? 'running' : 'held to end'} ${held > 0 ? '+' : ''}${held.toFixed(1)}%</span>
