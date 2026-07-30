@@ -5685,6 +5685,32 @@ body {
   border-color: var(--yellow);
 }
 
+.stock-stop-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.stock-stop-input input {
+  width: 34px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: right;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.stock-stop-input input::-webkit-outer-spin-button,
+.stock-stop-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 .stock-group { margin-top: 14px; }
 
 .stock-group-head {

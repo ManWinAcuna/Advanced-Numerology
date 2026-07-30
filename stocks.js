@@ -2358,6 +2358,62 @@ function stocksGradeWindowTwoModes(inst, lean, bars) {
   return { calendar, calPrice };
 }
 
+/* ---- Stop-Loss grading (session-only, not a persisted ledger version - see
+   stocksLoadStopLossRecord below for why) ---- */
+
+// Checks a hard % stop against each day's actual adverse extreme (the LOW
+// for a long, the HIGH for a short - not the close, a stop can fire
+// intraday). Fires on the first day the adverse extreme breaches -stopPct;
+// the exit price on that day is that day's real worst price, not an
+// idealized fill sitting exactly on the stop line. Also tracks the best
+// favorable extreme reached along the way, for the card's "peak" stat.
+function stocksApplyStopExit(bars, lean, stopPct) {
+  const entry = bars[0][1];
+  const fav = (px) => (lean.lean === 'short' ? ((entry - px) / entry) * 100 : ((px - entry) / entry) * 100);
+  let peak = -Infinity;
+  for (let i = 0; i < bars.length; i++) {
+    const favBest = fav(lean.lean === 'short' ? bars[i][3] : bars[i][2]);
+    if (favBest > peak) peak = favBest;
+    const adverseFav = fav(lean.lean === 'short' ? bars[i][2] : bars[i][3]);
+    if (adverseFav <= -stopPct) return { bars: bars.slice(0, i + 1), stopped: true, stopFav: adverseFav, peak };
+  }
+  return { bars, stopped: false, peak };
+}
+
+// Stop-Loss sub-grade: the OTHER exit (besides the stop) is the window's
+// natural end, not the reversal signal - this mode is isolating "does a
+// hard floor alone fix the tail risk," not blending in the reversal exit
+// too. A stopped trade is always graded WRONG, overriding the normal
+// time-in-profit grading - that's the point of a hard stop. An unstopped
+// trade grades exactly like Full Term (same path, nothing intervened), so
+// a stop wide enough to never fire reproduces Full Term's numbers exactly.
+function stocksGradeSubStop(inst, lean, bars, entryIdx, triggerAnchor, stopPct) {
+  if (entryIdx < 0) return null;
+  const fullPath = stocksApplyExitRule(inst, lean, bars.slice(entryIdx), false, triggerAnchor, 'end').bars;
+  const stop = stocksApplyStopExit(fullPath, lean, stopPct);
+  if (!stop.stopped) {
+    const card = stocksTradeCard('', lean, stop.bars);
+    return { grade: card.grade, held: Math.round(card.held * 100) / 100, peak: Math.round(card.peak * 100) / 100, worst: Math.round(card.worst * 100) / 100 };
+  }
+  const held = Math.round(stop.stopFav * 100) / 100;
+  return { grade: 'wrong', held, peak: Math.round(stop.peak * 100) / 100, worst: held };
+}
+
+// Same shape as stocksGradeWindowTwoModes's { calendar, calPrice }, but each
+// nested one level under a 'stop' key so stocksAggregateEntries (built for
+// exitMode lookups like entries[mode]) works unchanged for this mode too.
+function stocksGradeWindowStop(inst, lean, bars, stopPct) {
+  const none = { stop: null };
+  if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: none, calPrice: none };
+  const ei = stocksConfirmedEntryIndex(inst, lean, bars);
+  const triggerAnchor = ei >= 0 ? stocksTriggeringAnchor(inst, lean, stocksParseDate(bars[ei][0])) : null;
+  const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
+  return {
+    calendar: { stop: stocksGradeSubStop(inst, lean, bars, ei, triggerAnchor, stopPct) },
+    calPrice: { stop: stocksGradeSubStop(inst, lean, bars, pei, triggerAnchor, stopPct) },
+  };
+}
+
 /* ---- persisted ledger: one entry per instrument per completed period ---- */
 
 function stocksLoadCombinedStore() {
@@ -2469,10 +2525,27 @@ function stocksBestModeLine(agg) {
 // Which stored horizon the box shows - session-scoped, resets to Month on
 // page load, same idea as the other Day/Month/Year toggles on this page.
 let stocksCombinedHorizon = 'month';
-// Which exit rule the box grades by - 'reversal' (default) or 'end' (ride
-// to the window's natural end). Both are pre-computed per entry, so this
-// switches instantly with no re-fetch.
+// Which exit rule the box grades by - 'reversal' (default), 'end' (ride to
+// the window's natural end), or 'stop' (ride to the end, but exit early on
+// a hard % stop). Reversal/end are pre-computed per entry in the persisted
+// ledger; stop is computed fresh in-session (see stocksLoadStopLossRecord).
 let stocksCombinedExitMode = 'reversal';
+
+// The hard stop %, freely editable in the box - same number applied to
+// every instrument (not scaled per volatility tier).
+let stocksStopPct = 5;
+// Session-only cache of the Stop-Loss regrade: { pct, monthEntries,
+// yearEntries }. Not persisted to localStorage - the % is a free-typed
+// input, so re-deriving it fresh (from price bars already cached for the
+// ledger above) is simpler than a fourth version-locked store, and cheap
+// once those bars are in hand.
+let stocksStopCache = null;
+let stocksStopLoading = false;
+// The instruments/today this box last loaded with - stashed here so the
+// Stop-Loss toggle and % input can kick off a rebuild without needing the
+// caller to thread them through the render function.
+let stocksCombinedInstruments = null;
+let stocksCombinedToday = null;
 
 function stocksCombinedHorizonFilterHtml() {
   const opt = (h, label) => `<button class="stocks-filter-btn${stocksCombinedHorizon === h ? ' active' : ''}" data-horizon="${h}">${label}</button>`;
@@ -2481,7 +2554,10 @@ function stocksCombinedHorizonFilterHtml() {
 
 function stocksCombinedExitFilterHtml() {
   const opt = (m, label) => `<button class="stocks-filter-btn${stocksCombinedExitMode === m ? ' active' : ''}" data-exit="${m}">${label}</button>`;
-  return `<div class="stocks-filter-seg" id="stockCombinedExitFilter">${opt('reversal', 'Reversal')}${opt('end', 'Full Term')}</div>`;
+  const stopInput = stocksCombinedExitMode === 'stop'
+    ? `<span class="stock-stop-input"><input type="number" id="stockStopPctInput" value="${stocksStopPct}" min="0.1" max="100" step="0.5">%</span>`
+    : '';
+  return `<div class="stocks-filter-seg" id="stockCombinedExitFilter">${opt('reversal', 'Reversal')}${opt('end', 'Full Term')}${opt('stop', 'Stop-Loss')}${stopInput}</div>`;
 }
 
 // Starts closed like every other group/dropdown on this page - a glance at
@@ -2489,9 +2565,25 @@ function stocksCombinedExitFilterHtml() {
 let stocksCombinedCollapsed = true;
 
 function renderStocksCombinedRecordBody(box, store) {
-  const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
+  const isStop = stocksCombinedExitMode === 'stop';
   const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
-  const exitLabel = stocksCombinedExitMode === 'end' ? 'holding to the window’s end' : 'exiting at the reversal signal';
+  const stopReady = isStop && stocksStopCache && stocksStopCache.pct === stocksStopPct;
+  let noteHtml;
+  let statsHtml = '';
+  if (isStop && !stopReady) {
+    noteHtml = stocksStopLoading
+      ? `Building the Stop-Loss record at ${stocksStopPct}%…`
+      : `Not built yet at ${stocksStopPct}% - change the number and press Enter, or re-click Stop-Loss, to run it.`;
+  } else if (isStop) {
+    const entries = stocksCombinedHorizon === 'year' ? stocksStopCache.yearEntries : stocksStopCache.monthEntries;
+    noteHtml = `Every completed ${stocksCombinedHorizon}-cycle window, ${windowLabel}, all 16 instruments, riding to the window's end but exiting at that day's real low/high the moment a ${stocksStopPct}% adverse move hits. A stopped trade always grades WRONG. Recomputed in-session, not saved.`;
+    statsHtml = stocksBestModeLine(stocksAggregateEntries(entries, 'stop'));
+  } else {
+    const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
+    const exitLabel = stocksCombinedExitMode === 'end' ? 'holding to the window’s end' : 'exiting at the reversal signal';
+    noteHtml = `Every completed ${stocksCombinedHorizon}-cycle window (each instrument's own boundaries), ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new window completes.`;
+    statsHtml = stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode));
+  }
   box.innerHTML = `
     <div class="stock-group${stocksCombinedCollapsed ? ' collapsed' : ''}" id="stockCombinedGroup">
       <div class="stock-group-head">
@@ -2501,8 +2593,8 @@ function renderStocksCombinedRecordBody(box, store) {
       <div class="stock-group-grid">
         ${stocksCombinedHorizonFilterHtml()}
         ${stocksCombinedExitFilterHtml()}
-        <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}-cycle window (each instrument's own boundaries), ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new window completes.</div>
-        ${stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode))}
+        <div class="stock-trades-note">${noteHtml}</div>
+        ${statsHtml}
       </div>
     </div>`;
   box.querySelector('.stock-group-head').addEventListener('click', () => {
@@ -2523,8 +2615,25 @@ function renderStocksCombinedRecordBody(box, store) {
       if (stocksCombinedExitMode === btn.dataset.exit) return;
       stocksCombinedExitMode = btn.dataset.exit;
       renderStocksCombinedRecordBody(box, store);
+      if (stocksCombinedExitMode === 'stop' && (!stocksStopCache || stocksStopCache.pct !== stocksStopPct) && stocksCombinedInstruments && !stocksStopLoading) {
+        stocksLoadStopLossRecord(stocksCombinedInstruments, stocksCombinedToday, stocksStopPct);
+      }
     });
   });
+  const stopInput = box.querySelector('#stockStopPctInput');
+  if (stopInput) {
+    stopInput.addEventListener('click', (e) => e.stopPropagation());
+    const commit = () => {
+      const v = parseFloat(stopInput.value);
+      if (!(v > 0) || v === stocksStopPct) return;
+      stocksStopPct = v;
+      stocksStopCache = null;
+      renderStocksCombinedRecordBody(box, store);
+      if (stocksCombinedInstruments && !stocksStopLoading) stocksLoadStopLossRecord(stocksCombinedInstruments, stocksCombinedToday, stocksStopPct);
+    };
+    stopInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') commit(); });
+    stopInput.addEventListener('blur', commit);
+  }
 }
 
 // Only grades what's actually new: each instrument's completed cycle
@@ -2537,6 +2646,8 @@ function renderStocksCombinedRecordBody(box, store) {
 async function stocksLoadCombinedRecord(instruments, today) {
   const box = document.getElementById('stocksCombinedRecord');
   if (!box) return;
+  stocksCombinedInstruments = instruments;
+  stocksCombinedToday = today;
   const key = localStorage.getItem(STOCKS_TD_KEY);
   if (!key) {
     box.innerHTML = `<div class="stock-trades-note">Needs the same Twelve Data API key as Trades/Day Cycles - open any instrument's Trades panel once to save one, then reload this page.</div>`;
@@ -2592,6 +2703,55 @@ async function stocksLoadCombinedRecord(instruments, today) {
   store.lastCheckedISO = todayISO;
   stocksSaveCombinedStore(store);
   renderStocksCombinedRecordBody(box, store);
+}
+
+// Stop-Loss isn't a persisted ledger version like Calendar/Cal+Price above -
+// the % is a free-typed input, so instead of a fifth version-locked store
+// this regrades fresh in-session, every time the toggle switches to Stop-Loss
+// or the % changes. Still cheap: it reuses the exact same price cache
+// (STOCKS_CYCLES_PX_CACHE_KEY) the ledger above already warms, so an
+// instrument the ledger already fetched today for a new window is a free
+// cache hit here too - only instruments with no new windows today (and so
+// no reason for the ledger to have fetched them) cost a real network call,
+// throttled the same way. Regrades EVERY completed window (not just new
+// ones, there's no store to diff against), which is what "full retroactive
+// regrade" means for a mode with nothing persisted to diff against.
+async function stocksLoadStopLossRecord(instruments, today, stopPct) {
+  const box = document.getElementById('stocksCombinedRecord');
+  if (!box || stocksStopLoading) return;
+  stocksStopLoading = true;
+  const monthBackDays = Math.round(STOCKS_COMBINED_MONTHS_BACK * 30.5);
+  const yearBackDays = STOCKS_COMBINED_YEARS_BACK * 366;
+  const monthEntries = [];
+  const yearEntries = [];
+  let processed = 0;
+  for (const inst of instruments) {
+    box.innerHTML = `<div class="stock-trades-note">Building the Stop-Loss record at ${stopPct}% - ${processed}/${instruments.length} instruments…</div>`;
+    await stocksDelay(0);
+    try {
+      const monthWins = stocksRecentCompletedWindows(inst, 'month', today, 999, monthBackDays);
+      const yearWins = stocksRecentCompletedWindows(inst, 'year', today, 99, yearBackDays);
+      if (monthWins.length || yearWins.length) {
+        const wasCached = stocksCyclesCacheHit(inst.px.symbol);
+        const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+        const gradeInto = (wins, entries) => wins.forEach((w) => {
+          const startISO = stocksDateToISO(w.start);
+          const endISO = stocksDateToISO(w.end);
+          const wBars = bars.filter((b) => b[0] >= startISO && b[0] <= endISO);
+          if (!wBars.length) return;
+          const { calendar, calPrice } = stocksGradeWindowStop(inst, stocksWindowLean(w), wBars, stopPct);
+          entries.push({ key: stocksWindowKey(w), ticker: inst.ticker, calendar, calPrice });
+        });
+        gradeInto(monthWins, monthEntries);
+        gradeInto(yearWins, yearEntries);
+        if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
+      }
+    } catch (e) { /* one bad symbol or a rate-limit hiccup shouldn't block the rest */ }
+    processed++;
+  }
+  stocksStopCache = { pct: stopPct, monthEntries, yearEntries };
+  stocksStopLoading = false;
+  renderStocksCombinedRecordBody(box, stocksLoadCombinedStore());
 }
 
 function stocksCycleLean(row, baseline) {
