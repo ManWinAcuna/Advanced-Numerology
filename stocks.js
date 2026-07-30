@@ -126,9 +126,8 @@ const STOCK_INSTRUMENTS = [
     ticker: 'SI', name: 'Silver Futures', kind: 'commodity', hue: 220, image: 'Silver',
     px: { symbol: 'XAG/USD', note: 'spot' },
     anchors: [
-      // Only the launch YEAR is reliably documented - so only the zodiac
-      // year is read. No invented month/day (see HONEST SCOPE above).
-      { key: 'launch', label: 'COMEX Launch', year: 1963, primary: true },
+      // Owner-verified exact launch date.
+      { key: 'launch', label: 'COMEX Launch', date: '1963-06-12', primary: true },
     ],
   },
   {
