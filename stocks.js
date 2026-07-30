@@ -343,6 +343,19 @@ function stocksScoreMark(score) {
   return score <= 10 ? ' · clash' : score >= 85 ? ' · boost' : '';
 }
 
+// Color/mark for a Numbers-row chip (PY/PM/PD) - keyed to the number's OWN
+// meaning (7/8/28/11, the thing that actually feeds the verdict), NOT the
+// numerology compat score against the Universal number. Those are two
+// unrelated axes that used to share the same red/green language here, which
+// meant an 11 (a bear meaning-number) could render green just because it
+// happens to pair well with today's Universal number - misleading, since it
+// looked like it agreed with a signal it was actually opposing.
+function stocksNumberSignalCls(num) {
+  const m = STOCKS_NUMBER_MEANINGS[num];
+  if (!m) return '';
+  return m.dir === 'bear' ? 'bad' : 'good';
+}
+
 // A number with one of the owner's meanings shows it everywhere it appears.
 function stocksNumLabel(n) {
   const m = STOCKS_NUMBER_MEANINGS[n];
@@ -741,9 +754,9 @@ function stocksEnergyBlock(r) {
       <div class="stock-energy-row">
         <span class="stock-energy-lab">Numbers</span>
         <span class="stock-energy-chips">
-          <span class="stock-chip ${stocksScoreCls(n.yearScore)}">PY ${stocksNumLabel(n.personalYear)} vs ${n.universalYear}${stocksScoreMark(n.yearScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(n.monthScore)}">PM ${stocksNumLabel(n.personalMonth)} vs ${n.universalMonth}${stocksScoreMark(n.monthScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(n.dayScore)}">PD ${stocksNumLabel(n.personalDay)} vs ${escapeHtml(String(n.universalDay))}${stocksScoreMark(n.dayScore)}</span>
+          <span class="stock-chip ${stocksNumberSignalCls(n.personalYear)}">PY ${stocksNumLabel(n.personalYear)} vs ${n.universalYear}</span>
+          <span class="stock-chip ${stocksNumberSignalCls(n.personalMonth)}">PM ${stocksNumLabel(n.personalMonth)} vs ${n.universalMonth}</span>
+          <span class="stock-chip ${stocksNumberSignalCls(n.personalDay)}">PD ${stocksNumLabel(n.personalDay)} vs ${escapeHtml(String(n.universalDay))}</span>
         </span>
       </div>
       <div class="stock-energy-row">
