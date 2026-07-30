@@ -274,25 +274,6 @@ function stocksTransitSignalsFor(anchorDate, level, onDate) {
     .filter(Boolean);
 }
 
-// All 9 transit-eligible planets (every STOCKS_TRANSIT_PLANETS body across
-// all three timeframes), for the energy-block display - the tally checks
-// each planet against only its own timeframe, but the display shows
-// everything currently active in one place, same as Numbers/Zodiac already
-// merge all three timeframes into one block.
-const STOCKS_ALL_TRANSIT_PLANETS = [].concat(...Object.values(STOCKS_TRANSIT_PLANETS));
-
-// Chips for whichever transits are actually active right now - most days,
-// for most planets, this is empty (an active aspect is the exception, not
-// the rule), which is a real, correct read, not a broken one.
-function stocksTransitChipsHtml(anchorDate, onDate) {
-  const natalSunLon = astroEclipticLongitude('Sun', anchorDate);
-  const active = STOCKS_ALL_TRANSIT_PLANETS
-    .map((body) => stocksTransitSignal(body, natalSunLon, onDate))
-    .filter(Boolean);
-  if (!active.length) return '<span class="stock-chip">No active transits right now</span>';
-  return active.map((t) => `<span class="stock-chip ${t.dir === 'bull' ? 'good' : 'bad'}">${escapeHtml(t.why)}</span>`).join('');
-}
-
 /* ===================== Western Sun-sign compat (Month level) ===================== */
 // Natal Sun sign vs today's Sun sign, scored through the same westernCompat/
 // WESTERN_TABLE the Compatibility Calculator and Month Outlook already use -
@@ -777,55 +758,88 @@ function stocksSyncFilterButtons() {
   document.getElementById('stocksLevelFilter').classList.toggle('muted', stocksFilter.dir === 'all');
 }
 
-// One anchor's deep today block: PY/PM/PD against the Universal numbers,
-// birth year/month/day signs against today's three signs, western Sun-sign
-// compat, and any currently active planetary transits to the natal Sun -
-// every pair marked in words when it clashes (table 10) or boosts (85+) -
-// color carries the rest, no icon noise. atDate is the reference date the
-// transit/western signals are read against (today, or a replay date).
-function stocksEnergyBlock(r, atDate) {
+const STOCKS_CYCLE_LABELS = { year: 'PY', month: 'PM', day: 'PD' };
+const STOCKS_CYCLE_FULL_LABELS = { year: 'Personal Year', month: 'Personal Month', day: 'Personal Day' };
+
+// Days until this anchor's own PY/PM number changes, found by asking the
+// real engine directly (computeEnergyFlow) at each candidate date rather
+// than hand-deriving a rollover formula - getPersonalMonthRaw's day-of-
+// month comparison has real edge cases (e.g. a day-31 birth can hold the
+// same PM number for ~60 days across a 30-day month), and this way the
+// countdown can never disagree with when the number actually changes.
+function stocksDaysToNextPersonalValue(anchorDate, atDate, level) {
+  const key = level === 'year' ? 'personalYear' : 'personalMonth';
+  const current = computeEnergyFlow(anchorDate, atDate).numerology[key];
+  for (let i = 1; i <= 400; i++) {
+    const d = stocksAddDays(atDate, i);
+    if (computeEnergyFlow(anchorDate, d).numerology[key] !== current) return i;
+  }
+  return null;
+}
+
+// One anchor's PY, PM, or PD as its own card, styled like an Anchor card
+// (owner's ask) instead of a chip row: big number, meaning label, a
+// countdown to the next rollover in place of a birthdate, and the matching
+// zodiac animal (Year/Month/Day, not just the birth-year one) colored the
+// same clash/boost way the anchor zodiac chip already is - color only, no
+// redundant "vs X" text, same minimalism the Anchor cards already use.
+// Western compat (Month-cadence) folds into the PM box; transits fold into
+// whichever box matches their own timeframe (Moon->PD, Mercury/Venus/
+// Mars->PM, Jupiter..Pluto->PY - see STOCKS_TRANSIT_PLANETS).
+function stocksCycleBoxHtml(r, level, atDate) {
   const f = r.flow;
-  const n = f.numerology;
-  const v = f.vietnamese;
-  const vol = stocksVolatilityBadge(stocksParseDate(r.date));
+  const meta = STOCKS_LEVEL_NUM_META[level];
+  const num = f.numerology[meta.numKey];
+  const sign = f.vietnamese[meta.mySignKey];
+  const signScore = f.vietnamese[meta.signKey];
   const anchorDate = stocksParseDate(r.date);
-  const entitySign = getSunSign(anchorDate);
-  const todaySign = getSunSign(atDate);
-  const westernScore = westernCompat(entitySign, todaySign);
+
+  const countdown = level === 'day'
+    ? atDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : (() => {
+        const days = stocksDaysToNextPersonalValue(anchorDate, atDate, level);
+        return days == null ? '—' : `${days}d to next ${STOCKS_CYCLE_LABELS[level]}`;
+      })();
+
+  const western = level === 'month' ? stocksWesternSignal(anchorDate, atDate) : null;
+  const transits = stocksTransitSignalsFor(anchorDate, level, atDate);
+  const extraChips = [
+    ...(western ? [`<span class="stock-chip ${western.dir === 'bull' ? 'good' : 'bad'}">${escapeHtml(western.why)}</span>`] : []),
+    ...transits.map((t) => `<span class="stock-chip ${t.dir === 'bull' ? 'good' : 'bad'}">${escapeHtml(t.why)}</span>`),
+  ].join('');
+
   return `
-    <div class="stock-energy-block">
+    <div class="stock-anchor-card cycle-box">
+      <div class="stock-anchor-label">${STOCKS_CYCLE_LABELS[level]}</div>
+      <div class="stock-anchor-number ${stocksNumberSignalCls(num)}">${num}</div>
+      <div class="stock-anchor-sub">${STOCKS_CYCLE_FULL_LABELS[level]}${STOCKS_NUMBER_MEANINGS[num] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[num].label) : ''}</div>
+      <div class="stock-anchor-date">${escapeHtml(countdown)}</div>
+      <div class="stock-anchor-zodiac">
+        <span class="stock-chip ${stocksScoreCls(signScore)}">${escapeHtml(sign)}</span>
+      </div>
+      ${extraChips ? `<div class="stock-cycle-extra">${extraChips}</div>` : ''}
+    </div>`;
+}
+
+// One anchor's full cycle read: a header (name, volatility, today's overall
+// score) over a row of its three PY/PM/PD cards - same layout language the
+// Anchors section already established, just one anchor's three cycles
+// instead of three different anchors side by side.
+function stocksEnergyBlock(r, atDate) {
+  const vol = stocksVolatilityBadge(stocksParseDate(r.date));
+  return `
+    <div class="stock-cycle-group">
       <div class="stock-energy-title">
         <span class="stock-energy-title-main">
           <span>${escapeHtml(r.person || r.label)}</span>
           ${vol ? `<span class="stock-volatility-badge stock-volatility-${vol.tier}" title="This entity's own Life Path risk profile, independent of the bull/bear lean">${escapeHtml(vol.label)}</span>` : ''}
         </span>
-        <span class="score-inline ${stocksScoreCls(f.finalScore)}">${f.finalScore}</span>
+        <span class="score-inline ${stocksScoreCls(r.flow.finalScore)}">${r.flow.finalScore}</span>
       </div>
-      <div class="stock-energy-row">
-        <span class="stock-energy-lab">Numbers</span>
-        <span class="stock-energy-chips">
-          <span class="stock-chip ${stocksNumberSignalCls(n.personalYear)}">PY ${stocksNumLabel(n.personalYear)} vs ${n.universalYear}</span>
-          <span class="stock-chip ${stocksNumberSignalCls(n.personalMonth)}">PM ${stocksNumLabel(n.personalMonth)} vs ${n.universalMonth}</span>
-          <span class="stock-chip ${stocksNumberSignalCls(n.personalDay)}">PD ${stocksNumLabel(n.personalDay)} vs ${escapeHtml(String(n.universalDay))}</span>
-        </span>
-      </div>
-      <div class="stock-energy-row">
-        <span class="stock-energy-lab">Zodiac</span>
-        <span class="stock-energy-chips">
-          <span class="stock-chip ${stocksScoreCls(v.yearScore)}">Year · ${escapeHtml(v.personalYearSign)} vs ${escapeHtml(v.universalYearSign)}${stocksScoreMark(v.yearScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(v.monthScore)}">Month · ${escapeHtml(v.personalMonthSign)} vs ${escapeHtml(v.universalMonthSign)}${stocksScoreMark(v.monthScore)}</span>
-          <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">Day · ${escapeHtml(v.personalDaySign)} vs ${escapeHtml(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
-        </span>
-      </div>
-      <div class="stock-energy-row">
-        <span class="stock-energy-lab">Western</span>
-        <span class="stock-energy-chips">
-          <span class="stock-chip ${stocksScoreCls(westernScore)}">${escapeHtml(entitySign)} vs ${escapeHtml(todaySign)}${stocksScoreMark(westernScore)}</span>
-        </span>
-      </div>
-      <div class="stock-energy-row">
-        <span class="stock-energy-lab">Transits</span>
-        <span class="stock-energy-chips">${stocksTransitChipsHtml(anchorDate, atDate)}</span>
+      <div class="stock-anchor-row" style="grid-template-columns:repeat(3,1fr);">
+        ${stocksCycleBoxHtml(r, 'year', atDate)}
+        ${stocksCycleBoxHtml(r, 'month', atDate)}
+        ${stocksCycleBoxHtml(r, 'day', atDate)}
       </div>
     </div>`;
 }

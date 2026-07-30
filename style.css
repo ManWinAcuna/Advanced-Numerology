@@ -5205,6 +5205,23 @@ body {
 .stock-anchor-py.bad { color: var(--bad); font-weight: 700; }
 .stock-anchor-py.good { color: var(--good); font-weight: 700; }
 
+/* PY/PM/PD cycle boxes ("look like the Anchors" redesign of Today's
+   Energies) - the big number colors by its own meaning (7/8/11/28), same
+   as everywhere else a meaning-number appears; a plain number (no meaning)
+   stays the default gold, same as a Life Path number always has. */
+.stock-anchor-number.bad { color: var(--bad); }
+.stock-anchor-number.good { color: var(--good); }
+
+.stock-cycle-group + .stock-cycle-group { margin-top: 14px; }
+
+.stock-cycle-extra {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
 .stock-verdict {
   border-left: 3px solid var(--border);
   background: rgba(255, 255, 255, 0.02);
