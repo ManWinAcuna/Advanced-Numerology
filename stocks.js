@@ -838,15 +838,42 @@ function openStockModal(inst) {
   // resolution - the stable year lean plus how this month and this day sit.
   // The sentence-length reasoning is a tap away now (same toggle pattern as
   // the trade cards' "Why"), not printed inline for every level every time.
+  // Entry/Peak/TP dates (Year/Month only - a single day has no separate
+  // take-profit day) use the exact same forward-looking calendar math as the
+  // Upcoming rows, just windowed to "rest of this month"/"rest of this
+  // zodiac year" instead of "next calendar month" - this is what THIS lean
+  // (not next month's) would actually do.
+  const today = new Date();
+  const restOfYearDays = [];
+  {
+    const animal = getChineseZodiacYear(today);
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
+      restOfYearDays.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  const restOfMonthDays = [];
+  {
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    for (let d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); d <= monthEnd; d.setDate(d.getDate() + 1)) {
+      restOfMonthDays.push(new Date(d));
+    }
+  }
+  const levelStatsDays = { year: restOfYearDays, month: restOfMonthDays, day: null };
+
   const levelRows = ['year', 'month', 'day'].map((level) => {
     const v = inst.levels[level];
     if (!v) return '';
+    const days = levelStatsDays[level];
+    const stats = days ? stocksHorizonStats(inst, v, days) : null;
     return `
       <div class="stock-verdict-row">
         <div class="stock-verdict-top">
           <span class="stock-verdict-term">${level.toUpperCase()}</span>
           ${stocksLeanBadge(v.lean, v.tier)}
         </div>
+        ${stats && stats.length ? `<div class="stock-trade-path">${stats.map((s) => `<span>${escapeHtml(s.label)} <b>${escapeHtml(s.value)}</b></span>`).join('')}</div>` : ''}
         <button class="stock-trade-detail-toggle" type="button">Why<span class="stock-trade-detail-chev">▾</span></button>
         <div class="stock-trade-detail" hidden>${stocksWhyListHtml(v.whyItems)}</div>
       </div>`;
@@ -1472,6 +1499,29 @@ function stocksFirstConfirmingDate(inst, lean, dates) {
   return dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
 }
 
+// Entry/Peak/TP preview for one lean over one forward window of dates - pure
+// calendar math, no prices. Shared by the Upcoming rows and the Verdict
+// section's own level rows, so "when would this actually enter/exit" reads
+// the same wherever it's shown instead of two versions quietly drifting.
+// Null for a neutral lean (nothing to enter) or before there IS a window
+// (the day resolution has no separate take-profit day - see stocksUpcomingRows).
+function stocksHorizonStats(inst, lean, days) {
+  if (!lean || (lean.lean !== 'short' && lean.lean !== 'long')) return null;
+  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const trigger = stocksFirstConfirmingDate(inst, lean, days);
+  if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
+  const peak = stocksPeakDay(inst, lean, days);
+  // Same anchor-scoped rule the actual replay exit uses (stocksApplyExitRule)
+  // - so this preview and what the system would really do line up.
+  const triggerAnchor = stocksTriggeringAnchor(inst, lean, trigger);
+  const reversal = triggerAnchor ? stocksAnchorReversalDay(triggerAnchor, lean, trigger, days) : null;
+  return [
+    { label: 'Entry', value: fmtD(trigger) },
+    ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
+    ...(reversal ? [{ label: 'TP', value: fmtD(reversal) }] : []),
+  ];
+}
+
 // Returns rows tagged with a level so the Trades panel filter can narrow to
 // just one horizon.
 function stocksUpcomingRows(inst) {
@@ -1497,21 +1547,7 @@ function stocksUpcomingRows(inst) {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   rows.push({ level: 'day', html: row(`Tomorrow · ${fmtD(tomorrow)}`, stocksLeanAt(inst, 'day', tomorrow), null) });
 
-  const horizonStats = (lean, days) => {
-    if (lean.lean !== 'short' && lean.lean !== 'long') return null;
-    const trigger = stocksFirstConfirmingDate(inst, lean, days);
-    if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
-    const peak = stocksPeakDay(inst, lean, days);
-    // Same anchor-scoped rule the actual replay exit uses (stocksApplyExitRule)
-    // - so this preview and what the system would really do line up.
-    const triggerAnchor = stocksTriggeringAnchor(inst, lean, trigger);
-    const reversal = triggerAnchor ? stocksAnchorReversalDay(triggerAnchor, lean, trigger, days) : null;
-    return [
-      { label: 'Entry', value: fmtD(trigger) },
-      ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
-      ...(reversal ? [{ label: 'TP', value: fmtD(reversal) }] : []),
-    ];
-  };
+  const horizonStats = (lean, days) => stocksHorizonStats(inst, lean, days);
 
   // Next calendar month.
   const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
