@@ -700,7 +700,9 @@ function stocksAnchorFlagBadges(read) {
 // sections are folded shut. Session-scoped on purpose - a filter is a way of
 // looking, not a setting.
 const stocksFilter = { dir: 'all', level: 'year' };
-const stocksCollapsedGroups = new Set();
+// Starts with every group closed - a tap opens the one you actually want to
+// look at, instead of dumping all 16 instruments open on load.
+const stocksCollapsedGroups = new Set(STOCKS_GROUPS.map((g) => g.kind));
 let stocksAllInstruments = [];
 
 // Glanceable only: ticker, name, direction, tier. The zodiac/cycle detail
@@ -1261,8 +1263,8 @@ async function stocksTimedTrades(inst, label, lean, bars, opts) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) {
     return [stocksTradeCard(label, lean, bars, null, opts)];
   }
-  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const fmtDate = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); // for real Date objects, not ISO strings (e.g. exit.exitDate)
+  const fmtD = (iso) => stocksParseDate(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); // for real Date objects, not ISO strings (e.g. exit.exitDate)
   const fmtT = (iso) => iso.slice(11, 16);
   const fmtPx = (x) => (x >= 1000 ? Math.round(x).toLocaleString() : x.toFixed(2));
   const noFill = (mode, why) => ({
@@ -1453,9 +1455,9 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts, detail
         </div>` : `
         <div class="stock-trade-path">
           <span>in profit ${Math.round(inProfit * 100)}% of days${isOpen ? ' so far' : ''}</span>
-          <span>take profit <span class="score-inline ${bestClose.f > 0 ? 'good' : 'bad'}">${bestClose.f > 0 ? '+' : ''}${bestClose.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(bestClose.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
-          <span>peak <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
-          <span>worst <span class="score-inline ${worst.f < 0 ? 'bad' : 'good'}">${worst.f > 0 ? '+' : ''}${worst.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(worst.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</span>
+          <span>take profit <span class="score-inline ${bestClose.f > 0 ? 'good' : 'bad'}">${bestClose.f > 0 ? '+' : ''}${bestClose.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(bestClose.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}</span>
+          <span>peak <span class="score-inline ${best.f > 0 ? 'good' : 'bad'}">${best.f > 0 ? '+' : ''}${best.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(best.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}</span>
+          <span>worst <span class="score-inline ${worst.f < 0 ? 'bad' : 'good'}">${worst.f > 0 ? '+' : ''}${worst.f.toFixed(1)}%</span> · ${escapeHtml(stocksParseDate(worst.d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}</span>
         </div>`;
 
   // Entry/trigger/confirm/peak as labeled fragments instead of a run-on
@@ -1559,7 +1561,7 @@ function stocksLevelWindowDays(inst, level, lean, today, maxDays) {
 // (the day resolution has no separate take-profit day - see stocksUpcomingRows).
 function stocksHorizonStats(inst, lean, days) {
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long')) return null;
-  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   const trigger = stocksFirstConfirmingDate(inst, lean, days);
   if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
   const peak = stocksPeakDay(inst, lean, days);
@@ -1584,7 +1586,7 @@ function stocksHorizonStats(inst, lean, days) {
 // just one horizon.
 function stocksUpcomingRows(inst) {
   const today = new Date();
-  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   const rows = [];
 
   const pill = (lean) => stocksLeanBadge(lean.lean, lean.tier);
@@ -1630,35 +1632,40 @@ function stocksUpcomingRows(inst) {
 // trigger definition as the Upcoming rows), so it's cheap enough to run for
 // all 16 instruments on every page load, no price fetch needed. Returns
 // null when nothing's directional on any horizon right now.
-function stocksNextOpportunity(inst, today) {
+// levelFilter (optional): 'day'|'month'|'year' to only build/return that
+// one level's candidate instead of the soonest across all three - lets the
+// Radar toggle show just one horizon instead of Day always winning "soonest"
+// (tomorrow is always sooner than any Month/Year trigger, which drowned out
+// the other two levels entirely before the toggle existed).
+function stocksNextOpportunity(inst, today, levelFilter) {
   const candidates = [];
 
-  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  const dayLean = stocksLeanAt(inst, 'day', tomorrow);
-  if (dayLean.lean === 'short' || dayLean.lean === 'long') {
-    candidates.push({ level: 'day', date: tomorrow, lean: dayLean });
-  }
-
-  const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
-  if (monthLean.lean === 'short' || monthLean.lean === 'long') {
-    const days = [];
-    for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
-    const trigger = stocksFirstConfirmingDate(inst, monthLean, days);
-    if (trigger) candidates.push({ level: 'month', date: trigger, lean: monthLean });
-  }
-
-  const yearLean = stocksLeanAt(inst, 'year', today);
-  if (yearLean.lean === 'short' || yearLean.lean === 'long') {
-    const animal = getChineseZodiacYear(today);
-    const days = [];
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    for (let i = 0; i < 400 && getChineseZodiacYear(d) === animal; i++) {
-      days.push(new Date(d));
-      d.setDate(d.getDate() + 1);
+  if (!levelFilter || levelFilter === 'day') {
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const dayLean = stocksLeanAt(inst, 'day', tomorrow);
+    if (dayLean.lean === 'short' || dayLean.lean === 'long') {
+      candidates.push({ level: 'day', date: tomorrow, lean: dayLean });
     }
-    const trigger = stocksFirstConfirmingDate(inst, yearLean, days);
-    if (trigger) candidates.push({ level: 'year', date: trigger, lean: yearLean });
+  }
+
+  if (!levelFilter || levelFilter === 'month') {
+    const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const monthLean = stocksLeanAt(inst, 'month', new Date(nm.getFullYear(), nm.getMonth(), 15));
+    if (monthLean.lean === 'short' || monthLean.lean === 'long') {
+      const days = [];
+      for (let d = new Date(nm); d.getMonth() === nm.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
+      const trigger = stocksFirstConfirmingDate(inst, monthLean, days);
+      if (trigger) candidates.push({ level: 'month', date: trigger, lean: monthLean });
+    }
+  }
+
+  if (!levelFilter || levelFilter === 'year') {
+    const yearLean = stocksLeanAt(inst, 'year', today);
+    if (yearLean.lean === 'short' || yearLean.lean === 'long') {
+      const days = stocksLevelWindowDays(inst, 'year', yearLean, today);
+      const trigger = stocksFirstConfirmingDate(inst, yearLean, days);
+      if (trigger) candidates.push({ level: 'year', date: trigger, lean: yearLean });
+    }
   }
 
   if (!candidates.length) return null;
@@ -1666,23 +1673,55 @@ function stocksNextOpportunity(inst, today) {
   return candidates[0];
 }
 
-// Ranks every instrument by its soonest opportunity - one glance across the
-// whole watchlist instead of opening each modal and toggling through its
-// panels one at a time.
+// Which single horizon the Radar shows - 'all' picks each instrument's
+// soonest across all three levels (Day usually wins, since tomorrow is
+// always sooner than any Month/Year trigger); Day/Month/Year narrows to
+// just that one so the other horizons aren't permanently drowned out.
+let stocksRadarLevel = 'all';
+
+function stocksRadarLevelFilterHtml() {
+  const opt = (level, label) => `<button class="stocks-filter-btn${stocksRadarLevel === level ? ' active' : ''}" data-level="${level}">${label}</button>`;
+  return `<div class="stocks-filter-seg" id="stockRadarLevelFilter">${opt('all', 'All')}${opt('day', 'Day')}${opt('month', 'Month')}${opt('year', 'Year')}</div>`;
+}
+
+// Ranks every instrument by its soonest opportunity at the selected horizon
+// - one glance across the whole watchlist instead of opening each modal and
+// toggling through its panels one at a time.
 function stocksRadarHtml(instruments, today) {
-  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const levelFilter = stocksRadarLevel === 'all' ? undefined : stocksRadarLevel;
   const ranked = instruments
-    .map((inst) => ({ inst, opp: stocksNextOpportunity(inst, today) }))
+    .map((inst) => ({ inst, opp: stocksNextOpportunity(inst, today, levelFilter) }))
     .filter((x) => x.opp)
     .sort((a, b) => a.opp.date - b.opp.date || b.opp.lean.signalCount - a.opp.lean.signalCount)
     .slice(0, 8);
-  if (!ranked.length) return `<div class="stock-trades-note">No directional signals on the horizon right now.</div>`;
-  return ranked.map(({ inst, opp }) => `
+  const rows = ranked.length ? ranked.map(({ inst, opp }) => `
     <div class="stock-radar-row" data-ticker="${escapeHtml(inst.ticker)}">
       <span class="stock-radar-ticker">${escapeHtml(inst.ticker)}</span>
       <span class="stock-radar-lean">${stocksLeanBadge(opp.lean.lean, opp.lean.tier)}</span>
       <span class="stock-radar-when">${escapeHtml(opp.level.toUpperCase())} · ${escapeHtml(fmtD(opp.date))}</span>
-    </div>`).join('');
+    </div>`).join('') : `<div class="stock-trades-note">No directional signals on the horizon right now.</div>`;
+  return stocksRadarLevelFilterHtml() + rows;
+}
+
+// Renders + wires the Radar box in one call, so the level-filter toggle can
+// just call this again on click instead of duplicating the wiring.
+function stocksRenderRadar(instruments, today) {
+  const box = document.getElementById('stocksRadar');
+  box.innerHTML = stocksRadarHtml(instruments, today);
+  box.querySelectorAll('.stock-radar-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const inst = stocksAllInstruments.find((i) => i.ticker === row.dataset.ticker);
+      if (inst) openStockModal(inst);
+    });
+  });
+  box.querySelectorAll('#stockRadarLevelFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (stocksRadarLevel === btn.dataset.level) return;
+      stocksRadarLevel = btn.dataset.level;
+      stocksRenderRadar(instruments, today);
+    });
+  });
 }
 
 function stocksTradesLevelFilterHtml() {
@@ -1780,7 +1819,7 @@ async function renderStockTrades(inst) {
   if (lastBar) {
     const dayDate = stocksParseDate(lastBar[0]);
     const dayLean = stocksLeanAt(inst, 'day', dayDate);
-    const dayLabel = dayDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const dayLabel = dayDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     cards.push({ ...stocksTradeCard(dayLabel, dayLean, [lastBar], null, null, stocksTradeDetailBlocks(inst, dayDate)), level: 'day' });
   }
 
@@ -1802,7 +1841,7 @@ async function renderStockTrades(inst) {
   const yearLean = stocksLeanAt(inst, 'year', today);
   // The zodiac year runs until the next Lunar New Year - it's an OPEN
   // position, shown as ahead/behind so far, never graded as settled.
-  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, yearLean, yearBars, { open: true, exitMode: stocksTradesExitMode, atDate: today })).map((c) => ({ ...c, level: 'year' })));
+  cards.push(...(await stocksTimedTrades(inst, `Zodiac year · since ${yStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`, yearLean, yearBars, { open: true, exitMode: stocksTradesExitMode, atDate: today })).map((c) => ({ ...c, level: 'year' })));
 
   // Record over the calls that actually traded - stated up front so the
   // reader never has to count for themselves. All three modes are computed
@@ -2246,24 +2285,42 @@ function stocksCombinedExitFilterHtml() {
   return `<div class="stocks-filter-seg" id="stockCombinedExitFilter">${opt('reversal', 'Reversal')}${opt('end', 'Full Term')}</div>`;
 }
 
+// Starts closed like every other group/dropdown on this page - a glance at
+// the ticker/day pill is the default view, the record itself is a tap away.
+let stocksCombinedCollapsed = true;
+
 function renderStocksCombinedRecordBody(box, store) {
   const entries = stocksCombinedHorizon === 'year' ? store.yearEntries : store.monthEntries;
   const windowLabel = stocksCombinedHorizon === 'year' ? `last ${STOCKS_COMBINED_YEARS_BACK} zodiac years` : `last ${STOCKS_COMBINED_MONTHS_BACK} months`;
   const exitLabel = stocksCombinedExitMode === 'end' ? 'holding to the window’s end' : 'exiting at the reversal signal';
   box.innerHTML = `
-    ${stocksCombinedHorizonFilterHtml()}
-    ${stocksCombinedExitFilterHtml()}
-    <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new one completes.</div>
-    ${stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode))}`;
-  document.querySelectorAll('#stockCombinedHorizonFilter .stocks-filter-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    <div class="stock-group${stocksCombinedCollapsed ? ' collapsed' : ''}" id="stockCombinedGroup">
+      <div class="stock-group-head">
+        <span>Combined Track Record</span>
+        <span class="stock-group-chev">▾</span>
+      </div>
+      <div class="stock-group-grid">
+        ${stocksCombinedHorizonFilterHtml()}
+        ${stocksCombinedExitFilterHtml()}
+        <div class="stock-trades-note">Every completed ${stocksCombinedHorizon}, ${windowLabel}, all 16 instruments, ${exitLabel}. Updates only when a new one completes.</div>
+        ${stocksBestModeLine(stocksAggregateEntries(entries, stocksCombinedExitMode))}
+      </div>
+    </div>`;
+  box.querySelector('.stock-group-head').addEventListener('click', () => {
+    stocksCombinedCollapsed = !stocksCombinedCollapsed;
+    box.querySelector('#stockCombinedGroup').classList.toggle('collapsed', stocksCombinedCollapsed);
+  });
+  box.querySelectorAll('#stockCombinedHorizonFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (stocksCombinedHorizon === btn.dataset.horizon) return;
       stocksCombinedHorizon = btn.dataset.horizon;
       renderStocksCombinedRecordBody(box, store);
     });
   });
-  document.querySelectorAll('#stockCombinedExitFilter .stocks-filter-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+  box.querySelectorAll('#stockCombinedExitFilter .stocks-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (stocksCombinedExitMode === btn.dataset.exit) return;
       stocksCombinedExitMode = btn.dataset.exit;
       renderStocksCombinedRecordBody(box, store);
@@ -2531,13 +2588,7 @@ function initStocksPage() {
 
   // Radar: pure calendar math across all 16, renders instantly - no need to
   // open every modal one at a time to see what's coming up next.
-  document.getElementById('stocksRadar').innerHTML = stocksRadarHtml(instruments, today);
-  document.querySelectorAll('#stocksRadar .stock-radar-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      const inst = stocksAllInstruments.find((i) => i.ticker === row.dataset.ticker);
-      if (inst) openStockModal(inst);
-    });
-  });
+  stocksRenderRadar(instruments, today);
   stocksLoadCombinedRecord(instruments, today); // async - throttled, see the Combined Track Record section above
 
   document.querySelectorAll('#stocksDirFilter .stocks-filter-btn').forEach((btn) => {

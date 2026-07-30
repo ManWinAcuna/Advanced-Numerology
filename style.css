@@ -5498,6 +5498,7 @@ body {
 
 .stock-trades-box .stocks-filter-seg { margin-bottom: 10px; }
 #stockTradesPanel > .stocks-filter-seg { margin-bottom: 10px; }
+#stocksRadar > .stocks-filter-seg { margin-bottom: 10px; }
 
 .stock-trade-card {
   border: 1px solid var(--border);
