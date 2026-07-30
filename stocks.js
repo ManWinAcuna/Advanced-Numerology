@@ -204,6 +204,91 @@ const STOCKS_NUMBER_MEANINGS = {
   11: { label: 'Emotional · Sporadic', dir: 'bear' },
 };
 
+/* ===================== Transit signals (financial astrology) ===================== */
+// Local copies of astrology.js's angularDiff/ASTRO_ASPECTS - not loaded here,
+// since that file is the Astrology page's own DOM controller and wires event
+// listeners against elements this page doesn't have. Same 5 aspects, same
+// orbs, just the pure math. Requires astro-engine.js (loaded on stocks.html
+// before numerology.js) for getAstroBodyInfo.
+const STOCKS_ASPECTS = [
+  { key: 'conjunction', angle: 0, orb: 6 },
+  { key: 'sextile', angle: 60, orb: 4 },
+  { key: 'square', angle: 90, orb: 6 },
+  { key: 'trine', angle: 120, orb: 6 },
+  { key: 'opposition', angle: 180, orb: 6 },
+];
+
+function stocksAngularDiff(a, b) {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+// Financial-astrology planet-to-timeframe split, by real orbital speed:
+// Moon changes sign every ~2.5 days (Day level), Mercury/Venus/Mars run
+// weeks-per-sign (Month level), Jupiter/Saturn/Uranus/Neptune/Pluto run
+// months-to-years-per-sign (Year level) - the classic Jupiter-Saturn
+// business-cycle pair lives here. Mirrors how PY/PM/PD already split by cadence.
+const STOCKS_TRANSIT_PLANETS = {
+  year: ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'],
+  month: ['Mercury', 'Venus', 'Mars'],
+  day: ['Moon'],
+};
+
+// Trine/sextile to the anchor's natal Sun reads bullish (harmonious flow),
+// square/opposition reads bearish (friction) - same "does this help or fight
+// the underlying" idea STOCKS_NUMBER_MEANINGS already applies to numbers.
+// Conjunction has no fixed direction in astrology (it just merges the
+// transiting planet's own nature into the natal point), so it's resolved per
+// planet instead: Jupiter/Venus are classical benefics (bull), Saturn/Mars
+// are classical malefics and Uranus/Neptune/Pluto are the modern
+// crisis/volatility planets financial astrology reads as destabilizing
+// (bear). Mercury and Moon have no fixed benefic/malefic charge, so their
+// conjunction is left neutral rather than guessed at.
+const STOCKS_TRANSIT_ASPECT_DIR = { trine: 'bull', sextile: 'bull', square: 'bear', opposition: 'bear' };
+const STOCKS_TRANSIT_CONJUNCTION_DIR = {
+  Jupiter: 'bull', Venus: 'bull',
+  Saturn: 'bear', Mars: 'bear', Uranus: 'bear', Neptune: 'bear', Pluto: 'bear',
+};
+
+// One planet's current read against an anchor's natal Sun - null most days,
+// for most planets, since an active aspect is the exception not the rule.
+// Uses astroEclipticLongitude directly rather than getAstroBodyInfo, since
+// only the longitude is needed here - not the extra retrograde lookup
+// getAstroBodyInfo does (a second position evaluation a day earlier), which
+// would double the ephemeris cost for nothing this function uses.
+function stocksTransitSignal(bodyKey, natalSunLon, onDate) {
+  const transitLon = astroEclipticLongitude(bodyKey, onDate);
+  const diff = stocksAngularDiff(natalSunLon, transitLon);
+  const aspect = STOCKS_ASPECTS.find((a) => Math.abs(diff - a.angle) <= a.orb);
+  if (!aspect) return null;
+  const dir = aspect.key === 'conjunction' ? STOCKS_TRANSIT_CONJUNCTION_DIR[bodyKey] : STOCKS_TRANSIT_ASPECT_DIR[aspect.key];
+  return dir ? { dir, why: `${bodyKey} ${aspect.key} natal Sun` } : null;
+}
+
+// All active transit signals for one anchor at one timeframe, on a given
+// date - level picks which planets are even in scope, matching each one's
+// real orbital speed to the timeframe it actually represents.
+function stocksTransitSignalsFor(anchorDate, level, onDate) {
+  const natalSunLon = astroEclipticLongitude('Sun', anchorDate);
+  return STOCKS_TRANSIT_PLANETS[level]
+    .map((body) => stocksTransitSignal(body, natalSunLon, onDate))
+    .filter(Boolean);
+}
+
+/* ===================== Western Sun-sign compat (Month level) ===================== */
+// Natal Sun sign vs today's Sun sign, scored through the same westernCompat/
+// WESTERN_TABLE the Compatibility Calculator and Month Outlook already use -
+// not a new table. Sun sign changes roughly monthly, so this is a Month-level
+// signal, same cadence as Personal Month / Zodiac Month.
+function stocksWesternSignal(anchorDate, onDate) {
+  const entitySign = getSunSign(anchorDate);
+  const daySign = getSunSign(onDate);
+  const score = westernCompat(entitySign, daySign);
+  if (score <= 10) return { dir: 'bear', why: `${entitySign} clashes ${daySign} (western)` };
+  if (score >= 85) return { dir: 'bull', why: `${entitySign} allies ${daySign} (western)` };
+  return null;
+}
+
 // One anchor -> everything the cards show. relation comes straight off the
 // engine's VIETNAMESE_TABLE bands: the six clash pairs score exactly 10
 // (enemy year), trine partners 85+ (ally year), everything else neutral.
@@ -278,110 +363,141 @@ function stocksVolatilityBadge(date) {
 }
 
 /* ===================== Year / Month / Day verdicts ===================== */
-// The same rule at every level, fed by that level's own signals. Bear
-// signals win: a zodiac clash (table score 10) or a 7-weakness cycle number
-// -> short lean. Then bull: a zodiac ally (85+) or an 8/28 cycle -> long
-// lean (with a swings note if an 11 rides along). An 11 alone -> sporadic.
-// Year uses PY + year animals, month uses PM + month signs, day uses PD +
-// day signs - "more than just the year", both systems, as instructed.
+// Every timeframe (year/month/day) blends four signal families per primary
+// anchor: the 7/8/28/11 meaning-number for that timeframe's own personal
+// number, the Vietnamese zodiac relation at that timeframe, real planetary
+// transits to the anchor's natal Sun (which planets are in scope depends on
+// the timeframe - see STOCKS_TRANSIT_PLANETS), and - Month only - western
+// Sun-sign compat (stocksWesternSignal). A card's own level then decides how
+// the three timeframes' NET signal counts (bulls minus bears) get weighted
+// together: 60/30/10, the card's own level takes 60%, and the senior cycle
+// (Year > Month > Day) takes the 30% slot whenever it isn't primary. Real
+// magnitude competition decides the lean - a strong bull read can outweigh
+// a lone bear signal now; there's no fixed bears-always-win precedence.
+const STOCKS_LEVEL_NUM_META = {
+  year: { numKey: 'personalYear', numName: 'PY', signKey: 'yearScore', mySignKey: 'personalYearSign', nowSignKey: 'universalYearSign', signWord: 'year' },
+  month: { numKey: 'personalMonth', numName: 'PM', signKey: 'monthScore', mySignKey: 'personalMonthSign', nowSignKey: 'universalMonthSign', signWord: 'month sign' },
+  day: { numKey: 'personalDay', numName: 'PD', signKey: 'daySignScore', mySignKey: 'personalDaySign', nowSignKey: 'universalDaySign', signWord: 'day sign' },
+};
 
-function stocksLevelSignals(read, level) {
-  if (!read.flow) return null;
+// The 60/30/10 cross-level weighting for a card at level `primary` - the
+// senior cycle (Year > Month > Day) takes the 30% slot whenever it isn't
+// the primary level itself (owner's call: "senior cycle wins ties").
+const STOCKS_LEVEL_WEIGHTS = {
+  year: { year: 0.6, month: 0.3, day: 0.1 },
+  month: { month: 0.6, year: 0.3, day: 0.1 },
+  day: { day: 0.6, month: 0.3, year: 0.1 },
+};
+
+// One anchor's bulls/bears at one timeframe - numerology meaning-number +
+// Vietnamese zodiac relation always, real transits at every timeframe (which
+// planets depends on the timeframe), western Sun-sign only at Month.
+function stocksAnchorTimeframeSignals(read, level, historical, today) {
+  if (!read.flow) return { bulls: [], bears: [] };
   const f = read.flow;
-  if (level === 'year') {
-    return {
-      num: f.numerology.personalYear, numName: 'PY',
-      signScore: f.vietnamese.yearScore,
-      mySign: f.vietnamese.personalYearSign, nowSign: f.vietnamese.universalYearSign, signWord: 'year',
-    };
-  }
+  const who = read.person || read.label;
+  const meta = STOCKS_LEVEL_NUM_META[level];
+  const num = f.numerology[meta.numKey];
+  const signScore = f.vietnamese[meta.signKey];
+  const mySign = f.vietnamese[meta.mySignKey];
+  const nowSign = f.vietnamese[meta.nowSignKey];
+  const bulls = [];
+  const bears = [];
+
+  const meaning = STOCKS_NUMBER_MEANINGS[num];
+  if (signScore <= 10) bears.push(`${who}'s ${mySign} clashes the ${nowSign} ${meta.signWord}`);
+  if (meaning && meaning.dir === 'bear') bears.push(`${who} runs a ${meta.numName} ${num} ${meaning.label.toLowerCase()}`);
+  if (signScore >= 85) bulls.push(`${who}'s ${mySign} allies the ${nowSign} ${meta.signWord}`);
+  if (meaning && meaning.dir === 'bull') bulls.push(`${who} runs a ${meta.numName} ${num} ${meaning.label.toLowerCase()}`);
+
+  const anchorDate = stocksParseDate(read.date);
   if (level === 'month') {
-    return {
-      num: f.numerology.personalMonth, numName: 'PM',
-      signScore: f.vietnamese.monthScore,
-      mySign: f.vietnamese.personalMonthSign, nowSign: f.vietnamese.universalMonthSign, signWord: 'month sign',
-    };
+    const western = stocksWesternSignal(anchorDate, today);
+    if (western) (western.dir === 'bull' ? bulls : bears).push(`${who}'s ${western.why}`);
   }
-  return {
-    num: f.numerology.personalDay, numName: 'PD',
-    signScore: f.vietnamese.daySignScore,
-    mySign: f.vietnamese.personalDaySign, nowSign: f.vietnamese.universalDaySign, signWord: 'day sign',
-  };
+  stocksTransitSignalsFor(anchorDate, level, today).forEach((t) => {
+    (t.dir === 'bull' ? bulls : bears).push(`${who}'s ${t.why}`);
+  });
+
+  if (historical) (historical.dir === 'bear' ? bears : bulls).push(historical.why);
+  return { bulls, bears };
 }
 
-// Conviction tier: how many signals actually agree, not just which side
-// won. Bears (or bulls) always win the LEAN by precedence regardless of
-// count - a single clash can override three agreeing bull signals - but
-// that's a very different call than every signal pointing the same way,
-// and the tier is what surfaces that difference. Deliberately not called
-// "Strong"/"Weak" - those words already mean something specific in this
-// app (7 = Weakness, 8 = Strength) and conviction is a different axis.
-//   Unanimous - 2+ signals agree, nothing on the other side.
-//   Majority  - 2+ signals agree, but at least one signal disagrees too.
-//   Solo      - exactly one signal is doing all the work, win or override.
+// Pools every primary anchor's signals at one timeframe into one combined
+// {bulls, bears} - anchors are weighted equally for now (an explicit,
+// revisitable placeholder pending an answer on Company-vs-CEO weighting).
+function stocksTimeframeSignals(reads, level, historical, today) {
+  const bulls = [];
+  const bears = [];
+  reads.filter((r) => r.primary).forEach((r) => {
+    const s = stocksAnchorTimeframeSignals(r, level, historical, today);
+    bulls.push(...s.bulls);
+    bears.push(...s.bears);
+  });
+  return { bulls, bears };
+}
+
+// Conviction tier: how many of the THREE timeframes (year/month/day) agree
+// with the winning direction, not just which side won overall. Only 3
+// timeframes exist, so this is a much stronger bar than counting raw signal
+// instances would be - a timeframe with a net-opposing read (e.g. Month
+// sitting on a 7-Weakness while Year leans bullish) always caps the tier at
+// Majority, it can never be silently outweighed into an "Unanimous" read.
+// Deliberately not called "Strong"/"Weak" - those words already mean
+// something specific in this app (7 = Weakness, 8 = Strength) and conviction
+// is a different axis.
+//   Unanimous - 2+ timeframes agree, nothing opposes.
+//   Majority  - 2+ timeframes agree, but at least one opposes too.
+//   Solo      - exactly one timeframe is doing all the work.
 function stocksTierFor(winningCount, opposingCount) {
   if (winningCount >= 2 && opposingCount === 0) return 'unanimous';
   if (winningCount >= 2) return 'majority';
   return 'solo';
 }
 
-// historical (optional): this level's Day Cycles backtest read for TODAY
-// specifically (see stocksHistoricalLeanFor below) - counts as one more
-// vote in the same bears/bulls list, same weight as a zodiac clash or a
-// 7/8/11/28 cycle number. Only ever present for ES/NQ, and only once their
-// price history has loaded; every other instrument/level behaves exactly
-// as before.
-function stocksLevelVerdict(reads, level, historical) {
-  const who = (r) => r.person || r.label;
-  const bears = [];
-  const bulls = [];
-  reads.filter((r) => r.primary).forEach((r) => {
-    const s = stocksLevelSignals(r, level);
-    if (!s) return;
-    const meaning = STOCKS_NUMBER_MEANINGS[s.num];
-    if (s.signScore <= 10) bears.push(`${who(r)}'s ${s.mySign} clashes the ${s.nowSign} ${s.signWord}`);
-    if (meaning && meaning.dir === 'bear') bears.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
-    if (s.signScore >= 85) bulls.push(`${who(r)}'s ${s.mySign} allies the ${s.nowSign} ${s.signWord}`);
-    if (meaning && meaning.dir === 'bull') bulls.push(`${who(r)} runs a ${s.numName} ${s.num} ${meaning.label.toLowerCase()}`);
-  });
-  if (historical) (historical.dir === 'bear' ? bears : bulls).push(historical.why);
+// historicalByLevel: {year, month, day}, each either the Day Cycles backtest
+// vote for that timeframe (see stocksHistoricalLeanFor) or null/undefined -
+// only ever present for ES/NQ, and only once their price history has loaded.
+function stocksLevelVerdict(reads, level, historicalByLevel, today) {
+  const hist = historicalByLevel || {};
+  const byTimeframe = {
+    year: stocksTimeframeSignals(reads, 'year', hist.year, today),
+    month: stocksTimeframeSignals(reads, 'month', hist.month, today),
+    day: stocksTimeframeSignals(reads, 'day', hist.day, today),
+  };
+  const nets = {
+    year: byTimeframe.year.bulls.length - byTimeframe.year.bears.length,
+    month: byTimeframe.month.bulls.length - byTimeframe.month.bears.length,
+    day: byTimeframe.day.bulls.length - byTimeframe.day.bears.length,
+  };
+  const weights = STOCKS_LEVEL_WEIGHTS[level];
+  const score = weights.year * nets.year + weights.month * nets.month + weights.day * nets.day;
 
-  if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; '), signalCount: bears.length, opposingCount: bulls.length, tier: stocksTierFor(bears.length, bulls.length) };
-  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; '), signalCount: bulls.length, opposingCount: bears.length, tier: stocksTierFor(bulls.length, bears.length) };
-  return { lean: 'neutral', label: 'Neutral', why: 'no signals at this level', signalCount: 0, opposingCount: 0, tier: null };
+  const allBulls = [...byTimeframe.year.bulls, ...byTimeframe.month.bulls, ...byTimeframe.day.bulls];
+  const allBears = [...byTimeframe.year.bears, ...byTimeframe.month.bears, ...byTimeframe.day.bears];
+
+  if (score === 0) return { lean: 'neutral', label: 'Neutral', why: 'no net signal at this level', signalCount: 0, opposingCount: 0, tier: null, score: 0 };
+
+  const dirSign = score > 0 ? 1 : -1;
+  const timeframes = ['year', 'month', 'day'];
+  const agreeing = timeframes.filter((tf) => Math.sign(nets[tf]) === dirSign).length;
+  const opposing = timeframes.filter((tf) => Math.sign(nets[tf]) === -dirSign).length;
+  const tier = stocksTierFor(agreeing, opposing);
+
+  if (dirSign < 0) return { lean: 'short', label: 'Short Lean', why: allBears.join('; ') || 'weighted bear signals outweigh bulls', signalCount: allBears.length, opposingCount: allBulls.length, tier, score };
+  return { lean: 'long', label: 'Long Lean', why: allBulls.join('; ') || 'weighted bull signals outweigh bears', signalCount: allBulls.length, opposingCount: allBears.length, tier, score };
 }
 
-// The year-level watch verdict that drives the grid pill - same precedence,
-// worded as the watchlist item (this is what sorts the board). historicalYear
-// is the same Day Cycles vote stocksLevelVerdict takes, at the year level.
-function stocksVerdict(reads, historicalYear) {
-  const primary = reads.filter((r) => r.primary);
-  const who = (r) => r.person || r.label;
-  const enemies = primary.filter((r) => r.relation === 'enemy');
-  const weak = primary.filter((r) => r.cycle && r.cycle.dir === 'bear');
-  const strong = primary.filter((r) => r.cycle && r.cycle.dir === 'bull');
-  const allies = primary.filter((r) => r.relation === 'ally');
-  const histBear = historicalYear && historicalYear.dir === 'bear';
-  const histBull = historicalYear && historicalYear.dir === 'bull';
-  const bearCount = enemies.length + weak.length + (histBear ? 1 : 0);
-  const bullCount = allies.length + strong.length + (histBull ? 1 : 0);
-
-  if (bearCount) {
-    const parts = [
-      ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
-      ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
-      ...(histBear ? [historicalYear.why] : []),
-    ];
-    return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.`, tier: stocksTierFor(bearCount, bullCount) };
-  }
-  if (bullCount) {
-    const parts = [
-      ...allies.map((r) => `${who(r)}'s ${r.animal} runs an ally year`),
-      ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
-      ...(histBull ? [historicalYear.why] : []),
-    ];
-    return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.`, tier: stocksTierFor(bullCount, bearCount) };
-  }
+// The year-level watch verdict that drives the grid pill - now just the
+// year-level card's own blended verdict, reworded for the watchlist. Used to
+// be a separate parallel implementation (enemies/weak/allies/strong arrays);
+// two computations of "is this instrument's year bullish" quietly drifting
+// out of sync was exactly the kind of thing that caused confusing results
+// before, so this is now a thin wrapper instead of a second engine.
+function stocksVerdict(reads, historicalByLevel, today) {
+  const v = stocksLevelVerdict(reads, 'year', historicalByLevel, today);
+  if (v.lean === 'short') return { watch: 'short', label: 'High Short Watch', text: `${v.why}.`, tier: v.tier };
+  if (v.lean === 'long') return { watch: 'long', label: 'Long Watch', text: `${v.why}.`, tier: v.tier };
   return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.', tier: null };
 }
 
@@ -412,15 +528,19 @@ function stocksHistoricalLeanFor(cycleStats, level, today) {
 
 function stocksInstrumentRead(inst, today, todayAnimal, cycleStats) {
   const reads = inst.anchors.map((a) => stocksAnchorRead(a, today, todayAnimal));
-  const histYear = stocksHistoricalLeanFor(cycleStats, 'year', today);
+  const historicalByLevel = {
+    year: stocksHistoricalLeanFor(cycleStats, 'year', today),
+    month: stocksHistoricalLeanFor(cycleStats, 'month', today),
+    day: stocksHistoricalLeanFor(cycleStats, 'day', today),
+  };
   return {
     ...inst,
     reads,
-    verdict: stocksVerdict(reads, histYear),
+    verdict: stocksVerdict(reads, historicalByLevel, today),
     levels: {
-      year: stocksLevelVerdict(reads, 'year', histYear),
-      month: stocksLevelVerdict(reads, 'month', stocksHistoricalLeanFor(cycleStats, 'month', today)),
-      day: stocksLevelVerdict(reads, 'day', stocksHistoricalLeanFor(cycleStats, 'day', today)),
+      year: stocksLevelVerdict(reads, 'year', historicalByLevel, today),
+      month: stocksLevelVerdict(reads, 'month', historicalByLevel, today),
+      day: stocksLevelVerdict(reads, 'day', historicalByLevel, today),
     },
   };
 }
@@ -884,7 +1004,7 @@ function stocksLeanAt(inst, level, atDate) {
   const reads = inst.anchors
     .filter((a) => a.primary && a.date)
     .map((a) => ({ ...a, primary: true, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
-  return stocksLevelVerdict(reads, level);
+  return stocksLevelVerdict(reads, level, null, atDate);
 }
 
 // ONE anchor's own day-level lean, independent of every other anchor -
@@ -892,7 +1012,7 @@ function stocksLeanAt(inst, level, atDate) {
 // single-anchor list instead of every primary anchor blended together.
 function stocksAnchorDayLeanAt(anchor, atDate) {
   const read = { ...anchor, primary: true, flow: computeEnergyFlow(stocksParseDate(anchor.date), atDate) };
-  return stocksLevelVerdict([read], 'day');
+  return stocksLevelVerdict([read], 'day', null, atDate);
 }
 
 // Which primary anchor is actually responsible for a day matching the
@@ -1857,7 +1977,10 @@ const STOCKS_COMBINED_YEARS_BACK = 3;
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
 // v3: entries now carry BOTH exit modes per grade (was one grade per
 // mode) - old v2 data is simply superseded, not migrated.
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v3';
+// v4: bumped because the verdict engine now blends transits/western/cross-
+// level weighting - leans computed under v3 are no longer comparable and
+// must be regraded rather than mixed with new entries.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v4';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
