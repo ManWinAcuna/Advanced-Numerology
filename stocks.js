@@ -275,6 +275,25 @@ function stocksTransitSignalsFor(anchorDate, level, onDate) {
     .filter(Boolean);
 }
 
+// All 9 transit-eligible planets (every STOCKS_TRANSIT_PLANETS body across
+// all three timeframes), for the energy-block display - the tally checks
+// each planet against only its own timeframe, but the display shows
+// everything currently active in one place, same as Numbers/Zodiac already
+// merge all three timeframes into one block.
+const STOCKS_ALL_TRANSIT_PLANETS = [].concat(...Object.values(STOCKS_TRANSIT_PLANETS));
+
+// Chips for whichever transits are actually active right now - most days,
+// for most planets, this is empty (an active aspect is the exception, not
+// the rule), which is a real, correct read, not a broken one.
+function stocksTransitChipsHtml(anchorDate, onDate) {
+  const natalSunLon = astroEclipticLongitude('Sun', anchorDate);
+  const active = STOCKS_ALL_TRANSIT_PLANETS
+    .map((body) => stocksTransitSignal(body, natalSunLon, onDate))
+    .filter(Boolean);
+  if (!active.length) return '<span class="stock-chip">No active transits right now</span>';
+  return active.map((t) => `<span class="stock-chip ${t.dir === 'bull' ? 'good' : 'bad'}">${escapeHtml(t.why)}</span>`).join('');
+}
+
 /* ===================== Western Sun-sign compat (Month level) ===================== */
 // Natal Sun sign vs today's Sun sign, scored through the same westernCompat/
 // WESTERN_TABLE the Compatibility Calculator and Month Outlook already use -
@@ -757,15 +776,21 @@ function stocksSyncFilterButtons() {
   document.getElementById('stocksLevelFilter').classList.toggle('muted', stocksFilter.dir === 'all');
 }
 
-// One anchor's deep today block: PY/PM/PD against the Universal numbers and
-// birth year/month/day signs against today's three signs, every pair marked
-// in words when it clashes (table 10) or boosts (85+) - color carries the
-// rest, no icon noise.
-function stocksEnergyBlock(r) {
+// One anchor's deep today block: PY/PM/PD against the Universal numbers,
+// birth year/month/day signs against today's three signs, western Sun-sign
+// compat, and any currently active planetary transits to the natal Sun -
+// every pair marked in words when it clashes (table 10) or boosts (85+) -
+// color carries the rest, no icon noise. atDate is the reference date the
+// transit/western signals are read against (today, or a replay date).
+function stocksEnergyBlock(r, atDate) {
   const f = r.flow;
   const n = f.numerology;
   const v = f.vietnamese;
   const vol = stocksVolatilityBadge(stocksParseDate(r.date));
+  const anchorDate = stocksParseDate(r.date);
+  const entitySign = getSunSign(anchorDate);
+  const todaySign = getSunSign(atDate);
+  const westernScore = westernCompat(entitySign, todaySign);
   return `
     <div class="stock-energy-block">
       <div class="stock-energy-title">
@@ -791,6 +816,16 @@ function stocksEnergyBlock(r) {
           <span class="stock-chip ${stocksScoreCls(v.daySignScore)}">Day · ${escapeHtml(v.personalDaySign)} vs ${escapeHtml(v.universalDaySign)}${stocksScoreMark(v.daySignScore)}</span>
         </span>
       </div>
+      <div class="stock-energy-row">
+        <span class="stock-energy-lab">Western</span>
+        <span class="stock-energy-chips">
+          <span class="stock-chip ${stocksScoreCls(westernScore)}">${escapeHtml(entitySign)} vs ${escapeHtml(todaySign)}${stocksScoreMark(westernScore)}</span>
+        </span>
+      </div>
+      <div class="stock-energy-row">
+        <span class="stock-energy-lab">Transits</span>
+        <span class="stock-energy-chips">${stocksTransitChipsHtml(anchorDate, atDate)}</span>
+      </div>
     </div>`;
 }
 
@@ -803,7 +838,7 @@ function stocksTradeDetailBlocks(inst, atDate) {
   const reads = inst.anchors
     .filter((a) => a.primary && a.date)
     .map((a) => ({ ...a, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
-  return reads.map(stocksEnergyBlock).join('');
+  return reads.map((r) => stocksEnergyBlock(r, atDate)).join('');
 }
 
 // Which signal an anchor card should shout with, if any - a real
@@ -908,7 +943,7 @@ function openStockModal(inst) {
     <div class="stock-anchor-row" style="grid-template-columns:repeat(${inst.reads.length},1fr);">${anchorCards}</div>
     ${uni ? `<div class="stock-section-label">Today's Energies</div>` : ''}
     ${uniLine}
-    ${flows.map(stocksEnergyBlock).join('')}`;
+    ${flows.map((r) => stocksEnergyBlock(r, today)).join('')}`;
 
   document.getElementById('stockTradesBtn').addEventListener('click', () => renderStockTrades(inst));
   if (inst.kind === 'futures') {
