@@ -1674,6 +1674,13 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts, detail
         </div>${pathRow}${detailSection}
       </div>`,
     grade,
+    // Realized (held-to-end) and best-case (peak) % returns, plus the worst
+    // adverse excursion - the actual size data expectancy/drawdown tracking
+    // needs, not just the grade string. Favorable-oriented (positive = good
+    // for either a long or a short), same as every number on this card.
+    held,
+    peak: best.f,
+    worst: worst.f,
   };
 }
 
@@ -2292,12 +2299,11 @@ const STOCKS_COMBINED_YEARS_BACK = 3;
 // record, so a cold run for 16 instruments never exceeds Twelve Data's
 // 8-credits-a-minute free-tier cap no matter how the timing lands.
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
-// v6: periods are now per-instrument cycle windows (constant-sign runs of
-// the timeframe-own net, keyed by window start date) instead of calendar
-// months / zodiac years, entries are PD-mandatory stacked picks, and exits
-// are the trigger anchor's opposite PD - nothing graded under earlier
-// window definitions is comparable, so the ledger rebuilds.
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v6';
+// v7: calendar/calPrice sub-grades now store the actual held/peak/worst %
+// returns behind each grade (expectancy/avg-win-loss/worst-trade), not just
+// the grade string - v6 entries have no size data to backfill, so the
+// ledger rebuilds.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v7';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2325,19 +2331,29 @@ function stocksCyclesCacheHit(symbol) {
 // Record's toggle switch instantly with no re-fetch. Returns
 // { calendar: { reversal, end }, calPrice: { reversal, end } }, each a
 // grade ('right'/'wrong'/'mixed') or null (not directional, or no fill).
+// One sub-grade: not just the grade string, but the actual held-to-end and
+// peak % returns behind it - the size data expectancy needs, not just
+// win/loss/mixed. Same favorable-oriented numbers stocksTradeCard already
+// shows on the card itself, just captured instead of only displayed.
+function stocksGradeSub(inst, lean, bars, entryIdx, triggerAnchor, exitMode) {
+  if (entryIdx < 0) return null;
+  const card = stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(entryIdx), false, triggerAnchor, exitMode).bars);
+  return { grade: card.grade, held: Math.round(card.held * 100) / 100, peak: Math.round(card.peak * 100) / 100, worst: Math.round(card.worst * 100) / 100 };
+}
+
 function stocksGradeWindowTwoModes(inst, lean, bars) {
   const none = { reversal: null, end: null };
   if (!lean || (lean.lean !== 'short' && lean.lean !== 'long') || bars.length <= 1) return { calendar: none, calPrice: none };
   const ei = stocksConfirmedEntryIndex(inst, lean, bars);
   const triggerAnchor = ei >= 0 ? stocksTriggeringAnchor(inst, lean, stocksParseDate(bars[ei][0])) : null;
-  const calendar = ei < 0 ? none : {
-    reversal: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor, 'reversal').bars).grade,
-    end: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(ei), false, triggerAnchor, 'end').bars).grade,
+  const calendar = {
+    reversal: stocksGradeSub(inst, lean, bars, ei, triggerAnchor, 'reversal'),
+    end: stocksGradeSub(inst, lean, bars, ei, triggerAnchor, 'end'),
   };
   const pei = stocksPriceConfirmedEntryIndex(inst, lean, bars);
-  const calPrice = pei < 0 ? none : {
-    reversal: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor, 'reversal').bars).grade,
-    end: stocksTradeCard('', lean, stocksApplyExitRule(inst, lean, bars.slice(pei), false, triggerAnchor, 'end').bars).grade,
+  const calPrice = {
+    reversal: stocksGradeSub(inst, lean, bars, pei, triggerAnchor, 'reversal'),
+    end: stocksGradeSub(inst, lean, bars, pei, triggerAnchor, 'end'),
   };
   return { calendar, calPrice };
 }
@@ -2364,18 +2380,75 @@ function stocksWindowKey(w) {
 }
 
 function stocksAggregateEntries(entries, exitMode) {
-  const agg = { calendar: { right: 0, wrong: 0, mixed: 0 }, calPrice: { right: 0, wrong: 0, mixed: 0 } };
+  const mk = () => ({ right: 0, wrong: 0, mixed: 0, wins: [], losses: [], worstTrade: 0 });
+  const agg = { calendar: mk(), calPrice: mk() };
   entries.forEach((e) => {
     const cal = e.calendar && e.calendar[exitMode];
     const cp = e.calPrice && e.calPrice[exitMode];
-    if (cal) agg.calendar[cal]++;
-    if (cp) agg.calPrice[cp]++;
+    if (cal) {
+      agg.calendar[cal.grade]++;
+      (cal.held > 0 ? agg.calendar.wins : agg.calendar.losses).push(cal.held);
+      agg.calendar.worstTrade = Math.min(agg.calendar.worstTrade, cal.worst);
+    }
+    if (cp) {
+      agg.calPrice[cp.grade]++;
+      (cp.held > 0 ? agg.calPrice.wins : agg.calPrice.losses).push(cp.held);
+      agg.calPrice.worstTrade = Math.min(agg.calPrice.worstTrade, cp.worst);
+    }
   });
   return agg;
 }
 
+// $1,000 is a clearly-labeled hypothetical stand-in position size (nothing
+// here trades real money) - just makes the expectancy % easy to picture at
+// a glance; multiply by 10 for $10k, etc.
+const STOCKS_HYPOTHETICAL_POSITION = 1000;
+
+// The size data behind the win rate - a 71% win rate with losses bigger
+// than wins can still lose money, and a 51% win rate with wins twice the
+// size of losses is a real, strong edge. "Win"/"loss" here means the
+// actual realized (held-to-end) return's sign, not the right/wrong/mixed
+// grade - a MIXED trade still has a real return and counts at that number.
+// Gated on STOCKS_CYCLE_MIN_N, same "not enough sample yet" doctrine the
+// Day Cycles backtest already uses.
+function stocksExpectancyStats(m) {
+  const n = m.wins.length + m.losses.length;
+  if (n < STOCKS_CYCLE_MIN_N) return { n, ready: false };
+  const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  const avgWin = m.wins.length ? sum(m.wins) / m.wins.length : 0;
+  const avgLoss = m.losses.length ? sum(m.losses) / m.losses.length : 0;
+  const expectancy = (sum(m.wins) + sum(m.losses)) / n;
+  return {
+    n, ready: true, avgWin, avgLoss, expectancy,
+    ratio: avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : null,
+    dollarExpectancy: (expectancy / 100) * STOCKS_HYPOTHETICAL_POSITION,
+    worstTrade: m.worstTrade,
+  };
+}
+
+function stocksExpectancyRowsHtml(m) {
+  const s = stocksExpectancyStats(m);
+  if (!s.ready) return `<div class="stock-trades-note">Not enough graded trades yet for expectancy (n=${s.n}, need ${STOCKS_CYCLE_MIN_N}+).</div>`;
+  const fmtPct = (x) => `${x >= 0 ? '+' : ''}${x.toFixed(2)}%`;
+  const good = s.expectancy > 0;
+  return `
+    <div class="stock-combined-record-row">
+      <span class="stock-combined-record-label">Expectancy <span class="stock-edge ${good ? 'good' : 'bad'}">${good ? 'Positive Edge' : 'Negative Edge'}</span></span>
+      <span class="score-inline ${good ? 'good' : 'bad'}">${fmtPct(s.expectancy)} <span style="font-weight:400;">per trade</span></span>
+    </div>
+    <div class="stock-combined-record-row">
+      <span class="stock-combined-record-label" style="font-weight:400;color:var(--muted);">Avg win ${fmtPct(s.avgWin)} · Avg loss ${fmtPct(s.avgLoss)}${s.ratio != null ? ` · ${s.ratio.toFixed(1)}:1` : ''}</span>
+      <span style="font-weight:400;color:var(--muted);font-size:0.8rem;">${s.dollarExpectancy >= 0 ? '+' : ''}$${s.dollarExpectancy.toFixed(0)} / $${STOCKS_HYPOTHETICAL_POSITION.toLocaleString()} risked</span>
+    </div>
+    <div class="stock-combined-record-row">
+      <span class="stock-combined-record-label" style="font-weight:400;color:var(--muted);">Worst single trade</span>
+      <span class="score-inline bad">${s.worstTrade.toFixed(1)}%</span>
+    </div>`;
+}
+
 // Shows whichever of Calendar/Cal + Price actually performed better - one
-// number, the one that's actually working, not both stacked.
+// number, the one that's actually working, not both stacked - plus the
+// expectancy/avg-win-loss/worst-trade breakdown for that same mode.
 function stocksBestModeLine(agg) {
   const rate = (m) => { const s = m.right + m.wrong + m.mixed; return s ? m.right / s : -1; };
   const calRate = rate(agg.calendar);
@@ -2389,7 +2462,8 @@ function stocksBestModeLine(agg) {
     <div class="stock-combined-record-row">
       <span class="stock-combined-record-label">${escapeHtml(best.label)} <span style="font-weight:400;color:var(--muted);">best of the two</span></span>
       <span class="score-inline ${cls}">${pct}% <span style="font-weight:400;">(${best.m.right}/${best.m.wrong}/${best.m.mixed} of ${settled})</span></span>
-    </div>`;
+    </div>
+    ${stocksExpectancyRowsHtml(best.m)}`;
 }
 
 // Which stored horizon the box shows - session-scoped, resets to Month on

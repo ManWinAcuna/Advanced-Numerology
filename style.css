@@ -5045,6 +5045,21 @@ body {
 .stock-tier-majority { color: var(--text); }
 .stock-tier-solo { opacity: 0.65; }
 
+/* Expectancy edge label - same pill shape as the tier chip, but genuinely
+   good/bad (green/red) since positive vs negative expectancy is a real
+   good/bad axis, unlike conviction tier. */
+.stock-edge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.stock-edge.good { color: var(--good); border-color: rgba(139, 195, 74, 0.5); }
+.stock-edge.bad { color: var(--bad); border-color: rgba(229, 57, 63, 0.5); }
+
 .stock-card-chips {
   display: flex;
   flex-wrap: wrap;
