@@ -794,12 +794,12 @@ function stocksCycleBoxHtml(r, level, atDate) {
   const signScore = f.vietnamese[meta.signKey];
   const anchorDate = stocksParseDate(r.date);
 
-  const countdown = level === 'day'
-    ? atDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-    : (() => {
-        const days = stocksDaysToNextPersonalValue(anchorDate, atDate, level);
-        return days == null ? '—' : `${days}d to next ${STOCKS_CYCLE_LABELS[level]}`;
-      })();
+  // PD has no countdown row at all - it changes every day, so there's
+  // nothing to count down to and no date worth stating either.
+  const countdown = level === 'day' ? null : (() => {
+    const days = stocksDaysToNextPersonalValue(anchorDate, atDate, level);
+    return days == null ? '—' : `${days}d to next ${STOCKS_CYCLE_LABELS[level]}`;
+  })();
 
   const western = level === 'month' ? stocksWesternSignal(anchorDate, atDate) : null;
   const transits = stocksTransitSignalsFor(anchorDate, level, atDate);
@@ -813,7 +813,7 @@ function stocksCycleBoxHtml(r, level, atDate) {
       <div class="stock-anchor-label">${STOCKS_CYCLE_LABELS[level]}</div>
       <div class="stock-anchor-number ${stocksNumberSignalCls(num)}">${num}</div>
       <div class="stock-anchor-sub">${STOCKS_CYCLE_FULL_LABELS[level]}${STOCKS_NUMBER_MEANINGS[num] ? ' · ' + escapeHtml(STOCKS_NUMBER_MEANINGS[num].label) : ''}</div>
-      <div class="stock-anchor-date">${escapeHtml(countdown)}</div>
+      ${countdown ? `<div class="stock-anchor-date">${escapeHtml(countdown)}</div>` : ''}
       <div class="stock-anchor-zodiac">
         <span class="stock-chip ${stocksScoreCls(signScore)}">${escapeHtml(sign)}</span>
       </div>
