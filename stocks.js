@@ -1114,7 +1114,33 @@ function stocksLeanAt(inst, level, atDate) {
 // single-anchor list instead of every primary anchor blended together.
 function stocksAnchorDayLeanAt(anchor, atDate) {
   const read = { ...anchor, primary: true, flow: computeEnergyFlow(stocksParseDate(anchor.date), atDate) };
-  return stocksLevelVerdict([read], 'day', null, atDate);
+  const s = stocksTimeframeSignals([read], 'day', null, atDate);
+  const net = s.bulls.length - s.bears.length;
+  return { lean: net > 0 ? 'long' : net < 0 ? 'short' : 'neutral', net };
+}
+
+// The DAY TIMEFRAME's own pooled read (PD meaning-number, day zodiac sign,
+// Moon transit - nothing else) across every primary anchor. This, not the
+// blended day-level verdict, is what entry confirmation keys off: the
+// blended verdict inherits the month/year bias through the 60/30/10
+// weights, so on a day with NO day signals at all it still "agrees" with
+// the month call by construction - which made "first confirming day"
+// nearly always tomorrow, for every instrument at once (verified: NVDA/
+// GOOGL/GC/XLM all "confirmed" with zero day-timeframe signals of their
+// own). Confirmation means the day itself actually fired something.
+const stocksDayTfCache = new Map();
+function stocksDayTimeframeLeanAt(inst, atDate) {
+  const key = `${inst.ticker}|dayTF|${atDate.getFullYear()}-${atDate.getMonth()}-${atDate.getDate()}`;
+  const hit = stocksDayTfCache.get(key);
+  if (hit) return hit;
+  const reads = inst.anchors
+    .filter((a) => a.primary && a.date)
+    .map((a) => ({ ...a, primary: true, flow: computeEnergyFlow(stocksParseDate(a.date), atDate) }));
+  const s = stocksTimeframeSignals(reads, 'day', null, atDate);
+  const net = s.bulls.length - s.bears.length;
+  const result = { lean: net > 0 ? 'long' : net < 0 ? 'short' : 'neutral', net };
+  stocksDayTfCache.set(key, result);
+  return result;
 }
 
 // Which primary anchor is actually responsible for a day matching the
@@ -1152,7 +1178,7 @@ function stocksSignalScoreAt(inst, lean, date) {
 // no-fill, not a forced one. Still pure calendar math, knowable in advance.
 function stocksConfirmedEntryIndex(inst, lean, bars) {
   for (let i = 0; i < bars.length; i++) {
-    const dayLean = stocksLeanAt(inst, 'day', stocksParseDate(bars[i][0]));
+    const dayLean = stocksDayTimeframeLeanAt(inst, stocksParseDate(bars[i][0]));
     if (dayLean.lean === lean.lean) return i;
   }
   return -1;
@@ -1528,7 +1554,7 @@ function stocksAnchorReversalDay(anchor, lean, afterDate, dates) {
 // between the Upcoming rows and the main-page radar (stocksNextOpportunity)
 // so both use the exact same definition of "when does this confirm."
 function stocksFirstConfirmingDate(inst, lean, dates) {
-  return dates.find((d) => stocksLeanAt(inst, 'day', d).lean === lean.lean) || null;
+  return dates.find((d) => stocksDayTimeframeLeanAt(inst, d).lean === lean.lean) || null;
 }
 
 // How many days into the future this exact level call stays true, before
@@ -2153,10 +2179,11 @@ const STOCKS_COMBINED_YEARS_BACK = 3;
 const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
 // v3: entries now carry BOTH exit modes per grade (was one grade per
 // mode) - old v2 data is simply superseded, not migrated.
-// v4: bumped because the verdict engine now blends transits/western/cross-
-// level weighting - leans computed under v3 are no longer comparable and
-// must be regraded rather than mixed with new entries.
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v4';
+// v5: entry confirmation/trigger/reversal now key off the day timeframe's
+// OWN signals instead of the blended day verdict (which inherited the
+// month/year bias and confirmed vacuously) - entries and exits land on
+// different days than v4 graded, so the ledger must rebuild.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v5';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
