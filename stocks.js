@@ -1546,13 +1546,19 @@ function stocksHorizonStats(inst, lean, days) {
   if (!trigger) return [{ label: 'Entry', value: 'No fill' }];
   const peak = stocksPeakDay(inst, lean, days);
   // Same anchor-scoped rule the actual replay exit uses (stocksApplyExitRule)
-  // - so this preview and what the system would really do line up.
+  // - so this preview and what the system would really do line up. The
+  // reversal search is bounded to `days` (this window only) same as the
+  // real replay - if entry lands near the end of the window there may be no
+  // day left afterward to find a reversal in, which is a real result (the
+  // position would just ride to the window's own end), not a bug. Said
+  // explicitly ("Held to end") instead of silently dropping the TP label,
+  // same as "No fill" is said explicitly rather than omitted above.
   const triggerAnchor = stocksTriggeringAnchor(inst, lean, trigger);
   const reversal = triggerAnchor ? stocksAnchorReversalDay(triggerAnchor, lean, trigger, days) : null;
   return [
     { label: 'Entry', value: fmtD(trigger) },
     ...(peak ? [{ label: 'Peak', value: fmtD(peak) }] : []),
-    ...(reversal ? [{ label: 'TP', value: fmtD(reversal) }] : []),
+    { label: 'TP', value: reversal ? fmtD(reversal) : 'Held to end' },
   ];
 }
 
