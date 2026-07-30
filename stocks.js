@@ -296,6 +296,22 @@ function stocksLevelSignals(read, level) {
   };
 }
 
+// Conviction tier: how many signals actually agree, not just which side
+// won. Bears (or bulls) always win the LEAN by precedence regardless of
+// count - a single clash can override three agreeing bull signals - but
+// that's a very different call than every signal pointing the same way,
+// and the tier is what surfaces that difference. Deliberately not called
+// "Strong"/"Weak" - those words already mean something specific in this
+// app (7 = Weakness, 8 = Strength) and conviction is a different axis.
+//   Unanimous - 2+ signals agree, nothing on the other side.
+//   Majority  - 2+ signals agree, but at least one signal disagrees too.
+//   Solo      - exactly one signal is doing all the work, win or override.
+function stocksTierFor(winningCount, opposingCount) {
+  if (winningCount >= 2 && opposingCount === 0) return 'unanimous';
+  if (winningCount >= 2) return 'majority';
+  return 'solo';
+}
+
 // historical (optional): this level's Day Cycles backtest read for TODAY
 // specifically (see stocksHistoricalLeanFor below) - counts as one more
 // vote in the same bears/bulls list, same weight as a zodiac clash or a
@@ -317,9 +333,9 @@ function stocksLevelVerdict(reads, level, historical) {
   });
   if (historical) (historical.dir === 'bear' ? bears : bulls).push(historical.why);
 
-  if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; '), signalCount: bears.length };
-  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; '), signalCount: bulls.length };
-  return { lean: 'neutral', label: 'Neutral', why: 'no signals at this level', signalCount: 0 };
+  if (bears.length) return { lean: 'short', label: 'Short Lean', why: bears.join('; '), signalCount: bears.length, opposingCount: bulls.length, tier: stocksTierFor(bears.length, bulls.length) };
+  if (bulls.length) return { lean: 'long', label: 'Long Lean', why: bulls.join('; '), signalCount: bulls.length, opposingCount: bears.length, tier: stocksTierFor(bulls.length, bears.length) };
+  return { lean: 'neutral', label: 'Neutral', why: 'no signals at this level', signalCount: 0, opposingCount: 0, tier: null };
 }
 
 // The year-level watch verdict that drives the grid pill - same precedence,
@@ -334,24 +350,26 @@ function stocksVerdict(reads, historicalYear) {
   const allies = primary.filter((r) => r.relation === 'ally');
   const histBear = historicalYear && historicalYear.dir === 'bear';
   const histBull = historicalYear && historicalYear.dir === 'bull';
+  const bearCount = enemies.length + weak.length + (histBear ? 1 : 0);
+  const bullCount = allies.length + strong.length + (histBull ? 1 : 0);
 
-  if (enemies.length || weak.length || histBear) {
+  if (bearCount) {
     const parts = [
       ...enemies.map((r) => `${who(r)}'s ${r.animal} runs its enemy year`),
       ...weak.map((r) => `${who(r)} sits in a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
       ...(histBear ? [historicalYear.why] : []),
     ];
-    return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.` };
+    return { watch: 'short', label: 'High Short Watch', text: `${parts.join('; ')}.`, tier: stocksTierFor(bearCount, bullCount) };
   }
-  if (allies.length || strong.length || histBull) {
+  if (bullCount) {
     const parts = [
       ...allies.map((r) => `${who(r)}'s ${r.animal} runs an ally year`),
       ...strong.map((r) => `${who(r)} runs a Personal Year ${r.personalYear} ${r.cycle.label.toLowerCase()} cycle`),
       ...(histBull ? [historicalYear.why] : []),
     ];
-    return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.` };
+    return { watch: 'long', label: 'Long Watch', text: `${parts.join('; ')}.`, tier: stocksTierFor(bullCount, bearCount) };
   }
-  return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.' };
+  return { watch: 'neutral', label: 'Neutral', text: 'No year-level signals on the primary anchors.', tier: null };
 }
 
 // Today's own Day Cycles backtest read, at one resolution - reuses the
@@ -462,7 +480,15 @@ function stocksMonogram(inst, withPortrait) {
 }
 
 function stocksWatchPill(verdict) {
-  return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '<span class="stock-dot"></span>' : ''}${escapeHtml(verdict.label)}</span>`;
+  return `<span class="stock-watch ${verdict.watch}">${verdict.watch === 'short' ? '<span class="stock-dot"></span>' : ''}${escapeHtml(verdict.label)}</span>${stocksTierChip(verdict.tier)}`;
+}
+
+// Conviction badge shown next to a lean/verdict wherever it appears - how
+// many signals actually agree, not just which side won (see stocksTierFor).
+const STOCKS_TIER_LABEL = { unanimous: 'Unanimous', majority: 'Majority', solo: 'Solo' };
+function stocksTierChip(tier) {
+  if (!tier) return '';
+  return `<span class="stock-tier stock-tier-${tier}">${STOCKS_TIER_LABEL[tier]}</span>`;
 }
 
 function stocksAnchorFlagBadges(read) {
@@ -627,7 +653,7 @@ function openStockModal(inst) {
     return `
       <div class="stock-verdict-row">
         <span class="stock-verdict-term">${level.toUpperCase()}</span>
-        <span class="stock-watch ${pillCls}">${escapeHtml(v.label)}</span>
+        <span class="stock-verdict-pillwrap"><span class="stock-watch ${pillCls}">${escapeHtml(v.label)}</span>${stocksTierChip(v.tier)}</span>
         <span class="stock-verdict-why">${escapeHtml(v.why)}</span>
       </div>`;
   }).join('');
@@ -1182,6 +1208,7 @@ function stocksTradeCard(windowLabel, lean, windowBars, entryStats, opts) {
           <span class="stock-trade-chips">
             ${opts && opts.mode ? `<span class="stock-chip">${escapeHtml(opts.mode)}</span>` : ''}
             <span class="stock-chip">${lean.lean === 'short' ? 'Short' : 'Long'}</span>
+            ${stocksTierChip(lean.tier)}
             <span class="stock-badge ${badgeCls}">${badge}</span>
           </span>
         </div>
@@ -1239,7 +1266,7 @@ function stocksUpcomingRows(inst) {
 
   const pill = (lean) => {
     const cls = lean.lean === 'short' ? 'short' : lean.lean === 'long' ? 'long' : lean.lean === 'caution' ? 'caution' : 'neutral';
-    return `<span class="stock-watch ${cls}">${escapeHtml(lean.label)}</span>`;
+    return `<span class="stock-watch ${cls}">${escapeHtml(lean.label)}</span>${stocksTierChip(lean.tier)}`;
   };
   // Compact label:value pairs instead of a prose sentence - the pill above
   // already says the direction and why (hover/inspect the Anchors section
@@ -1352,7 +1379,7 @@ function stocksRadarHtml(instruments, today) {
       <span class="stock-radar-ticker">${escapeHtml(inst.ticker)}</span>
       <span class="stock-watch ${opp.lean.lean}">${escapeHtml(opp.lean.label)}</span>
       <span class="stock-radar-when">${escapeHtml(opp.level.toUpperCase())} · ${escapeHtml(fmtD(opp.date))}</span>
-      <span class="stock-radar-signals">${opp.lean.signalCount} signal${opp.lean.signalCount === 1 ? '' : 's'}</span>
+      ${stocksTierChip(opp.lean.tier)}
     </div>`).join('');
 }
 

@@ -4933,12 +4933,6 @@ body {
   text-align: right;
 }
 
-.stock-radar-signals {
-  color: var(--muted);
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-
 .stock-combined-record-row {
   display: flex;
   align-items: center;
@@ -5018,6 +5012,23 @@ body {
 .stock-watch.short { color: var(--bad); border-color: rgba(229, 57, 63, 0.5); background: rgba(229, 57, 63, 0.1); }
 .stock-watch.long { color: var(--good); border-color: rgba(139, 195, 74, 0.5); background: rgba(139, 195, 74, 0.1); }
 .stock-watch.caution { color: var(--orange); border-color: rgba(255, 138, 61, 0.5); background: rgba(255, 138, 61, 0.1); }
+
+/* Conviction tier - how many signals actually agree, separate from
+   direction (which the watch pill/chip next to it already shows). Graded
+   by opacity/weight rather than color, since it isn't bullish or bearish. */
+.stock-tier {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stock-tier-unanimous { color: var(--yellow); border-color: rgba(245, 197, 66, 0.5); font-weight: 800; }
+.stock-tier-majority { color: var(--text); }
+.stock-tier-solo { opacity: 0.65; }
 
 .stock-card-chips {
   display: flex;
@@ -5382,6 +5393,13 @@ body {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+.stock-verdict-pillwrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .stock-verdict-why {
