@@ -285,6 +285,65 @@ function setLookupStatus(text, isError) {
   el.className = 'famous-status' + (isError ? ' error' : '');
 }
 
+/* ===================== Preload Top 50 ===================== */
+// Only offered on a category whose name exactly matches one of EMAX's
+// starter lists (emax-seed-data.js) - a renamed or custom category simply
+// never shows the button, no per-category configuration needed. Runs the
+// exact same lookup (lookupKeyDateByNameWithTitle) as a single manual
+// "Look up" click, just looped: skips names already in the category
+// (case-insensitive, same dedup rule Bulk Upload already uses), and any
+// name that doesn't resolve is silently skipped and counted (never a
+// fabricated date) rather than blocking the rest of the run. Sequential with
+// a small gap between requests - Wikimedia throttles bursty automated
+// clients (see the label-search queue further down this file's neighbor,
+// db-core.js), and ~50 lookups in a tight loop is exactly that pattern.
+let emaxPreloading = false;
+
+async function preloadTop50() {
+  if (emaxPreloading) return;
+  const names = EMAX_SEED_LISTS[category.name];
+  if (!names) return;
+  emaxPreloading = true;
+  const btn = document.getElementById('preloadTop50Btn');
+  btn.disabled = true;
+  const existing = new Set(category.entries.map((e) => e.name.toLowerCase()));
+  let added = 0;
+  let skippedExisting = 0;
+  let failed = 0;
+
+  for (let i = 0; i < names.length; i++) {
+    // Each seed entry is either a plain display name, or [displayName,
+    // searchTerm] when the clean name alone is too ambiguous to resolve
+    // reliably - the search term only finds the right Wikidata item, the
+    // display name is always what actually gets saved/shown.
+    const seed = names[i];
+    const displayName = Array.isArray(seed) ? seed[0] : seed;
+    const searchTerm = Array.isArray(seed) ? seed[1] : seed;
+    setLookupStatus(`⚡ Preloading Top 50 - ${i + 1}/${names.length} (${added} added so far)...`, false);
+    if (existing.has(displayName.toLowerCase())) { skippedExisting++; continue; }
+    try {
+      const info = await lookupKeyDateByNameWithTitle(searchTerm);
+      if (info) {
+        category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title });
+        existing.add(displayName.toLowerCase());
+        added++;
+      } else {
+        failed++;
+      }
+    } catch (e) {
+      failed++;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+
+  saveEmaxDB(db);
+  renderEntries();
+  btn.disabled = false;
+  emaxPreloading = false;
+  const skipNote = skippedExisting ? ` (${skippedExisting} already in your list)` : '';
+  setLookupStatus(`⚡ Preloaded ${added}/${names.length - skippedExisting}${skipNote} - ${failed} couldn't be matched automatically.`, false);
+}
+
 function init() {
   attachDateMask(document.getElementById('newEntryDate'));
 
@@ -411,6 +470,11 @@ function init() {
       return `Imported ${rows.length} row${rows.length === 1 ? '' : 's'}: ${added} added, ${updated} updated.`;
     });
   });
+
+  if (EMAX_SEED_LISTS[category.name]) {
+    document.getElementById('preloadTop50Btn').style.display = '';
+    document.getElementById('preloadTop50Btn').addEventListener('click', () => preloadTop50());
+  }
 
   renderEntries();
 }
