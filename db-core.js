@@ -424,6 +424,34 @@ function lookupPerformerForSong(name) {
   return queuedFetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchPerformerForSong(hit.qid) : null));
 }
 
+// EMAX Video Games' own linked-person lookup - P287 (designer) first, P57
+// (director) as a fallback when a game has one but not the other (checked
+// live against 4 well-known games: Zelda: Breath of the Wild only had P57,
+// Metal Gear Solid and Minecraft only had P287, Half-Life had neither -
+// trying both roughly doubles real coverage over either alone). Unlike
+// Songs' P175 (which defaults to a BAND very commonly), a game's designer/
+// director credit is essentially always a real person already, so this
+// skips the P31=human check and lead-fallback machinery that problem
+// needed - there's no equivalent "team of co-equal designers with no clear
+// lead" ambiguity worth chasing the same way; a multi-value claim just
+// takes Wikidata's own first-listed credit. Queued from the start (see
+// fetchPerformerForSong's own comment on why - learned that lesson there).
+function fetchDirectorForGame(qid) {
+  return queuedFetchWikidataClaims(qid).then((claims) => {
+    const designerClaim = claims && claims.P287 && claims.P287[0];
+    const directorClaim = claims && claims.P57 && claims.P57[0];
+    const claim = designerClaim || directorClaim;
+    const value = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+    const personQid = value && value.id;
+    if (!personQid) return null;
+    return queuedFetchWikipediaTitleFromQid(personQid).then((title) => (title ? { qid: personQid, title } : null));
+  });
+}
+
+function lookupDirectorForGame(name) {
+  return queuedFetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchDirectorForGame(hit.qid) : null));
+}
+
 /* ===================== Wikipedia infobox fallback ===================== */
 // Wikidata's P571 (inception) is often missing even when the Wikipedia
 // article's infobox has the date written right in it - infoboxes get filled
@@ -1136,6 +1164,8 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['anime', 'manga'], emoji: '🎌' },
   { keywords: ['show', 'series', 'tv'], emoji: '📺' },
   { keywords: ['song', 'track', 'single'], emoji: '🎵' },
+  { keywords: ['video game', 'game'], emoji: '🎮' },
+  { keywords: ['youtuber', 'streamer', 'influencer', 'creator'], emoji: '📹' },
 ];
 
 const CATEGORY_EMOJI_FALLBACK = ['🎉', '🎈', '🎊', '🌟', '💫', '🎁', '✨', '🎆', '🪩', '🎇'];
@@ -1170,7 +1200,7 @@ const EMAX_SEEN_STARTERS_KEY = 'numerology_emax_starters_seen_v1';
 
 const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
-  'Anime', 'Shows', 'Songs',
+  'Anime', 'Shows', 'Songs', 'Video Games', 'YouTubers',
 ];
 
 function loadEmaxDB() {

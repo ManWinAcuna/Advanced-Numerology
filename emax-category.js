@@ -16,14 +16,14 @@ let pendingWikiTitle = null;
 // actually matched THIS entry rather than always assuming the category's
 // default kind. Same lifecycle as pendingWikiTitle - cleared on hand-edit.
 let pendingDateKind = null;
-// Songs only: the QID a successful "Look up" resolved the performer to via
-// P175 (see lookupPerformerForSong, db-core.js) - lets "+ Add to Database"
-// (in the popup) skip straight to fetchKeyDate instead of a name re-search.
-// The artist NAME itself is the visible #newEntryArtist field, not a hidden
-// var - "Look up" fills it in, but it's always user-editable/typeable, since
-// P175 doesn't resolve for every song and there was previously no way to
-// attach an artist by hand at all. Same cleared-on-hand-edit lifecycle as
-// pendingWikiTitle/pendingDateKind.
+// Categories with a linked-person config (EMAX_LINKED_PERSON_CONFIG - Songs'
+// artist, Video Games' director): the QID a successful "Look up" resolved
+// that person to - lets "+ Add to Database" (in the popup) skip straight to
+// fetchKeyDate instead of a name re-search. The person's NAME itself is the
+// visible #newEntryArtist field, not a hidden var - "Look up" fills it in,
+// but it's always user-editable/typeable, since the lookup doesn't resolve
+// for every item and there was previously no way to attach one by hand at
+// all. Same cleared-on-hand-edit lifecycle as pendingWikiTitle/pendingDateKind.
 let pendingArtistQid = null;
 // Guards a lookup response against a newer one that started after it (e.g.
 // fixing a typo and re-clicking Look Up before the first request lands).
@@ -44,6 +44,23 @@ const EMAX_IMAGE_CACHE_KEY = 'numerology_emax_images_v1';
 let emaxImageCache = {};
 try { emaxImageCache = JSON.parse(localStorage.getItem(EMAX_IMAGE_CACHE_KEY)) || {}; } catch (e) { emaxImageCache = {}; }
 
+// Same reason as EMAX_IMAGE_CACHE_KEY above - init() (called synchronously
+// below) reads this directly, so it has to be initialized before that call,
+// not down by emaxLinkedPersonBannerHtml where it conceptually belongs.
+// Categories whose items have a linked REAL PERSON worth their own banner
+// in the popup - Songs' performer (originally the only one), now also
+// Video Games' designer/director. One config entry drives the whole
+// banner/manual-field/preload/lookup machinery instead of a parallel copy
+// per category. `field` is the entry property PREFIX - the actual stored
+// properties are entry[field+'Name']/entry[field+'Qid'] ('artist' for Songs
+// matches its already-shipped entry.artistName/artistQid exactly, so
+// existing real user data needs no migration). `label` is what the manual
+// field's placeholder calls it. `lookupFn` is the db-core.js resolver.
+const EMAX_LINKED_PERSON_CONFIG = {
+  Songs: { field: 'artist', label: 'Artist', lookupFn: lookupPerformerForSong },
+  'Video Games': { field: 'director', label: 'Director', lookupFn: lookupDirectorForGame },
+};
+
 if (!category) {
   document.querySelector('.db-page').innerHTML = '<div class="empty-state">Category not found. <a href="emax.html">Back to categories</a></div>';
 } else {
@@ -54,7 +71,12 @@ if (!category) {
 
 /* ===================== Entries CRUD ===================== */
 
-function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, artistName, artistQid) {
+// linkedPersonName/linkedPersonQid: only meaningful for a category with an
+// EMAX_LINKED_PERSON_CONFIG entry (Songs' artist, Video Games' director) -
+// stored under that category's own field prefix (entry.artistName for
+// Songs, entry.directorName for Video Games) so existing Songs data keeps
+// working under its already-shipped literal field names unchanged.
+function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid) {
   name = name.trim();
   if (!name || !date) return;
   const entry = { id: uid(), name, date };
@@ -62,13 +84,17 @@ function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, artistName
   if (wikiTitle) entry.wikiTitle = wikiTitle;
   if (noImage) entry.noImage = true;
   if (dateKind) entry.dateKind = dateKind;
-  if (artistName) { entry.artistName = artistName; entry.artistQid = artistQid; }
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  if (linkedPersonCfg && linkedPersonName) {
+    entry[linkedPersonCfg.field + 'Name'] = linkedPersonName;
+    entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+  }
   category.entries.push(entry);
   saveEmaxDB(db);
   renderEntries();
 }
 
-function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind, artistName, artistQid) {
+function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid) {
   name = name.trim();
   if (!name || !date) return;
   const entry = category.entries.find((e) => e.id === entryId);
@@ -83,9 +109,16 @@ function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind
   // monogram, skipping the fetch (and any manual imageUrl) entirely.
   if (noImage) entry.noImage = true; else delete entry.noImage;
   if (dateKind) entry.dateKind = dateKind; else delete entry.dateKind;
-  // Songs only (see lookupPerformerForSong) - the artist behind this track,
-  // for the popup's artist banner.
-  if (artistName) { entry.artistName = artistName; entry.artistQid = artistQid; } else { delete entry.artistName; delete entry.artistQid; }
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  if (linkedPersonCfg) {
+    if (linkedPersonName) {
+      entry[linkedPersonCfg.field + 'Name'] = linkedPersonName;
+      entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+    } else {
+      delete entry[linkedPersonCfg.field + 'Name'];
+      delete entry[linkedPersonCfg.field + 'Qid'];
+    }
+  }
   saveEmaxDB(db);
   renderEntries();
 }
@@ -324,14 +357,15 @@ function entryRowHtml(entry, score) {
 // isn't blocked on network round-trips to show up. A manual entry.imageUrl
 // is already rendered synchronously above (no fetch needed); entry.noImage
 // (the "remove picture" edit option) skips this entirely, monogram stays.
-// Songs only: most song articles simply have no lead image on Wikipedia at
-// all (a plain 2-letter monogram is the common case, not the exception), so
-// when the SONG's own fetch comes up empty, the artist's own photo is tried
+// Categories with a linked-person config only: most items in these
+// categories simply have no lead image of their own on Wikipedia (a plain
+// 2-letter monogram is the common case, not the exception), so when the
+// ITEM's own fetch comes up empty, the linked person's own photo is tried
 // next before finally settling for the monogram - a real photo the row can
 // actually show beats a blank initials circle either way.
 function emaxLoadRowImages(ranked) {
   const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
-  const isSongsCategory = category.name === 'Songs';
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   ranked.forEach(({ entry }) => {
     if (!entry.date || entry.noImage || entry.imageUrl) return;
     const title = entry.wikiTitle || entry.name;
@@ -341,11 +375,10 @@ function emaxLoadRowImages(ranked) {
         if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
         return;
       }
-      if (!isSongsCategory || !entry.artistName) return;
-      emaxArtistImageUrl(entry).then((artistUrl) => {
-        if (!artistUrl) return;
+      emaxLinkedPersonImageUrl(entry, linkedPersonCfg).then((personUrl) => {
+        if (!personUrl) return;
         const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
-        if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(artistUrl)}" alt="">`;
+        if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(personUrl)}" alt="">`;
       });
     });
   });
@@ -407,78 +440,86 @@ function emaxFactTile(icon, label, reduced, compound) {
   return `<div class="emax-fact-tile">${iconHtml}${labelHtml}${valueHtml}</div>`;
 }
 
-// Songs only: entry.artistName (set by lookupPerformerForSong at Preload/
-// Look-up time) gets its own small banner in the song's popup - the
-// performer's own compatibility, a separate number from the song's own
-// release-date score already shown above. If that performer already exists
-// in the Artists category (matched by name), the banner shows their real
-// score and opens THEIR popup on tap (openItemModal again, with an
-// 'Artists' override so it behaves exactly as it would from that page - see
-// openItemModal's own comment on categoryNameOverride). If not, there's
-// nothing to score yet, so it offers "+ Add to Database" instead.
-function emaxArtistBannerHtml(entry, meDate) {
-  if (!entry.artistName) return '';
+// entry[cfg.field+'Name'] (set by cfg.lookupFn at Preload/Look-up time, or
+// typed by hand) gets its own small banner in the item's popup - the linked
+// person's own compatibility, a separate number from the item's own score
+// already shown above. If that person already exists in the Artists
+// category (matched by name), the banner shows their real score and opens
+// THEIR popup on tap (openItemModal again, with an 'Artists' override so it
+// behaves exactly as it would from that page - see openItemModal's own
+// comment on categoryNameOverride). If not, there's nothing to score yet,
+// so it offers "+ Add to Database" instead. cfg is null for every category
+// without a config above - returns '' immediately, same as before this was
+// Songs-only.
+function emaxLinkedPersonBannerHtml(entry, meDate, cfg) {
+  if (!cfg) return '';
+  const personName = entry[cfg.field + 'Name'];
+  if (!personName) return '';
+  const personQid = entry[cfg.field + 'Qid'];
   const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === entry.artistName.toLowerCase());
-  const thumb = emaxMonogram(entry.artistName, false);
+  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
+  const thumb = emaxMonogram(personName, false);
 
   if (existing && existing.date) {
-    const artistScore = computeCompatibility(meDate, parseDateStr(existing.date)).finalScore;
+    const personScore = computeCompatibility(meDate, parseDateStr(existing.date)).finalScore;
     return `
       <button type="button" class="emax-artist-banner" id="emaxArtistBanner" data-artist-id="${escapeHtml(existing.id)}">
         <div class="emax-artist-banner-thumb" id="emaxArtistBannerThumb">${thumb}</div>
-        <div class="emax-artist-banner-name">${escapeHtml(entry.artistName)}</div>
-        <div class="emax-score ${scoreClass(artistScore)}">${artistScore}%</div>
+        <div class="emax-artist-banner-name">${escapeHtml(personName)}</div>
+        <div class="emax-score ${scoreClass(personScore)}">${personScore}%</div>
       </button>`;
   }
 
   return `
     <div class="emax-artist-banner">
       <div class="emax-artist-banner-thumb" id="emaxArtistBannerThumb">${thumb}</div>
-      <div class="emax-artist-banner-name">${escapeHtml(entry.artistName)}</div>
-      <button type="button" class="btn-link" id="emaxAddArtistBtn" data-artist-name="${escapeHtml(entry.artistName)}" data-artist-qid="${escapeHtml(entry.artistQid || '')}">+ Add to Database</button>
+      <div class="emax-artist-banner-name">${escapeHtml(personName)}</div>
+      <button type="button" class="btn-link" id="emaxAddArtistBtn" data-artist-name="${escapeHtml(personName)}" data-artist-qid="${escapeHtml(personQid || '')}">+ Add to Database</button>
     </div>`;
 }
 
-// Shared by the artist banner (popup) and each Songs row's own small artist
-// avatar - one resolver, same priority order everywhere: the ARTIST's own
-// stored noImage/imageUrl wins when they're already a real Artists entry
-// (their own edits should be respected wherever their photo shows up), else
-// falls back to entry.artistName itself, which is already the resolved
-// Wikipedia title from lookupPerformerForSong, not a guessed search string.
+// Shared by the linked-person banner (popup) and each row's own small
+// avatar fallback - one resolver, same priority order everywhere: the
+// PERSON's own stored noImage/imageUrl wins when they're already a real
+// Artists entry (their own edits should be respected wherever their photo
+// shows up), else falls back to the name itself, which is already the
+// resolved Wikipedia title from cfg.lookupFn, not a guessed search string.
 // Resolves to a URL, or null (never fetches when noImage is set).
-function emaxArtistImageUrl(entry) {
-  if (!entry.artistName) return Promise.resolve(null);
+function emaxLinkedPersonImageUrl(entry, cfg) {
+  if (!cfg) return Promise.resolve(null);
+  const personName = entry[cfg.field + 'Name'];
+  if (!personName) return Promise.resolve(null);
   const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === entry.artistName.toLowerCase());
+  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
   if (existing && existing.noImage) return Promise.resolve(null);
   if (existing && existing.imageUrl) return Promise.resolve(existing.imageUrl);
-  const title = (existing && existing.wikiTitle) || entry.artistName;
+  const title = (existing && existing.wikiTitle) || personName;
   return emaxFetchImage(title, false);
 }
 
-// emaxArtistBannerHtml above only ever renders the monogram - it's a sync
-// string builder, same as every other row/hero thumb in this file. The real
-// photo is a separate async enhancement, called right after the banner HTML
-// lands in the DOM (openItemModal), same "paint monogram first, swap in the
-// real image once it resolves" pattern as emaxLoadRowImages and the modal
-// hero image below.
-function emaxLoadArtistBannerImage(entry) {
-  if (!entry.artistName) return;
-  emaxArtistImageUrl(entry).then((url) => {
+// emaxLinkedPersonBannerHtml above only ever renders the monogram - it's a
+// sync string builder, same as every other row/hero thumb in this file. The
+// real photo is a separate async enhancement, called right after the
+// banner HTML lands in the DOM (openItemModal), same "paint monogram
+// first, swap in the real image once it resolves" pattern as
+// emaxLoadRowImages and the modal hero image below.
+function emaxLoadLinkedPersonBannerImage(entry, cfg) {
+  if (!cfg || !entry[cfg.field + 'Name']) return;
+  emaxLinkedPersonImageUrl(entry, cfg).then((url) => {
     if (!url) return;
     const thumbEl = document.getElementById('emaxArtistBannerThumb');
     if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
   });
 }
 
-// The "+ Add to Database" click: resolves the performer's own birthdate
-// (their real QID, already captured by lookupPerformerForSong, skips
-// straight to fetchKeyDate instead of re-searching by name - the same
-// property-priority cascade Artists' own Preload/Look-up already use, P569
-// first) and adds them to the Artists category. On success, immediately
-// opens their real popup - the natural conclusion of "add them," per the
-// owner's own answer to "should this also resolve their birthdate."
+// The "+ Add to Database" click: resolves the linked person's own birthdate
+// (their real QID, already captured by cfg.lookupFn, skips straight to
+// fetchKeyDate instead of re-searching by name - the same property-priority
+// cascade Artists' own Preload/Look-up already use, P569 first) and adds
+// them to the Artists category. On success, immediately opens their real
+// popup - the natural conclusion of "add them," per the owner's own answer
+// to "should this also resolve their birthdate" (originally asked for
+// Songs, now shared by every category with a linked-person config).
 async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
   const artistsCat = db.categories.find((c) => c.name === 'Artists');
   if (!artistsCat) return;
@@ -529,6 +570,7 @@ async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
 // outright. undefined for every ordinary open (list row, Preload, etc.).
 function openItemModal(entry, categoryNameOverride, backTo) {
   const effectiveCategoryName = categoryNameOverride || category.name;
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[effectiveCategoryName];
   const profile = loadProfile();
   if (!profile || !profile.date) {
     alert('Set your birthday on the My Profile page first, then come back to see compatibility.');
@@ -617,7 +659,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
         </div>
       </div>
       ${flagHtml}
-      ${emaxArtistBannerHtml(entry, meDate)}
+      ${emaxLinkedPersonBannerHtml(entry, meDate, linkedPersonCfg)}
       <div class="emax-fact-grid">
         ${emaxFactTile('✨', 'Life Path', lifePath, lifePathCompound)}
         ${emaxFactTile('📅', 'Day Born', dayBorn, dayBornCompound)}
@@ -688,7 +730,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     });
   }
 
-  emaxLoadArtistBannerImage(entry);
+  emaxLoadLinkedPersonBannerImage(entry, linkedPersonCfg);
 }
 
 function closeItemModal() {
@@ -701,10 +743,11 @@ function startEdit(entry) {
   editingEntryId = entry.id;
   pendingWikiTitle = entry.wikiTitle || null;
   pendingDateKind = entry.dateKind || null;
-  pendingArtistQid = entry.artistQid || null;
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  pendingArtistQid = (linkedPersonCfg && entry[linkedPersonCfg.field + 'Qid']) || null;
   document.getElementById('newEntryName').value = entry.name;
   document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
-  document.getElementById('newEntryArtist').value = entry.artistName || '';
+  document.getElementById('newEntryArtist').value = (linkedPersonCfg && entry[linkedPersonCfg.field + 'Name']) || '';
   document.getElementById('newEntryImage').value = entry.imageUrl || '';
   document.getElementById('newEntryNoImage').checked = !!entry.noImage;
   document.getElementById('entryFormLabel').textContent = `Edit Item - ${entry.name}`;
@@ -761,10 +804,10 @@ async function preloadTop50() {
   // lookupKeyDateByNameWithTitle - only meaningful for brand/company
   // categories, never people or movies (see that function's own comment).
   const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
-  // Songs only: also resolves the performer (P175) alongside the release
-  // date, for the artist banner in the song's own popup - see
-  // lookupPerformerForSong (db-core.js) and openItemModal's banner section.
-  const isSongsCategory = category.name === 'Songs';
+  // Categories with a linked-person config also resolve that person
+  // alongside the item's own date, for the banner in the item's own popup -
+  // see EMAX_LINKED_PERSON_CONFIG and openItemModal's banner section.
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   emaxPreloading = true;
   const btn = document.getElementById('preloadTop50Btn');
   btn.disabled = true;
@@ -787,11 +830,11 @@ async function preloadTop50() {
       const info = await lookupKeyDateByNameWithTitle(searchTerm, isBrandCategory);
       if (info) {
         const entry = { id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind };
-        if (isSongsCategory) {
+        if (linkedPersonCfg) {
           try {
-            const performer = await lookupPerformerForSong(searchTerm);
-            if (performer) { entry.artistName = performer.title; entry.artistQid = performer.qid; }
-          } catch (e2) { /* no performer found - the song still saves fine without one */ }
+            const person = await linkedPersonCfg.lookupFn(searchTerm);
+            if (person) { entry[linkedPersonCfg.field + 'Name'] = person.title; entry[linkedPersonCfg.field + 'Qid'] = person.qid; }
+          } catch (e2) { /* no linked person found - the item still saves fine without one */ }
         }
         category.entries.push(entry);
         existing.add(displayName.toLowerCase());
@@ -854,7 +897,7 @@ async function preloadByYear(targetYear, includeYearOnly) {
   const names = EMAX_SEED_LISTS[category.name];
   const kind = EMAX_YEAR_FILTER_KIND[category.name];
   if (!names || !kind) return;
-  const isSongsCategory = category.name === 'Songs';
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   emaxPreloading = true;
   const btn = document.getElementById('preloadByYearBtn');
   btn.disabled = true;
@@ -879,10 +922,10 @@ async function preloadByYear(targetYear, includeYearOnly) {
 
     if (info.date) {
       const entry = { id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind };
-      if (isSongsCategory) {
-        let performer = null;
-        try { performer = await lookupPerformerForSong(searchTerm); } catch (e2) { /* no performer found - the song still saves fine without one */ }
-        if (performer) { entry.artistName = performer.title; entry.artistQid = performer.qid; }
+      if (linkedPersonCfg) {
+        let person = null;
+        try { person = await linkedPersonCfg.lookupFn(searchTerm); } catch (e2) { /* no linked person found - the item still saves fine without one */ }
+        if (person) { entry[linkedPersonCfg.field + 'Name'] = person.title; entry[linkedPersonCfg.field + 'Qid'] = person.qid; }
       }
       category.entries.push(entry);
       existing.add(displayName.toLowerCase());
@@ -994,7 +1037,7 @@ function init() {
     setLookupStatus('🔍 Looking up...', false);
     const myToken = ++lookupToken;
     const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
-    const isSongsCategory = category.name === 'Songs';
+    const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
     lookupKeyDateByNameWithTitle(name, isBrandCategory).then((info) => {
       if (myToken !== lookupToken) return; // superseded by a newer lookup
       if (!info) {
@@ -1006,19 +1049,19 @@ function init() {
       pendingDateKind = info.kind;
       const kindLabel = EMAX_DATE_KIND_LABEL[info.kind] ? EMAX_DATE_KIND_LABEL[info.kind].toLowerCase() : info.kind;
       setLookupStatus(`✓ Matched "${info.title}" (${kindLabel} ${info.date}) - please double-check before saving.`, false);
-      if (!isSongsCategory) return;
+      if (!linkedPersonCfg) return;
       const artistInput = document.getElementById('newEntryArtist');
       // Only fills in an EMPTY field - a name the user already typed by hand
-      // (because P175 doesn't resolve for every song, or they know better
+      // (the lookup doesn't resolve for every item, or they know better
       // than Wikidata) is never silently overwritten by an auto-detection
       // that happens to land afterward, same "manual always wins" rule
       // every other auto-fetched field in this app already follows.
       if (artistInput.value.trim()) return;
-      lookupPerformerForSong(name).then((performer) => {
-        if (myToken !== lookupToken || !performer || artistInput.value.trim()) return;
-        artistInput.value = performer.title;
-        pendingArtistQid = performer.qid;
-      }).catch(() => { /* no performer found - the song still saves fine without one, or the user can type one by hand */ });
+      linkedPersonCfg.lookupFn(name).then((person) => {
+        if (myToken !== lookupToken || !person || artistInput.value.trim()) return;
+        artistInput.value = person.title;
+        pendingArtistQid = person.qid;
+      }).catch(() => { /* no linked person found - the item still saves fine without one, or the user can type one by hand */ });
     }).catch(() => {
       if (myToken !== lookupToken) return;
       setLookupStatus(`Couldn't find a date automatically for "${name}" - please enter it yourself.`, true);
@@ -1110,10 +1153,15 @@ function init() {
     preloadBtn.addEventListener('click', () => preloadTop50());
   }
 
-  // Songs only - see #newEntryArtist's own comments (init's addEntryBtn
-  // handler, entryLookupBtn handler) for how this field is filled/used.
-  if (category.name === 'Songs') {
+  // Any category with a linked-person config (EMAX_LINKED_PERSON_CONFIG) -
+  // see #newEntryArtist's own comments (init's addEntryBtn handler,
+  // entryLookupBtn handler) for how this field is filled/used. The DOM ids
+  // stay "Artist"-named even for Video Games' Director - internal only,
+  // never shown to the user, and not worth a churn-risky rename.
+  const formLinkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  if (formLinkedPersonCfg) {
     document.getElementById('newEntryArtistRow').style.display = '';
+    document.getElementById('newEntryArtist').placeholder = `${formLinkedPersonCfg.label} (optional) - auto-filled by Look Up, or type your own`;
   }
 
   if (EMAX_YEAR_FILTER_KIND[category.name]) {
