@@ -1162,9 +1162,16 @@ body::after {
      animating in/out during scroll, which visibly drags this pill along
      with the page for a frame before it snaps back. Forcing it onto its
      own GPU compositing layer keeps it pinned through that animation
-     instead of being repainted in step with scroll. */
+     instead of being repainted in step with scroll. translateZ(0) alone
+     only promotes it reactively (on the first paint that needs it) - on a
+     long, heavily-scrolled list (EMAX categories now run into the
+     hundreds of rows) that first promotion can itself land mid-scroll and
+     still show a frame of drag. will-change tells the browser to keep this
+     layer promoted proactively the whole time, not just when it first
+     notices scroll is happening. */
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
+  will-change: transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
