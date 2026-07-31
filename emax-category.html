@@ -10,7 +10,7 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Category - Birthday Database</title>
+<title>Category - EMAX</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,18 +20,18 @@
     <a href="profile.html" class="nav-link">My Profile</a>
     <a href="sports-betting.html" class="nav-link">Sports Betting</a>
     <a href="stocks.html" class="nav-link">Stocks</a>
-    <a href="emax.html" class="nav-link">EMAX</a>
+    <a href="emax.html" class="nav-link active">EMAX</a>
     <a href="calculator.html" class="nav-link">Calculator</a>
     <a href="famous.html" class="nav-link">Famous Lookup</a>
     <a href="calendar.html" class="nav-link">Calendar</a>
     <a href="astrology.html" class="nav-link">Astrology</a>
-    <a href="database.html" class="nav-link active">Database</a>
+    <a href="database.html" class="nav-link">Database</a>
     <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
   </nav>
   <script src="nav-scroll.js"></script>
 
   <div class="topbar">
-    <a href="database.html" class="back-link">&larr; All Categories</a>
+    <a href="emax.html" class="back-link">&larr; All Categories</a>
   </div>
 
   <h1 class="page-title" id="categoryTitle">Category</h1>
@@ -40,26 +40,28 @@
 
     <div class="box add-category-box" id="addEntryBox">
       <div class="box-label-row">
-        <div class="box-label" id="entryFormLabel">Add Birthday</div>
+        <div class="box-label" id="entryFormLabel">Add Item</div>
         <button class="btn-link bulk-upload-btn" id="bulkUploadBtn" type="button">📤 Bulk Upload</button>
       </div>
       <div class="inline-form">
         <input type="text" id="newEntryName" placeholder="Name">
         <input type="text" id="newEntryDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
-        <input type="time" id="newEntryTime" title="Birth time (optional)">
+        <button class="icon-btn icon-btn-lookup" id="entryLookupBtn" type="button" title="Look up date">🔍</button>
+        <input type="text" id="newEntryImage" placeholder="Image URL (optional)">
         <button id="addEntryBtn" class="btn">Add</button>
         <button id="cancelEditBtn" class="btn-link" style="display:none;">Cancel</button>
       </div>
+      <div class="famous-status" id="entryLookupStatus"></div>
     </div>
 
-    <div id="entriesContainer" class="entries-list"></div>
+    <div id="entriesContainer" class="entries-list emax-entries-list"></div>
 
   </div>
 
-  <div class="modal-overlay" id="compatModalOverlay">
+  <div class="modal-overlay" id="itemModalOverlay">
     <div class="modal-box">
-      <button class="modal-close" id="compatModalClose" title="Close">&times;</button>
-      <div id="compatModalBody"></div>
+      <button class="modal-close" id="itemModalClose" title="Close">&times;</button>
+      <div id="itemModalBody"></div>
     </div>
   </div>
 
@@ -75,6 +77,6 @@
 <script src="firebase-loader.js"></script>
 <script src="compat-render.js"></script>
 <script src="bulk-upload.js"></script>
-<script src="category.js"></script>
+<script src="emax-category.js"></script>
 </body>
 </html>

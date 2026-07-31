@@ -117,6 +117,9 @@ function dateFromClaim(claims) {
 
 // P569 = date of birth (people). P571 = inception (companies, organizations,
 // countries, buildings, etc.) - tried as a fallback for non-person entities.
+// P577 = publication date (films, books, software) - tried last, for EMAX's
+// Movies category; virtually never set on a person/place/company, so this
+// tier is inert for every other existing caller of this function.
 function fetchKeyDate(qid) {
   const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
   return fetch(url)
@@ -130,6 +133,9 @@ function fetchKeyDate(qid) {
 
       const founded = dateFromClaim(entity.claims.P571);
       if (founded) return { date: founded, kind: 'founded' };
+
+      const released = dateFromClaim(entity.claims.P577);
+      if (released) return { date: released, kind: 'released' };
 
       return null;
     });
@@ -337,6 +343,37 @@ function lookupKeyDateByName(name) {
   return fetchWikidataId(name)
     .then((qid) => (qid ? fetchKeyDate(qid) : null))
     .then((result) => (result || lookupKeyDateFromWikipediaInfobox(name)));
+}
+
+// Same first tier as fetchWikidataId, but also keeps the resolved page's
+// TITLE (post-redirect) - EMAX's "Look up" button shows this so a wrong
+// match (e.g. a common brand/movie name with more than one Wikipedia
+// article) is obvious before saving, instead of trusting the date silently.
+// A separate function rather than changing fetchWikidataId's return shape,
+// since that one's relied on as a bare qid by several existing callers
+// (Famous Lookup, UFC/Tennis venue lookups) that must not change behavior.
+function fetchWikidataIdWithTitle(title) {
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&redirects=1&titles=${encodeURIComponent(title)}&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const pages = data.query && data.query.pages;
+      if (!pages) return null;
+      const page = Object.values(pages)[0];
+      const qid = (page && page.pageprops) ? page.pageprops.wikibase_item : null;
+      return qid ? { qid, title: page.title } : null;
+    });
+}
+
+// Same Wikidata-claims lookup as lookupKeyDateByName, but resolves to
+// { date, kind, title } (or null) - no infobox-scraping fallback, since that
+// fallback can't report which page it actually read. Good enough coverage
+// for EMAX without the extra scraping tier; a miss just means manual entry.
+function lookupKeyDateByNameWithTitle(name) {
+  return fetchWikidataIdWithTitle(name).then((hit) => {
+    if (!hit) return null;
+    return fetchKeyDate(hit.qid).then((result) => (result ? { ...result, title: hit.title } : null));
+  });
 }
 
 /* ===================== Label-search birthdate fallback ===================== */
@@ -677,6 +714,12 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['music', 'band'], emoji: '🎵' },
   { keywords: ['church', 'faith'], emoji: '🙏' },
   { keywords: ['travel', 'trip'], emoji: '✈️' },
+  { keywords: ['clothing', 'clothes', 'apparel', 'fashion'], emoji: '👕' },
+  { keywords: ['movie', 'film', 'cinema'], emoji: '🎬' },
+  { keywords: ['artist', 'singer', 'rapper', 'musician'], emoji: '🎤' },
+  { keywords: ['shoe', 'sneaker'], emoji: '👟' },
+  { keywords: ['tech', 'electronics', 'gadget'], emoji: '💻' },
+  { keywords: ['hygiene', 'skincare', 'grooming', 'cologne'], emoji: '🧴' },
 ];
 
 const CATEGORY_EMOJI_FALLBACK = ['🎉', '🎈', '🎊', '🌟', '💫', '🎁', '✨', '🎆', '🪩', '🎇'];
@@ -691,6 +734,34 @@ function pickCategoryEmoji(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return CATEGORY_EMOJI_FALLBACK[hash % CATEGORY_EMOJI_FALLBACK.length];
+}
+
+/* ===================== EMAX (personal brand/media compatibility) ===================== */
+// Same categories-of-entries shape as the Birthday Database above, kept in
+// its own store since these are things you like, not people you know -
+// EMAX_STARTER_CATEGORIES gets seeded in once on a first-ever visit
+// (emax.js), then it's just an ordinary extensible category list from
+// there, same "Add Category" capability as the Birthday Database.
+
+const EMAX_STORAGE_KEY = 'numerology_emax_db';
+
+const EMAX_STARTER_CATEGORIES = [
+  'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
+];
+
+function loadEmaxDB() {
+  try {
+    const raw = localStorage.getItem(EMAX_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && Array.isArray(parsed.categories)) ? parsed : { categories: [] };
+  } catch (e) {
+    return { categories: [] };
+  }
+}
+
+function saveEmaxDB(db) {
+  localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify(db));
+  cloudPushKey(EMAX_STORAGE_KEY);
 }
 
 /* ===================== My Profile ===================== */
@@ -2788,6 +2859,7 @@ function initBreakdownToggle(selectId, boxIds) {
 
 const CLOUD_SYNC_FIELDS = {
   [STORAGE_KEY]: 'db',
+  [EMAX_STORAGE_KEY]: 'emax',
   [PROFILE_KEY]: 'profile',
   [STADIUMS_KEY]: 'stadiums',
   [INTL_REGIONS_KEY]: 'intlRegions',

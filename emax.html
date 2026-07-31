@@ -10,7 +10,7 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Compatibility Calculator</title>
+<title>EMAX</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,51 +20,36 @@
     <a href="profile.html" class="nav-link">My Profile</a>
     <a href="sports-betting.html" class="nav-link">Sports Betting</a>
     <a href="stocks.html" class="nav-link">Stocks</a>
-    <a href="emax.html" class="nav-link">EMAX</a>
+    <a href="emax.html" class="nav-link active">EMAX</a>
     <a href="calculator.html" class="nav-link">Calculator</a>
     <a href="famous.html" class="nav-link">Famous Lookup</a>
     <a href="calendar.html" class="nav-link">Calendar</a>
     <a href="astrology.html" class="nav-link">Astrology</a>
     <a href="database.html" class="nav-link">Database</a>
-    <a href="compatibility.html" class="nav-link active">Compatibility Calculator</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
   </nav>
   <script src="nav-scroll.js"></script>
 
+  <h1 class="page-title">EMAX</h1>
 
-  <div class="compat-mode-select" id="modeSelect">
-    <button class="mode-card" data-mode="today">
-      <div class="mode-icon">📅</div>
-      <div class="mode-title">Compatibility with Today</div>
-      <div class="mode-desc">See how a birthday lines up with today's date.</div>
-    </button>
-    <button class="mode-card" data-mode="date">
-      <div class="mode-icon">🔗</div>
-      <div class="mode-title">Compatibility with Another Date</div>
-      <div class="mode-desc">Compare two birthdays against each other.</div>
-    </button>
+  <div class="db-page">
+
+    <div class="box add-category-box">
+      <div class="box-label">New Category</div>
+      <div class="inline-form">
+        <input type="text" id="newCategoryName" placeholder="e.g. Colognes, Restaurants, Cars">
+        <button id="addCategoryBtn" class="btn">Add Category</button>
+      </div>
+    </div>
+
+    <div id="categoriesContainer"></div>
+
   </div>
-
-  <div class="compat-form" id="compatForm">
-    <a href="#" class="back-link" id="backToModes">&larr; Change mode</a>
-
-    <div class="person-inputs" id="personInputs"></div>
-
-    <button class="btn btn-large" id="calculateBtn">Calculate Compatibility</button>
-  </div>
-
-  <div class="compat-results" id="compatResults"></div>
-
 </div>
 
-<script src="astronomy.browser.min.js"></script>
-<script src="astro-engine.js"></script>
-<script src="numerology.js"></script>
-<script src="compat-data.js"></script>
-<script src="compat-engine.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
-<script src="compat-render.js"></script>
-<script src="compatibility.js"></script>
+<script src="emax.js"></script>
 </body>
 </html>
