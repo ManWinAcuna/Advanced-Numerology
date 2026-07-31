@@ -238,8 +238,16 @@ function computeLuckyBonus(dateA, dateB) {
 // western sun sign at 0 and day-of-year at +2 while they carried 10% and 3% of
 // the score. Every sub-score is still computed and returned at any weight - a
 // dimension has to keep being measured to notice if it ever starts predicting.
+//
+// Top-level moved from 60/30/10 to 50/40/10 (numerology/vietnamese/western,
+// 2026-07-31) - the Vietnamese zodiac axis, especially clash pairs, kept
+// showing up in real outcomes more than its old 30% implied: Crocs (founded
+// 2002, Year of the Horse) hit its major lawsuit in 2008, Year of the Rat -
+// Horse/Rat is a classic clash pair; BTC (associated with the Rat) was down
+// over 30% during the 2026 Year of the Horse. Western stays at 10% - no
+// observed edge there either way yet.
 const COMPAT_DEFAULT_WEIGHTS = {
-  numerology: 0.60, vietnamese: 0.30, western: 0.10,
+  numerology: 0.50, vietnamese: 0.40, western: 0.10,
   lifePath: 0.60, dayNum: 0.35, doy: 0.05,
 };
 
