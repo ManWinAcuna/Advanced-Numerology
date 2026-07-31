@@ -421,7 +421,7 @@ async function preloadTop50() {
     const seed = names[i];
     const displayName = Array.isArray(seed) ? seed[0] : seed;
     const searchTerm = Array.isArray(seed) ? seed[1] : seed;
-    setLookupStatus(`⚡ Preloading Top 50 - ${i + 1}/${names.length} (${added} added so far)...`, false);
+    setLookupStatus(`⚡ Preloading Top ${names.length} - ${i + 1}/${names.length} (${added} added so far)...`, false);
     if (existing.has(displayName.toLowerCase())) { skippedExisting++; continue; }
     try {
       const info = await lookupKeyDateByNameWithTitle(searchTerm);
@@ -658,8 +658,13 @@ function init() {
   });
 
   if (EMAX_SEED_LISTS[category.name]) {
-    document.getElementById('preloadTop50Btn').style.display = '';
-    document.getElementById('preloadTop50Btn').addEventListener('click', () => preloadTop50());
+    const preloadBtn = document.getElementById('preloadTop50Btn');
+    // Labeled with the list's REAL length, not a fixed number - each
+    // category's pool grew to a different size (quality over forcing an
+    // exact count), so the button always says what it actually offers.
+    preloadBtn.textContent = `⚡ Preload Top ${EMAX_SEED_LISTS[category.name].length}`;
+    preloadBtn.style.display = '';
+    preloadBtn.addEventListener('click', () => preloadTop50());
   }
 
   if (EMAX_YEAR_FILTER_KIND[category.name]) {
