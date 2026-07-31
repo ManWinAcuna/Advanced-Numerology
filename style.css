@@ -5883,15 +5883,28 @@ body {
 .emax-entry-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* Each row's own compatibility score tints the whole card - the thumbnail's
+   glow ring and an ambient shadow off the card itself - not just the number,
+   so rank reads at a glance while scrolling (per your "no top-3 badge, keep
+   it to sort + color" answer, this IS that color, just carried further). */
+.emax-entry-item.good { --emax-glow: rgba(139, 195, 74, 0.5); border-color: rgba(139, 195, 74, 0.35); }
+.emax-entry-item.bad { --emax-glow: rgba(229, 57, 63, 0.5); border-color: rgba(229, 57, 63, 0.35); }
+.emax-entry-item.mid { --emax-glow: rgba(245, 197, 66, 0.5); border-color: rgba(245, 197, 66, 0.35); }
+.emax-entry-item.dim { --emax-glow: rgba(255, 255, 255, 0.12); }
+.emax-entry-item.good, .emax-entry-item.bad, .emax-entry-item.mid {
+  box-shadow: 0 0 18px -10px var(--emax-glow);
 }
 
 .emax-entry-thumb {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   overflow: hidden;
+  box-shadow: 0 0 0 2px var(--panel), 0 0 12px 1px var(--emax-glow, transparent);
 }
 .emax-entry-thumb img {
   width: 100%;
@@ -5913,19 +5926,19 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Colored initials circle - grid/list stays this always; the real photo
    (auto-fetched or manual) only loads inside an item's own popup. */
 .emax-monogram {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   color: #0c0a08;
   background: hsl(var(--emax-hue) 70% 55%);
@@ -5945,10 +5958,33 @@ body {
   font-weight: 800;
   white-space: nowrap;
 }
-.emax-score.good { color: var(--good); border-color: rgba(139, 195, 74, 0.5); }
-.emax-score.bad { color: var(--bad); border-color: rgba(229, 57, 63, 0.5); }
-.emax-score.mid { color: var(--yellow); border-color: rgba(245, 197, 66, 0.5); }
 .emax-score.dim { color: var(--muted); }
+
+/* Mini score ring on each row - a compact version of the popup's own score
+   ring (openItemModal's emax-score-ring), so the list and the popup read as
+   one visual system instead of two different score treatments. */
+.emax-row-score {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+.emax-row-score-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.emax-row-score-ring-track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 4; }
+.emax-row-score-ring-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.4s ease; }
+.emax-row-score-ring.good .emax-row-score-ring-fill { stroke: var(--good); }
+.emax-row-score-ring.bad .emax-row-score-ring-fill { stroke: var(--bad); }
+.emax-row-score-ring.mid .emax-row-score-ring-fill { stroke: var(--yellow); }
+.emax-row-score-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
 
 .emax-stars {
   display: inline-flex;

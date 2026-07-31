@@ -212,11 +212,29 @@ function scoredEntries(meDate) {
   return list;
 }
 
+// A compact version of the popup's score ring (openItemModal), sized for a
+// list row. `null` (no profile birthday yet, or a year-only entry) keeps the
+// plain dash - a ring with nothing to show would be misleading.
+function emaxRowScoreHtml(score) {
+  if (score == null) return '<div class="emax-score dim">&mdash;</div>';
+  const r = 18;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - Math.min(100, Math.max(0, score)) / 100);
+  return `
+    <div class="emax-row-score">
+      <svg viewBox="0 0 44 44" class="emax-row-score-ring ${scoreClass(score)}">
+        <circle cx="22" cy="22" r="${r}" class="emax-row-score-ring-track"></circle>
+        <circle cx="22" cy="22" r="${r}" class="emax-row-score-ring-fill" style="stroke-dasharray:${circumference};stroke-dashoffset:${offset};"></circle>
+      </svg>
+      <div class="emax-row-score-num">${score}</div>
+    </div>`;
+}
+
 function entryRowHtml(entry, score) {
   if (!entry.date && entry.year) {
     const yearSign = getChineseZodiacYear(new Date(entry.year, 6, 1));
     return `
-      <div class="entry-item emax-entry-item">
+      <div class="entry-item emax-entry-item dim">
         <div class="emax-entry-thumb">${emaxMonogram(entry.name, false)}</div>
         <div class="emax-entry-main">
           <div class="entry-name">${escapeHtml(entry.name)}</div>
@@ -232,16 +250,19 @@ function entryRowHtml(entry, score) {
       </div>`;
   }
 
-  const scoreHtml = score == null ? '<div class="emax-score dim">&mdash;</div>' : `<div class="emax-score ${scoreClass(score)}">${score}%</div>`;
+  // The score tier tints the whole card (border + thumbnail glow), not just
+  // the number - per your "no special top-3 badge, keep it to sort + color"
+  // answer, this IS the color coding, just carried through the whole row.
+  const tierCls = score == null ? 'dim' : scoreClass(score);
   return `
-    <div class="entry-item emax-entry-item" data-open="${entry.id}">
+    <div class="entry-item emax-entry-item ${tierCls}" data-open="${entry.id}">
       <div class="emax-entry-thumb" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
       <div class="emax-entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
         ${starsHtml(entry.id, entry.rating || 0)}
       </div>
       <div class="emax-entry-side">
-        ${scoreHtml}
+        ${emaxRowScoreHtml(score)}
         <div class="entry-actions">
           <button class="btn-link" data-edit="${entry.id}">Edit</button>
           <button class="icon-btn" data-entry-delete="${entry.id}" title="Delete">&times;</button>
