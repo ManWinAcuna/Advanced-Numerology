@@ -41,11 +41,19 @@ function breakdownSection(title, score, rows) {
 // toward the score, but showing the same label twice reads as a glitch, so
 // notes sharing a rule name are grouped into a single row here with their
 // details joined.
+//
+// A note is either a plain string (renderMonthDetail builds its own
+// {total, notes} object by hand from a single pre-formatted luckyNote
+// string) or a {text, from} object (everything coming straight from
+// computeLuckyBonus) - `from` isn't used here (this component has no
+// concept of "who's viewing"), it's read directly by consumers that DO know
+// (see emax-category.js rewriting "your" to a real name before calling in).
 function bonusSectionHtml(bonuses) {
   if (!bonuses || !bonuses.notes.length) return '';
   const order = [];
   const detailsByRule = new Map();
-  bonuses.notes.forEach((n) => {
+  bonuses.notes.forEach((note) => {
+    const n = typeof note === 'string' ? note : note.text;
     const sepIdx = n.indexOf(' - ');
     const rule = sepIdx === -1 ? n : n.slice(0, sepIdx);
     const detail = sepIdx === -1 ? '' : n.slice(sepIdx + 3);

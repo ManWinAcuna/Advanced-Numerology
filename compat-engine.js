@@ -157,11 +157,16 @@ const MONTH_NAMES_LONG = ['January', 'February', 'March', 'April', 'May', 'June'
 
 // Checks a person's lucky-number digits against a compared date, per the three bonus rules.
 // Each note explains exactly which value triggered it, not just the rule's name. Notes are
-// {points, text} pairs (rather than plain strings) so the caller can de-duplicate identical
-// facts surfaced from both comparison directions without losing track of their point value -
-// e.g. two dates in the same month+year make the "Month" check trivially true both ways,
-// which would otherwise double-count the same fact as two separate bonuses.
-function luckyNumberBonus(luckyNumber, luckyDigits, comparedDate) {
+// {points, text, from} objects (rather than plain strings) so the caller can de-duplicate
+// identical facts surfaced from both comparison directions without losing track of their
+// point value - e.g. two dates in the same month+year make the "Month" check trivially true
+// both ways, which would otherwise double-count the same fact as two separate bonuses. `from`
+// ('entity' or 'day', matching computeCompatibility's own parameter names) records WHOSE lucky
+// digits actually triggered the note - the text always says "your lucky digits" regardless,
+// since this engine has no notion of which side is "the viewer"; a consumer that DOES know
+// (e.g. EMAX, which always knows which side is the profile owner) can use `from` to rephrase
+// it accurately instead of a blanket "your" that's only correct half the time.
+function luckyNumberBonus(luckyNumber, luckyDigits, comparedDate, from) {
   const month = comparedDate.getMonth() + 1;
   const monthName = MONTH_NAMES_LONG[month - 1];
   const day = comparedDate.getDate();
@@ -178,22 +183,22 @@ function luckyNumberBonus(luckyNumber, luckyDigits, comparedDate) {
     const monthDayMatch = (a === month && b === day) || (b === month && a === day);
     const combinedDayMatch = day === Number(`${a}${b}`) || day === Number(`${b}${a}`);
     if (monthDayMatch) {
-      notes.push({ points: 10, text: `Lucky Number Day - ${monthName} ${day} is built from your lucky digits ${a}/${b}` });
+      notes.push({ points: 10, text: `Lucky Number Day - ${monthName} ${day} is built from your lucky digits ${a}/${b}`, from });
     } else if (combinedDayMatch) {
-      notes.push({ points: 10, text: `Lucky Number Day - the ${day}${ORDINAL_SUFFIX(day)} matches your lucky digits ${a}/${b} combined` });
+      notes.push({ points: 10, text: `Lucky Number Day - the ${day}${ORDINAL_SUFFIX(day)} matches your lucky digits ${a}/${b} combined`, from });
     }
   }
 
   // Lucky Month: anyone born in this compared month+year would share the same lucky digits.
   const monthDigits = monthYearLuckyDigits(month, year);
   if (sameDigitSet(monthDigits, luckyDigits)) {
-    notes.push({ points: 5, text: `Lucky Number Month - ${monthName} ${year} shares your lucky digits ${luckyDigits.join('/')}` });
+    notes.push({ points: 5, text: `Lucky Number Month - ${monthName} ${year} shares your lucky digits ${luckyDigits.join('/')}`, from });
   } else if ((luckyNumber === 11 || luckyNumber === 12) && month === luckyNumber) {
     // A lucky number of 11 or 12 directly names a calendar month (Nov/Dec) -
     // that month is lucky every single year regardless of the year's own
     // digits, since months only run 1-12 and no other lucky number can ever
     // land on a real month this way.
-    notes.push({ points: 5, text: `Lucky Number Month - ${monthName} is the ${luckyNumber}th month, matching your lucky number ${luckyNumber}` });
+    notes.push({ points: 5, text: `Lucky Number Month - ${monthName} is the ${luckyNumber}th month, matching your lucky number ${luckyNumber}`, from });
   }
 
   // X day of the year: day-of-year's digits (zeros stripped) are a permutation of the lucky digits.
@@ -202,7 +207,7 @@ function luckyNumberBonus(luckyNumber, luckyDigits, comparedDate) {
   const doyMatch = doyDigits.length === luckyDigitsSorted.length
     && doyDigits.every((d, idx) => d === luckyDigitsSorted[idx]);
   if (doyMatch) {
-    notes.push({ points: 10, text: `Lucky Number Day-of-Year - ${monthName} ${day} is day ${dayOfYear} of the year, matching your lucky digits ${luckyDigits.join('/')}` });
+    notes.push({ points: 10, text: `Lucky Number Day-of-Year - ${monthName} ${day} is day ${dayOfYear} of the year, matching your lucky digits ${luckyDigits.join('/')}`, from });
   }
 
   return notes;
@@ -217,8 +222,8 @@ function computeLuckyBonus(dateA, dateB) {
   const luckyA = getCompatLuckyNumber(dateA);
   const luckyB = getCompatLuckyNumber(dateB);
   const rawNotes = [
-    ...luckyNumberBonus(luckyA.number, luckyA.digits, dateB),
-    ...luckyNumberBonus(luckyB.number, luckyB.digits, dateA),
+    ...luckyNumberBonus(luckyA.number, luckyA.digits, dateB, 'entity'),
+    ...luckyNumberBonus(luckyB.number, luckyB.digits, dateA, 'day'),
   ];
   const seenText = new Set();
   const notes = rawNotes.filter((n) => {
@@ -227,7 +232,7 @@ function computeLuckyBonus(dateA, dateB) {
     return true;
   });
   const total = notes.reduce((sum, n) => sum + n.points, 0);
-  return { total, notes: notes.map((n) => n.text) };
+  return { total, notes: notes.map((n) => ({ text: n.text, from: n.from })) };
 }
 
 /* ---------- Full scoring ---------- */

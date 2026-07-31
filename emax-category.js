@@ -200,6 +200,23 @@ function emaxAdjustedCompatibility(meDate, themDate) {
   };
 }
 
+// computeLuckyBonus checks both directions - a note's `from` says WHOSE lucky
+// digits actually triggered it ('entity' = mine, 'day' = the item's - see
+// computeCompatibility(meDate, themDate) in emaxAdjustedCompatibility above,
+// entityDate is always meDate here). The engine always writes "your lucky
+// digits" regardless of direction since it has no notion of "the viewer";
+// EMAX does, so a 'day' note gets rewritten to name the item instead of
+// reading as if the fact were about the viewer's own digits.
+function emaxRewriteBonusNotes(bonuses, themName) {
+  if (!bonuses || !bonuses.notes.length) return bonuses;
+  const notes = bonuses.notes.map((note) => {
+    if (typeof note === 'string') return note; // no direction info - leave as-is
+    if (note.from !== 'day') return note.text;
+    return note.text.replace(/\byour lucky (digits|number)\b/g, `${themName}'s lucky $1`);
+  });
+  return { total: bonuses.total, notes };
+}
+
 /* ===================== List rendering ===================== */
 
 // { entry, score }[] - score null when there's no profile birthday yet or
@@ -448,7 +465,8 @@ function openItemModal(entry) {
     </div>`;
 
   const compatEl = document.getElementById('itemModalCompat');
-  renderCompatResults(compatEl, result, entry.name, 'Me');
+  const renderResult = { ...result, bonuses: emaxRewriteBonusNotes(result.bonuses, entry.name) };
+  renderCompatResults(compatEl, renderResult, entry.name, 'Me');
   compatEl.classList.add('emax-breakdown-body');
   compatEl.hidden = true;
   document.getElementById('itemModalBreakdownToggle').addEventListener('click', () => {
