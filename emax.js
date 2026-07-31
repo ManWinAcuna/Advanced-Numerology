@@ -1,12 +1,40 @@
 let db = loadEmaxDB();
 
-// First-ever visit: seed the 6 starter categories so the page isn't empty.
-// Only fires once - anyone who deletes a starter category later keeps it
-// deleted (this only runs when there are NO categories at all yet).
-if (db.categories.length === 0) {
-  EMAX_STARTER_CATEGORIES.forEach((name) => db.categories.push({ id: uid(), name, entries: [] }));
+// Seeds any starter category name not yet offered to this account -
+// EMAX_SEEN_STARTERS_KEY tracks that regardless of whether you kept or
+// deleted it, so nothing is ever resurrected, but a category added to the
+// app AFTER you'd already been using EMAX (Anime/Shows/Songs, added well
+// after the original 6) still reaches your existing database instead of
+// only ever showing up for a brand-new install.
+let emaxSeenStarters = null;
+try {
+  const raw = localStorage.getItem(EMAX_SEEN_STARTERS_KEY);
+  emaxSeenStarters = raw ? JSON.parse(raw) : null;
+} catch (e) { emaxSeenStarters = null; }
+
+if (emaxSeenStarters === null) {
+  // No migration record yet. A device that already has categories was
+  // seeded under the ORIGINAL one-time-only logic (the first 6) before this
+  // tracking existed - treat those as already-seen so they're never
+  // re-offered (that would resurrect one you'd deliberately deleted). A
+  // truly first-ever visit (zero categories) has seen nothing yet.
+  emaxSeenStarters = db.categories.length > 0
+    ? ['Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands']
+    : [];
+}
+
+// Also guards against a name that's somehow already present in db.categories
+// (a stale/out-of-sync emaxSeenStarters shouldn't be able to duplicate a
+// category that's already there, deleted-and-seen or not) - belt and
+// suspenders over the seen-list check alone.
+const existingNames = new Set(db.categories.map((c) => c.name));
+const newStarters = EMAX_STARTER_CATEGORIES.filter((name) => !emaxSeenStarters.includes(name) && !existingNames.has(name));
+if (newStarters.length) {
+  newStarters.forEach((name) => db.categories.push({ id: uid(), name, entries: [] }));
+  emaxSeenStarters = emaxSeenStarters.concat(newStarters);
   saveEmaxDB(db);
 }
+try { localStorage.setItem(EMAX_SEEN_STARTERS_KEY, JSON.stringify(emaxSeenStarters)); cloudPushKey(EMAX_SEEN_STARTERS_KEY); } catch (e) { /* storage full - retried next load */ }
 
 function addCategory(name) {
   name = name.trim();

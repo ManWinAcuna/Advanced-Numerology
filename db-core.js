@@ -993,11 +993,18 @@ function pickCategoryEmoji(name) {
 /* ===================== EMAX (personal brand/media compatibility) ===================== */
 // Same categories-of-entries shape as the Birthday Database above, kept in
 // its own store since these are things you like, not people you know -
-// EMAX_STARTER_CATEGORIES gets seeded in once on a first-ever visit
-// (emax.js), then it's just an ordinary extensible category list from
-// there, same "Add Category" capability as the Birthday Database.
+// EMAX_STARTER_CATEGORIES gets seeded in incrementally (emax.js, tracked by
+// EMAX_SEEN_STARTERS_KEY): any name in this list not yet marked "seen" for
+// this account gets added once, so a NEW starter category added to the app
+// later (Anime/Shows/Songs, added well after the original 6 shipped) still
+// reaches an EXISTING user's already-populated database, not just a
+// brand-new one. A name only ever gets offered once - deleting it afterward
+// (an original starter or a newly-added one) is never resurrected. From
+// there it's just an ordinary extensible category list, same "Add Category"
+// capability as the Birthday Database.
 
 const EMAX_STORAGE_KEY = 'numerology_emax_db';
+const EMAX_SEEN_STARTERS_KEY = 'numerology_emax_starters_seen_v1';
 
 const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
@@ -3115,6 +3122,11 @@ function initBreakdownToggle(selectId, boxIds) {
 const CLOUD_SYNC_FIELDS = {
   [STORAGE_KEY]: 'db',
   [EMAX_STORAGE_KEY]: 'emax',
+  // Syncs the starter-category migration state itself (see
+  // EMAX_SEEN_STARTERS_KEY above) so a second device that already pulled
+  // down a newly-added starter category (e.g. Anime/Shows/Songs) doesn't
+  // also independently re-seed it - it sees the same "already seen" record.
+  [EMAX_SEEN_STARTERS_KEY]: 'emaxSeenStarters',
   [PROFILE_KEY]: 'profile',
   [STADIUMS_KEY]: 'stadiums',
   [INTL_REGIONS_KEY]: 'intlRegions',
