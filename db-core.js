@@ -875,6 +875,90 @@ function queuedWikiJson(url) {
   return run;
 }
 
+/* ===================== EMAX "Preload by Year" v2 (live SPARQL) ===================== */
+// See EMAX_YEAR_QUERY_CONFIG (emax-seed-data.js) for what each category
+// actually queries. One bulk SPARQL request per search - the query itself
+// does the ranking (ORDER BY sitelinks, a real cross-language notability
+// signal - there's no true "popularity" data on Wikidata) and the
+// day-precision filtering (statement-node psv:/wikibase:timePrecision, not
+// the simplified wdt: triple, since that normalizes a year-only fact to a
+// fabricated Jan-1 timestamp indistinguishable from a real one).
+
+function emaxYearSparqlSubjectClause(cfg) {
+  const values = (cfg.values || []).map((q) => `wd:${q}`).join(' ');
+  if (cfg.queryKind === 'instance') return `?item wdt:P31 ?cls. VALUES ?cls { ${values} }`;
+  if (cfg.queryKind === 'industry') return `?item wdt:P452 ?ind. VALUES ?ind { ${values} }`;
+  if (cfg.queryKind === 'occupation') return `?item wdt:P106 ?occ. VALUES ?occ { ${values} }`;
+  if (cfg.queryKind === 'human') return `?item wdt:P31 wd:Q5. ?item wdt:P106 ?occ. VALUES ?occ { ${values} }`;
+  throw new Error(`unknown EMAX_YEAR_QUERY_CONFIG.queryKind: ${cfg.queryKind}`);
+}
+
+// Reusing the same ?stmt/?val/?date/?precision names across UNION branches
+// is deliberate, not an oversight - each branch is evaluated independently,
+// so the outer query ends up with exactly one ?date/?precision no matter
+// which property actually matched (P571 vs P1619, or P580 vs P577 for anime).
+function emaxYearSparqlDateClause(prop, year) {
+  return `{ ?item p:${prop} ?stmt. ?stmt psv:${prop} ?val. ?val wikibase:timeValue ?date. ?val wikibase:timePrecision ?precision. FILTER(YEAR(?date) = ${year}) }`;
+}
+
+function buildEmaxYearSparqlQuery(cfg, year, limit) {
+  const subject = emaxYearSparqlSubjectClause(cfg);
+  const dateProps = cfg.altDateProp ? [cfg.dateProp, cfg.altDateProp] : [cfg.dateProp];
+  const dateUnion = dateProps.map((p) => emaxYearSparqlDateClause(p, year)).join(' UNION ');
+  return `SELECT ?item ?itemLabel ?date ?precision ?sitelinks ?wikiTitle WHERE {
+    ${subject}
+    ${dateUnion}
+    ?item wikibase:sitelinks ?sitelinks.
+    ?sitelink schema:about ?item; schema:isPartOf <https://en.wikipedia.org/>; schema:name ?wikiTitle.
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  } ORDER BY DESC(?sitelinks) LIMIT ${limit}`;
+}
+
+// itemLabel (the clean Wikidata label, e.g. "Baby") is what gets SAVED and
+// shown as the item's name; wikiTitle (the real enwiki article title, e.g.
+// "Baby (Justin Bieber song)") is kept only for image lookups - the two
+// genuinely differ whenever a title needed disambiguation, and using the
+// wrong one for either purpose either shows an ugly disambiguated name or
+// fails to find the item's real Wikipedia page.
+async function fetchEmaxYearCandidates(cfg, year, limit) {
+  const query = buildEmaxYearSparqlQuery(cfg, year, limit);
+  const url = `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`;
+  const data = await queuedWikiJson(url);
+  const bindings = (data && data.results && Array.isArray(data.results.bindings)) ? data.results.bindings : [];
+  const seen = new Set();
+  const out = [];
+  for (const b of bindings) {
+    if (!b.itemLabel || !b.wikiTitle || !b.item || !b.date || !b.precision) continue;
+    const qid = b.item.value.split('/').pop();
+    if (seen.has(qid)) continue; // a UNION with two date branches can return the same item twice
+    seen.add(qid);
+    out.push({
+      qid,
+      name: b.itemLabel.value,
+      wikiTitle: b.wikiTitle.value,
+      date: b.date.value.slice(0, 10),
+      year,
+      dayPrecision: Number(b.precision.value) >= 11,
+      sitelinks: Number(b.sitelinks.value),
+    });
+  }
+  return out;
+}
+
+// Candidates arrive sorted DESC by sitelinks (server-side). Cherry-picking
+// only the top N would be nothing but the globally-most-famous entries for
+// that year; picking evenly-spaced indices across the full sorted list
+// instead spreads the result across the whole fame spectrum - some
+// instantly-recognizable, some genuinely obscure - per the user's own
+// preference (2026-07-31), rather than a strict popularity ranking.
+function emaxStratifiedFameSample(candidates, targetN) {
+  if (candidates.length <= targetN) return candidates;
+  const stride = candidates.length / targetN;
+  const picked = [];
+  for (let i = 0; i < targetN; i++) picked.push(candidates[Math.floor(i * stride)]);
+  return picked;
+}
+
 async function lookupPersonDobByLabelSearch(name, descriptionRe) {
   const data = await queuedWikiJson(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&type=item&limit=5&format=json&origin=*`);
   const hits = data && Array.isArray(data.search) ? data.search : [];

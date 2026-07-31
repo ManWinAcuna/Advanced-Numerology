@@ -51,6 +51,54 @@ const EMAX_YEAR_FILTER_KIND = {
   'Authors': 'born',
 };
 
+// "Preload by Year" v2 - a live Wikidata SPARQL query for what actually
+// exists FROM year X (top N, sampled across the fame spectrum), replacing
+// the old approach of scanning this file's own curated seed list hoping a
+// handful of all-time picks happened to land on one exact year (which for
+// most years came back with zero or near-zero hits - the actual bug report
+// this fixed). Kept as data here (not logic - see db-core.js's
+// buildEmaxYearSparqlQuery/fetchEmaxYearCandidates) since it's just which
+// real-world Wikidata classes/properties define each category:
+//   'instance' - ?item is one of `values` via P31 (Movies/Songs/Shows/
+//     Anime/Video Games/Books)
+//   'industry' - ?item's P452 (industry) is one of `values` (the 5 Brand
+//     categories) - Wikidata doesn't have one clean "clothing brand" class
+//     with real coverage, but industry tagging on P571-dated companies does
+//   'occupation' - ?item's P106 (occupation) is one of `values` (Artists/
+//     YouTubers/Authors)
+//   'human' - any P31=human WHOSE occupation is one of `values` (Historical
+//     Figures) - deliberately a broad-but-relevant allowlist (politician/
+//     monarch/head of state/military officer/revolutionary/explorer/
+//     philosopher), not every human born that year: an unfiltered query was
+//     tested live and it's dominated by whichever athletes/actors have the
+//     most Wikipedia sitelinks globally, not remotely what "Historical
+//     Figures" means next to Caesar/Genghis Khan/Confucius in the seed list.
+// dateProp is the primary property tested for a match; altDateProp (when
+// present) is also tried via SPARQL property alternation - e.g. a brand's
+// P571 inception OR its P1619 opening, same fallback the per-item "Look Up"
+// lookups already use. Every query additionally requires day-precision
+// (Wikidata's own stated precision, not a value that merely NORMALIZES to
+// a full timestamp) to save a full date - a year- or month-only fact is kept
+// as a year-only entry instead, same "never fabricate a date finer than
+// what the source actually supports" rule as the rest of this app.
+const EMAX_YEAR_QUERY_CONFIG = {
+  'Clothing Brands': { queryKind: 'industry', dateProp: 'P571', altDateProp: 'P1619', values: ['Q11828862'] },
+  'Shoe Brands': { queryKind: 'industry', dateProp: 'P571', altDateProp: 'P1619', values: ['Q5915560', 'Q11828862'] },
+  'Technology Brands': { queryKind: 'industry', dateProp: 'P571', altDateProp: 'P1619', values: ['Q73768396', 'Q880371', 'Q110702998'] },
+  'Hygiene Brands': { queryKind: 'industry', dateProp: 'P571', altDateProp: 'P1619', values: ['Q12752882'] },
+  'Food & Beverage Brands': { queryKind: 'industry', dateProp: 'P571', altDateProp: 'P1619', values: ['Q540912', 'Q4899370'] },
+  'Artists': { queryKind: 'occupation', dateProp: 'P569', values: ['Q639669', 'Q177220', 'Q488205', 'Q36834', 'Q855091'] },
+  'YouTubers': { queryKind: 'occupation', dateProp: 'P569', values: ['Q17125263'] },
+  'Authors': { queryKind: 'occupation', dateProp: 'P569', values: ['Q36180'] },
+  'Historical Figures': { queryKind: 'human', dateProp: 'P569', values: ['Q82955', 'Q116', 'Q48352', 'Q189290', 'Q3242115', 'Q11900058', 'Q4964182'] },
+  'Movies': { queryKind: 'instance', dateProp: 'P577', values: ['Q11424'] },
+  'Songs': { queryKind: 'instance', dateProp: 'P577', values: ['Q7366'] },
+  'Shows': { queryKind: 'instance', dateProp: 'P580', values: ['Q5398426'] },
+  'Anime': { queryKind: 'instance', dateProp: 'P580', altDateProp: 'P577', values: ['Q63952888'] },
+  'Video Games': { queryKind: 'instance', dateProp: 'P577', values: ['Q7889'] },
+  'Books': { queryKind: 'instance', dateProp: 'P577', values: ['Q571', 'Q7725634'] },
+};
+
 const EMAX_SEED_LISTS = {
   'Clothing Brands': [
     "Gucci", ["Levi's", "Levi Strauss & Co."], "Zara", "H&M", "Uniqlo",
