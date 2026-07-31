@@ -1028,9 +1028,12 @@ body::after {
   cursor: default;
 }
 .tile-reorder-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
+  grid-template-rows: repeat(2, 32px);
   gap: 6px;
   margin-top: 4px;
+  justify-content: center;
 }
 .tile-reorder-controls .icon-btn {
   width: 32px;
@@ -1038,6 +1041,10 @@ body::after {
   font-size: 16px;
   font-weight: 800;
 }
+.tile-reorder-controls [data-action="move-up"] { grid-column: 2; grid-row: 1; }
+.tile-reorder-controls [data-action="move-earlier"] { grid-column: 1; grid-row: 2; }
+.tile-reorder-controls [data-action="move-down"] { grid-column: 2; grid-row: 2; }
+.tile-reorder-controls [data-action="move-later"] { grid-column: 3; grid-row: 2; }
 .tile-reorder-controls .icon-btn:hover:not(:disabled) {
   color: var(--yellow);
   border-color: var(--yellow);

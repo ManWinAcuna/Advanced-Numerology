@@ -70,6 +70,36 @@ function reorderCategory(fromIndex, toIndex) {
 // happens to arbitrate a held touch. Guaranteed to work everywhere.
 let rearrangeMode = false;
 
+// The grid is auto-fill/minmax, so its column count changes with viewport
+// width - measuring the browser's own computed layout (rather than
+// hardcoding a number) keeps Up/Down correct whether it's 2 columns on a
+// phone or 5+ on a wide desktop window.
+function currentGridColumns() {
+  const container = document.getElementById('categoriesContainer');
+  // getComputedStyle is always present in a real browser; the fallback here
+  // only matters for the Node/vm test harness, which has no CSS layout
+  // engine to resolve auto-fill/minmax into an actual column count.
+  if (typeof getComputedStyle !== 'function') return 2;
+  const cols = getComputedStyle(container).gridTemplateColumns.split(' ').filter(Boolean).length;
+  return cols || 1;
+}
+
+// Up/Down swaps directly with the tile one row away in the same column.
+// This is deliberately NOT reorderCategory's splice-based move: splicing by
+// more than one position shifts every tile in between rather than
+// exchanging just the two involved, which for a "move up/down one row"
+// click would drag along a neighbor the user never touched. Left/Right
+// moves by exactly one position, where a splice and a swap are the same
+// operation, so reorderCategory is untouched and still owns those.
+function swapCategories(indexA, indexB) {
+  if (indexA === indexB || indexA < 0 || indexB < 0
+    || indexA >= db.categories.length || indexB >= db.categories.length) return;
+  const tmp = db.categories[indexA];
+  db.categories[indexA] = db.categories[indexB];
+  db.categories[indexB] = tmp;
+  saveEmaxDB(db);
+}
+
 function render() {
   const container = document.getElementById('categoriesContainer');
   container.innerHTML = '';
@@ -81,6 +111,7 @@ function render() {
   }
 
   container.className = 'category-grid';
+  const cols = rearrangeMode ? currentGridColumns() : 1;
 
   db.categories.forEach((cat, index) => {
     const count = cat.entries.length;
@@ -90,7 +121,9 @@ function render() {
     tile.dataset.category = cat.id;
     const reorderControlsHtml = rearrangeMode ? `
       <div class="tile-reorder-controls">
+        <button class="icon-btn" data-action="move-up" data-category="${cat.id}" title="Move up" ${index - cols < 0 ? 'disabled' : ''}>▲</button>
         <button class="icon-btn" data-action="move-earlier" data-category="${cat.id}" title="Move earlier" ${index === 0 ? 'disabled' : ''}>‹</button>
+        <button class="icon-btn" data-action="move-down" data-category="${cat.id}" title="Move down" ${index + cols >= db.categories.length ? 'disabled' : ''}>▼</button>
         <button class="icon-btn" data-action="move-later" data-category="${cat.id}" title="Move later" ${index === db.categories.length - 1 ? 'disabled' : ''}>›</button>
       </div>` : '';
     tile.innerHTML = `
@@ -133,14 +166,18 @@ document.getElementById('categoriesContainer').addEventListener('click', (e) => 
     return;
   }
 
-  const moveBtn = e.target.closest('button[data-action="move-earlier"], button[data-action="move-later"]');
+  const moveBtn = e.target.closest('button[data-action="move-earlier"], button[data-action="move-later"], button[data-action="move-up"], button[data-action="move-down"]');
   if (moveBtn) {
     e.preventDefault();
     e.stopPropagation();
     const fromIndex = db.categories.findIndex((c) => c.id === moveBtn.dataset.category);
     if (fromIndex === -1) return;
-    const toIndex = moveBtn.dataset.action === 'move-earlier' ? fromIndex - 1 : fromIndex + 1;
-    reorderCategory(fromIndex, toIndex);
+    switch (moveBtn.dataset.action) {
+      case 'move-earlier': reorderCategory(fromIndex, fromIndex - 1); break;
+      case 'move-later': reorderCategory(fromIndex, fromIndex + 1); break;
+      case 'move-up': swapCategories(fromIndex, fromIndex - currentGridColumns()); break;
+      case 'move-down': swapCategories(fromIndex, fromIndex + currentGridColumns()); break;
+    }
     render();
     return;
   }
