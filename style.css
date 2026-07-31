@@ -1021,6 +1021,32 @@ body::after {
   right: 8px;
 }
 
+/* Explicit "Rearrange" mode (emax.js) - a guaranteed-reliable alternative
+   to the tap-hold/drag reorder above it, for when a device's own touch
+   handling wins the race against that instead. */
+.category-tile.rearrange-active {
+  cursor: default;
+}
+.tile-reorder-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.tile-reorder-controls .icon-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.tile-reorder-controls .icon-btn:hover:not(:disabled) {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+.tile-reorder-controls .icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* Category detail page */
 
 .back-link {

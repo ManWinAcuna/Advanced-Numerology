@@ -61,6 +61,15 @@ function reorderCategory(fromIndex, toIndex) {
   saveEmaxDB(db);
 }
 
+// Explicit, button-driven alternative to the tap-hold/drag reorder below -
+// added after tap-hold repeatedly failed on a real device even with the
+// iOS touch-callout fix (a native gesture or platform quirk this app can't
+// fully control either way). "‹"/"›" just call the SAME reorderCategory
+// used by the drag path, one array position at a time - no pointer timing,
+// no touch-action fights, nothing that depends on how any given browser
+// happens to arbitrate a held touch. Guaranteed to work everywhere.
+let rearrangeMode = false;
+
 function render() {
   const container = document.getElementById('categoriesContainer');
   container.innerHTML = '';
@@ -73,17 +82,23 @@ function render() {
 
   container.className = 'category-grid';
 
-  db.categories.forEach((cat) => {
+  db.categories.forEach((cat, index) => {
     const count = cat.entries.length;
     const tile = document.createElement('a');
-    tile.className = 'category-tile';
+    tile.className = 'category-tile' + (rearrangeMode ? ' rearrange-active' : '');
     tile.href = `emax-category.html?id=${cat.id}`;
     tile.dataset.category = cat.id;
+    const reorderControlsHtml = rearrangeMode ? `
+      <div class="tile-reorder-controls">
+        <button class="icon-btn" data-action="move-earlier" data-category="${cat.id}" title="Move earlier" ${index === 0 ? 'disabled' : ''}>‹</button>
+        <button class="icon-btn" data-action="move-later" data-category="${cat.id}" title="Move later" ${index === db.categories.length - 1 ? 'disabled' : ''}>›</button>
+      </div>` : '';
     tile.innerHTML = `
       <button class="icon-btn tile-delete" data-action="delete-category" data-category="${cat.id}" title="Delete category">&times;</button>
       <div class="tile-icon">${pickCategoryEmoji(cat.name)}</div>
       <div class="tile-name">${escapeHtml(cat.name)}</div>
       <div class="tile-count">${count} item${count === 1 ? '' : 's'}</div>
+      ${reorderControlsHtml}
     `;
     container.appendChild(tile);
   });
@@ -100,15 +115,42 @@ document.getElementById('newCategoryName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('addCategoryBtn').click();
 });
 
+document.getElementById('rearrangeToggleBtn').addEventListener('click', () => {
+  rearrangeMode = !rearrangeMode;
+  document.getElementById('rearrangeToggleBtn').textContent = rearrangeMode ? '✓ Done' : '⇅ Rearrange';
+  render();
+});
+
 document.getElementById('categoriesContainer').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-action="delete-category"]');
-  if (!btn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const categoryId = btn.dataset.category;
-  const cat = db.categories.find((c) => c.id === categoryId);
-  const label = cat ? cat.name : 'this category';
-  if (confirm(`Delete "${label}" and everything in it?`)) deleteCategory(categoryId);
+  const deleteBtn = e.target.closest('button[data-action="delete-category"]');
+  if (deleteBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const categoryId = deleteBtn.dataset.category;
+    const cat = db.categories.find((c) => c.id === categoryId);
+    const label = cat ? cat.name : 'this category';
+    if (confirm(`Delete "${label}" and everything in it?`)) deleteCategory(categoryId);
+    return;
+  }
+
+  const moveBtn = e.target.closest('button[data-action="move-earlier"], button[data-action="move-later"]');
+  if (moveBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const fromIndex = db.categories.findIndex((c) => c.id === moveBtn.dataset.category);
+    if (fromIndex === -1) return;
+    const toIndex = moveBtn.dataset.action === 'move-earlier' ? fromIndex - 1 : fromIndex + 1;
+    reorderCategory(fromIndex, toIndex);
+    render();
+    return;
+  }
+
+  // Rearrange mode is for shifting tiles around, not navigating away from
+  // the page mid-edit - tapping the tile body itself (anything that isn't
+  // one of the buttons above) is a no-op while it's on.
+  if (rearrangeMode && e.target.closest('.category-tile')) {
+    e.preventDefault();
+  }
 });
 
 /* ===================== Tap-and-hold / click-and-drag to reorder ===================== */
@@ -136,6 +178,7 @@ function endReorderHold() {
 }
 
 document.getElementById('categoriesContainer').addEventListener('pointerdown', (e) => {
+  if (rearrangeMode) return; // the explicit ‹/› buttons own reordering while this is on
   if (e.target.closest('button[data-action="delete-category"]')) return;
   const tile = e.target.closest('.category-tile');
   if (!tile) return;
