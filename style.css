@@ -1143,6 +1143,18 @@ body::after {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  /* Same iOS fixed-position drift as .auth-widget (see its own comment) -
+     Safari recalculates fixed elements against the layout viewport while
+     its toolbar animates in/out during scroll, dragging the overlay (and
+     the popup inside it) along with the page for a frame. Forcing its own
+     GPU compositing layer keeps it pinned through that animation. This is
+     the shared modal class every page's popup uses, so fixing it here
+     fixes it everywhere at once, not just EMAX. */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .modal-overlay.active {
