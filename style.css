@@ -5896,34 +5896,139 @@ body {
 .emax-star.filled { color: var(--yellow); }
 .emax-star:hover { color: var(--yellow); opacity: 0.7; }
 
-.emax-modal-hero {
+/* ---- Popup hero v2: centered/stacked, image up top ---- */
+
+.emax-modal-hero-v2 {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  text-align: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .emax-modal-image {
-  flex: 0 0 auto;
-  width: 84px;
-  height: 84px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   overflow: hidden;
+  box-shadow: 0 0 0 3px var(--panel), 0 0 22px 2px var(--emax-glow, rgba(245, 197, 66, 0.35));
 }
+.emax-modal-image.good { --emax-glow: rgba(139, 195, 74, 0.45); }
+.emax-modal-image.bad { --emax-glow: rgba(229, 57, 63, 0.45); }
+.emax-modal-image.mid { --emax-glow: rgba(245, 197, 66, 0.45); }
 .emax-modal-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+.emax-modal-image .emax-monogram.large {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
 
-.emax-modal-facts {
-  flex: 1;
-  min-width: 0;
+.emax-modal-name {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.emax-modal-date {
+  margin-top: -6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---- Score ring ---- */
+
+.emax-score-ring-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 6px 0;
+}
+.emax-score-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.emax-score-ring-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 10;
+  opacity: 0.5;
+}
+.emax-score-ring-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+.emax-score-ring.good .emax-score-ring-fill { stroke: var(--good); filter: drop-shadow(0 0 8px rgba(139, 195, 74, 0.65)); }
+.emax-score-ring.bad .emax-score-ring-fill { stroke: var(--bad); filter: drop-shadow(0 0 8px rgba(229, 57, 63, 0.65)); }
+.emax-score-ring.mid .emax-score-ring-fill { stroke: var(--yellow); filter: drop-shadow(0 0 8px rgba(245, 197, 66, 0.65)); }
+
+.emax-score-ring-label {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
+.emax-score-num { font-size: 2.1rem; font-weight: 800; color: var(--text); }
+.emax-score-outof { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+.emax-score-flag {
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.emax-score-flag.perfect, .emax-score-flag.ideal { color: var(--yellow); border-color: var(--yellow); }
+.emax-score-flag.clash { color: var(--bad); border-color: var(--bad); }
+
+/* ---- Fact tile grid ---- */
+
+.emax-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+.emax-fact-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 6px;
+}
+.emax-fact-icon { font-size: 1.1rem; }
+.emax-fact-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.emax-fact-value { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+
+.emax-breakdown-toggle {
+  background: none;
+  border: none;
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 0 0;
+}
+.emax-breakdown-toggle:hover { text-decoration: underline; }
+
+/* Reusing renderCompatResults' output for the expanded breakdown - it
+   renders its own name/score hero too, which would duplicate the one
+   already shown above, so it's hidden here without touching the shared
+   compat-render.js component itself (Database/Compatibility Calculator's
+   own popups still show it, untouched). */
+.emax-breakdown-body .score-hero { display: none; }
 
 .emax-year-only-toggle {
   display: inline-flex;

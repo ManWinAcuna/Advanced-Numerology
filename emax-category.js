@@ -199,6 +199,11 @@ function renderEntries() {
 // (compat-render.js, same component the Database's "Compare with me" and
 // the Compatibility Calculator already use) underneath.
 
+// What EMAX_YEAR_FILTER_KIND's kind maps to as a human verb on the date
+// line - a custom category (not in that map) has no known kind, so its
+// items just show the bare date with no verb prefix.
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released' };
+
 function openItemModal(entry) {
   const profile = loadProfile();
   if (!profile || !profile.date) {
@@ -212,27 +217,65 @@ function openItemModal(entry) {
   const meDate = parseDateStr(profile.date);
   const themDate = parseDateStr(entry.date);
   const result = computeCompatibility(meDate, themDate);
+  const score = result.finalScore;
+  const scoreCls = scoreClass(score);
 
   const lifePath = getLifePath(themDate);
   const dayBorn = getReducedDay(themDate);
   const chineseMonth = getChineseMonth(themDate);
   const chineseDay = getChineseDaySign(themDate);
 
+  const kindLabel = EMAX_DATE_KIND_LABEL[EMAX_YEAR_FILTER_KIND[category.name]];
+  const dateLine = `${kindLabel ? kindLabel + ' ' : ''}${formatDate(entry.date)}`;
+
+  // A ring circumference for r=52 (see the SVG below) - dashoffset shrinks
+  // as the score climbs, so the fill sweeps clockwise from empty to full.
+  const circumference = 2 * Math.PI * 52;
+  const offset = circumference * (1 - Math.min(100, Math.max(0, score)) / 100);
+
+  const flagHtml = result.flags.map((f) => {
+    if (f === 'perfect') return '<div class="emax-score-flag perfect">★ Perfect Match</div>';
+    if (f === 'ideal') return '<div class="emax-score-flag ideal">★ Ideal Match</div>';
+    if (f === 'clash') return '<div class="emax-score-flag clash">⚠ Clash</div>';
+    return '';
+  }).join('');
+
   document.getElementById('itemModalHeader').innerHTML = `
-    <div class="emax-modal-hero">
-      <div class="emax-modal-image" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
-      <div class="emax-modal-facts">
-        ${starsHtml(entry.id, entry.rating || 0)}
-        <div class="entry-badges">
-          <span class="badge">✨ LP ${lifePath}</span>
-          <span class="badge">📅 Day ${dayBorn}</span>
-          <span class="badge">${VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || ''} ${chineseMonth} month</span>
-          <span class="badge">${VIETNAMESE_ZODIAC_EMOJI[chineseDay] || ''} ${chineseDay} day</span>
+    <div class="emax-modal-hero-v2">
+      <div class="emax-modal-image ${scoreCls}" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
+      ${starsHtml(entry.id, entry.rating || 0)}
+      <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
+      <div class="emax-modal-date">${escapeHtml(dateLine)}</div>
+      <div class="emax-score-ring-wrap">
+        <svg viewBox="0 0 120 120" class="emax-score-ring ${scoreCls}">
+          <circle cx="60" cy="60" r="52" class="emax-score-ring-track"></circle>
+          <circle cx="60" cy="60" r="52" class="emax-score-ring-fill" style="stroke-dasharray:${circumference};stroke-dashoffset:${offset};"></circle>
+        </svg>
+        <div class="emax-score-ring-label">
+          <span class="emax-score-num">${score}</span>
+          <span class="emax-score-outof">/100</span>
         </div>
       </div>
+      ${flagHtml}
+      <div class="emax-fact-grid">
+        <div class="emax-fact-tile"><span class="emax-fact-icon">✨</span><span class="emax-fact-label">Life Path</span><span class="emax-fact-value">${lifePath}</span></div>
+        <div class="emax-fact-tile"><span class="emax-fact-icon">📅</span><span class="emax-fact-label">Day Born</span><span class="emax-fact-value">${dayBorn}</span></div>
+        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || ''}</span><span class="emax-fact-label">Month</span><span class="emax-fact-value">${chineseMonth}</span></div>
+        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseDay] || ''}</span><span class="emax-fact-label">Day</span><span class="emax-fact-value">${chineseDay}</span></div>
+      </div>
+      <button class="emax-breakdown-toggle" id="itemModalBreakdownToggle" type="button">▾ See full breakdown</button>
     </div>`;
 
-  renderCompatResults(document.getElementById('itemModalCompat'), result, entry.name, 'Me');
+  const compatEl = document.getElementById('itemModalCompat');
+  renderCompatResults(compatEl, result, entry.name, 'Me');
+  compatEl.classList.add('emax-breakdown-body');
+  compatEl.hidden = true;
+  document.getElementById('itemModalBreakdownToggle').addEventListener('click', () => {
+    const toggleBtn = document.getElementById('itemModalBreakdownToggle');
+    compatEl.hidden = !compatEl.hidden;
+    toggleBtn.textContent = compatEl.hidden ? '▾ See full breakdown' : '▴ Hide full breakdown';
+  });
+
   document.getElementById('itemModalOverlay').classList.add('active');
 
   if (entry.imageUrl) {
