@@ -354,7 +354,7 @@ function renderEntries() {
 // entry's own dateKind when a lookup resolved one) as a human verb on the
 // date line - no match (a custom category with no known kind, or a
 // hand-typed date) just shows the bare date with no verb prefix.
-const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed', launched: 'Launched' };
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed', launched: 'Launched', aired: 'Aired' };
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
@@ -624,6 +624,8 @@ const EMAX_YEAR_LOOKUP_FN = {
   founded: lookupFoundingDateOrYearWithTitle,
   born: lookupBirthDateOrYearWithTitle,
   released: lookupReleaseDateOrYearWithTitle,
+  aired: lookupAiredDateOrYearWithTitle,
+  anime: lookupAnimeDateOrYearWithTitle,
 };
 
 const EMAX_FOUNDING_CACHE_KEY = 'numerology_emax_founding_cache_v1';

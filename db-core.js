@@ -131,10 +131,13 @@ function fetchWikidataClaims(qid) {
 // brand/venue's grand opening vs. when the company itself came into being),
 // but Wikidata sometimes has one recorded with a real day when the other
 // only has a year or is missing entirely, so it's worth a second organization
-// -tier try before giving up. P577 = publication date (films, books,
-// software) - tried last, for EMAX's Movies category; virtually never set on
-// a person/place/company, so this tier is inert for every other existing
-// caller of this function.
+// -tier try before giving up. P577 = publication date (films, books, songs,
+// software) - EMAX's Movies/Songs categories. P580 = start time - the
+// property TV series use for when they first aired (P577 is a single-work
+// "publication," which doesn't fit an ongoing series); tried last, for
+// EMAX's Shows/Anime categories. Both P577 and P580 are virtually never set
+// on a person/place/company, so both tiers are inert for every other
+// existing caller of this function.
 function fetchKeyDate(qid) {
   return fetchWikidataClaims(qid).then((claims) => {
     if (!claims) return null;
@@ -150,6 +153,9 @@ function fetchKeyDate(qid) {
 
     const released = dateFromClaim(claims.P577);
     if (released) return { date: released, kind: 'released' };
+
+    const aired = dateFromClaim(claims.P580);
+    if (aired) return { date: aired, kind: 'aired' };
 
     return null;
   });
@@ -239,6 +245,19 @@ function lookupBirthDateOrYearWithTitle(name) {
 }
 function lookupReleaseDateOrYearWithTitle(name) {
   return lookupBestDateOrYearWithTitle(name, [['P577', 'released']], false);
+}
+// TV series only (EMAX Shows) - P580 start time, no P577 fallback since a
+// show isn't a single "publication."
+function lookupAiredDateOrYearWithTitle(name) {
+  return lookupBestDateOrYearWithTitle(name, [['P580', 'aired']], false);
+}
+// EMAX Anime - a mixed list of both series and films, so both properties are
+// tried per entity (whichever one the actual Wikidata item has); P577 first
+// since standalone films are the more common day-precision hit, P580 as the
+// fallback for series entries. See fetchBestDateOrYear above for how ties
+// (both present) resolve - the first pair in the list wins.
+function lookupAnimeDateOrYearWithTitle(name) {
+  return lookupBestDateOrYearWithTitle(name, [['P577', 'released'], ['P580', 'aired']], false);
 }
 
 // EMAX brand logos only: Wikidata's P154 (logo image) is a structured,
@@ -932,6 +951,9 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['shoe', 'sneaker'], emoji: '👟' },
   { keywords: ['tech', 'electronics', 'gadget'], emoji: '💻' },
   { keywords: ['hygiene', 'skincare', 'grooming', 'cologne'], emoji: '🧴' },
+  { keywords: ['anime', 'manga'], emoji: '🎌' },
+  { keywords: ['show', 'series', 'tv'], emoji: '📺' },
+  { keywords: ['song', 'track', 'single'], emoji: '🎵' },
 ];
 
 const CATEGORY_EMOJI_FALLBACK = ['🎉', '🎈', '🎊', '🌟', '💫', '🎁', '✨', '🎆', '🪩', '🎇'];
@@ -959,6 +981,7 @@ const EMAX_STORAGE_KEY = 'numerology_emax_db';
 
 const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
+  'Anime', 'Shows', 'Songs',
 ];
 
 function loadEmaxDB() {
