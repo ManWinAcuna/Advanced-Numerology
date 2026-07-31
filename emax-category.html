@@ -39,26 +39,41 @@
   <div class="db-page">
 
     <div class="box add-category-box" id="addEntryBox">
-      <div class="box-label-row">
-        <div class="box-label" id="entryFormLabel">Add Item</div>
-        <button class="btn-link bulk-upload-btn" id="preloadTop50Btn" type="button" style="display:none;">⚡ Preload Top</button>
-        <button class="btn-link bulk-upload-btn" id="bulkUploadBtn" type="button">📤 Bulk Upload</button>
+      <button class="box-label-row emax-collapsible-toggle" id="addEntryToggle" type="button">
+        <span class="box-label" id="entryFormLabel">Add Item</span>
+        <span class="emax-collapse-chevron" id="addEntryChevron">▸</span>
+      </button>
+      <div class="emax-collapsible-body" id="addEntryBody" hidden>
+        <div class="emax-preload-btn-row">
+          <button class="btn-link bulk-upload-btn" id="preloadTop50Btn" type="button" style="display:none;">⚡ Preload Top</button>
+          <button class="btn-link bulk-upload-btn" id="bulkUploadBtn" type="button">📤 Bulk Upload</button>
+        </div>
+        <div class="inline-form">
+          <input type="text" id="newEntryName" placeholder="Name">
+          <input type="text" id="newEntryDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
+          <button class="icon-btn icon-btn-lookup" id="entryLookupBtn" type="button" title="Look up date">🔍</button>
+          <input type="text" id="newEntryImage" placeholder="Image URL (optional)">
+          <label class="emax-year-only-toggle"><input type="checkbox" id="newEntryNoImage"> No photo</label>
+          <button id="addEntryBtn" class="btn">Add</button>
+          <button id="cancelEditBtn" class="btn-link" style="display:none;">Cancel</button>
+        </div>
+        <div class="inline-form" id="preloadByYearRow" style="display:none;">
+          <input type="number" id="preloadYearInput" placeholder="Year" inputmode="numeric">
+          <label class="emax-year-only-toggle"><input type="checkbox" id="preloadYearOnlyToggle" checked> Include year-only matches</label>
+          <button id="preloadByYearBtn" class="btn" type="button">Preload by Year</button>
+        </div>
+        <div class="famous-status" id="entryLookupStatus"></div>
       </div>
-      <div class="inline-form">
-        <input type="text" id="newEntryName" placeholder="Name">
-        <input type="text" id="newEntryDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
-        <button class="icon-btn icon-btn-lookup" id="entryLookupBtn" type="button" title="Look up date">🔍</button>
-        <input type="text" id="newEntryImage" placeholder="Image URL (optional)">
-        <label class="emax-year-only-toggle"><input type="checkbox" id="newEntryNoImage"> No photo</label>
-        <button id="addEntryBtn" class="btn">Add</button>
-        <button id="cancelEditBtn" class="btn-link" style="display:none;">Cancel</button>
-      </div>
-      <div class="inline-form" id="preloadByYearRow" style="display:none;">
-        <input type="number" id="preloadYearInput" placeholder="Year" inputmode="numeric">
-        <label class="emax-year-only-toggle"><input type="checkbox" id="preloadYearOnlyToggle" checked> Include year-only matches</label>
-        <button id="preloadByYearBtn" class="btn" type="button">Preload by Year</button>
-      </div>
-      <div class="famous-status" id="entryLookupStatus"></div>
+    </div>
+
+    <div class="inline-form emax-filter-row" id="emaxFilterRow">
+      <label class="emax-filter-label" for="emaxFilterValue">Show scores</label>
+      <select id="emaxFilterMode">
+        <option value="over">Over</option>
+        <option value="under">Under</option>
+      </select>
+      <input type="number" id="emaxFilterValue" placeholder="e.g. 80" min="0" max="100">
+      <button class="btn-link" id="emaxFilterClearBtn" type="button" style="display:none;">Clear</button>
     </div>
 
     <div id="entriesContainer" class="entries-list emax-entries-list"></div>

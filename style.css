@@ -5832,6 +5832,54 @@ body {
 }
 .emax-note a { color: var(--yellow); }
 
+/* Add Item starts collapsed - Preload/Bulk Upload/the form all live behind
+   one toggle so the item list is what you see first, not a form. */
+.emax-collapsible-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.emax-collapse-chevron {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+.emax-collapse-chevron.open {
+  transform: rotate(90deg);
+}
+.emax-collapsible-body {
+  margin-top: 10px;
+}
+.emax-preload-btn-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.emax-filter-row {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.emax-filter-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.emax-filter-row select {
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 10px;
+  font-size: 14px;
+}
+.emax-filter-row input[type="number"] {
+  width: 80px;
+}
+
 .emax-entry-item {
   display: flex;
   align-items: center;

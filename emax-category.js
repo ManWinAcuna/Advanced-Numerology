@@ -13,6 +13,12 @@ let pendingWikiTitle = null;
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
 
+// The "show scores over/under X" filter (emaxFilterRow) - null means no
+// filter is active. Only affects which rows renderEntries() prints; sorting
+// and everything else on the page stays exactly as it already was.
+let scoreFilterValue = null;
+let scoreFilterMode = 'over';
+
 // Declared here (ahead of init() below) rather than down by emaxFetchImage
 // itself - renderEntries() now loads row images synchronously off of
 // init(), which runs immediately at module load, before any `let` further
@@ -275,8 +281,20 @@ function renderEntries() {
   const meDate = (profile && profile.date) ? parseDateStr(profile.date) : null;
   const noteHtml = meDate ? '' : '<div class="emax-note">Set your birthday on <a href="profile.html">My Profile</a> to see compatibility scores.</div>';
   const ranked = scoredEntries(meDate);
-  container.innerHTML = noteHtml + ranked.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
-  emaxLoadRowImages(ranked);
+
+  // A score filter excludes anything that doesn't HAVE a score yet
+  // (year-only entries, or no profile birthday set) - "over 80" can't
+  // meaningfully include an item with no score to compare.
+  const visible = scoreFilterValue == null ? ranked : ranked.filter(({ score }) => {
+    if (score == null) return false;
+    return scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue;
+  });
+  const emptyFilterHtml = (scoreFilterValue != null && visible.length === 0)
+    ? '<div class="empty-state">No items match this filter.</div>'
+    : '';
+
+  container.innerHTML = noteHtml + emptyFilterHtml + visible.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
+  emaxLoadRowImages(visible);
 }
 
 /* ===================== Item popup ===================== */
@@ -445,6 +463,8 @@ function startEdit(entry) {
   document.getElementById('addEntryBtn').textContent = 'Save Changes';
   document.getElementById('cancelEditBtn').style.display = '';
   document.getElementById('entryLookupStatus').textContent = '';
+  document.getElementById('addEntryBody').hidden = false;
+  document.getElementById('addEntryChevron').classList.add('open');
   document.getElementById('newEntryName').focus();
   document.getElementById('addEntryBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -613,6 +633,33 @@ async function preloadByYear(targetYear, includeYearOnly) {
 
 function init() {
   attachDateMask(document.getElementById('newEntryDate'));
+
+  // The HTML's own `hidden` attribute already starts this collapsed (avoids
+  // a flash of the open form before this script runs) - set it again here
+  // too so the collapsed state doesn't quietly depend on that markup alone.
+  document.getElementById('addEntryBody').hidden = true;
+  document.getElementById('addEntryToggle').addEventListener('click', () => {
+    const body = document.getElementById('addEntryBody');
+    body.hidden = !body.hidden;
+    document.getElementById('addEntryChevron').classList.toggle('open', !body.hidden);
+  });
+
+  document.getElementById('emaxFilterValue').addEventListener('input', () => {
+    const raw = document.getElementById('emaxFilterValue').value;
+    scoreFilterValue = raw === '' ? null : Number(raw);
+    document.getElementById('emaxFilterClearBtn').style.display = scoreFilterValue == null ? 'none' : '';
+    renderEntries();
+  });
+  document.getElementById('emaxFilterMode').addEventListener('change', () => {
+    scoreFilterMode = document.getElementById('emaxFilterMode').value;
+    renderEntries();
+  });
+  document.getElementById('emaxFilterClearBtn').addEventListener('click', () => {
+    scoreFilterValue = null;
+    document.getElementById('emaxFilterValue').value = '';
+    document.getElementById('emaxFilterClearBtn').style.display = 'none';
+    renderEntries();
+  });
 
   document.getElementById('addEntryBtn').addEventListener('click', () => {
     const nameInput = document.getElementById('newEntryName');
