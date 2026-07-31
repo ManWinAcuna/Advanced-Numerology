@@ -86,18 +86,26 @@ const EMAX_IMAGE_CACHE_KEY = 'numerology_emax_images_v1';
 let emaxImageCache = {};
 try { emaxImageCache = JSON.parse(localStorage.getItem(EMAX_IMAGE_CACHE_KEY)) || {}; } catch (e) { emaxImageCache = {}; }
 
-async function emaxFetchImage(title) {
+// tryLogoFirst: brand categories check Wikidata's real logo property (P154)
+// before falling back to whatever photo the Wikipedia page's own summary
+// leads with - see lookupLogoImageUrl in db-core.js for why. Either path's
+// result lands in the same cache, keyed by title alone.
+async function emaxFetchImage(title, tryLogoFirst) {
   if (Object.prototype.hasOwnProperty.call(emaxImageCache, title)) return emaxImageCache[title];
+  let url = null;
   try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
-    const data = await res.json();
-    const url = (data.thumbnail && data.thumbnail.source) || null;
-    emaxImageCache[title] = url;
-    try { localStorage.setItem(EMAX_IMAGE_CACHE_KEY, JSON.stringify(emaxImageCache)); } catch (e2) { /* storage full - refetch next time */ }
-    return url;
+    if (tryLogoFirst) url = await lookupLogoImageUrl(title);
+    if (!url) {
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+      const data = await res.json();
+      url = (data.thumbnail && data.thumbnail.source) || null;
+    }
   } catch (e) {
-    return null; // offline or no image - monogram fallback stays
+    url = null; // offline or no image - monogram fallback stays
   }
+  emaxImageCache[title] = url;
+  try { localStorage.setItem(EMAX_IMAGE_CACHE_KEY, JSON.stringify(emaxImageCache)); } catch (e2) { /* storage full - refetch next time */ }
+  return url;
 }
 
 function emaxMonogram(name, large) {
@@ -119,6 +127,52 @@ function starsHtml(entryId, rating) {
   return html;
 }
 
+/* ===================== Same-sign zodiac override ===================== */
+// Non-person items only (Artists = real people, always the plain computed
+// score): when the item's Vietnamese zodiac sign matches yours on an axis -
+// "a horse wearing horse brands" is optimal energy - that axis's score
+// becomes a flat 99 instead of whatever vietnameseCompat's table has for a
+// same-animal pairing, then blends via the SAME year>month>day weighting
+// compat-engine.js's own defaults use (0.60/0.30/0.10 - not exported by
+// that file, so mirrored here rather than editing it). Numerology and
+// Western stay exactly as computeCompatibility already computed them; only
+// the Vietnamese axis and the top-level blend get recomputed, using
+// COMPAT_DEFAULT_WEIGHTS' own real numerology/vietnamese/western split -
+// this NEVER edits compat-engine.js, it only consumes it more than once.
+function emaxAdjustedCompatibility(meDate, themDate) {
+  const result = computeCompatibility(meDate, themDate);
+  if (category.name === 'Artists') return result;
+
+  const v = result.vietnamese;
+  const yearMatch = v.entityYearSign === v.dayYearSign;
+  const monthMatch = v.entityMonthSign === v.dayMonthSign;
+  const dayMatch = v.entityDaySign === v.dayDaySign;
+  if (!yearMatch && !monthMatch && !dayMatch) return result;
+
+  const yearScore = yearMatch ? 99 : v.yearScore;
+  const monthScore = monthMatch ? 99 : v.monthScore;
+  const daySignScore = dayMatch ? 99 : v.daySignScore;
+  const vietnameseScore = 0.60 * yearScore + 0.30 * monthScore + 0.10 * daySignScore;
+
+  const baseScore = COMPAT_DEFAULT_WEIGHTS.numerology * result.numerology.score
+    + COMPAT_DEFAULT_WEIGHTS.vietnamese * vietnameseScore
+    + COMPAT_DEFAULT_WEIGHTS.western * result.western.score;
+  const finalScore = Math.min(100, Math.round(baseScore + result.bonuses.total));
+
+  const flags = [];
+  if (finalScore < 49) flags.push('clash');
+  else if (finalScore >= 85) flags.push('perfect');
+  else if (finalScore >= 77) flags.push('ideal');
+
+  return {
+    ...result,
+    finalScore,
+    baseScore: Math.round(baseScore),
+    flags,
+    vietnamese: { ...v, score: Math.round(vietnameseScore), yearScore, monthScore, daySignScore },
+  };
+}
+
 /* ===================== List rendering ===================== */
 
 // { entry, score }[] - score null when there's no profile birthday yet or
@@ -128,7 +182,7 @@ function starsHtml(entryId, rating) {
 function scoredEntries(meDate) {
   const list = category.entries.map((entry) => {
     if (!meDate || !entry.date) return { entry, score: null };
-    const score = computeCompatibility(meDate, parseDateStr(entry.date)).finalScore;
+    const score = emaxAdjustedCompatibility(meDate, parseDateStr(entry.date)).finalScore;
     return { entry, score };
   });
   list.sort((a, b) => {
@@ -216,12 +270,14 @@ function openItemModal(entry) {
 
   const meDate = parseDateStr(profile.date);
   const themDate = parseDateStr(entry.date);
-  const result = computeCompatibility(meDate, themDate);
+  const result = emaxAdjustedCompatibility(meDate, themDate);
   const score = result.finalScore;
   const scoreCls = scoreClass(score);
 
   const lifePath = getLifePath(themDate);
   const dayBorn = getReducedDay(themDate);
+  const dayOfYear = getReducedDayOfYear(themDate);
+  const chineseYear = getChineseZodiacYear(themDate);
   const chineseMonth = getChineseMonth(themDate);
   const chineseDay = getChineseDaySign(themDate);
 
@@ -260,6 +316,8 @@ function openItemModal(entry) {
       <div class="emax-fact-grid">
         <div class="emax-fact-tile"><span class="emax-fact-icon">✨</span><span class="emax-fact-label">Life Path</span><span class="emax-fact-value">${lifePath}</span></div>
         <div class="emax-fact-tile"><span class="emax-fact-icon">📅</span><span class="emax-fact-label">Day Born</span><span class="emax-fact-value">${dayBorn}</span></div>
+        <div class="emax-fact-tile"><span class="emax-fact-icon">🔢</span><span class="emax-fact-label">Day of Year</span><span class="emax-fact-value">${dayOfYear}</span></div>
+        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseYear] || ''}</span><span class="emax-fact-label">Year</span><span class="emax-fact-value">${chineseYear}</span></div>
         <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || ''}</span><span class="emax-fact-label">Month</span><span class="emax-fact-value">${chineseMonth}</span></div>
         <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseDay] || ''}</span><span class="emax-fact-label">Day</span><span class="emax-fact-value">${chineseDay}</span></div>
       </div>
@@ -282,7 +340,8 @@ function openItemModal(entry) {
     document.getElementById('itemModalImage').innerHTML = `<img src="${escapeHtml(entry.imageUrl)}" alt="">`;
   } else {
     const title = entry.wikiTitle || entry.name;
-    emaxFetchImage(title).then((url) => {
+    const isBrand = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
+    emaxFetchImage(title, isBrand).then((url) => {
       if (!url) return;
       const imgEl = document.getElementById('itemModalImage');
       if (imgEl) imgEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;

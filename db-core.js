@@ -199,6 +199,26 @@ function lookupReleaseDateOrYearWithTitle(name) {
   return lookupDateOrYearForPropertyWithTitle(name, 'P577', 'released');
 }
 
+// EMAX brand logos only: Wikidata's P154 (logo image) is a structured,
+// separate fact from whatever photo the Wikipedia page's own summary
+// happens to lead with - which is sometimes a founder's portrait rather
+// than the mark itself, for a brand named after its founder (Ralph Lauren,
+// Tommy Hilfiger, ...). P154's value is a Commons filename; Commons'
+// Special:FilePath redirects that straight to the real image, so no
+// second API round-trip is needed - the constructed URL just works as an
+// <img src>.
+function fetchLogoImageUrl(qid) {
+  return fetchWikidataClaims(qid).then((claims) => {
+    const claim = claims && claims.P154 && claims.P154[0];
+    const filename = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+    return filename ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}` : null;
+  });
+}
+
+function lookupLogoImageUrl(name) {
+  return fetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchLogoImageUrl(hit.qid) : null));
+}
+
 /* ===================== Wikipedia infobox fallback ===================== */
 // Wikidata's P571 (inception) is often missing even when the Wikipedia
 // article's infobox has the date written right in it - infoboxes get filled
