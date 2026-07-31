@@ -1,6 +1,11 @@
 let famousMatches = [];
 let famousDebounceTimer = null;
 
+// fetchKeyDate (db-core.js) can resolve to any of these kinds - born (P569),
+// founded (P571), opened (P1619, an organization's official-opening date
+// when inception itself has no exact day), or released (P577).
+const FAMOUS_KIND_VERB = { born: 'born', founded: 'founded', opened: 'opened', released: 'released' };
+
 function setFamousStatus(message, isError) {
   const el = document.getElementById('famousStatus');
   el.textContent = message;
@@ -80,7 +85,7 @@ function selectFamousPerson(title) {
       }
       document.getElementById('bday').value = isoToDisplay(info.date);
       render();
-      const verb = info.kind === 'founded' ? 'founded' : 'born';
+      const verb = FAMOUS_KIND_VERB[info.kind] || 'born';
       setFamousStatus(`✓ ${title} — ${verb} ${info.date}`, false);
     })
     .catch(() => setFamousStatus('Lookup failed. Try again.', true));

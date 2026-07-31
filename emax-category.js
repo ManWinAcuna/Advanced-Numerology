@@ -9,6 +9,13 @@ let editingEntryId = null;
 // off the typed name. Cleared whenever the date field is hand-edited (see
 // the 'input' listener in init) so a stale match never gets saved silently.
 let pendingWikiTitle = null;
+// The specific date TYPE ("founded", "opened", ...) a successful "Look up"
+// resolved to - db-core.js's lookups can now match more than one Wikidata
+// property per category kind (e.g. a brand's official-opening date when its
+// inception has no exact day), so the popup needs to remember which one
+// actually matched THIS entry rather than always assuming the category's
+// default kind. Same lifecycle as pendingWikiTitle - cleared on hand-edit.
+let pendingDateKind = null;
 // Guards a lookup response against a newer one that started after it (e.g.
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
@@ -38,19 +45,20 @@ if (!category) {
 
 /* ===================== Entries CRUD ===================== */
 
-function addEntry(name, date, imageUrl, wikiTitle, noImage) {
+function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind) {
   name = name.trim();
   if (!name || !date) return;
   const entry = { id: uid(), name, date };
   if (imageUrl) entry.imageUrl = imageUrl;
   if (wikiTitle) entry.wikiTitle = wikiTitle;
   if (noImage) entry.noImage = true;
+  if (dateKind) entry.dateKind = dateKind;
   category.entries.push(entry);
   saveEmaxDB(db);
   renderEntries();
 }
 
-function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage) {
+function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind) {
   name = name.trim();
   if (!name || !date) return;
   const entry = category.entries.find((e) => e.id === entryId);
@@ -64,6 +72,7 @@ function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage) {
   // one) - when set, both the list row and the popup always show the
   // monogram, skipping the fetch (and any manual imageUrl) entirely.
   if (noImage) entry.noImage = true; else delete entry.noImage;
+  if (dateKind) entry.dateKind = dateKind; else delete entry.dateKind;
   saveEmaxDB(db);
   renderEntries();
 }
@@ -324,10 +333,11 @@ function renderEntries() {
 // (compat-render.js, same component the Database's "Compare with me" and
 // the Compatibility Calculator already use) underneath.
 
-// What EMAX_YEAR_FILTER_KIND's kind maps to as a human verb on the date
-// line - a custom category (not in that map) has no known kind, so its
-// items just show the bare date with no verb prefix.
-const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released' };
+// A date "kind" (from EMAX_YEAR_FILTER_KIND's category default, or an
+// entry's own dateKind when a lookup resolved one) as a human verb on the
+// date line - no match (a custom category with no known kind, or a
+// hand-typed date) just shows the bare date with no verb prefix.
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened' };
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
@@ -386,7 +396,12 @@ function openItemModal(entry) {
   const personalMonthCompound = getPersonalMonthRaw(themDate, today);
   const personalDayCompound = getPersonalDayRaw(personalMonth, today);
 
-  const kindLabel = EMAX_DATE_KIND_LABEL[EMAX_YEAR_FILTER_KIND[category.name]];
+  // entry.dateKind (set when a lookup - Preload or "Look up" - resolved this
+  // specific entry's date) is more accurate than the category's default kind:
+  // a brand whose official-opening date (not its inception) supplied the
+  // real day should say "Opened", not "Founded". Falls back to the category
+  // default for entries with no stored kind (e.g. a hand-typed date).
+  const kindLabel = EMAX_DATE_KIND_LABEL[entry.dateKind] || EMAX_DATE_KIND_LABEL[EMAX_YEAR_FILTER_KIND[category.name]];
   const dateLine = `${kindLabel ? kindLabel + ' ' : ''}${formatDate(entry.date)}`;
 
   // A ring circumference for r=52 (see the SVG below) - dashoffset shrinks
@@ -476,6 +491,7 @@ function closeItemModal() {
 function startEdit(entry) {
   editingEntryId = entry.id;
   pendingWikiTitle = entry.wikiTitle || null;
+  pendingDateKind = entry.dateKind || null;
   document.getElementById('newEntryName').value = entry.name;
   document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
   document.getElementById('newEntryImage').value = entry.imageUrl || '';
@@ -493,6 +509,7 @@ function startEdit(entry) {
 function exitEditMode() {
   editingEntryId = null;
   pendingWikiTitle = null;
+  pendingDateKind = null;
   document.getElementById('newEntryName').value = '';
   document.getElementById('newEntryDate').value = '';
   document.getElementById('newEntryImage').value = '';
@@ -548,7 +565,7 @@ async function preloadTop50() {
     try {
       const info = await lookupKeyDateByNameWithTitle(searchTerm);
       if (info) {
-        category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title });
+        category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind });
         existing.add(displayName.toLowerCase());
         added++;
       } else {
@@ -630,7 +647,7 @@ async function preloadByYear(targetYear, includeYearOnly) {
     if (resolvedYear !== targetYear) continue;
 
     if (info.date) {
-      category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title });
+      category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind });
       existing.add(displayName.toLowerCase());
       added++;
     } else if (includeYearOnly) {
@@ -693,9 +710,9 @@ function init() {
       return;
     }
     if (editingEntryId) {
-      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked);
+      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind);
     } else {
-      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked);
+      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind);
     }
     exitEditMode();
   });
@@ -709,7 +726,7 @@ function init() {
   // A hand-typed date invalidates whatever "Look up" previously matched -
   // setting .value programmatically (the lookup filling it in) does NOT
   // fire 'input', only real typing does, so this only clears on genuine edits.
-  document.getElementById('newEntryDate').addEventListener('input', () => { pendingWikiTitle = null; });
+  document.getElementById('newEntryDate').addEventListener('input', () => { pendingWikiTitle = null; pendingDateKind = null; });
 
   document.getElementById('entryLookupBtn').addEventListener('click', () => {
     const name = document.getElementById('newEntryName').value.trim();
@@ -724,7 +741,8 @@ function init() {
       }
       document.getElementById('newEntryDate').value = isoToDisplay(info.date);
       pendingWikiTitle = info.title;
-      const kindLabel = info.kind === 'born' ? 'born' : info.kind === 'released' ? 'released' : 'founded';
+      pendingDateKind = info.kind;
+      const kindLabel = EMAX_DATE_KIND_LABEL[info.kind] ? EMAX_DATE_KIND_LABEL[info.kind].toLowerCase() : info.kind;
       setLookupStatus(`✓ Matched "${info.title}" (${kindLabel} ${info.date}) - please double-check before saving.`, false);
     }).catch(() => {
       if (myToken !== lookupToken) return;

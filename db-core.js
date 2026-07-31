@@ -127,9 +127,14 @@ function fetchWikidataClaims(qid) {
 
 // P569 = date of birth (people). P571 = inception (companies, organizations,
 // countries, buildings, etc.) - tried as a fallback for non-person entities.
-// P577 = publication date (films, books, software) - tried last, for EMAX's
-// Movies category; virtually never set on a person/place/company, so this
-// tier is inert for every other existing caller of this function.
+// P1619 = date of official opening - a distinct event from inception (a
+// brand/venue's grand opening vs. when the company itself came into being),
+// but Wikidata sometimes has one recorded with a real day when the other
+// only has a year or is missing entirely, so it's worth a second organization
+// -tier try before giving up. P577 = publication date (films, books,
+// software) - tried last, for EMAX's Movies category; virtually never set on
+// a person/place/company, so this tier is inert for every other existing
+// caller of this function.
 function fetchKeyDate(qid) {
   return fetchWikidataClaims(qid).then((claims) => {
     if (!claims) return null;
@@ -139,6 +144,9 @@ function fetchKeyDate(qid) {
 
     const founded = dateFromClaim(claims.P571);
     if (founded) return { date: founded, kind: 'founded' };
+
+    const opened = dateFromClaim(claims.P1619);
+    if (opened) return { date: opened, kind: 'opened' };
 
     const released = dateFromClaim(claims.P577);
     if (released) return { date: released, kind: 'released' };
@@ -165,38 +173,51 @@ function yearFromClaim(claims) {
 
 // EMAX-only: resolves a real date (day-precision) for the given Wikidata
 // property when available, or just the YEAR when that's all Wikidata
-// records - never a fabricated day. `prop` is P571 (inception/founded),
-// P569 (birth), or P577 (publication/released); `kind` is the label
-// stamped on the result. Returns { date, kind } or { year, kind } or null.
-function fetchDateOrYearForProperty(qid, prop, kind) {
+// records - never a fabricated day. `propKindPairs` is tried in priority
+// order as TWO passes: first every pair is checked for a day-precision date
+// (the first one found wins, even if it's a lower-priority pair - a real day
+// always beats a bare year), and only if NONE of them have a real day does
+// it fall back to the best available year (highest-priority pair first).
+// This is how a brand's inception (P571) being year-only doesn't shadow its
+// official-opening date (P1619) when THAT has a real day on file. Returns
+// { date, kind } or { year, kind } or null - `kind` is whichever pair
+// actually matched, not necessarily the first one in the list.
+function fetchBestDateOrYear(qid, propKindPairs) {
   return fetchWikidataClaims(qid).then((claims) => {
     if (!claims) return null;
-    const exact = dateFromClaim(claims[prop]);
-    if (exact) return { date: exact, kind };
-    const year = yearFromClaim(claims[prop]);
-    if (year) return { year, kind };
+    for (const [prop, kind] of propKindPairs) {
+      const exact = dateFromClaim(claims[prop]);
+      if (exact) return { date: exact, kind };
+    }
+    for (const [prop, kind] of propKindPairs) {
+      const year = yearFromClaim(claims[prop]);
+      if (year) return { year, kind };
+    }
     return null;
   });
 }
 
-function lookupDateOrYearForPropertyWithTitle(name, prop, kind) {
+function lookupBestDateOrYearWithTitle(name, propKindPairs) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
-    return fetchDateOrYearForProperty(hit.qid, prop, kind).then((result) => (result ? { ...result, title: hit.title } : null));
+    return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => (result ? { ...result, title: hit.title } : null));
   });
 }
 
-// EMAX "Preload by Year" - one thin wrapper per category kind: brands
-// filter by founding year (P571), artists by birth year (P569), movies by
-// release year (P577). Same year-or-day-precision behavior throughout.
+// EMAX "Preload by Year" - one wrapper per category kind. Brands try
+// inception (P571) first, falling back to the date of official opening
+// (P1619) when inception has no real day - see fetchBestDateOrYear above.
+// Artists filter by birth year (P569), movies by release year (P577); those
+// two only ever have one meaningful Wikidata property, so a single-pair list
+// behaves exactly like checking one property.
 function lookupFoundingDateOrYearWithTitle(name) {
-  return lookupDateOrYearForPropertyWithTitle(name, 'P571', 'founded');
+  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']]);
 }
 function lookupBirthDateOrYearWithTitle(name) {
-  return lookupDateOrYearForPropertyWithTitle(name, 'P569', 'born');
+  return lookupBestDateOrYearWithTitle(name, [['P569', 'born']]);
 }
 function lookupReleaseDateOrYearWithTitle(name) {
-  return lookupDateOrYearForPropertyWithTitle(name, 'P577', 'released');
+  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']]);
 }
 
 // EMAX brand logos only: Wikidata's P154 (logo image) is a structured,
