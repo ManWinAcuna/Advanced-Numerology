@@ -337,7 +337,7 @@ function renderEntries() {
 // entry's own dateKind when a lookup resolved one) as a human verb on the
 // date line - no match (a custom category with no known kind, or a
 // hand-typed date) just shows the bare date with no verb prefix.
-const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed' };
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed', launched: 'Launched' };
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
@@ -544,6 +544,10 @@ async function preloadTop50() {
   if (emaxPreloading) return;
   const names = EMAX_SEED_LISTS[category.name];
   if (!names) return;
+  // Gates the prose "first product launch" long-shot tier in
+  // lookupKeyDateByNameWithTitle - only meaningful for brand/company
+  // categories, never people or movies (see that function's own comment).
+  const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
   emaxPreloading = true;
   const btn = document.getElementById('preloadTop50Btn');
   btn.disabled = true;
@@ -563,7 +567,7 @@ async function preloadTop50() {
     setLookupStatus(`⚡ Preloading Top ${names.length} - ${i + 1}/${names.length} (${added} added so far)...`, false);
     if (existing.has(displayName.toLowerCase())) { skippedExisting++; continue; }
     try {
-      const info = await lookupKeyDateByNameWithTitle(searchTerm);
+      const info = await lookupKeyDateByNameWithTitle(searchTerm, isBrandCategory);
       if (info) {
         category.entries.push({ id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind });
         existing.add(displayName.toLowerCase());
@@ -733,7 +737,8 @@ function init() {
     if (!name) { setLookupStatus('Type a name first.', true); return; }
     setLookupStatus('🔍 Looking up...', false);
     const myToken = ++lookupToken;
-    lookupKeyDateByNameWithTitle(name).then((info) => {
+    const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
+    lookupKeyDateByNameWithTitle(name, isBrandCategory).then((info) => {
       if (myToken !== lookupToken) return; // superseded by a newer lookup
       if (!info) {
         setLookupStatus(`Couldn't find a date automatically for "${name}" - please enter it yourself.`, true);

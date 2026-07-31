@@ -197,22 +197,27 @@ function fetchBestDateOrYear(qid, propKindPairs) {
   });
 }
 
-// useInfoboxFallback: when NEITHER Wikidata property has a real day, tries
-// scraping the Wikipedia article's own infobox (lookupKeyDateFromWikipediaInfobox,
-// defined further down) for one before settling for a bare Wikidata year - a
-// real day found in prose still beats a bare year, same "exact day always
-// wins" rule as fetchBestDateOrYear's own two-property cascade. Only worth
-// trying for founding-type lookups; a person's birthday or a film's release
-// date isn't the kind of fact infobox field-name scanning is built for.
-function lookupBestDateOrYearWithTitle(name, propKindPairs, useInfoboxFallback) {
+// useWikipediaFallback: when NEITHER Wikidata property has a real day, tries
+// the Wikipedia article itself before settling for a bare Wikidata year - a
+// real day found there still beats a bare year, same "exact day always
+// wins" rule as fetchBestDateOrYear's own two-property cascade. Two tiers,
+// each only tried if the previous one missed: the infobox scrape
+// (lookupKeyDateFromWikipediaInfobox - founded/opened/renamed fields), then
+// the prose scrape (lookupLaunchDateFromWikipediaProse - the genuine long
+// shot). Only worth trying for founding-type lookups; a person's birthday
+// or a film's release date isn't the kind of fact either scrape is built for.
+function lookupBestDateOrYearWithTitle(name, propKindPairs, useWikipediaFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
     return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => {
       if (result && result.date) return { ...result, title: hit.title };
-      if (!useInfoboxFallback) return result ? { ...result, title: hit.title } : null;
+      if (!useWikipediaFallback) return result ? { ...result, title: hit.title } : null;
       return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => {
         if (infoboxResult) return { ...infoboxResult, title: hit.title };
-        return result ? { ...result, title: hit.title } : null;
+        return lookupLaunchDateFromWikipediaProse(hit.title).then((proseResult) => {
+          if (proseResult) return { ...proseResult, title: hit.title };
+          return result ? { ...result, title: hit.title } : null;
+        });
       });
     });
   });
@@ -220,11 +225,12 @@ function lookupBestDateOrYearWithTitle(name, propKindPairs, useInfoboxFallback) 
 
 // EMAX "Preload by Year" - one wrapper per category kind. Brands try
 // inception (P571) first, falling back to the date of official opening
-// (P1619) when inception has no real day, then the Wikipedia infobox scrape
-// when NEITHER Wikidata property has one - see fetchBestDateOrYear and
-// lookupBestDateOrYearWithTitle above. Artists filter by birth year (P569),
-// movies by release year (P577); those two only ever have one meaningful
-// Wikidata property and skip the infobox fallback entirely.
+// (P1619) when inception has no real day, then the Wikipedia infobox scrape,
+// then the prose scrape, when NEITHER Wikidata property has one - see
+// fetchBestDateOrYear and lookupBestDateOrYearWithTitle above. Artists
+// filter by birth year (P569), movies by release year (P577); those two
+// only ever have one meaningful Wikidata property and skip the Wikipedia
+// fallback entirely.
 function lookupFoundingDateOrYearWithTitle(name) {
   return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']], true);
 }
@@ -416,6 +422,55 @@ function lookupKeyDateFromWikipediaInfobox(title) {
   return fetchWikipediaWikitext(title).then((wikitext) => (wikitext ? extractInfoboxDayDate(wikitext) : null));
 }
 
+/* ===================== Wikipedia prose fallback: first product launch ===================== */
+// EMAX brands/companies only, and only wired in behind an explicit
+// useProseFallback flag - the true last resort, tried only after founded,
+// opened, AND renamed have all missed. There is no infobox field for "first
+// product launched" at all (products lists WHAT a company makes, never
+// WHEN), so the only place this fact can possibly live is the article's own
+// written prose. This is a real step down in reliability from everything
+// else in this cascade: no field to anchor on, just a sentence that happens
+// to mention both a launch-type word and a real date near each other -
+// genuinely a long shot, not a normal fallback tier. Deliberately kept
+// separate from extractInfoboxDayDate/lookupKeyDateFromWikipediaInfobox
+// (shared with UFC/Tennis/MLB's place-founding lookups, which read the date
+// directly rather than just the kind) so a prose false positive here can
+// never corrupt real stadium/venue data those pages never asked to change.
+const PROSE_LAUNCH_KEYWORDS = /\b(launch(?:ed|ing)?|released?|introduc(?:ed|ing)|debut(?:ed)?|unveiled)\b/i;
+const PROSE_FIRST_HINT = /\bfirst\b/i;
+
+// <ref>...</ref> citation blocks are full of dates that have nothing to do
+// with the article's subject ("Retrieved 2019-05-01", a cited source's own
+// publication date) - stripped first so they can't masquerade as the event
+// date just because they happen to sit near a launch-type word.
+function stripWikiRefs(wikitext) {
+  return wikitext.replace(/<ref[^>]*\/>/gi, ' ').replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, ' ');
+}
+
+// Crude sentence split (on ./!/?) - good enough for a best-effort scan, not
+// meant to perfectly parse prose. Only a sentence containing BOTH "first"
+// and a launch-type verb is even considered, and only then is it checked
+// for a real day-precision date via the same parser used everywhere else in
+// this cascade - never a fabricated or coarse-year date.
+function extractProseLaunchDate(wikitext) {
+  const body = stripWikiRefs(wikitext);
+  const sentences = body.split(/(?<=[.!?])\s+/);
+  for (const sentence of sentences) {
+    if (!PROSE_FIRST_HINT.test(sentence) || !PROSE_LAUNCH_KEYWORDS.test(sentence)) continue;
+    const date = parseWikitextDateValue(sentence);
+    if (date) return date;
+  }
+  return null;
+}
+
+function lookupLaunchDateFromWikipediaProse(title) {
+  return fetchWikipediaWikitext(title).then((wikitext) => {
+    if (!wikitext) return null;
+    const date = extractProseLaunchDate(wikitext);
+    return date ? { date, kind: 'launched' } : null;
+  });
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the
@@ -512,12 +567,23 @@ function fetchWikidataIdWithTitle(title) {
 // but resolves to { date, kind, title } (or null) - hit.title (the resolved
 // page, post-redirect) is already known here, so the infobox fallback can
 // report exactly which page it read, same as lookupKeyDateByName's own.
-function lookupKeyDateByNameWithTitle(name) {
+// useProseFallback additionally tries the prose "first product launch" scan
+// (lookupLaunchDateFromWikipediaProse) as the true last resort, once the
+// infobox scrape has ALSO missed - gated separately from the infobox tier
+// (which is safe for every category) because a "released her first album"
+// -style sentence is a real risk in an ARTIST's biography prose and would
+// mislabel what should be a birthday lookup; EMAX only passes true for
+// brand/company categories.
+function lookupKeyDateByNameWithTitle(name, useProseFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
     return fetchKeyDate(hit.qid).then((result) => {
       if (result) return { ...result, title: hit.title };
-      return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => (infoboxResult ? { ...infoboxResult, title: hit.title } : null));
+      return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => {
+        if (infoboxResult) return { ...infoboxResult, title: hit.title };
+        if (!useProseFallback) return null;
+        return lookupLaunchDateFromWikipediaProse(hit.title).then((proseResult) => (proseResult ? { ...proseResult, title: hit.title } : null));
+      });
     });
   });
 }
