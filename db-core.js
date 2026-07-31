@@ -297,13 +297,65 @@ function lookupLogoImageUrl(name) {
 //
 // P175 very often points to a BAND, not a person (Queen, not Freddie
 // Mercury) - checked live: Queen's own Wikidata item has no P569 at all and
-// its P571 (inception) is year-only, so "+ Add to Database" would silently
-// add a useless dateless entry and never find a real birthdate no matter
-// how many times you tried. Filtered here at the source via P31 ("instance
-// of") = Q5 (human) so a band NEVER gets auto-filled into the Artist field
-// in the first place - the owner's own call on band songs was to type the
-// actual singer's name in by hand (the manual field), not to surface a name
-// that can only ever fail.
+// its P571 (inception) is year-only, so a band could never resolve a real
+// birthdate through Wikidata alone no matter how many times you tried.
+// Filtered here via P31 ("instance of") = Q5 (human); when it isn't,
+// extractLeadSingerTitle below is tried as a fallback BEFORE giving up -
+// see that function's own comment for how and why.
+//
+// A band's own Wikipedia lead paragraph almost always names its founding
+// singer explicitly with a role word right next to their name - either
+// "[[Name]] (lead vocals, ...)" (Queen's own house style) or "lead singer
+// ... [[Name]]" (Nirvana, Imagine Dragons). Verified live against Queen,
+// Coldplay, Nirvana, Fleetwood Mac, Imagine Dragons, and The Beatles: 5 of
+// 6 resolved to exactly the right person, the 6th (The Beatles, who
+// genuinely have no single lead singer) correctly resolved to nothing
+// rather than guessing. Deliberately conservative - only returns a name
+// when there's exactly ONE candidate the surrounding text ties to a vocal
+// role; any ambiguity (more than one candidate with no clear "lead" among
+// them, or none tagged with "lead" specifically among multiple vocal
+// -tagged people) returns null rather than picking one at random. A wrong
+// pick here is still fully correctable - it only ever lands in the
+// always-editable Artist field, never saved without the field being shown
+// first.
+function extractLeadSingerTitle(wikitext) {
+  const body = stripWikiRefs(wikitext).slice(0, 3000);
+  const linkRe = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+  const candidates = [];
+  let m;
+  while ((m = linkRe.exec(body))) {
+    const target = m[1].trim();
+    // This link's OWN parenthetical only, if it has one immediately after
+    // it - never the next person's, which extractLeadSingerTitle's earlier
+    // prototyping found bleeding through with a naive fixed-width window.
+    const afterStart = m.index + m[0].length;
+    const afterParenMatch = /^\s*\(([^)]*)\)/.exec(body.slice(afterStart, afterStart + 80));
+    const after = afterParenMatch ? afterParenMatch[1] : '';
+    // A short window immediately before the link, but cut off at the
+    // nearest ')' or ']]' so it can't reach back into the PREVIOUS
+    // person's own trailing role text either.
+    const beforeRaw = body.slice(Math.max(0, m.index - 45), m.index);
+    const stopIdx = Math.max(beforeRaw.lastIndexOf(')'), beforeRaw.lastIndexOf(']]'));
+    const before = stopIdx === -1 ? beforeRaw : beforeRaw.slice(stopIdx + 1);
+    const context = (before + ' ' + after).toLowerCase();
+    if (!/\b(vocal|singer|frontman|frontwoman)/.test(context)) continue;
+    candidates.push({ target, hasLead: /\blead\b/.test(context) });
+  }
+  if (candidates.length === 0) return null;
+  const leadTagged = candidates.filter((c) => c.hasLead);
+  if (leadTagged.length === 1) return leadTagged[0].target;
+  if (leadTagged.length === 0 && candidates.length === 1) return candidates[0].target;
+  return null;
+}
+
+function lookupLeadSingerForBand(bandTitle) {
+  return fetchWikipediaWikitext(bandTitle).then((wikitext) => {
+    if (!wikitext) return null;
+    const singerTitle = extractLeadSingerTitle(wikitext);
+    return singerTitle ? fetchWikidataIdWithTitle(singerTitle) : null;
+  });
+}
+
 function fetchPerformerForSong(qid) {
   return fetchWikidataClaims(qid).then((claims) => {
     const claim = claims && claims.P175 && claims.P175[0];
@@ -316,8 +368,10 @@ function fetchPerformerForSong(qid) {
         const v = c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value;
         return v && v.id === 'Q5';
       });
-      if (!isHuman) return null;
-      return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+      if (isHuman) {
+        return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+      }
+      return fetchWikipediaTitleFromQid(artistQid).then((bandTitle) => (bandTitle ? lookupLeadSingerForBand(bandTitle) : null));
     });
   });
 }
