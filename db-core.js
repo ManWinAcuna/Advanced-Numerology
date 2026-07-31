@@ -163,26 +163,40 @@ function yearFromClaim(claims) {
   return Number(time.slice(1, 5));
 }
 
-// EMAX-only: resolves a brand's founding info (P571) as a real date
-// (day-precision) when Wikidata has one, or just the YEAR when that's all
-// Wikidata records - never a fabricated day. Returns { date, kind:'founded' }
-// or { year, kind:'founded' } or null.
-function fetchFoundingDateOrYear(qid) {
+// EMAX-only: resolves a real date (day-precision) for the given Wikidata
+// property when available, or just the YEAR when that's all Wikidata
+// records - never a fabricated day. `prop` is P571 (inception/founded),
+// P569 (birth), or P577 (publication/released); `kind` is the label
+// stamped on the result. Returns { date, kind } or { year, kind } or null.
+function fetchDateOrYearForProperty(qid, prop, kind) {
   return fetchWikidataClaims(qid).then((claims) => {
     if (!claims) return null;
-    const founded = dateFromClaim(claims.P571);
-    if (founded) return { date: founded, kind: 'founded' };
-    const foundedYear = yearFromClaim(claims.P571);
-    if (foundedYear) return { year: foundedYear, kind: 'founded' };
+    const exact = dateFromClaim(claims[prop]);
+    if (exact) return { date: exact, kind };
+    const year = yearFromClaim(claims[prop]);
+    if (year) return { year, kind };
     return null;
   });
 }
 
-function lookupFoundingDateOrYearWithTitle(name) {
+function lookupDateOrYearForPropertyWithTitle(name, prop, kind) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
-    return fetchFoundingDateOrYear(hit.qid).then((result) => (result ? { ...result, title: hit.title } : null));
+    return fetchDateOrYearForProperty(hit.qid, prop, kind).then((result) => (result ? { ...result, title: hit.title } : null));
   });
+}
+
+// EMAX "Preload by Year" - one thin wrapper per category kind: brands
+// filter by founding year (P571), artists by birth year (P569), movies by
+// release year (P577). Same year-or-day-precision behavior throughout.
+function lookupFoundingDateOrYearWithTitle(name) {
+  return lookupDateOrYearForPropertyWithTitle(name, 'P571', 'founded');
+}
+function lookupBirthDateOrYearWithTitle(name) {
+  return lookupDateOrYearForPropertyWithTitle(name, 'P569', 'born');
+}
+function lookupReleaseDateOrYearWithTitle(name) {
+  return lookupDateOrYearForPropertyWithTitle(name, 'P577', 'released');
 }
 
 /* ===================== Wikipedia infobox fallback ===================== */

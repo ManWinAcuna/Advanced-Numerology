@@ -345,27 +345,33 @@ async function preloadTop50() {
 }
 
 /* ===================== Preload by Year ===================== */
-// Only offered on the brand categories (EMAX_YEAR_FILTERABLE_CATEGORIES) -
-// "founded in year X" is a real, checkable fact for a brand, unlike a
-// meaningful "top of year X" for a movie or artist. There's no live
-// "founded in year X" query - this SCANS the whole category's seed pool
-// (fetchFoundingDateOrYear per candidate) and keeps only the ones whose
-// founding year matches, so an exact year with sparse coverage can come
-// back with very few hits (or none) - that's the honest tradeoff of an
-// exact-year filter over a broader curated list, never papered over with a
-// fabricated match. Results are cached per (category, search term) so
-// re-running for a DIFFERENT year on the same category reuses everything
-// already looked up instead of re-querying Wikidata from scratch.
+// Only offered on categories listed in EMAX_YEAR_FILTER_KIND - each maps to
+// a real, single-fact Wikidata property (founded/born/released), never a
+// curated "top of year X" judgment call. There's no live "X in year Y"
+// query - this SCANS the whole category's seed pool (one lookup per
+// candidate, via whichever property this category's kind maps to) and keeps
+// only the ones whose resolved year matches, so an exact year with sparse
+// coverage can come back with very few hits (or none) - that's the honest
+// tradeoff of an exact-year filter over a broader curated list, never
+// papered over with a fabricated match. Results are cached per (category,
+// search term) so re-running for a DIFFERENT year on the same category
+// reuses everything already looked up instead of re-querying Wikidata.
+
+const EMAX_YEAR_LOOKUP_FN = {
+  founded: lookupFoundingDateOrYearWithTitle,
+  born: lookupBirthDateOrYearWithTitle,
+  released: lookupReleaseDateOrYearWithTitle,
+};
 
 const EMAX_FOUNDING_CACHE_KEY = 'numerology_emax_founding_cache_v1';
 let emaxFoundingCache = {};
 try { emaxFoundingCache = JSON.parse(localStorage.getItem(EMAX_FOUNDING_CACHE_KEY)) || {}; } catch (e) { emaxFoundingCache = {}; }
 
-async function emaxLookupFoundingCached(categoryName, searchTerm) {
-  const key = `${categoryName}|${searchTerm}`;
+async function emaxLookupYearCached(kind, categoryName, searchTerm) {
+  const key = `${kind}|${categoryName}|${searchTerm}`;
   if (Object.prototype.hasOwnProperty.call(emaxFoundingCache, key)) return emaxFoundingCache[key];
   let info = null;
-  try { info = await lookupFoundingDateOrYearWithTitle(searchTerm); } catch (e) { info = null; }
+  try { info = await EMAX_YEAR_LOOKUP_FN[kind](searchTerm); } catch (e) { info = null; }
   emaxFoundingCache[key] = info;
   try { localStorage.setItem(EMAX_FOUNDING_CACHE_KEY, JSON.stringify(emaxFoundingCache)); } catch (e2) { /* storage full - refetch next time */ }
   await new Promise((resolve) => setTimeout(resolve, 350)); // pace real network calls only - a cache hit above already returned
@@ -375,7 +381,8 @@ async function emaxLookupFoundingCached(categoryName, searchTerm) {
 async function preloadByYear(targetYear, includeYearOnly) {
   if (emaxPreloading) return;
   const names = EMAX_SEED_LISTS[category.name];
-  if (!names) return;
+  const kind = EMAX_YEAR_FILTER_KIND[category.name];
+  if (!names || !kind) return;
   emaxPreloading = true;
   const btn = document.getElementById('preloadByYearBtn');
   btn.disabled = true;
@@ -392,7 +399,7 @@ async function preloadByYear(targetYear, includeYearOnly) {
     setLookupStatus(`⚡ Scanning for ${targetYear} - ${i + 1}/${names.length} (${added} matched so far)...`, false);
     if (existing.has(displayName.toLowerCase())) { skippedExisting++; continue; }
 
-    const info = await emaxLookupFoundingCached(category.name, searchTerm);
+    const info = await emaxLookupYearCached(kind, category.name, searchTerm);
     if (!info) continue;
 
     const resolvedYear = info.date ? Number(info.date.slice(0, 4)) : info.year;
@@ -418,7 +425,7 @@ async function preloadByYear(targetYear, includeYearOnly) {
   emaxPreloading = false;
   const yearOnlyNote = addedYearOnly ? ` (${addedYearOnly} year-only precision)` : '';
   const excludedNote = skippedYearOnlyExcluded ? ` · ${skippedYearOnlyExcluded} more matched but were year-only and excluded` : '';
-  setLookupStatus(`⚡ Found ${added} founded in ${targetYear}${yearOnlyNote} out of ${names.length} scanned${excludedNote}.`, false);
+  setLookupStatus(`⚡ Found ${added} ${kind} in ${targetYear}${yearOnlyNote} out of ${names.length} scanned${excludedNote}.`, false);
 }
 
 function init() {
@@ -553,7 +560,7 @@ function init() {
     document.getElementById('preloadTop50Btn').addEventListener('click', () => preloadTop50());
   }
 
-  if (EMAX_YEAR_FILTERABLE_CATEGORIES.includes(category.name)) {
+  if (EMAX_YEAR_FILTER_KIND[category.name]) {
     document.getElementById('preloadByYearRow').style.display = '';
     document.getElementById('preloadByYearBtn').addEventListener('click', () => {
       const year = parseInt(document.getElementById('preloadYearInput').value, 10);

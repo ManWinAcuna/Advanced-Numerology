@@ -14,11 +14,24 @@
 // used to FIND the right Wikidata item, never shown to you.
 
 // Which categories offer the year-precision "Preload by Year" control
-// (emax-category.js) instead of just the plain all-time Top 50 button -
-// only the brand categories, where "founded in year X" is a real,
-// well-defined fact (unlike Movies/Artists, where a meaningful "top of a
-// specific year" ranking needs curated knowledge this app doesn't build in).
-const EMAX_YEAR_FILTERABLE_CATEGORIES = ['Clothing Brands', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands'];
+// (emax-category.js) instead of just the plain all-time Top 50 button, and
+// what "year" means for each - a real, single-fact Wikidata property, never
+// a curated "top of year X" judgment call:
+//   'founded' (brands, P571 inception) - 'born' (Artists, P569 birth date) -
+//   'released' (Movies, P577 publication date).
+// A group act (a band, not a solo artist) has no P569 birth date at all, so
+// it simply never matches any year filter here - correct, not a bug, since
+// a band doesn't have a birth year (it has a formation year, which is what
+// P571/'founded' would mean instead - not offered for Artists since most
+// entries in that list ARE solo people, where 'born' is the natural read).
+const EMAX_YEAR_FILTER_KIND = {
+  'Clothing Brands': 'founded',
+  'Shoe Brands': 'founded',
+  'Technology Brands': 'founded',
+  'Hygiene Brands': 'founded',
+  'Artists': 'born',
+  'Movies': 'released',
+};
 
 const EMAX_SEED_LISTS = {
   'Clothing Brands': [
@@ -56,6 +69,31 @@ const EMAX_SEED_LISTS = {
     'The Silence of the Lambs', 'Saving Private Ryan', 'The Departed', 'No Country for Old Men',
     'There Will Be Blood', 'Whiplash', 'The Social Network', 'Django Unchained',
     'Once Upon a Time in Hollywood', 'Mad Max: Fury Road', 'Deadpool', 'Guardians of the Galaxy',
+    // Preload by Year (release year, P577) needs a much wider pool - expanded
+    // across many more decades so a specific year has real odds of a hit.
+    'Citizen Kane', 'Singin\' in the Rain', 'Vertigo (film)', 'Psycho (1960 film)', 'Lawrence of Arabia (film)',
+    'The Sound of Music (film)', 'Dr. Strangelove', '2001: A Space Odyssey (film)', 'The Graduate',
+    'Bonnie and Clyde (film)', 'Butch Cassidy and the Sundance Kid', 'Easy Rider', 'The French Connection',
+    'A Clockwork Orange (film)', 'Chinatown (1974 film)', 'One Flew Over the Cuckoo\'s Nest (film)',
+    'Taxi Driver', 'Annie Hall', 'Apocalypse Now', 'Alien (film)', 'Raging Bull', 'The Empire Strikes Back',
+    'Return of the Jedi', 'Indiana Jones and the Raiders of the Lost Ark',
+    'Blade Runner', 'Ghostbusters (1984 film)', 'The Terminator', 'The Breakfast Club', 'Top Gun (1986 film)',
+    'Aliens (film)', 'Die Hard', 'Beetlejuice', 'Batman (1989 film)', 'Dead Poets Society', 'Home Alone',
+    'Terminator 2: Judgment Day', 'Unforgiven', 'The Fugitive (1993 film)', 'Speed (1994 film)',
+    'Braveheart', 'Se7en', 'Independence Day (film)', 'Twister (1996 film)',
+    'Men in Black (film)', 'Good Will Hunting', 'Armageddon (1998 film)', 'The Sixth Sense',
+    'American Beauty (1999 film)', 'Gladiator (2000 film)', "Ocean's Eleven (2001 film)",
+    'The Lord of the Rings: The Fellowship of the Ring', 'Spider-Man (2002 film)', 'Finding Nemo',
+    'Pirates of the Caribbean: The Curse of the Black Pearl', 'Shrek 2', 'Batman Begins',
+    'Pirates of the Caribbean: Dead Man\'s Chest', 'Casino Royale (2006 film)', 'Iron Man (2008 film)',
+    'WALL-E', 'Slumdog Millionaire', 'Up (2009 film)', 'Toy Story 3', 'Inglourious Basterds', 'The Hangover',
+    'Harry Potter and the Deathly Hallows – Part 2', 'The Avengers (2012 film)',
+    'Gravity (2013 film)', '12 Years a Slave (film)', 'The Wolf of Wall Street (film)',
+    'Guardians of the Galaxy (film)', 'The Revenant (2015 film)',
+    'Zootopia', 'Moonlight (2016 film)', 'Wonder Woman (2017 film)', 'Coco (2017 film)', 'Black Panther (film)',
+    'Avengers: Infinity War', 'Bohemian Rhapsody (film)', 'Spider-Man: Into the Spider-Verse', 'Joker (2019 film)',
+    '1917 (2019 film)', 'Soul (2020 film)', 'Nomadland',
+    'Encanto', 'Everything Everywhere All at Once',
   ],
   'Artists': [
     'Michael Jackson', 'The Beatles', 'Elvis Presley', 'Madonna', 'Whitney Houston', 'Prince', 'Stevie Wonder',
@@ -65,6 +103,30 @@ const EMAX_SEED_LISTS = {
     'Tyler, the Creator', 'J. Cole', 'Lil Wayne', 'Snoop Dogg', 'Dr. Dre', 'Tupac Shakur', 'The Notorious B.I.G.',
     'Nas', '50 Cent', 'Usher', 'Chris Brown', 'Bad Bunny', 'Karol G', 'Shakira', 'Rosalía', 'BTS', 'Blackpink',
     'Coldplay', 'Bob Marley',
+    // Preload by Year (birth year, P569) needs a much wider pool of SOLO
+    // artists - a group act has no birth date of its own (see the note on
+    // EMAX_YEAR_FILTER_KIND above), so groups already on this list simply
+    // never match a year filter, which is correct.
+    'Stevie Nicks', 'Freddie Mercury', 'David Bowie', 'Elton John', 'Paul McCartney', 'John Lennon',
+    'George Harrison', 'Ringo Starr', 'Mick Jagger', 'Keith Richards', 'Jimi Hendrix', 'Janis Joplin',
+    'Jim Morrison', 'Aretha Franklin', 'Ray Charles', 'James Brown', 'Marvin Gaye', 'Diana Ross',
+    'Smokey Robinson', 'Al Green', 'Otis Redding', 'Sam Cooke', 'Chuck Berry', 'Little Richard', 'Buddy Holly',
+    'Johnny Cash', 'Dolly Parton', 'Willie Nelson', 'Kenny Rogers', 'Garth Brooks', 'Shania Twain',
+    'Reba McEntire', 'Carrie Underwood', 'Miley Cyrus', 'Selena Gomez', 'Demi Lovato', 'Katy Perry', 'Lady Gaga',
+    'Christina Aguilera', 'Britney Spears', 'Jennifer Lopez', 'Mariah Carey', 'Celine Dion', 'Alicia Keys',
+    'John Legend', 'Sam Smith', 'Sia', 'Lorde', 'Halsey', 'Lana Del Rey', 'Camila Cabello', 'Gloria Estefan',
+    'Enrique Iglesias', 'Ricky Martin', 'Luis Fonsi', 'Marc Anthony', 'Daddy Yankee', 'J Balvin', 'Maluma',
+    'Nicky Jam', 'Romeo Santos', 'Celia Cruz', 'Vicente Fernández', 'Luis Miguel', 'Julio Iglesias',
+    'Andrea Bocelli', 'Luciano Pavarotti', 'Michael Bublé', 'Frank Sinatra', 'Dean Martin', 'Nat King Cole',
+    'Louis Armstrong', 'Ella Fitzgerald', 'Billie Holiday', 'Duke Ellington', 'Miles Davis', 'John Coltrane',
+    'Charlie Parker', 'B.B. King', 'Muddy Waters', 'Etta James', 'Nina Simone', 'Curtis Mayfield', 'Isaac Hayes',
+    'Barry White', 'Luther Vandross', 'Anita Baker', 'Toni Braxton', 'Ne-Yo', 'Trey Songz', 'Miguel (singer)',
+    'Solange', 'Erykah Badu', 'Lauryn Hill', 'Missy Elliott', 'Queen Latifah', 'Ice Cube', 'Ice-T', 'LL Cool J',
+    'RZA', 'Method Man', 'Busta Rhymes', 'DMX', 'Fat Joe', 'Nelly', 'Ludacris', 'T.I.', 'Rick Ross', 'Meek Mill',
+    'Future (rapper)', 'Lil Baby', 'DaBaby', 'Quavo', '21 Savage', 'Lil Uzi Vert', 'Playboi Carti',
+    'XXXTentacion', 'Juice Wrld', 'Mac Miller', 'Logic (rapper)', 'Chance the Rapper', 'Vince Staples',
+    'ASAP Rocky', 'Pusha T', 'Big Sean', 'Lil Durk', 'Polo G', 'Roddy Ricch', 'Megan Thee Stallion', 'Latto',
+    'Ice Spice', 'Saweetie',
   ],
   'Shoe Brands': [
     ['Nike', 'Nike, Inc.'], 'Adidas', ['Puma', 'Puma (brand)'], 'Reebok', 'New Balance', 'Converse', 'Vans',
