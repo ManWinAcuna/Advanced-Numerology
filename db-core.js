@@ -197,27 +197,42 @@ function fetchBestDateOrYear(qid, propKindPairs) {
   });
 }
 
-function lookupBestDateOrYearWithTitle(name, propKindPairs) {
+// useInfoboxFallback: when NEITHER Wikidata property has a real day, tries
+// scraping the Wikipedia article's own infobox (lookupKeyDateFromWikipediaInfobox,
+// defined further down) for one before settling for a bare Wikidata year - a
+// real day found in prose still beats a bare year, same "exact day always
+// wins" rule as fetchBestDateOrYear's own two-property cascade. Only worth
+// trying for founding-type lookups; a person's birthday or a film's release
+// date isn't the kind of fact infobox field-name scanning is built for.
+function lookupBestDateOrYearWithTitle(name, propKindPairs, useInfoboxFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
-    return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => (result ? { ...result, title: hit.title } : null));
+    return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => {
+      if (result && result.date) return { ...result, title: hit.title };
+      if (!useInfoboxFallback) return result ? { ...result, title: hit.title } : null;
+      return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => {
+        if (infoboxResult) return { ...infoboxResult, title: hit.title };
+        return result ? { ...result, title: hit.title } : null;
+      });
+    });
   });
 }
 
 // EMAX "Preload by Year" - one wrapper per category kind. Brands try
 // inception (P571) first, falling back to the date of official opening
-// (P1619) when inception has no real day - see fetchBestDateOrYear above.
-// Artists filter by birth year (P569), movies by release year (P577); those
-// two only ever have one meaningful Wikidata property, so a single-pair list
-// behaves exactly like checking one property.
+// (P1619) when inception has no real day, then the Wikipedia infobox scrape
+// when NEITHER Wikidata property has one - see fetchBestDateOrYear and
+// lookupBestDateOrYearWithTitle above. Artists filter by birth year (P569),
+// movies by release year (P577); those two only ever have one meaningful
+// Wikidata property and skip the infobox fallback entirely.
 function lookupFoundingDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']]);
+  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']], true);
 }
 function lookupBirthDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P569', 'born']]);
+  return lookupBestDateOrYearWithTitle(name, [['P569', 'born']], false);
 }
 function lookupReleaseDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']]);
+  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']], false);
 }
 
 // EMAX brand logos only: Wikidata's P154 (logo image) is a structured,
@@ -251,10 +266,14 @@ function lookupLogoImageUrl(name) {
 // usable here any more than a coarse Wikidata claim is (see dateFromClaim's
 // precision check above).
 
-const INFOBOX_DATE_FIELDS = [
-  'established', 'founded', 'opened', 'built', 'broke_ground',
-  'inaugurated', 'formed', 'foundation', 'opening',
-];
+// Split into two buckets (rather than one flat list) so a match reports
+// which kind of event it actually is - "founded"-type fields describe the
+// entity coming into existence, "opened"-type fields describe a later grand
+// -opening/inauguration. Checked in this order (founded bucket first) so a
+// page listing both prefers the truer, earlier event, same priority as
+// P571-before-P1619 on the Wikidata side.
+const INFOBOX_FOUNDED_FIELDS = ['established', 'founded', 'built', 'broke_ground', 'formed', 'foundation'];
+const INFOBOX_OPENED_FIELDS = ['inaugurated', 'opened', 'opening'];
 
 // Named WIKI_ (not plain MONTH_NAMES) because calendar.js declares its own
 // top-level MONTH_NAMES const - two same-named top-level consts across
@@ -316,6 +335,10 @@ const FOUNDING_EVENT_KEYWORDS = [
   'union', 'unification', 'republic', 'constitution', 'sovereignty',
 ];
 
+// Returns { date, kind } or null - never a bare string, so a caller can
+// label "opened" honestly instead of assuming every infobox hit is a
+// founding (see EMAX's dateKind, which now traces back to whichever real
+// event actually supplied the date).
 function extractInfoboxDayDate(wikitext) {
   const eventRe = /\|\s*established_event(\d+)\s*=\s*([^\n]+)/gi;
   const dateRe = /\|\s*established_date(\d+)\s*=\s*([^\n]+)/gi;
@@ -336,18 +359,26 @@ function extractInfoboxDayDate(wikitext) {
       best = { n, date, hasKeyword };
     }
   }
-  if (best) return best.date;
+  if (best) return { date: best.date, kind: 'founded' };
 
-  for (const field of INFOBOX_DATE_FIELDS) {
-    // Capture to end of line, not to the next "|" - infobox param values are
-    // almost always one per line, and a value that's itself a template (the
-    // common "{{Start date|1968|06|24}}" case) contains its own pipes, which
-    // a "stop at any |" capture would truncate mid-template.
+  // Capture to end of line, not to the next "|" - infobox param values are
+  // almost always one per line, and a value that's itself a template (the
+  // common "{{Start date|1968|06|24}}" case) contains its own pipes, which
+  // a "stop at any |" capture would truncate mid-template.
+  for (const field of INFOBOX_FOUNDED_FIELDS) {
     const re = new RegExp(`\\|\\s*${field}[a-z_]*\\s*=\\s*([^\\n]+)`, 'i');
     const match = re.exec(wikitext);
     if (match) {
       const date = parseWikitextDateValue(match[1]);
-      if (date) return date;
+      if (date) return { date, kind: 'founded' };
+    }
+  }
+  for (const field of INFOBOX_OPENED_FIELDS) {
+    const re = new RegExp(`\\|\\s*${field}[a-z_]*\\s*=\\s*([^\\n]+)`, 'i');
+    const match = re.exec(wikitext);
+    if (match) {
+      const date = parseWikitextDateValue(match[1]);
+      if (date) return { date, kind: 'opened' };
     }
   }
   return null;
@@ -365,11 +396,7 @@ function fetchWikipediaWikitext(title) {
 }
 
 function lookupKeyDateFromWikipediaInfobox(title) {
-  return fetchWikipediaWikitext(title).then((wikitext) => {
-    if (!wikitext) return null;
-    const date = extractInfoboxDayDate(wikitext);
-    return date ? { date, kind: 'founded' } : null;
-  });
+  return fetchWikipediaWikitext(title).then((wikitext) => (wikitext ? extractInfoboxDayDate(wikitext) : null));
 }
 
 /* ===================== Place lookup: country fallback ===================== */
@@ -464,14 +491,17 @@ function fetchWikidataIdWithTitle(title) {
     });
 }
 
-// Same Wikidata-claims lookup as lookupKeyDateByName, but resolves to
-// { date, kind, title } (or null) - no infobox-scraping fallback, since that
-// fallback can't report which page it actually read. Good enough coverage
-// for EMAX without the extra scraping tier; a miss just means manual entry.
+// Same Wikidata-claims-then-infobox-scrape cascade as lookupKeyDateByName,
+// but resolves to { date, kind, title } (or null) - hit.title (the resolved
+// page, post-redirect) is already known here, so the infobox fallback can
+// report exactly which page it read, same as lookupKeyDateByName's own.
 function lookupKeyDateByNameWithTitle(name) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
-    return fetchKeyDate(hit.qid).then((result) => (result ? { ...result, title: hit.title } : null));
+    return fetchKeyDate(hit.qid).then((result) => {
+      if (result) return { ...result, title: hit.title };
+      return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => (infoboxResult ? { ...infoboxResult, title: hit.title } : null));
+    });
   });
 }
 
