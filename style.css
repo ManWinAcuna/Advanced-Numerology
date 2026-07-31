@@ -967,6 +967,20 @@ body::after {
   text-decoration: none;
   color: var(--text);
   transition: border-color 0.15s ease, transform 0.15s ease;
+  /* This is an <a href> tile that emax.js's own hold-timer turns into a
+     tap-and-hold drag handle - without this, iOS Safari's NATIVE "hold on
+     a link" behavior (link-preview popup / Open-in-New-Tab context menu)
+     fires at roughly the same ~500ms mark and wins the race, hijacking the
+     touch before the app's own pointerdown hold timer ever gets a real
+     chance - the reorder logic itself is correct (verified directly:
+     dispatching real pointer events reproduces a working drag), so a
+     touch that never even reaches it, not a bug in the reorder code, is
+     what "holding does nothing" actually was. touch-callout disables that
+     native menu; user-select stops the tile's own text turning into an
+     iOS text-selection/magnifier gesture under the same held touch. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .category-tile:hover {
