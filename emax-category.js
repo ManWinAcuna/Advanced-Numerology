@@ -305,10 +305,7 @@ function entryRowHtml(entry, score) {
     <div class="entry-item emax-entry-item ${tierCls}" data-open="${entry.id}">
       <div class="emax-entry-thumb" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
       <div class="emax-entry-main">
-        <div class="entry-name">
-          <span class="emax-row-name-text">${escapeHtml(entry.name)}</span>
-          ${entry.artistName ? `<span class="emax-row-artist-thumb" id="emaxRowArtistThumb-${entry.id}" title="${escapeHtml(entry.artistName)}">${emaxMonogram(entry.artistName, false)}</span>` : ''}
-        </div>
+        <div class="entry-name">${escapeHtml(entry.name)}</div>
         ${starsHtml(entry.id, entry.rating || 0)}
       </div>
       <div class="emax-entry-side">
@@ -327,30 +324,29 @@ function entryRowHtml(entry, score) {
 // isn't blocked on network round-trips to show up. A manual entry.imageUrl
 // is already rendered synchronously above (no fetch needed); entry.noImage
 // (the "remove picture" edit option) skips this entirely, monogram stays.
+// Songs only: most song articles simply have no lead image on Wikipedia at
+// all (a plain 2-letter monogram is the common case, not the exception), so
+// when the SONG's own fetch comes up empty, the artist's own photo is tried
+// next before finally settling for the monogram - a real photo the row can
+// actually show beats a blank initials circle either way.
 function emaxLoadRowImages(ranked) {
   const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
+  const isSongsCategory = category.name === 'Songs';
   ranked.forEach(({ entry }) => {
     if (!entry.date || entry.noImage || entry.imageUrl) return;
     const title = entry.wikiTitle || entry.name;
     emaxFetchImage(title, isBrandCategory).then((url) => {
-      if (!url) return;
-      const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
-      if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
-    });
-  });
-}
-
-// Same lazy enhancement, for the small artist avatar entryRowHtml renders
-// next to a song's own name (Songs only - see emaxArtistImageUrl above for
-// the shared resolution/priority logic with the popup's own artist banner).
-function emaxLoadRowArtistImages(ranked) {
-  if (category.name !== 'Songs') return;
-  ranked.forEach(({ entry }) => {
-    if (!entry.artistName) return;
-    emaxArtistImageUrl(entry).then((url) => {
-      if (!url) return;
-      const thumbEl = document.getElementById(`emaxRowArtistThumb-${entry.id}`);
-      if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+      if (url) {
+        const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
+        if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+        return;
+      }
+      if (!isSongsCategory || !entry.artistName) return;
+      emaxArtistImageUrl(entry).then((artistUrl) => {
+        if (!artistUrl) return;
+        const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
+        if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(artistUrl)}" alt="">`;
+      });
     });
   });
 }
@@ -381,7 +377,6 @@ function renderEntries() {
 
   container.innerHTML = noteHtml + emptyFilterHtml + visible.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
   emaxLoadRowImages(visible);
-  emaxLoadRowArtistImages(visible);
 }
 
 /* ===================== Item popup ===================== */
