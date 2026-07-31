@@ -274,6 +274,15 @@ function lookupLogoImageUrl(name) {
 // P571-before-P1619 on the Wikidata side.
 const INFOBOX_FOUNDED_FIELDS = ['established', 'founded', 'built', 'broke_ground', 'formed', 'foundation'];
 const INFOBOX_OPENED_FIELDS = ['inaugurated', 'opened', 'opening'];
+// A genuine long-shot, tried last, only once founded/opened both miss.
+// Unlike those two, there's no dedicated "rename date" field in Infobox
+// company - these fields hold a NAME or a short fate description ("Renamed
+// TechCo", "Merged into BigCorp"), so a date only turns up here when an
+// editor happened to write one into that same short phrase. Real, lower
+// hit rate, and the one place a false-positive-shaped match is even
+// plausible - parseWikitextDateValue's month-name-or-ISO requirement still
+// guards against a bare year range like "(1985-1998)" being mistaken for one.
+const INFOBOX_RENAMED_FIELDS = ['former_name', 'fate', 'predecessor'];
 
 // Named WIKI_ (not plain MONTH_NAMES) because calendar.js declares its own
 // top-level MONTH_NAMES const - two same-named top-level consts across
@@ -379,6 +388,14 @@ function extractInfoboxDayDate(wikitext) {
     if (match) {
       const date = parseWikitextDateValue(match[1]);
       if (date) return { date, kind: 'opened' };
+    }
+  }
+  for (const field of INFOBOX_RENAMED_FIELDS) {
+    const re = new RegExp(`\\|\\s*${field}[a-z_]*\\s*=\\s*([^\\n]+)`, 'i');
+    const match = re.exec(wikitext);
+    if (match) {
+      const date = parseWikitextDateValue(match[1]);
+      if (date) return { date, kind: 'renamed' };
     }
   }
   return null;

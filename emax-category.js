@@ -337,7 +337,7 @@ function renderEntries() {
 // entry's own dateKind when a lookup resolved one) as a human verb on the
 // date line - no match (a custom category with no known kind, or a
 // hand-typed date) just shows the bare date with no verb prefix.
-const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened' };
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed' };
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
