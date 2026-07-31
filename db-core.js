@@ -294,13 +294,31 @@ function lookupLogoImageUrl(name) {
 // fetchWikipediaTitleFromQid - turns that QID into a real title, which then
 // doubles as both the artist's display name and (like every other entry in
 // this app) the seed for their photo fetch.
+//
+// P175 very often points to a BAND, not a person (Queen, not Freddie
+// Mercury) - checked live: Queen's own Wikidata item has no P569 at all and
+// its P571 (inception) is year-only, so "+ Add to Database" would silently
+// add a useless dateless entry and never find a real birthdate no matter
+// how many times you tried. Filtered here at the source via P31 ("instance
+// of") = Q5 (human) so a band NEVER gets auto-filled into the Artist field
+// in the first place - the owner's own call on band songs was to type the
+// actual singer's name in by hand (the manual field), not to surface a name
+// that can only ever fail.
 function fetchPerformerForSong(qid) {
   return fetchWikidataClaims(qid).then((claims) => {
     const claim = claims && claims.P175 && claims.P175[0];
     const value = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
     const artistQid = value && value.id;
     if (!artistQid) return null;
-    return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+    return fetchWikidataClaims(artistQid).then((performerClaims) => {
+      const instanceOfClaims = (performerClaims && performerClaims.P31) || [];
+      const isHuman = instanceOfClaims.some((c) => {
+        const v = c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value;
+        return v && v.id === 'Q5';
+      });
+      if (!isHuman) return null;
+      return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+    });
   });
 }
 

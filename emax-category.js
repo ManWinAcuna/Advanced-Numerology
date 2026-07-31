@@ -492,9 +492,18 @@ async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
     info = artistQid ? await fetchKeyDate(artistQid) : await lookupBirthDateOrYearWithTitle(artistName);
   } catch (e) { info = null; }
 
+  // Nothing found at all (most often a BAND typed in by hand - a group has
+  // no birthdate to find, no matter how many times this runs) - nothing is
+  // added, so the name isn't permanently stuck past the "already in the
+  // database" guard above with no way to retry after fixing the name.
+  if (!info || (!info.date && !info.year)) {
+    if (btn) { btn.disabled = false; btn.textContent = "Couldn't find a birthdate - try the person's own name"; }
+    return;
+  }
+
   const newEntry = { id: uid(), name: artistName };
-  if (info && info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
-  else if (info && info.year) { newEntry.year = info.year; }
+  if (info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
+  else { newEntry.year = info.year; }
   artistsCat.entries.push(newEntry);
   saveEmaxDB(db);
 
@@ -502,7 +511,7 @@ async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
     openItemModal(newEntry, 'Artists', backTo);
   } else if (btn) {
     btn.disabled = false;
-    btn.textContent = newEntry.year ? 'Added (year only)' : 'Added - no birthdate found';
+    btn.textContent = 'Added (year only)';
   }
 }
 
