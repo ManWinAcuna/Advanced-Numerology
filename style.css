@@ -975,6 +975,16 @@ body::after {
   box-shadow: var(--glow-cyan);
 }
 
+/* Tap-and-hold (or click-and-drag) reorder - see emax.js */
+.category-tile.dragging {
+  border-color: var(--yellow);
+  box-shadow: var(--glow-cyan);
+  transform: scale(1.05);
+  opacity: 0.85;
+  z-index: 5;
+  cursor: grabbing;
+}
+
 .tile-icon {
   font-size: 30px;
 }
