@@ -348,36 +348,80 @@ function extractLeadSingerTitle(wikitext) {
   return null;
 }
 
+// The band -> lead-singer chain below needs up to 4 extra Wikidata/
+// Wikipedia calls per band song (a P31 check, the band's own title, its
+// FULL article wikitext, then the singer's own QID) on top of the P175
+// lookup every song already does - verified live: plain, unthrottled fetch
+// hit Wikimedia's "You are making too many requests" after just 3
+// back-to-back real song lookups while checking this. Routed through the
+// same queuedWikiJson mechanism the UFC/Tennis label-search fallback
+// already uses for exactly this reason (see that section's own comment) -
+// sequential, one at a time, a short pause after each - rather than
+// inventing a second throttling scheme. These mirror fetchWikidataClaims/
+// fetchWikipediaTitleFromQid/fetchWikipediaWikitext/fetchWikidataIdWithTitle
+// exactly, just queued instead of a bare fetch, and are used ONLY by this
+// chain - every other existing caller of those four functions is
+// deliberately untouched.
+function queuedFetchWikidataClaims(qid) {
+  return queuedWikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`)
+    .then((data) => {
+      const entity = data && data.entities && data.entities[qid];
+      return (entity && entity.claims) || null;
+    });
+}
+function queuedFetchWikipediaTitleFromQid(qid) {
+  return queuedWikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=sitelinks&sitefilter=enwiki&format=json&origin=*`)
+    .then((data) => {
+      const entity = data && data.entities && data.entities[qid];
+      const sitelink = entity && entity.sitelinks && entity.sitelinks.enwiki;
+      return sitelink ? sitelink.title : null;
+    });
+}
+function queuedFetchWikipediaWikitext(title) {
+  return queuedWikiJson(`https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&redirects=1&prop=wikitext&format=json&origin=*`)
+    .then((data) => ((data && data.parse && data.parse.wikitext) ? data.parse.wikitext['*'] : null));
+}
+function queuedFetchWikidataIdWithTitle(title) {
+  return queuedWikiJson(`https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&redirects=1&titles=${encodeURIComponent(title)}&format=json&origin=*`)
+    .then((data) => {
+      const pages = data && data.query && data.query.pages;
+      if (!pages) return null;
+      const page = Object.values(pages)[0];
+      const qid = (page && page.pageprops) ? page.pageprops.wikibase_item : null;
+      return qid ? { qid, title: page.title } : null;
+    });
+}
+
 function lookupLeadSingerForBand(bandTitle) {
-  return fetchWikipediaWikitext(bandTitle).then((wikitext) => {
+  return queuedFetchWikipediaWikitext(bandTitle).then((wikitext) => {
     if (!wikitext) return null;
     const singerTitle = extractLeadSingerTitle(wikitext);
-    return singerTitle ? fetchWikidataIdWithTitle(singerTitle) : null;
+    return singerTitle ? queuedFetchWikidataIdWithTitle(singerTitle) : null;
   });
 }
 
 function fetchPerformerForSong(qid) {
-  return fetchWikidataClaims(qid).then((claims) => {
+  return queuedFetchWikidataClaims(qid).then((claims) => {
     const claim = claims && claims.P175 && claims.P175[0];
     const value = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
     const artistQid = value && value.id;
     if (!artistQid) return null;
-    return fetchWikidataClaims(artistQid).then((performerClaims) => {
+    return queuedFetchWikidataClaims(artistQid).then((performerClaims) => {
       const instanceOfClaims = (performerClaims && performerClaims.P31) || [];
       const isHuman = instanceOfClaims.some((c) => {
         const v = c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value;
         return v && v.id === 'Q5';
       });
       if (isHuman) {
-        return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+        return queuedFetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
       }
-      return fetchWikipediaTitleFromQid(artistQid).then((bandTitle) => (bandTitle ? lookupLeadSingerForBand(bandTitle) : null));
+      return queuedFetchWikipediaTitleFromQid(artistQid).then((bandTitle) => (bandTitle ? lookupLeadSingerForBand(bandTitle) : null));
     });
   });
 }
 
 function lookupPerformerForSong(name) {
-  return fetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchPerformerForSong(hit.qid) : null));
+  return queuedFetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchPerformerForSong(hit.qid) : null));
 }
 
 /* ===================== Wikipedia infobox fallback ===================== */
