@@ -6023,6 +6023,11 @@ body {
   margin-bottom: 8px;
 }
 
+.emax-modal-back {
+  align-self: flex-start;
+  margin: 0 0 -4px;
+}
+
 .emax-modal-image {
   width: 120px;
   height: 120px;

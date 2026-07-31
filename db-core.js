@@ -203,24 +203,29 @@ function fetchBestDateOrYear(qid, propKindPairs) {
   });
 }
 
-// useWikipediaFallback: when NEITHER Wikidata property has a real day, tries
+// wikipediaFallback: when NEITHER Wikidata property has a real day, tries
 // the Wikipedia article itself before settling for a bare Wikidata year - a
 // real day found there still beats a bare year, same "exact day always
-// wins" rule as fetchBestDateOrYear's own two-property cascade. Two tiers,
-// each only tried if the previous one missed: the infobox scrape
-// (lookupKeyDateFromWikipediaInfobox - founded/opened/renamed fields), then
-// the prose scrape (lookupLaunchDateFromWikipediaProse - the genuine long
-// shot). Only worth trying for founding-type lookups; a person's birthday
-// or a film's release date isn't the kind of fact either scrape is built for.
-function lookupBestDateOrYearWithTitle(name, propKindPairs, useWikipediaFallback) {
+// wins" rule as fetchBestDateOrYear's own two-property cascade. Falsy (the
+// common case) skips this entirely - only worth trying for categories where
+// Wikidata itself is frequently missing a day-precision claim. When present,
+// it's { infobox, prose } - two tiers, each only tried if the previous one
+// missed, and each caller supplies its OWN scrape functions rather than this
+// shared cascade hardcoding one category's field names/keywords (a brand's
+// "founded/opened" infobox fields and product-launch prose scan are useless
+// noise on a song's article, and vice versa - see lookupFoundingDateOrYearWithTitle
+// vs lookupReleaseDateOrYearWithTitle below). `prose` may be null/omitted to
+// skip that tier - it's the true long-shot, not every category needs it.
+function lookupBestDateOrYearWithTitle(name, propKindPairs, wikipediaFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
     return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => {
       if (result && result.date) return { ...result, title: hit.title };
-      if (!useWikipediaFallback) return result ? { ...result, title: hit.title } : null;
-      return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => {
+      if (!wikipediaFallback) return result ? { ...result, title: hit.title } : null;
+      return wikipediaFallback.infobox(hit.title).then((infoboxResult) => {
         if (infoboxResult) return { ...infoboxResult, title: hit.title };
-        return lookupLaunchDateFromWikipediaProse(hit.title).then((proseResult) => {
+        if (!wikipediaFallback.prose) return result ? { ...result, title: hit.title } : null;
+        return wikipediaFallback.prose(hit.title).then((proseResult) => {
           if (proseResult) return { ...proseResult, title: hit.title };
           return result ? { ...result, title: hit.title } : null;
         });
@@ -233,18 +238,21 @@ function lookupBestDateOrYearWithTitle(name, propKindPairs, useWikipediaFallback
 // inception (P571) first, falling back to the date of official opening
 // (P1619) when inception has no real day, then the Wikipedia infobox scrape,
 // then the prose scrape, when NEITHER Wikidata property has one - see
-// fetchBestDateOrYear and lookupBestDateOrYearWithTitle above. Artists
-// filter by birth year (P569), movies by release year (P577); those two
-// only ever have one meaningful Wikidata property and skip the Wikipedia
-// fallback entirely.
+// fetchBestDateOrYear and lookupBestDateOrYearWithTitle above. Songs try
+// release (P577) first, then their own Infobox song "released" field scrape
+// (no prose tier - the brand prose scanner's "first product launched"
+// wording doesn't fit a song, and a bespoke one isn't worth the false-
+// positive risk for what's already a rarer miss than brands see). Artists
+// filter by birth year (P569) with no fallback at all - a person's Wikidata
+// item is reliably complete enough not to need one.
 function lookupFoundingDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']], true);
+  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']], { infobox: lookupKeyDateFromWikipediaInfobox, prose: lookupLaunchDateFromWikipediaProse });
 }
 function lookupBirthDateOrYearWithTitle(name) {
   return lookupBestDateOrYearWithTitle(name, [['P569', 'born']], false);
 }
 function lookupReleaseDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']], false);
+  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']], { infobox: lookupReleaseDateFromWikipediaInfobox, prose: null });
 }
 // TV series only (EMAX Shows) - P580 start time, no P577 fallback since a
 // show isn't a single "publication."
@@ -328,6 +336,11 @@ const INFOBOX_OPENED_FIELDS = ['inaugurated', 'opened', 'opening'];
 // plausible - parseWikitextDateValue's month-name-or-ISO requirement still
 // guards against a bare year range like "(1985-1998)" being mistaken for one.
 const INFOBOX_RENAMED_FIELDS = ['former_name', 'fate', 'predecessor'];
+// EMAX Songs only - Infobox song's field is literally "released" (usually
+// wrapped in {{Start date|YYYY|MM|DD}}, the same template
+// parseWikitextDateValue already handles for every other infobox tier).
+// Tried only when Wikidata's own P577 has no day-precision value on file.
+const INFOBOX_RELEASED_FIELDS = ['released'];
 
 // Named WIKI_ (not plain MONTH_NAMES) because calendar.js declares its own
 // top-level MONTH_NAMES const - two same-named top-level consts across
@@ -459,6 +472,26 @@ function fetchWikipediaWikitext(title) {
 
 function lookupKeyDateFromWikipediaInfobox(title) {
   return fetchWikipediaWikitext(title).then((wikitext) => (wikitext ? extractInfoboxDayDate(wikitext) : null));
+}
+
+// Songs' own infobox tier - separate from extractInfoboxDayDate above (which
+// is company/place-founding vocabulary shared with UFC/Tennis/MLB's own
+// venue lookups) so a "released" field never gets mistaken for a founding
+// date on an unrelated page, and vice versa.
+function extractInfoboxReleaseDate(wikitext) {
+  for (const field of INFOBOX_RELEASED_FIELDS) {
+    const re = new RegExp(`\\|\\s*${field}[a-z_]*\\s*=\\s*([^\\n]+)`, 'i');
+    const match = re.exec(wikitext);
+    if (match) {
+      const date = parseWikitextDateValue(match[1]);
+      if (date) return { date, kind: 'released' };
+    }
+  }
+  return null;
+}
+
+function lookupReleaseDateFromWikipediaInfobox(title) {
+  return fetchWikipediaWikitext(title).then((wikitext) => (wikitext ? extractInfoboxReleaseDate(wikitext) : null));
 }
 
 /* ===================== Wikipedia prose fallback: first product launch ===================== */
@@ -605,14 +638,24 @@ function fetchWikidataIdWithTitle(title) {
 // Same Wikidata-claims-then-infobox-scrape cascade as lookupKeyDateByName,
 // but resolves to { date, kind, title } (or null) - hit.title (the resolved
 // page, post-redirect) is already known here, so the infobox fallback can
-// report exactly which page it read, same as lookupKeyDateByName's own.
+// report exactly which page it read, same as lookupKeyDateByName's own. This
+// is the cascade both "Preload Top N" and the manual "Look up" button
+// actually run (for every EMAX category, not just brands), so a tier added
+// here is the one that matters most for real day-to-day coverage.
+// Two infobox tiers, each tried only if the previous one missed: the
+// founding-vocabulary scrape (lookupKeyDateFromWikipediaInfobox -
+// founded/opened/renamed fields) first, then the release-vocabulary scrape
+// (lookupReleaseDateFromWikipediaInfobox - Infobox song/film's "released"
+// field) - safe to always try both regardless of category, since a page
+// with no matching infobox field just falls through, same "never fabricate,
+// only ever find a REAL day" guarantee as every other tier in this file.
 // useProseFallback additionally tries the prose "first product launch" scan
-// (lookupLaunchDateFromWikipediaProse) as the true last resort, once the
-// infobox scrape has ALSO missed - gated separately from the infobox tier
-// (which is safe for every category) because a "released her first album"
-// -style sentence is a real risk in an ARTIST's biography prose and would
-// mislabel what should be a birthday lookup; EMAX only passes true for
-// brand/company categories.
+// (lookupLaunchDateFromWikipediaProse) as the true last resort, once BOTH
+// infobox scrapes have missed - gated separately from those (which are safe
+// for every category) because a "released her first album" -style sentence
+// is a real risk in an ARTIST's biography prose and would mislabel what
+// should be a birthday lookup; EMAX only passes true for brand/company
+// categories.
 function lookupKeyDateByNameWithTitle(name, useProseFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
@@ -620,8 +663,11 @@ function lookupKeyDateByNameWithTitle(name, useProseFallback) {
       if (result) return { ...result, title: hit.title };
       return lookupKeyDateFromWikipediaInfobox(hit.title).then((infoboxResult) => {
         if (infoboxResult) return { ...infoboxResult, title: hit.title };
-        if (!useProseFallback) return null;
-        return lookupLaunchDateFromWikipediaProse(hit.title).then((proseResult) => (proseResult ? { ...proseResult, title: hit.title } : null));
+        return lookupReleaseDateFromWikipediaInfobox(hit.title).then((releaseResult) => {
+          if (releaseResult) return { ...releaseResult, title: hit.title };
+          if (!useProseFallback) return null;
+          return lookupLaunchDateFromWikipediaProse(hit.title).then((proseResult) => (proseResult ? { ...proseResult, title: hit.title } : null));
+        });
       });
     });
   });

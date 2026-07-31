@@ -16,10 +16,14 @@ let pendingWikiTitle = null;
 // actually matched THIS entry rather than always assuming the category's
 // default kind. Same lifecycle as pendingWikiTitle - cleared on hand-edit.
 let pendingDateKind = null;
-// Songs only: the performer a successful "Look up" resolved via P175, for
-// the popup's artist banner (see lookupPerformerForSong, db-core.js). Same
-// lifecycle as pendingWikiTitle/pendingDateKind - cleared on hand-edit.
-let pendingArtistName = null;
+// Songs only: the QID a successful "Look up" resolved the performer to via
+// P175 (see lookupPerformerForSong, db-core.js) - lets "+ Add to Database"
+// (in the popup) skip straight to fetchKeyDate instead of a name re-search.
+// The artist NAME itself is the visible #newEntryArtist field, not a hidden
+// var - "Look up" fills it in, but it's always user-editable/typeable, since
+// P175 doesn't resolve for every song and there was previously no way to
+// attach an artist by hand at all. Same cleared-on-hand-edit lifecycle as
+// pendingWikiTitle/pendingDateKind.
 let pendingArtistQid = null;
 // Guards a lookup response against a newer one that started after it (e.g.
 // fixing a typo and re-clicking Look Up before the first request lands).
@@ -408,7 +412,7 @@ function emaxArtistBannerHtml(entry, meDate) {
     const artistScore = computeCompatibility(meDate, parseDateStr(existing.date)).finalScore;
     return `
       <button type="button" class="emax-artist-banner" id="emaxArtistBanner" data-artist-id="${escapeHtml(existing.id)}">
-        <div class="emax-artist-banner-thumb">${thumb}</div>
+        <div class="emax-artist-banner-thumb" id="emaxArtistBannerThumb">${thumb}</div>
         <div class="emax-artist-banner-name">${escapeHtml(entry.artistName)}</div>
         <div class="emax-score ${scoreClass(artistScore)}">${artistScore}%</div>
       </button>`;
@@ -416,10 +420,38 @@ function emaxArtistBannerHtml(entry, meDate) {
 
   return `
     <div class="emax-artist-banner">
-      <div class="emax-artist-banner-thumb">${thumb}</div>
+      <div class="emax-artist-banner-thumb" id="emaxArtistBannerThumb">${thumb}</div>
       <div class="emax-artist-banner-name">${escapeHtml(entry.artistName)}</div>
       <button type="button" class="btn-link" id="emaxAddArtistBtn" data-artist-name="${escapeHtml(entry.artistName)}" data-artist-qid="${escapeHtml(entry.artistQid || '')}">+ Add to Database</button>
     </div>`;
+}
+
+// emaxArtistBannerHtml above only ever renders the monogram - it's a sync
+// string builder, same as every other row/hero thumb in this file. The real
+// photo is a separate async enhancement, called right after the banner HTML
+// lands in the DOM (openItemModal), same "paint monogram first, swap in the
+// real image once it resolves" pattern as emaxLoadRowImages and the modal
+// hero image below. Prefers the ARTIST's own stored image/wikiTitle when
+// they're already a real Artists entry (their own edits - a manual imageUrl
+// or noImage - should win); falls back to entry.artistName itself, which is
+// already the resolved Wikipedia title from lookupPerformerForSong, not a
+// guessed search string.
+function emaxLoadArtistBannerImage(entry) {
+  if (!entry.artistName) return;
+  const artistsCat = db.categories.find((c) => c.name === 'Artists');
+  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === entry.artistName.toLowerCase());
+  if (existing && existing.noImage) return;
+  if (existing && existing.imageUrl) {
+    const thumbEl = document.getElementById('emaxArtistBannerThumb');
+    if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(existing.imageUrl)}" alt="">`;
+    return;
+  }
+  const title = (existing && existing.wikiTitle) || entry.artistName;
+  emaxFetchImage(title, false).then((url) => {
+    if (!url) return;
+    const thumbEl = document.getElementById('emaxArtistBannerThumb');
+    if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+  });
 }
 
 // The "+ Add to Database" click: resolves the performer's own birthdate
@@ -429,7 +461,7 @@ function emaxArtistBannerHtml(entry, meDate) {
 // first) and adds them to the Artists category. On success, immediately
 // opens their real popup - the natural conclusion of "add them," per the
 // owner's own answer to "should this also resolve their birthdate."
-async function emaxAddArtistToDatabase(artistName, artistQid) {
+async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
   const artistsCat = db.categories.find((c) => c.name === 'Artists');
   if (!artistsCat) return;
   if (artistsCat.entries.some((e) => e.name.toLowerCase() === artistName.toLowerCase())) return;
@@ -449,7 +481,7 @@ async function emaxAddArtistToDatabase(artistName, artistQid) {
   saveEmaxDB(db);
 
   if (newEntry.date) {
-    openItemModal(newEntry, 'Artists');
+    openItemModal(newEntry, 'Artists', backTo);
   } else if (btn) {
     btn.disabled = false;
     btn.textContent = newEntry.year ? 'Added (year only)' : 'Added - no birthdate found';
@@ -463,7 +495,12 @@ async function emaxAddArtistToDatabase(artistName, artistQid) {
 // same-sign override skipped, the date-kind label defaulting to "Born", the
 // image fetch not trying the brand-only P154 logo tier). Defaults to the
 // current page's own category, unchanged for every existing caller.
-function openItemModal(entry, categoryNameOverride) {
+// backTo: { entry, categoryNameOverride } of whatever popup navigated INTO
+// this one (the song whose artist banner was tapped) - renders a "Back to"
+// link at the top so following the banner into the artist's own profile
+// doesn't strand you there with no way back except closing the modal
+// outright. undefined for every ordinary open (list row, Preload, etc.).
+function openItemModal(entry, categoryNameOverride, backTo) {
   const effectiveCategoryName = categoryNameOverride || category.name;
   const profile = loadProfile();
   if (!profile || !profile.date) {
@@ -531,8 +568,13 @@ function openItemModal(entry, categoryNameOverride) {
     return '';
   }).join('');
 
+  const backHtml = backTo
+    ? `<button type="button" class="btn-link emax-modal-back" id="itemModalBack">← Back to ${escapeHtml(backTo.entry.name)}</button>`
+    : '';
+
   document.getElementById('itemModalHeader').innerHTML = `
     <div class="emax-modal-hero-v2">
+      ${backHtml}
       <div class="emax-modal-image ${scoreCls}" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
       ${starsHtml(entry.id, entry.rating || 0)}
       <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
@@ -575,6 +617,12 @@ function openItemModal(entry, categoryNameOverride) {
   });
 
   document.getElementById('itemModalHeader').addEventListener('click', (e) => {
+    const backBtn = e.target.closest('#itemModalBack');
+    if (backBtn) {
+      if (backTo) openItemModal(backTo.entry, backTo.categoryNameOverride);
+      return;
+    }
+
     const tile = e.target.closest('.emax-fact-tile-tap');
     if (tile) {
       const valueEl = tile.querySelector('.emax-fact-value');
@@ -587,13 +635,13 @@ function openItemModal(entry, categoryNameOverride) {
     if (artistBanner) {
       const artistsCat = db.categories.find((c) => c.name === 'Artists');
       const artistEntry = artistsCat && artistsCat.entries.find((en) => en.id === artistBanner.dataset.artistId);
-      if (artistEntry) openItemModal(artistEntry, 'Artists');
+      if (artistEntry) openItemModal(artistEntry, 'Artists', { entry, categoryNameOverride: effectiveCategoryName });
       return;
     }
 
     const addArtistBtn = e.target.closest('#emaxAddArtistBtn');
     if (addArtistBtn) {
-      emaxAddArtistToDatabase(addArtistBtn.dataset.artistName, addArtistBtn.dataset.artistQid);
+      emaxAddArtistToDatabase(addArtistBtn.dataset.artistName, addArtistBtn.dataset.artistQid, { entry, categoryNameOverride: effectiveCategoryName });
     }
   });
 
@@ -612,6 +660,8 @@ function openItemModal(entry, categoryNameOverride) {
       if (imgEl) imgEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
     });
   }
+
+  emaxLoadArtistBannerImage(entry);
 }
 
 function closeItemModal() {
@@ -624,10 +674,10 @@ function startEdit(entry) {
   editingEntryId = entry.id;
   pendingWikiTitle = entry.wikiTitle || null;
   pendingDateKind = entry.dateKind || null;
-  pendingArtistName = entry.artistName || null;
   pendingArtistQid = entry.artistQid || null;
   document.getElementById('newEntryName').value = entry.name;
   document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
+  document.getElementById('newEntryArtist').value = entry.artistName || '';
   document.getElementById('newEntryImage').value = entry.imageUrl || '';
   document.getElementById('newEntryNoImage').checked = !!entry.noImage;
   document.getElementById('entryFormLabel').textContent = `Edit Item - ${entry.name}`;
@@ -644,10 +694,10 @@ function exitEditMode() {
   editingEntryId = null;
   pendingWikiTitle = null;
   pendingDateKind = null;
-  pendingArtistName = null;
   pendingArtistQid = null;
   document.getElementById('newEntryName').value = '';
   document.getElementById('newEntryDate').value = '';
+  document.getElementById('newEntryArtist').value = '';
   document.getElementById('newEntryImage').value = '';
   document.getElementById('newEntryNoImage').checked = false;
   document.getElementById('entryFormLabel').textContent = 'Add Item';
@@ -864,15 +914,25 @@ function init() {
     const dateInput = document.getElementById('newEntryDate');
     const imageInput = document.getElementById('newEntryImage');
     const noImageInput = document.getElementById('newEntryNoImage');
+    const artistInput = document.getElementById('newEntryArtist');
     const iso = displayToISO(dateInput.value);
     if (!iso) {
       alert('Please enter a valid date (MM/DD/YYYY) - or use Look Up to try filling it in automatically.');
       return;
     }
+    // artistInput is always user-editable (typed by hand or auto-filled by
+    // Look Up), so whatever's in it wins - pendingArtistQid only tags along
+    // when the visible text still matches what Look Up actually resolved
+    // (cleared the instant the field is hand-edited, see its own listener
+    // below); a hand-typed name with no QID still saves fine, same as any
+    // other manual entry - "+ Add to Database" just falls back to a name
+    // search instead of skipping straight to the QID.
+    const artistName = artistInput.value.trim() || null;
+    const artistQid = artistName ? pendingArtistQid : null;
     if (editingEntryId) {
-      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, pendingArtistName, pendingArtistQid);
+      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid);
     } else {
-      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, pendingArtistName, pendingArtistQid);
+      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid);
     }
     exitEditMode();
   });
@@ -886,10 +946,18 @@ function init() {
   // A hand-typed date invalidates whatever "Look up" previously matched -
   // setting .value programmatically (the lookup filling it in) does NOT
   // fire 'input', only real typing does, so this only clears on genuine edits.
+  // The artist NAME text itself is left alone (it's the user's own visible
+  // field now, not tied to the date) - only the internal QID association
+  // is stale once the date no longer matches what Look Up found.
   document.getElementById('newEntryDate').addEventListener('input', () => {
     pendingWikiTitle = null;
     pendingDateKind = null;
-    pendingArtistName = null;
+    pendingArtistQid = null;
+  });
+
+  // Same idea for the artist field itself - typing a different name means
+  // whatever QID Look Up previously attached no longer applies to it.
+  document.getElementById('newEntryArtist').addEventListener('input', () => {
     pendingArtistQid = null;
   });
 
@@ -900,8 +968,6 @@ function init() {
     const myToken = ++lookupToken;
     const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
     const isSongsCategory = category.name === 'Songs';
-    pendingArtistName = null;
-    pendingArtistQid = null;
     lookupKeyDateByNameWithTitle(name, isBrandCategory).then((info) => {
       if (myToken !== lookupToken) return; // superseded by a newer lookup
       if (!info) {
@@ -914,11 +980,18 @@ function init() {
       const kindLabel = EMAX_DATE_KIND_LABEL[info.kind] ? EMAX_DATE_KIND_LABEL[info.kind].toLowerCase() : info.kind;
       setLookupStatus(`✓ Matched "${info.title}" (${kindLabel} ${info.date}) - please double-check before saving.`, false);
       if (!isSongsCategory) return;
+      const artistInput = document.getElementById('newEntryArtist');
+      // Only fills in an EMPTY field - a name the user already typed by hand
+      // (because P175 doesn't resolve for every song, or they know better
+      // than Wikidata) is never silently overwritten by an auto-detection
+      // that happens to land afterward, same "manual always wins" rule
+      // every other auto-fetched field in this app already follows.
+      if (artistInput.value.trim()) return;
       lookupPerformerForSong(name).then((performer) => {
-        if (myToken !== lookupToken || !performer) return;
-        pendingArtistName = performer.title;
+        if (myToken !== lookupToken || !performer || artistInput.value.trim()) return;
+        artistInput.value = performer.title;
         pendingArtistQid = performer.qid;
-      }).catch(() => { /* no performer found - the song still saves fine without one */ });
+      }).catch(() => { /* no performer found - the song still saves fine without one, or the user can type one by hand */ });
     }).catch(() => {
       if (myToken !== lookupToken) return;
       setLookupStatus(`Couldn't find a date automatically for "${name}" - please enter it yourself.`, true);
@@ -1008,6 +1081,12 @@ function init() {
     preloadBtn.textContent = `⚡ Preload Top ${EMAX_SEED_LISTS[category.name].length}`;
     preloadBtn.style.display = '';
     preloadBtn.addEventListener('click', () => preloadTop50());
+  }
+
+  // Songs only - see #newEntryArtist's own comments (init's addEntryBtn
+  // handler, entryLookupBtn handler) for how this field is filled/used.
+  if (category.name === 'Songs') {
+    document.getElementById('newEntryArtistRow').style.display = '';
   }
 
   if (EMAX_YEAR_FILTER_KIND[category.name]) {
