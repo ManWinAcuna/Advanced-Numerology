@@ -305,7 +305,10 @@ function entryRowHtml(entry, score) {
     <div class="entry-item emax-entry-item ${tierCls}" data-open="${entry.id}">
       <div class="emax-entry-thumb" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
       <div class="emax-entry-main">
-        <div class="entry-name">${escapeHtml(entry.name)}</div>
+        <div class="entry-name">
+          <span class="emax-row-name-text">${escapeHtml(entry.name)}</span>
+          ${entry.artistName ? `<span class="emax-row-artist-thumb" id="emaxRowArtistThumb-${entry.id}" title="${escapeHtml(entry.artistName)}">${emaxMonogram(entry.artistName, false)}</span>` : ''}
+        </div>
         ${starsHtml(entry.id, entry.rating || 0)}
       </div>
       <div class="emax-entry-side">
@@ -337,6 +340,21 @@ function emaxLoadRowImages(ranked) {
   });
 }
 
+// Same lazy enhancement, for the small artist avatar entryRowHtml renders
+// next to a song's own name (Songs only - see emaxArtistImageUrl above for
+// the shared resolution/priority logic with the popup's own artist banner).
+function emaxLoadRowArtistImages(ranked) {
+  if (category.name !== 'Songs') return;
+  ranked.forEach(({ entry }) => {
+    if (!entry.artistName) return;
+    emaxArtistImageUrl(entry).then((url) => {
+      if (!url) return;
+      const thumbEl = document.getElementById(`emaxRowArtistThumb-${entry.id}`);
+      if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+    });
+  });
+}
+
 function renderEntries() {
   const container = document.getElementById('entriesContainer');
 
@@ -363,6 +381,7 @@ function renderEntries() {
 
   container.innerHTML = noteHtml + emptyFilterHtml + visible.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
   emaxLoadRowImages(visible);
+  emaxLoadRowArtistImages(visible);
 }
 
 /* ===================== Item popup ===================== */
@@ -426,28 +445,32 @@ function emaxArtistBannerHtml(entry, meDate) {
     </div>`;
 }
 
+// Shared by the artist banner (popup) and each Songs row's own small artist
+// avatar - one resolver, same priority order everywhere: the ARTIST's own
+// stored noImage/imageUrl wins when they're already a real Artists entry
+// (their own edits should be respected wherever their photo shows up), else
+// falls back to entry.artistName itself, which is already the resolved
+// Wikipedia title from lookupPerformerForSong, not a guessed search string.
+// Resolves to a URL, or null (never fetches when noImage is set).
+function emaxArtistImageUrl(entry) {
+  if (!entry.artistName) return Promise.resolve(null);
+  const artistsCat = db.categories.find((c) => c.name === 'Artists');
+  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === entry.artistName.toLowerCase());
+  if (existing && existing.noImage) return Promise.resolve(null);
+  if (existing && existing.imageUrl) return Promise.resolve(existing.imageUrl);
+  const title = (existing && existing.wikiTitle) || entry.artistName;
+  return emaxFetchImage(title, false);
+}
+
 // emaxArtistBannerHtml above only ever renders the monogram - it's a sync
 // string builder, same as every other row/hero thumb in this file. The real
 // photo is a separate async enhancement, called right after the banner HTML
 // lands in the DOM (openItemModal), same "paint monogram first, swap in the
 // real image once it resolves" pattern as emaxLoadRowImages and the modal
-// hero image below. Prefers the ARTIST's own stored image/wikiTitle when
-// they're already a real Artists entry (their own edits - a manual imageUrl
-// or noImage - should win); falls back to entry.artistName itself, which is
-// already the resolved Wikipedia title from lookupPerformerForSong, not a
-// guessed search string.
+// hero image below.
 function emaxLoadArtistBannerImage(entry) {
   if (!entry.artistName) return;
-  const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === entry.artistName.toLowerCase());
-  if (existing && existing.noImage) return;
-  if (existing && existing.imageUrl) {
-    const thumbEl = document.getElementById('emaxArtistBannerThumb');
-    if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(existing.imageUrl)}" alt="">`;
-    return;
-  }
-  const title = (existing && existing.wikiTitle) || entry.artistName;
-  emaxFetchImage(title, false).then((url) => {
+  emaxArtistImageUrl(entry).then((url) => {
     if (!url) return;
     const thumbEl = document.getElementById('emaxArtistBannerThumb');
     if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;

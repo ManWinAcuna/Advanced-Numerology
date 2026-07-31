@@ -5931,6 +5931,15 @@ body {
   gap: 6px;
 }
 
+/* Scoped to .emax-entry-item specifically (not plain .entry-item, which the
+   Birthday Database page's own rows also use) - only Songs entries ever
+   render the artist avatar span at all. */
+.emax-entry-item .entry-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.emax-row-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emax-row-artist-thumb { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; overflow: hidden; }
+.emax-row-artist-thumb .emax-monogram { width: 18px; height: 18px; font-size: 8px; }
+.emax-row-artist-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .emax-entry-side {
   flex: 0 0 auto;
   display: flex;
@@ -6129,8 +6138,9 @@ button.emax-artist-banner {
   transition: border-color 0.15s ease;
 }
 button.emax-artist-banner:hover { border-color: var(--yellow); }
-.emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; }
+.emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
 .emax-artist-banner-thumb .emax-monogram { width: 36px; height: 36px; font-size: 13px; }
+.emax-artist-banner-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .emax-artist-banner-name {
   flex: 1;
   min-width: 0;
