@@ -280,6 +280,26 @@ function lookupLogoImageUrl(name) {
   return fetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchLogoImageUrl(hit.qid) : null));
 }
 
+// EMAX Songs only: P175 (performer) is a WIKIDATA-ITEM-valued claim (an
+// artist's own QID, not a date/string), so a second lookup - the same
+// enwiki-sitelink resolution the country/place fallback already uses via
+// fetchWikipediaTitleFromQid - turns that QID into a real title, which then
+// doubles as both the artist's display name and (like every other entry in
+// this app) the seed for their photo fetch.
+function fetchPerformerForSong(qid) {
+  return fetchWikidataClaims(qid).then((claims) => {
+    const claim = claims && claims.P175 && claims.P175[0];
+    const value = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+    const artistQid = value && value.id;
+    if (!artistQid) return null;
+    return fetchWikipediaTitleFromQid(artistQid).then((title) => (title ? { qid: artistQid, title } : null));
+  });
+}
+
+function lookupPerformerForSong(name) {
+  return fetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchPerformerForSong(hit.qid) : null));
+}
+
 /* ===================== Wikipedia infobox fallback ===================== */
 // Wikidata's P571 (inception) is often missing even when the Wikipedia
 // article's infobox has the date written right in it - infoboxes get filled

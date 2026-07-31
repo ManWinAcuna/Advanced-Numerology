@@ -6095,6 +6095,38 @@ body {
 .emax-score-flag.perfect, .emax-score-flag.ideal { color: var(--yellow); border-color: var(--yellow); }
 .emax-score-flag.clash { color: var(--bad); border-color: var(--bad); }
 
+/* ---- Songs only: the performer banner in a song's own popup ---- */
+.emax-artist-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-top: 4px;
+}
+button.emax-artist-banner {
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+button.emax-artist-banner:hover { border-color: var(--yellow); }
+.emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; }
+.emax-artist-banner-thumb .emax-monogram { width: 36px; height: 36px; font-size: 13px; }
+.emax-artist-banner-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emax-artist-banner .btn-link { flex: 0 0 auto; white-space: nowrap; }
+
 /* ---- Fact tile grid ---- */
 
 .emax-fact-grid {
