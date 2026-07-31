@@ -56,9 +56,16 @@ try { emaxImageCache = JSON.parse(localStorage.getItem(EMAX_IMAGE_CACHE_KEY)) ||
 // matches its already-shipped entry.artistName/artistQid exactly, so
 // existing real user data needs no migration). `label` is what the manual
 // field's placeholder calls it. `lookupFn` is the db-core.js resolver.
+// targetCategory: which category a "+ Add to Database" click actually adds
+// the linked person INTO, and where an existing match is looked up from -
+// Songs' artist and Video Games' director both share the general "Artists"
+// bucket (real people generally), but Books' author gets its own dedicated
+// "Authors" category instead, per an explicit call not to just keep
+// dumping every linked-person type into Artists.
 const EMAX_LINKED_PERSON_CONFIG = {
-  Songs: { field: 'artist', label: 'Artist', lookupFn: lookupPerformerForSong },
-  'Video Games': { field: 'director', label: 'Director', lookupFn: lookupDirectorForGame },
+  Songs: { field: 'artist', label: 'Artist', lookupFn: lookupPerformerForSong, targetCategory: 'Artists' },
+  'Video Games': { field: 'director', label: 'Director', lookupFn: lookupDirectorForGame, targetCategory: 'Artists' },
+  Books: { field: 'author', label: 'Author', lookupFn: lookupAuthorForBook, targetCategory: 'Authors' },
 };
 
 if (!category) {
@@ -222,7 +229,16 @@ function starsHtml(entryId, rating) {
 // this NEVER edits compat-engine.js, it only consumes it more than once.
 function emaxAdjustedCompatibility(meDate, themDate) {
   const result = computeCompatibility(meDate, themDate);
-  if (category.name === 'Artists') return result;
+  // Real PEOPLE (any category whose date is a birthdate - Artists,
+  // YouTubers, Historical Figures, Authors) are exempt from the same-sign
+  // override below: a matching Vietnamese zodiac sign is a meaningful
+  // thematic-alignment signal for a brand/movie/song, but not something
+  // that should artificially boost an actual person's real numerological
+  // compatibility. This was hardcoded to the literal name "Artists" before
+  // YouTubers/Historical Figures/Authors existed - genuinely missed
+  // exempting YouTubers since it shipped, caught while wiring the newer
+  // person categories through the same check.
+  if (EMAX_YEAR_FILTER_KIND[category.name] === 'born') return result;
 
   const v = result.vietnamese;
   const yearMatch = v.entityYearSign === v.dayYearSign;
@@ -456,8 +472,8 @@ function emaxLinkedPersonBannerHtml(entry, meDate, cfg) {
   const personName = entry[cfg.field + 'Name'];
   if (!personName) return '';
   const personQid = entry[cfg.field + 'Qid'];
-  const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
+  const targetCat = db.categories.find((c) => c.name === cfg.targetCategory);
+  const existing = targetCat && targetCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
   const thumb = emaxMonogram(personName, false);
 
   if (existing && existing.date) {
@@ -489,8 +505,8 @@ function emaxLinkedPersonImageUrl(entry, cfg) {
   if (!cfg) return Promise.resolve(null);
   const personName = entry[cfg.field + 'Name'];
   if (!personName) return Promise.resolve(null);
-  const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  const existing = artistsCat && artistsCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
+  const targetCat = db.categories.find((c) => c.name === cfg.targetCategory);
+  const existing = targetCat && targetCat.entries.find((e) => e.name.toLowerCase() === personName.toLowerCase());
   if (existing && existing.noImage) return Promise.resolve(null);
   if (existing && existing.imageUrl) return Promise.resolve(existing.imageUrl);
   const title = (existing && existing.wikiTitle) || personName;
@@ -515,15 +531,16 @@ function emaxLoadLinkedPersonBannerImage(entry, cfg) {
 // The "+ Add to Database" click: resolves the linked person's own birthdate
 // (their real QID, already captured by cfg.lookupFn, skips straight to
 // fetchKeyDate instead of re-searching by name - the same property-priority
-// cascade Artists' own Preload/Look-up already use, P569 first) and adds
-// them to the Artists category. On success, immediately opens their real
+// cascade every "born"-kind category's own Preload/Look-up already use,
+// P569 first) and adds them to cfg.targetCategory (Artists for Songs/Video
+// Games, Authors for Books). On success, immediately opens their real
 // popup - the natural conclusion of "add them," per the owner's own answer
 // to "should this also resolve their birthdate" (originally asked for
 // Songs, now shared by every category with a linked-person config).
-async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
-  const artistsCat = db.categories.find((c) => c.name === 'Artists');
-  if (!artistsCat) return;
-  if (artistsCat.entries.some((e) => e.name.toLowerCase() === artistName.toLowerCase())) return;
+async function emaxAddArtistToDatabase(artistName, artistQid, targetCategoryName, backTo) {
+  const targetCat = db.categories.find((c) => c.name === targetCategoryName);
+  if (!targetCat) return;
+  if (targetCat.entries.some((e) => e.name.toLowerCase() === artistName.toLowerCase())) return;
 
   const btn = document.getElementById('emaxAddArtistBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
@@ -545,11 +562,11 @@ async function emaxAddArtistToDatabase(artistName, artistQid, backTo) {
   const newEntry = { id: uid(), name: artistName };
   if (info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
   else { newEntry.year = info.year; }
-  artistsCat.entries.push(newEntry);
+  targetCat.entries.push(newEntry);
   saveEmaxDB(db);
 
   if (newEntry.date) {
-    openItemModal(newEntry, 'Artists', backTo);
+    openItemModal(newEntry, targetCategoryName, backTo);
   } else if (btn) {
     btn.disabled = false;
     btn.textContent = 'Added (year only)';
@@ -582,13 +599,14 @@ function openItemModal(entry, categoryNameOverride, backTo) {
 
   const meDate = parseDateStr(profile.date);
   const themDate = parseDateStr(entry.date);
-  // Artists (real people) are always exempt from the same-sign 99% override
-  // - emaxAdjustedCompatibility already returns computeCompatibility's own
-  // result unmodified for the CURRENT page's Artists category, so calling
-  // computeCompatibility directly here for an override of 'Artists' is the
-  // exact same result, without needing emaxAdjustedCompatibility to also
-  // learn about a category it isn't actually on.
-  const result = effectiveCategoryName === 'Artists' ? computeCompatibility(meDate, themDate) : emaxAdjustedCompatibility(meDate, themDate);
+  // Real people (any 'born'-kind category - Artists, YouTubers, Historical
+  // Figures, Authors) are always exempt from the same-sign 99% override -
+  // emaxAdjustedCompatibility applies the exact same exemption for the
+  // CURRENT page's own category, so calling computeCompatibility directly
+  // here for a person-category override is the same result, without
+  // needing emaxAdjustedCompatibility to also learn about a category
+  // (Authors, viewed from within a Books popup) it isn't actually on.
+  const result = EMAX_YEAR_FILTER_KIND[effectiveCategoryName] === 'born' ? computeCompatibility(meDate, themDate) : emaxAdjustedCompatibility(meDate, themDate);
   const score = result.finalScore;
   const scoreCls = scoreClass(score);
 
@@ -701,16 +719,16 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     }
 
     const artistBanner = e.target.closest('#emaxArtistBanner');
-    if (artistBanner) {
-      const artistsCat = db.categories.find((c) => c.name === 'Artists');
-      const artistEntry = artistsCat && artistsCat.entries.find((en) => en.id === artistBanner.dataset.artistId);
-      if (artistEntry) openItemModal(artistEntry, 'Artists', { entry, categoryNameOverride: effectiveCategoryName });
+    if (artistBanner && linkedPersonCfg) {
+      const targetCat = db.categories.find((c) => c.name === linkedPersonCfg.targetCategory);
+      const artistEntry = targetCat && targetCat.entries.find((en) => en.id === artistBanner.dataset.artistId);
+      if (artistEntry) openItemModal(artistEntry, linkedPersonCfg.targetCategory, { entry, categoryNameOverride: effectiveCategoryName });
       return;
     }
 
     const addArtistBtn = e.target.closest('#emaxAddArtistBtn');
-    if (addArtistBtn) {
-      emaxAddArtistToDatabase(addArtistBtn.dataset.artistName, addArtistBtn.dataset.artistQid, { entry, categoryNameOverride: effectiveCategoryName });
+    if (addArtistBtn && linkedPersonCfg) {
+      emaxAddArtistToDatabase(addArtistBtn.dataset.artistName, addArtistBtn.dataset.artistQid, linkedPersonCfg.targetCategory, { entry, categoryNameOverride: effectiveCategoryName });
     }
   });
 

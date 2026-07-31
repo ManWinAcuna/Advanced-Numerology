@@ -452,6 +452,30 @@ function lookupDirectorForGame(name) {
   return queuedFetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchDirectorForGame(hit.qid) : null));
 }
 
+// EMAX Books' own linked-person lookup - P50 (author) is a PERSON-typed
+// property by Wikidata's own convention (a publisher/imprint is the
+// separate P123), so unlike Songs' P175 it essentially always points
+// straight to a real person already - checked live against 4 well-known
+// books (1984, Harry Potter and the Philosopher's Stone, The Great Gatsby,
+// Pride and Prejudice), all 4 resolved cleanly. No P31=human check or
+// band-style fallback needed for the same reason Video Games' director
+// lookup didn't need Songs' lead-singer machinery - a different property,
+// a different (much more reliable) failure mode. Queued from the start,
+// same reasoning as every other lookup in this cluster.
+function fetchAuthorForBook(qid) {
+  return queuedFetchWikidataClaims(qid).then((claims) => {
+    const claim = claims && claims.P50 && claims.P50[0];
+    const value = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+    const authorQid = value && value.id;
+    if (!authorQid) return null;
+    return queuedFetchWikipediaTitleFromQid(authorQid).then((title) => (title ? { qid: authorQid, title } : null));
+  });
+}
+
+function lookupAuthorForBook(name) {
+  return queuedFetchWikidataIdWithTitle(name).then((hit) => (hit ? fetchAuthorForBook(hit.qid) : null));
+}
+
 /* ===================== Wikipedia infobox fallback ===================== */
 // Wikidata's P571 (inception) is often missing even when the Wikipedia
 // article's infobox has the date written right in it - infoboxes get filled
@@ -1166,6 +1190,10 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['song', 'track', 'single'], emoji: '🎵' },
   { keywords: ['video game', 'game'], emoji: '🎮' },
   { keywords: ['youtuber', 'streamer', 'influencer', 'creator'], emoji: '📹' },
+  { keywords: ['food', 'beverage', 'drink', 'restaurant', 'snack'], emoji: '🍔' },
+  { keywords: ['historical', 'politician'], emoji: '🏛️' },
+  { keywords: ['book', 'novel'], emoji: '📚' },
+  { keywords: ['author', 'writer'], emoji: '✍️' },
 ];
 
 const CATEGORY_EMOJI_FALLBACK = ['🎉', '🎈', '🎊', '🌟', '💫', '🎁', '✨', '🎆', '🪩', '🎇'];
@@ -1201,6 +1229,7 @@ const EMAX_SEEN_STARTERS_KEY = 'numerology_emax_starters_seen_v1';
 const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
   'Anime', 'Shows', 'Songs', 'Video Games', 'YouTubers',
+  'Food & Beverage Brands', 'Historical Figures', 'Books', 'Authors',
 ];
 
 function loadEmaxDB() {
