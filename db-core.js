@@ -115,30 +115,74 @@ function dateFromClaim(claims) {
   return time.slice(1, 11);
 }
 
+function fetchWikidataClaims(qid) {
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
+  return fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      const entity = data.entities && data.entities[qid];
+      return (entity && entity.claims) || null;
+    });
+}
+
 // P569 = date of birth (people). P571 = inception (companies, organizations,
 // countries, buildings, etc.) - tried as a fallback for non-person entities.
 // P577 = publication date (films, books, software) - tried last, for EMAX's
 // Movies category; virtually never set on a person/place/company, so this
 // tier is inert for every other existing caller of this function.
 function fetchKeyDate(qid) {
-  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
-  return fetch(url)
-    .then((res) => res.json())
-    .then((data) => {
-      const entity = data.entities && data.entities[qid];
-      if (!entity || !entity.claims) return null;
+  return fetchWikidataClaims(qid).then((claims) => {
+    if (!claims) return null;
 
-      const born = dateFromClaim(entity.claims.P569);
-      if (born) return { date: born, kind: 'born' };
+    const born = dateFromClaim(claims.P569);
+    if (born) return { date: born, kind: 'born' };
 
-      const founded = dateFromClaim(entity.claims.P571);
-      if (founded) return { date: founded, kind: 'founded' };
+    const founded = dateFromClaim(claims.P571);
+    if (founded) return { date: founded, kind: 'founded' };
 
-      const released = dateFromClaim(entity.claims.P577);
-      if (released) return { date: released, kind: 'released' };
+    const released = dateFromClaim(claims.P577);
+    if (released) return { date: released, kind: 'released' };
 
-      return null;
-    });
+    return null;
+  });
+}
+
+// Year-only sibling of dateFromClaim - EMAX's "Preload by Year" needs to
+// know a brand's founding YEAR even when Wikidata only records that (a
+// precision-9 claim, no exact day/month), unlike every other caller of
+// dateFromClaim, which needs a real calendar date for a full numerology
+// profile and correctly rejects anything coarser.
+function yearFromClaim(claims) {
+  if (!claims || claims.length === 0) return null;
+  const snak = claims[0].mainsnak;
+  if (!snak || !snak.datavalue) return null;
+  const value = snak.datavalue.value;
+  if (value.precision < 9) return null; // coarser than a year (decade/century) - never usable
+  const time = value.time;
+  if (time.charAt(0) === '-') return null;
+  return Number(time.slice(1, 5));
+}
+
+// EMAX-only: resolves a brand's founding info (P571) as a real date
+// (day-precision) when Wikidata has one, or just the YEAR when that's all
+// Wikidata records - never a fabricated day. Returns { date, kind:'founded' }
+// or { year, kind:'founded' } or null.
+function fetchFoundingDateOrYear(qid) {
+  return fetchWikidataClaims(qid).then((claims) => {
+    if (!claims) return null;
+    const founded = dateFromClaim(claims.P571);
+    if (founded) return { date: founded, kind: 'founded' };
+    const foundedYear = yearFromClaim(claims.P571);
+    if (foundedYear) return { year: foundedYear, kind: 'founded' };
+    return null;
+  });
+}
+
+function lookupFoundingDateOrYearWithTitle(name) {
+  return fetchWikidataIdWithTitle(name).then((hit) => {
+    if (!hit) return null;
+    return fetchFoundingDateOrYear(hit.qid).then((result) => (result ? { ...result, title: hit.title } : null));
+  });
 }
 
 /* ===================== Wikipedia infobox fallback ===================== */

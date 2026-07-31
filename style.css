@@ -5924,4 +5924,16 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+
+.emax-year-only-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#preloadYearInput { width: 90px; }
 .stock-cycles-table tr.lean-flat td.lean-cell { color: var(--orange); font-weight: 700; }
