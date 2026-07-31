@@ -13,6 +13,15 @@ let pendingWikiTitle = null;
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
 
+// Declared here (ahead of init() below) rather than down by emaxFetchImage
+// itself - renderEntries() now loads row images synchronously off of
+// init(), which runs immediately at module load, before any `let` further
+// down this file has been reached; a hoisted function calling into it that
+// early would otherwise hit a genuine temporal-dead-zone ReferenceError.
+const EMAX_IMAGE_CACHE_KEY = 'numerology_emax_images_v1';
+let emaxImageCache = {};
+try { emaxImageCache = JSON.parse(localStorage.getItem(EMAX_IMAGE_CACHE_KEY)) || {}; } catch (e) { emaxImageCache = {}; }
+
 if (!category) {
   document.querySelector('.db-page').innerHTML = '<div class="empty-state">Category not found. <a href="emax.html">Back to categories</a></div>';
 } else {
@@ -23,18 +32,19 @@ if (!category) {
 
 /* ===================== Entries CRUD ===================== */
 
-function addEntry(name, date, imageUrl, wikiTitle) {
+function addEntry(name, date, imageUrl, wikiTitle, noImage) {
   name = name.trim();
   if (!name || !date) return;
   const entry = { id: uid(), name, date };
   if (imageUrl) entry.imageUrl = imageUrl;
   if (wikiTitle) entry.wikiTitle = wikiTitle;
+  if (noImage) entry.noImage = true;
   category.entries.push(entry);
   saveEmaxDB(db);
   renderEntries();
 }
 
-function updateEntry(entryId, name, date, imageUrl, wikiTitle) {
+function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage) {
   name = name.trim();
   if (!name || !date) return;
   const entry = category.entries.find((e) => e.id === entryId);
@@ -44,6 +54,10 @@ function updateEntry(entryId, name, date, imageUrl, wikiTitle) {
   delete entry.year; // a real date supersedes any year-only value
   if (imageUrl) entry.imageUrl = imageUrl; else delete entry.imageUrl;
   if (wikiTitle) entry.wikiTitle = wikiTitle; else delete entry.wikiTitle;
+  // The "remove picture" override (in case the auto-fetch got the wrong
+  // one) - when set, both the list row and the popup always show the
+  // monogram, skipping the fetch (and any manual imageUrl) entirely.
+  if (noImage) entry.noImage = true; else delete entry.noImage;
   saveEmaxDB(db);
   renderEntries();
 }
@@ -77,14 +91,12 @@ function parseDateStr(dateStr) {
 }
 
 /* ===================== Images: auto-fetch + monogram fallback ===================== */
-// Same pattern Stocks already uses for CEO portraits: the LIST stays
-// monogram-only (fast, no image loading in a scrolling list), the real
-// photo only loads lazily when an item's own popup opens. A manual
-// entry.imageUrl always wins over the auto-fetch.
-
-const EMAX_IMAGE_CACHE_KEY = 'numerology_emax_images_v1';
-let emaxImageCache = {};
-try { emaxImageCache = JSON.parse(localStorage.getItem(EMAX_IMAGE_CACHE_KEY)) || {}; } catch (e) { emaxImageCache = {}; }
+// Same pattern Stocks already uses for CEO portraits: the real photo loads
+// lazily (an item's own popup, or - now - each dated list row) with a
+// monogram fallback. A manual entry.imageUrl always wins over the
+// auto-fetch, and entry.noImage (the "remove picture" edit option) wins
+// over both. EMAX_IMAGE_CACHE_KEY/emaxImageCache are declared up top of
+// this file - see the comment there for why.
 
 // tryLogoFirst: brand categories check Wikidata's real logo property (P154)
 // before falling back to whatever photo the Wikipedia page's own summary
@@ -217,7 +229,7 @@ function entryRowHtml(entry, score) {
   const scoreHtml = score == null ? '<div class="emax-score dim">&mdash;</div>' : `<div class="emax-score ${scoreClass(score)}">${score}%</div>`;
   return `
     <div class="entry-item emax-entry-item" data-open="${entry.id}">
-      <div class="emax-entry-thumb">${emaxMonogram(entry.name, false)}</div>
+      <div class="emax-entry-thumb" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
       <div class="emax-entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
         ${starsHtml(entry.id, entry.rating || 0)}
@@ -230,6 +242,25 @@ function entryRowHtml(entry, score) {
         </div>
       </div>
     </div>`;
+}
+
+// Same auto-fetch (real photo/logo, cached, monogram-fallback) the popup
+// already uses, applied to each dated row's small thumbnail too - lazy,
+// after the list itself has already painted with monograms, so a big list
+// isn't blocked on network round-trips to show up. A manual entry.imageUrl
+// is already rendered synchronously above (no fetch needed); entry.noImage
+// (the "remove picture" edit option) skips this entirely, monogram stays.
+function emaxLoadRowImages(ranked) {
+  const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
+  ranked.forEach(({ entry }) => {
+    if (!entry.date || entry.noImage || entry.imageUrl) return;
+    const title = entry.wikiTitle || entry.name;
+    emaxFetchImage(title, isBrandCategory).then((url) => {
+      if (!url) return;
+      const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
+      if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+    });
+  });
 }
 
 function renderEntries() {
@@ -245,6 +276,7 @@ function renderEntries() {
   const noteHtml = meDate ? '' : '<div class="emax-note">Set your birthday on <a href="profile.html">My Profile</a> to see compatibility scores.</div>';
   const ranked = scoredEntries(meDate);
   container.innerHTML = noteHtml + ranked.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
+  emaxLoadRowImages(ranked);
 }
 
 /* ===================== Item popup ===================== */
@@ -257,6 +289,23 @@ function renderEntries() {
 // line - a custom category (not in that map) has no known kind, so its
 // items just show the bare date with no verb prefix.
 const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released' };
+
+// A fact-grid tile. When `compound` is given and differs from the reduced
+// value shown, the tile becomes tappable - clicking toggles the displayed
+// value between the reduced form and "compound/reduced" (e.g. "23/5"),
+// exactly the owner's ask: tap Life Path or a Personal Year/Month/Day tile
+// to see its compound version. Day Born/Day of Year/the Chinese signs stay
+// plain, non-interactive tiles - not part of that ask.
+function emaxFactTile(icon, label, reduced, compound) {
+  const iconHtml = `<span class="emax-fact-icon">${icon}</span>`;
+  const labelHtml = `<span class="emax-fact-label">${escapeHtml(label)}</span>`;
+  const valueHtml = `<span class="emax-fact-value">${escapeHtml(String(reduced))}</span>`;
+  if (compound != null && String(compound) !== String(reduced)) {
+    const compoundLabel = `${compound}/${reduced}`;
+    return `<button type="button" class="emax-fact-tile emax-fact-tile-tap" data-reduced="${escapeHtml(String(reduced))}" data-compound="${escapeHtml(compoundLabel)}">${iconHtml}${labelHtml}${valueHtml}</button>`;
+  }
+  return `<div class="emax-fact-tile">${iconHtml}${labelHtml}${valueHtml}</div>`;
+}
 
 function openItemModal(entry) {
   const profile = loadProfile();
@@ -275,11 +324,27 @@ function openItemModal(entry) {
   const scoreCls = scoreClass(score);
 
   const lifePath = getLifePath(themDate);
+  const lifePathCompound = getLifePathCompound(themDate);
   const dayBorn = getReducedDay(themDate);
   const dayOfYear = getReducedDayOfYear(themDate);
   const chineseYear = getChineseZodiacYear(themDate);
   const chineseMonth = getChineseMonth(themDate);
   const chineseDay = getChineseDaySign(themDate);
+
+  // The item's OWN current personal cycle, same computeEnergyFlow(birth,
+  // today) pattern used everywhere else in the app (Stocks' Today's
+  // Energies, etc.) - "today" is always the real current date, never the
+  // profile's own date or anything else. Raw (unreduced) values are
+  // computed separately for the tap-to-reveal compound view below -
+  // computeEnergyFlow's own return only exposes the final reduced numbers.
+  const today = new Date();
+  const energyFlow = computeEnergyFlow(themDate, today);
+  const personalYear = energyFlow.numerology.personalYear;
+  const personalMonth = energyFlow.numerology.personalMonth;
+  const personalDay = energyFlow.numerology.personalDay;
+  const personalYearCompound = getPersonalYearRaw(themDate, today);
+  const personalMonthCompound = getPersonalMonthRaw(themDate, today);
+  const personalDayCompound = getPersonalDayRaw(personalMonth, today);
 
   const kindLabel = EMAX_DATE_KIND_LABEL[EMAX_YEAR_FILTER_KIND[category.name]];
   const dateLine = `${kindLabel ? kindLabel + ' ' : ''}${formatDate(entry.date)}`;
@@ -314,12 +379,15 @@ function openItemModal(entry) {
       </div>
       ${flagHtml}
       <div class="emax-fact-grid">
-        <div class="emax-fact-tile"><span class="emax-fact-icon">✨</span><span class="emax-fact-label">Life Path</span><span class="emax-fact-value">${lifePath}</span></div>
-        <div class="emax-fact-tile"><span class="emax-fact-icon">📅</span><span class="emax-fact-label">Day Born</span><span class="emax-fact-value">${dayBorn}</span></div>
-        <div class="emax-fact-tile"><span class="emax-fact-icon">🔢</span><span class="emax-fact-label">Day of Year</span><span class="emax-fact-value">${dayOfYear}</span></div>
-        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseYear] || ''}</span><span class="emax-fact-label">Year</span><span class="emax-fact-value">${chineseYear}</span></div>
-        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || ''}</span><span class="emax-fact-label">Month</span><span class="emax-fact-value">${chineseMonth}</span></div>
-        <div class="emax-fact-tile"><span class="emax-fact-icon">${VIETNAMESE_ZODIAC_EMOJI[chineseDay] || ''}</span><span class="emax-fact-label">Day</span><span class="emax-fact-value">${chineseDay}</span></div>
+        ${emaxFactTile('✨', 'Life Path', lifePath, lifePathCompound)}
+        ${emaxFactTile('📅', 'Day Born', dayBorn)}
+        ${emaxFactTile('🔢', 'Day of Year', dayOfYear)}
+        ${emaxFactTile('🔮', 'Personal Yr', personalYear, personalYearCompound)}
+        ${emaxFactTile('🔮', 'Personal Mo', personalMonth, personalMonthCompound)}
+        ${emaxFactTile('🔮', 'Personal Day', personalDay, personalDayCompound)}
+        ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseYear] || '', 'Year', chineseYear)}
+        ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || '', 'Month', chineseMonth)}
+        ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseDay] || '', 'Day', chineseDay)}
       </div>
       <button class="emax-breakdown-toggle" id="itemModalBreakdownToggle" type="button">▾ See full breakdown</button>
     </div>`;
@@ -334,9 +402,19 @@ function openItemModal(entry) {
     toggleBtn.textContent = compatEl.hidden ? '▾ See full breakdown' : '▴ Hide full breakdown';
   });
 
+  document.getElementById('itemModalHeader').addEventListener('click', (e) => {
+    const tile = e.target.closest('.emax-fact-tile-tap');
+    if (!tile) return;
+    const valueEl = tile.querySelector('.emax-fact-value');
+    const showingCompound = tile.classList.toggle('showing-compound');
+    valueEl.textContent = showingCompound ? tile.dataset.compound : tile.dataset.reduced;
+  });
+
   document.getElementById('itemModalOverlay').classList.add('active');
 
-  if (entry.imageUrl) {
+  if (entry.noImage) {
+    // "Remove picture" override - stays the monogram already rendered above.
+  } else if (entry.imageUrl) {
     document.getElementById('itemModalImage').innerHTML = `<img src="${escapeHtml(entry.imageUrl)}" alt="">`;
   } else {
     const title = entry.wikiTitle || entry.name;
@@ -361,6 +439,7 @@ function startEdit(entry) {
   document.getElementById('newEntryName').value = entry.name;
   document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
   document.getElementById('newEntryImage').value = entry.imageUrl || '';
+  document.getElementById('newEntryNoImage').checked = !!entry.noImage;
   document.getElementById('entryFormLabel').textContent = `Edit Item - ${entry.name}`;
   document.getElementById('addEntryBtn').textContent = 'Save Changes';
   document.getElementById('cancelEditBtn').style.display = '';
@@ -375,6 +454,7 @@ function exitEditMode() {
   document.getElementById('newEntryName').value = '';
   document.getElementById('newEntryDate').value = '';
   document.getElementById('newEntryImage').value = '';
+  document.getElementById('newEntryNoImage').checked = false;
   document.getElementById('entryFormLabel').textContent = 'Add Item';
   document.getElementById('addEntryBtn').textContent = 'Add';
   document.getElementById('cancelEditBtn').style.display = 'none';
@@ -537,15 +617,16 @@ function init() {
     const nameInput = document.getElementById('newEntryName');
     const dateInput = document.getElementById('newEntryDate');
     const imageInput = document.getElementById('newEntryImage');
+    const noImageInput = document.getElementById('newEntryNoImage');
     const iso = displayToISO(dateInput.value);
     if (!iso) {
       alert('Please enter a valid date (MM/DD/YYYY) - or use Look Up to try filling it in automatically.');
       return;
     }
     if (editingEntryId) {
-      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle);
+      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked);
     } else {
-      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle);
+      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked);
     }
     exitEditMode();
   });

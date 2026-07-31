@@ -5828,7 +5828,19 @@ body {
   gap: 12px;
 }
 
-.emax-entry-thumb { flex: 0 0 auto; }
+.emax-entry-thumb {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.emax-entry-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 .emax-entry-main {
   flex: 1;
@@ -6011,6 +6023,30 @@ body {
 .emax-fact-icon { font-size: 1.1rem; }
 .emax-fact-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .emax-fact-value { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+
+/* Tappable tiles (Life Path, Personal Year/Month/Day) - a real <button>
+   under the hood, reset back to look identical to the plain <div> tiles,
+   plus a subtle cue that there's a compound value one tap away. */
+button.emax-fact-tile-tap {
+  font-family: inherit;
+  cursor: pointer;
+  position: relative;
+}
+.emax-fact-tile-tap::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--yellow);
+  opacity: 0.7;
+}
+.emax-fact-tile-tap.showing-compound {
+  border-color: var(--yellow);
+}
+.emax-fact-tile-tap.showing-compound .emax-fact-value { color: var(--yellow); }
 
 .emax-breakdown-toggle {
   background: none;
