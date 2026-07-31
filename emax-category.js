@@ -240,18 +240,39 @@ function emaxAdjustedCompatibility(meDate, themDate) {
   // person categories through the same check.
   if (EMAX_YEAR_FILTER_KIND[category.name] === 'born') return result;
 
+  // Life Path 9 matched against Life Path 9 scores very low (10) in the core
+  // person-to-person table (NUMEROLOGY_TABLE[9][9], compat-data.js) - two
+  // PEOPLE who are both 9 (the completion/letting-go number) can genuinely
+  // clash. That reading doesn't transfer to a brand/movie/song sharing your
+  // Life Path 9: there's no interpersonal friction to have, so it reads as a
+  // strong thematic match instead (per the user, 2026-07-31). Only the Life
+  // Path sub-score is touched - Day Number and Day-of-Year keep whatever
+  // computeCompatibility already found for them, same "never edit
+  // compat-engine.js, just recompose what it already returned" approach as
+  // the Vietnamese override below.
+  let numerologyScore = result.numerology.score;
+  let lifePathScore = result.numerology.lifePathScore;
+  const nineNineMatch = result.numerology.entityLifePath === '9' && result.numerology.dayLifePath === '9';
+  if (nineNineMatch) {
+    lifePathScore = 80;
+    numerologyScore = COMPAT_DEFAULT_WEIGHTS.lifePath * lifePathScore
+      + COMPAT_DEFAULT_WEIGHTS.dayNum * result.numerology.dayScore
+      + COMPAT_DEFAULT_WEIGHTS.doy * result.numerology.doyScore;
+  }
+
   const v = result.vietnamese;
   const yearMatch = v.entityYearSign === v.dayYearSign;
   const monthMatch = v.entityMonthSign === v.dayMonthSign;
   const dayMatch = v.entityDaySign === v.dayDaySign;
-  if (!yearMatch && !monthMatch && !dayMatch) return result;
+  const vietnameseOverride = yearMatch || monthMatch || dayMatch;
+  if (!nineNineMatch && !vietnameseOverride) return result;
 
   const yearScore = yearMatch ? 99 : v.yearScore;
   const monthScore = monthMatch ? 99 : v.monthScore;
   const daySignScore = dayMatch ? 99 : v.daySignScore;
-  const vietnameseScore = 0.60 * yearScore + 0.30 * monthScore + 0.10 * daySignScore;
+  const vietnameseScore = vietnameseOverride ? (0.60 * yearScore + 0.30 * monthScore + 0.10 * daySignScore) : v.score;
 
-  const baseScore = COMPAT_DEFAULT_WEIGHTS.numerology * result.numerology.score
+  const baseScore = COMPAT_DEFAULT_WEIGHTS.numerology * numerologyScore
     + COMPAT_DEFAULT_WEIGHTS.vietnamese * vietnameseScore
     + COMPAT_DEFAULT_WEIGHTS.western * result.western.score;
   const finalScore = Math.min(100, Math.round(baseScore + result.bonuses.total));
@@ -266,7 +287,10 @@ function emaxAdjustedCompatibility(meDate, themDate) {
     finalScore,
     baseScore: Math.round(baseScore),
     flags,
-    vietnamese: { ...v, score: Math.round(vietnameseScore), yearScore, monthScore, daySignScore },
+    numerology: { ...result.numerology, score: Math.round(numerologyScore), lifePathScore },
+    vietnamese: vietnameseOverride
+      ? { ...v, score: Math.round(vietnameseScore), yearScore, monthScore, daySignScore }
+      : v,
   };
 }
 
