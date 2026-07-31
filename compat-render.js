@@ -34,13 +34,36 @@ function breakdownSection(title, score, rows) {
 // Shared "Lucky Number Bonuses" section - every compatibility-style score in
 // the app (Compatibility, Energy Flow, Month Outlook) factors lucky number
 // in, so they all render it the same way.
+//
+// computeLuckyBonus checks both directions (each side's lucky digits against
+// the other's date), so the same rule name - e.g. "Lucky Number Month" - can
+// legitimately fire twice for two different dates. Both hits still count
+// toward the score, but showing the same label twice reads as a glitch, so
+// notes sharing a rule name are grouped into a single row here with their
+// details joined.
 function bonusSectionHtml(bonuses) {
   if (!bonuses || !bonuses.notes.length) return '';
+  const order = [];
+  const detailsByRule = new Map();
+  bonuses.notes.forEach((n) => {
+    const sepIdx = n.indexOf(' - ');
+    const rule = sepIdx === -1 ? n : n.slice(0, sepIdx);
+    const detail = sepIdx === -1 ? '' : n.slice(sepIdx + 3);
+    if (!detailsByRule.has(rule)) {
+      detailsByRule.set(rule, []);
+      order.push(rule);
+    }
+    if (detail) detailsByRule.get(rule).push(detail);
+  });
+  const rows = order.map((rule) => {
+    const details = detailsByRule.get(rule);
+    return details.length ? `${rule} - ${details.join(' · ')}` : rule;
+  });
   return `
     <div class="breakdown-section bonus-section">
       <div class="breakdown-header"><span>🍀 Lucky Number Bonuses</span></div>
       <div class="breakdown-rows">
-        ${bonuses.notes.map((n) => `<div class="breakdown-row bonus-row">${escapeHtml(n)}</div>`).join('')}
+        ${rows.map((n) => `<div class="breakdown-row bonus-row">${escapeHtml(n)}</div>`).join('')}
       </div>
     </div>
   `;

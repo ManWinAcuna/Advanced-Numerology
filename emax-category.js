@@ -292,10 +292,9 @@ const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Rele
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
-// value between the reduced form and "compound/reduced" (e.g. "23/5"),
-// exactly the owner's ask: tap Life Path or a Personal Year/Month/Day tile
-// to see its compound version. Day Born/Day of Year/the Chinese signs stay
-// plain, non-interactive tiles - not part of that ask.
+// value between the reduced form and "compound/reduced" (e.g. "23/5"). Used
+// for Life Path, Day Born, Day of Year, and Personal Year/Month/Day. The
+// Chinese sign tiles have no numeric compound, so they stay plain.
 function emaxFactTile(icon, label, reduced, compound) {
   const iconHtml = `<span class="emax-fact-icon">${icon}</span>`;
   const labelHtml = `<span class="emax-fact-label">${escapeHtml(label)}</span>`;
@@ -326,7 +325,9 @@ function openItemModal(entry) {
   const lifePath = getLifePath(themDate);
   const lifePathCompound = getLifePathCompound(themDate);
   const dayBorn = getReducedDay(themDate);
+  const dayBornCompound = getRawDay(themDate);
   const dayOfYear = getReducedDayOfYear(themDate);
+  const dayOfYearCompound = getDayOfYear(themDate);
   const chineseYear = getChineseZodiacYear(themDate);
   const chineseMonth = getChineseMonth(themDate);
   const chineseDay = getChineseDaySign(themDate);
@@ -380,11 +381,11 @@ function openItemModal(entry) {
       ${flagHtml}
       <div class="emax-fact-grid">
         ${emaxFactTile('✨', 'Life Path', lifePath, lifePathCompound)}
-        ${emaxFactTile('📅', 'Day Born', dayBorn)}
-        ${emaxFactTile('🔢', 'Day of Year', dayOfYear)}
-        ${emaxFactTile('🔮', 'Personal Yr', personalYear, personalYearCompound)}
-        ${emaxFactTile('🔮', 'Personal Mo', personalMonth, personalMonthCompound)}
-        ${emaxFactTile('🔮', 'Personal Day', personalDay, personalDayCompound)}
+        ${emaxFactTile('📅', 'Day Born', dayBorn, dayBornCompound)}
+        ${emaxFactTile('🔢', 'Day of Year', dayOfYear, dayOfYearCompound)}
+        ${emaxFactTile('', 'Personal Yr', personalYear, personalYearCompound)}
+        ${emaxFactTile('', 'Personal Mo', personalMonth, personalMonthCompound)}
+        ${emaxFactTile('', 'Personal Day', personalDay, personalDayCompound)}
         ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseYear] || '', 'Year', chineseYear)}
         ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || '', 'Month', chineseMonth)}
         ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseDay] || '', 'Day', chineseDay)}

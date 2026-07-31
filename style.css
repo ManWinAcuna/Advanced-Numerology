@@ -1147,10 +1147,20 @@ body::after {
   cursor: pointer;
   box-shadow: var(--glow-cyan);
   transition: transform 0.15s ease;
+  /* iOS (especially installed home-screen PWAs) recalculates fixed-position
+     elements against the layout viewport while Safari's toolbar is
+     animating in/out during scroll, which visibly drags this pill along
+     with the page for a frame before it snaps back. Forcing it onto its
+     own GPU compositing layer keeps it pinned through that animation
+     instead of being repainted in step with scroll. */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .auth-widget:hover {
-  transform: translateY(-1px);
+  transform: translateY(-1px) translateZ(0);
 }
 
 .auth-sync-overlay {
