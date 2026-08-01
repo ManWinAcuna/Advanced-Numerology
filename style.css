@@ -87,6 +87,16 @@ body {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
+  /* This is now the fixed, viewport-anchored box - body's own
+     safe-area padding (further down this file) no longer reaches it at
+     all (fixed positioning is relative to the real viewport, not body's
+     padding box), so the notch/status-bar clearance has to be repeated
+     here or every page's content renders flush under the notch. Bottom
+     clearance is intentionally left to .page's own padding-bottom (see
+     the auth-widget mobile rule) rather than doubled up here. */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 body::before {
