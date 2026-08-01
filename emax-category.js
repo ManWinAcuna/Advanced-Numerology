@@ -791,6 +791,19 @@ function emaxEnemyZodiacAnimal(animal) {
   return VIETNAMESE_KEYS[(VIETNAMESE_KEYS.indexOf(animal) + 6) % 12];
 }
 
+// Chinese zodiac's traditional "Three Harmonies" trine - a FIXED grouping
+// (every 4th animal around the 12-year cycle forms a harmonious trio: e.g.
+// Rat-Dragon-Monkey), always the same 2 partners regardless of any
+// compatibility scoring. Independent of VIETNAMESE_TABLE below - shown as
+// its own section alongside whatever the table separately calls
+// "friendly", per the user's own explicit call (2026-08-01): always show
+// the trine, and on top of that whatever the table itself flags as
+// friendly, even where the two don't fully agree.
+function emaxTrineZodiacAnimals(animal) {
+  const i = VIETNAMESE_KEYS.indexOf(animal);
+  return [VIETNAMESE_KEYS[(i + 4) % 12], VIETNAMESE_KEYS[(i + 8) % 12]];
+}
+
 // The "friendliest" animal(s) for a given sign - unlike the enemy pair
 // (a clean, symmetric 10 for every animal, always exactly 6 positions
 // apart), the table's HIGHEST score per row isn't a uniform offset or even
@@ -826,12 +839,12 @@ function emaxPersonalYearForYear(birthDate, year) {
 // per the user's own call (2026-08-01): their own zodiac year doesn't save
 // a Personal Year 7 or 11, since 7/11 are already bearish in this app's own
 // established number meanings (matches Stocks' identical reading). Enemy
-// zodiac year reads as bad on its own; own or friendly zodiac year reads as
-// good UNLESS numerology overrides it.
-function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear) {
+// zodiac year reads as bad on its own; own, trine, or friendly zodiac year
+// reads as good UNLESS numerology overrides it.
+function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear) {
   if (personalYear === 7 || personalYear === 11) return 'bad';
   if (isEnemyYear) return 'bad';
-  if (isOwnYear || isFriendlyYear) return 'good';
+  if (isOwnYear || isFriendlyYear || isTrineYear) return 'good';
   return 'mid';
 }
 
@@ -841,10 +854,12 @@ function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendl
 function emaxBuildTimeline(birthDate) {
   const ownAnimal = getChineseZodiacYear(birthDate);
   const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+  const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
   const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal);
   const startYear = birthDate.getFullYear();
   const endYear = new Date().getFullYear();
   const ownYears = [];
+  const trineYears = [];
   const friendlyYears = [];
   const enemyYears = [];
   const py7Years = [];
@@ -856,15 +871,17 @@ function emaxBuildTimeline(birthDate) {
     const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
     const isOwnYear = yearAnimal === ownAnimal;
     const isEnemyYear = yearAnimal === enemyAnimal;
+    const isTrineYear = trineAnimals.includes(yearAnimal);
     const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
-    const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear);
+    const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
     if (isOwnYear) ownYears.push({ year, verdict });
+    if (isTrineYear) trineYears.push({ year, verdict });
     if (isFriendlyYear) friendlyYears.push({ year, verdict });
     if (isEnemyYear) enemyYears.push({ year, verdict });
     if (personalYear === 7) py7Years.push({ year, verdict });
     if (personalYear === 11) py11Years.push({ year, verdict });
   }
-  return { ownAnimal, enemyAnimal, friendlyAnimals, ownYears, friendlyYears, enemyYears, py7Years, py11Years };
+  return { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years };
 }
 
 // entry.timelineEvents is undefined until the very first Wikipedia-scan
@@ -962,14 +979,18 @@ function emaxTimelineSectionHtml(entry, title, years) {
     </div>`;
 }
 
+function emaxTimelineZodiacGroupTitle(animals, label) {
+  const emojis = animals.map((a) => VIETNAMESE_ZODIAC_EMOJI[a] || '').join('');
+  return `${emojis} ${label}${animals.length > 1 ? 's' : ''} (${animals.join(', ')})`;
+}
+
 function renderTimelineBody(entry, timeline) {
-  const { ownAnimal, enemyAnimal, friendlyAnimals, ownYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
-  const friendlyEmojis = friendlyAnimals.map((a) => VIETNAMESE_ZODIAC_EMOJI[a] || '').join('');
-  const friendlyTitle = `${friendlyEmojis} Friendly Year${friendlyAnimals.length > 1 ? 's' : ''} (${friendlyAnimals.join(', ')})`;
+  const { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
   document.getElementById('emaxTimelineBody').innerHTML = `
     <div class="box-label">${escapeHtml(entry.name)}'s Timeline</div>
     ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
-    ${emaxTimelineSectionHtml(entry, friendlyTitle, friendlyYears)}
+    ${emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(trineAnimals, 'Trine Year'), trineYears)}
+    ${emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(friendlyAnimals, 'Friendly Year'), friendlyYears)}
     ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
     ${emaxTimelineSectionHtml(entry, 'Personal Year 7', py7Years)}
     ${emaxTimelineSectionHtml(entry, 'Personal Year 11', py11Years)}
@@ -986,8 +1007,8 @@ async function openTimelineModal(entry, birthDate) {
   document.getElementById('emaxTimelineOverlay').classList.add('active');
 
   if (entry.timelineEvents === undefined) {
-    const { ownYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
-    const years = [...new Set([...ownYears, ...friendlyYears, ...enemyYears, ...py7Years, ...py11Years].map((y) => y.year))];
+    const { ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
+    const years = [...new Set([...ownYears, ...trineYears, ...friendlyYears, ...enemyYears, ...py7Years, ...py11Years].map((y) => y.year))];
     await emaxFetchYearEvents(entry, years);
     // The popup may have moved on to a different entry (or closed) while
     // this fetch was in flight - only repaint if we're still looking at it.
