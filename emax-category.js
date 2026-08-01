@@ -406,6 +406,18 @@ function emaxTileShapeClass() {
   return (kind === 'released' || kind === 'aired' || kind === 'anime') ? 'emax-tile-poster' : 'emax-tile-circle';
 }
 
+// Brand categories try Wikidata's own logo property first (emaxFetchImage's
+// tryLogoFirst) - a logo mark cropped to fill a square/circle the way a
+// face-photo cover-fit would (object-fit:cover) chops off exactly the parts
+// that make it recognizable. These get object-fit:contain + a light card
+// behind them instead (see .logo in style.css) so the whole mark stays
+// visible. Not a perfect signal (a brand with no real logo claim still
+// falls back to whatever photo the Wikipedia page leads with, which would
+// get the same treatment) but right for the common case.
+function emaxIsLogoCategory(categoryName) {
+  return EMAX_YEAR_FILTER_KIND[categoryName] === 'founded';
+}
+
 // Redesigned 2026-07-31 from a one-row-per-item list into a poster/avatar
 // grid (per the user's own brainstormed direction) - Edit/Delete moved into
 // the popup for a normal dated tile (nothing to overlay on the art itself),
@@ -414,6 +426,7 @@ function emaxTileShapeClass() {
 // tapping it jumps straight into the edit form instead.
 function entryRowHtml(entry, score) {
   const shapeCls = emaxTileShapeClass();
+  const logoCls = emaxIsLogoCategory(category.name) ? ' logo' : '';
 
   if (!entry.date && entry.year) {
     return `
@@ -438,7 +451,7 @@ function entryRowHtml(entry, score) {
   const perfectCls = score != null && score >= 85 ? ' perfect' : '';
   return `
     <div class="emax-tile ${shapeCls} ${tierCls}${perfectCls}" data-open="${entry.id}">
-      <div class="emax-tile-media">
+      <div class="emax-tile-media${logoCls}">
         <div class="emax-tile-media-img" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
         <div class="emax-tile-badge">${emaxRowScoreHtml(score)}</div>
       </div>
@@ -1166,7 +1179,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     <div class="emax-modal-hero-v2">
       ${backHtml}
       ${actionsHtml}
-      <div class="emax-modal-image ${scoreCls}" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
+      <div class="emax-modal-image ${scoreCls}${emaxIsLogoCategory(effectiveCategoryName) ? ' logo' : ''}" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
       ${starsHtml(entry.id, entry.rating || 0)}
       <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
       <div class="emax-modal-date">${escapeHtml(dateLine)}</div>
