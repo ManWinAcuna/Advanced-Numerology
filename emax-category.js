@@ -43,6 +43,16 @@ let unratedOnly = false;
 let pictureFilterMode = 'any'; // 'any' | 'has' | 'none'
 let searchQuery = '';
 
+// Pagination (added 2026-08-01) - a category can run into the hundreds of
+// items (Artists/Movies/Songs all do), and rendering + lazy-image-fetching
+// all of them on one endless-scroll page at once was the actual complaint.
+// EMAX_PAGE_WINDOW is how many page-number buttons show at once - beyond
+// that, the </ > arrows jump a whole window at a time rather than one page,
+// so "page 47 of 80" is still just a couple of clicks away.
+const EMAX_PAGE_SIZE = 30;
+const EMAX_PAGE_WINDOW = 5;
+let emaxCurrentPage = 1;
+
 // Declared here (ahead of init() below) rather than down by emaxFetchImage
 // itself - renderEntries() now loads row images synchronously off of
 // init(), which runs immediately at module load, before any `let` further
@@ -564,18 +574,37 @@ function emaxSetToggleGroupActive(groupId, value) {
 function emaxSetScoreMode(mode) {
   scoreFilterMode = mode;
   emaxSetToggleGroupActive('emaxScoreModeToggle', mode);
-  if (scoreFilterValue != null) renderEntries();
+  if (scoreFilterValue != null) { emaxCurrentPage = 1; renderEntries(); }
 }
 function emaxSetStarMode(mode) {
   starFilterMode = mode;
   emaxSetToggleGroupActive('emaxStarModeToggle', mode);
-  if (starFilterValue != null) renderEntries();
+  if (starFilterValue != null) { emaxCurrentPage = 1; renderEntries(); }
 }
 function emaxSetPictureMode(mode) {
   pictureFilterMode = mode;
   emaxSetToggleGroupActive('emaxPictureToggle', mode);
   emaxUpdateFilterClearVisibility();
+  emaxCurrentPage = 1;
   renderEntries();
+}
+
+// Numbered page buttons, EMAX_PAGE_WINDOW at a time - beyond that window
+// the </ > arrows jump the whole window (not just one page) in either
+// direction, landing on the first/last page of the newly-revealed window
+// so the click itself is immediately useful, not just a reveal.
+function emaxPaginationHtml(totalPages) {
+  if (totalPages <= 1) return '';
+  const windowStart = Math.floor((emaxCurrentPage - 1) / EMAX_PAGE_WINDOW) * EMAX_PAGE_WINDOW + 1;
+  const windowEnd = Math.min(windowStart + EMAX_PAGE_WINDOW - 1, totalPages);
+  let html = '<div class="emax-pagination">';
+  if (windowStart > 1) html += `<button type="button" class="emax-page-arrow" data-page="${windowStart - 1}">&lsaquo;</button>`;
+  for (let p = windowStart; p <= windowEnd; p++) {
+    html += `<button type="button" class="emax-page-num${p === emaxCurrentPage ? ' active' : ''}" data-page="${p}">${p}</button>`;
+  }
+  if (windowEnd < totalPages) html += `<button type="button" class="emax-page-arrow" data-page="${windowEnd + 1}">&rsaquo;</button>`;
+  html += '</div>';
+  return html;
 }
 
 function renderEntries() {
@@ -583,6 +612,7 @@ function renderEntries() {
 
   if (category.entries.length === 0) {
     container.innerHTML = '<div class="empty-state">No items yet. Add one above.</div>';
+    document.getElementById('emaxPagination').innerHTML = '';
     return;
   }
 
@@ -615,8 +645,15 @@ function renderEntries() {
     ? '<div class="empty-state">No items match this filter.</div>'
     : '';
 
-  container.innerHTML = noteHtml + emptyFilterHtml + visible.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
-  emaxLoadRowImages(visible);
+  const totalPages = Math.max(1, Math.ceil(visible.length / EMAX_PAGE_SIZE));
+  if (emaxCurrentPage > totalPages) emaxCurrentPage = totalPages;
+  if (emaxCurrentPage < 1) emaxCurrentPage = 1;
+  const pageStart = (emaxCurrentPage - 1) * EMAX_PAGE_SIZE;
+  const pageEntries = visible.slice(pageStart, pageStart + EMAX_PAGE_SIZE);
+
+  container.innerHTML = noteHtml + emptyFilterHtml + pageEntries.map(({ entry, score }) => entryRowHtml(entry, score)).join('');
+  emaxLoadRowImages(pageEntries);
+  document.getElementById('emaxPagination').innerHTML = emaxPaginationHtml(totalPages);
 }
 
 /* ===================== Item popup ===================== */
@@ -1494,12 +1531,14 @@ function init() {
   document.getElementById('emaxSearchInput').addEventListener('input', () => {
     searchQuery = document.getElementById('emaxSearchInput').value.trim();
     emaxUpdateFilterClearVisibility();
+    emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxFilterValue').addEventListener('input', () => {
     const raw = document.getElementById('emaxFilterValue').value;
     scoreFilterValue = raw === '' ? null : Number(raw);
     emaxUpdateFilterClearVisibility();
+    emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxScoreModeToggle').addEventListener('click', (e) => {
@@ -1514,10 +1553,12 @@ function init() {
     const btn = e.target.closest('.emax-star');
     if (!btn) return;
     emaxToggleStarFilter(Number(btn.dataset.star));
+    emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxUnratedFilterBtn').addEventListener('click', () => {
     emaxToggleUnratedFilter();
+    emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxPictureToggle').addEventListener('click', (e) => {
@@ -1528,10 +1569,18 @@ function init() {
     emaxClearAllFilters();
     document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
+    emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxFiltersToggleBtn').addEventListener('click', () => {
     document.getElementById('emaxFilterDrawer').classList.toggle('open');
+  });
+  document.getElementById('emaxPagination').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-page]');
+    if (!btn) return;
+    emaxCurrentPage = Number(btn.dataset.page);
+    renderEntries();
+    document.getElementById('entriesContainer').scrollIntoView({ block: 'start' });
   });
 
   document.getElementById('addEntryBtn').addEventListener('click', () => {

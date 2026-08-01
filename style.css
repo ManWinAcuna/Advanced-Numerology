@@ -6257,6 +6257,43 @@ body {
   gap: 16px;
 }
 
+.emax-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+.emax-page-num,
+.emax-page-arrow {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.emax-page-num.active {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #0c0a08;
+}
+.emax-page-arrow {
+  color: var(--yellow);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .emax-page-num:not(.active):hover,
+  .emax-page-arrow:hover {
+    border-color: var(--yellow);
+  }
+}
+
 .emax-tile {
   display: block;
   background: var(--panel);
