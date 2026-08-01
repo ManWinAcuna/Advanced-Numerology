@@ -165,9 +165,11 @@ body::after {
   flex-shrink: 0;
 }
 
-.topnav .nav-link:hover {
-  color: var(--text);
-  text-shadow: 0 0 8px rgba(240, 230, 210, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .topnav .nav-link:hover {
+    color: var(--text);
+    text-shadow: 0 0 8px rgba(240, 230, 210, 0.4);
+  }
 }
 
 .topnav .nav-link.active {
@@ -193,8 +195,10 @@ body::after {
   transition: color 0.15s ease;
 }
 
-.collapsible summary:hover {
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .collapsible summary:hover {
+    color: var(--yellow);
+  }
 }
 
 .collapsible summary::-webkit-details-marker {
@@ -373,9 +377,11 @@ body::after {
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.dayleft-tile:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 10px rgba(245, 197, 66, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .dayleft-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 10px rgba(245, 197, 66, 0.3);
+  }
 }
 
 .dayleft-icon {
@@ -413,10 +419,12 @@ body::after {
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.stat-box:hover {
-  transform: translateY(-2px);
-  border-color: var(--orange);
-  box-shadow: var(--glow-magenta), 0 4px 14px rgba(0, 0, 0, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .stat-box:hover {
+    transform: translateY(-2px);
+    border-color: var(--orange);
+    box-shadow: var(--glow-magenta), 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .stat-box::before {
@@ -448,8 +456,10 @@ body::after {
   pointer-events: none;
 }
 
-.compat-today-box:hover::after {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .compat-today-box:hover::after {
+    opacity: 1;
+  }
 }
 
 .optional-tag {
@@ -526,10 +536,12 @@ body::after {
   transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
 }
 
-.cell.highlight:hover {
-  transform: scale(1.03);
-  filter: brightness(1.1);
-  box-shadow: 0 0 16px rgba(245, 197, 66, 0.65), 0 0 32px rgba(245, 197, 66, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .cell.highlight:hover {
+    transform: scale(1.03);
+    filter: brightness(1.1);
+    box-shadow: 0 0 16px rgba(245, 197, 66, 0.65), 0 0 32px rgba(245, 197, 66, 0.3);
+  }
 }
 
 #pmReduced {
@@ -594,10 +606,12 @@ body::after {
 .month-outlook-row.mid { border-left-color: var(--yellow); }
 .month-outlook-row.bad { border-left-color: var(--bad); }
 
-.month-outlook-row:hover {
-  border-color: var(--yellow);
-  box-shadow: var(--glow-cyan);
-  transform: translateX(3px);
+@media (hover: hover) and (pointer: fine) {
+  .month-outlook-row:hover {
+    border-color: var(--yellow);
+    box-shadow: var(--glow-cyan);
+    transform: translateX(3px);
+  }
 }
 
 .month-outlook-rank {
@@ -711,10 +725,12 @@ body::after {
   transition: transform 0.15s ease, border-color 0.15s ease;
 }
 
-.pinnacle-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--yellow);
-  box-shadow: var(--glow-cyan);
+@media (hover: hover) and (pointer: fine) {
+  .pinnacle-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--yellow);
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 .pinnacle-card::before {
@@ -915,10 +931,12 @@ body::after {
   transition: box-shadow 0.15s ease, transform 0.1s ease;
 }
 
-.btn:hover {
-  background: #ffd873;
-  box-shadow: 0 0 14px rgba(245, 197, 66, 0.75), 0 0 34px rgba(245, 197, 66, 0.4);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: #ffd873;
+    box-shadow: 0 0 14px rgba(245, 197, 66, 0.75), 0 0 34px rgba(245, 197, 66, 0.4);
+    transform: translateY(-1px);
+  }
 }
 
 .btn:active {
@@ -938,8 +956,10 @@ body::after {
   margin-right: 10px;
 }
 
-.btn-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .btn-link:hover {
+    text-decoration: underline;
+  }
 }
 
 .btn-link-danger {
@@ -963,16 +983,20 @@ body::after {
   cursor: pointer;
 }
 
-.icon-btn:hover {
-  color: #ff6b6b;
-  border-color: #ff6b6b;
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover {
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+  }
 }
 
 /* Founding-date lookup trigger - same size/shape as .icon-btn, but a
    non-destructive hover color since this isn't a delete/clear action. */
-.icon-btn-lookup:hover {
-  color: var(--yellow);
-  border-color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn-lookup:hover {
+    color: var(--yellow);
+    border-color: var(--yellow);
+  }
 }
 
 .empty-state {
@@ -1019,10 +1043,12 @@ body::after {
   user-select: none;
 }
 
-.category-tile:hover {
-  border-color: var(--yellow);
-  transform: translateY(-2px);
-  box-shadow: var(--glow-cyan);
+@media (hover: hover) and (pointer: fine) {
+  .category-tile:hover {
+    border-color: var(--yellow);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 /* Tap-and-hold (or click-and-drag) reorder - see emax.js */
@@ -1081,9 +1107,11 @@ body::after {
 .tile-reorder-controls [data-action="move-earlier"] { grid-column: 1; grid-row: 2; }
 .tile-reorder-controls [data-action="move-down"] { grid-column: 2; grid-row: 2; }
 .tile-reorder-controls [data-action="move-later"] { grid-column: 3; grid-row: 2; }
-.tile-reorder-controls .icon-btn:hover:not(:disabled) {
-  color: var(--yellow);
-  border-color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .tile-reorder-controls .icon-btn:hover:not(:disabled) {
+    color: var(--yellow);
+    border-color: var(--yellow);
+  }
 }
 .tile-reorder-controls .icon-btn:disabled {
   opacity: 0.3;
@@ -1098,8 +1126,10 @@ body::after {
   font-size: 13px;
 }
 
-.back-link:hover {
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .back-link:hover {
+    color: var(--yellow);
+  }
 }
 
 .page-title {
@@ -1230,9 +1260,11 @@ body::after {
   cursor: pointer;
 }
 
-.modal-close:hover {
-  color: var(--bad);
-  border-color: var(--bad);
+@media (hover: hover) and (pointer: fine) {
+  .modal-close:hover {
+    color: var(--bad);
+    border-color: var(--bad);
+  }
 }
 
 /* ===================== Cloud sign-in widget ===================== */
@@ -1271,8 +1303,10 @@ body::after {
   -webkit-backface-visibility: hidden;
 }
 
-.auth-widget:hover {
-  transform: translateY(-1px) translateZ(0);
+@media (hover: hover) and (pointer: fine) {
+  .auth-widget:hover {
+    transform: translateY(-1px) translateZ(0);
+  }
 }
 
 .auth-sync-overlay {
@@ -1394,10 +1428,12 @@ body::after {
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
-.mode-card:hover {
-  border-color: var(--yellow);
-  transform: translateY(-2px);
-  box-shadow: var(--glow-cyan);
+@media (hover: hover) and (pointer: fine) {
+  .mode-card:hover {
+    border-color: var(--yellow);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 .mode-icon {
@@ -1669,8 +1705,10 @@ body::after {
   border-bottom: none;
 }
 
-.suggestion-item:hover {
-  background: #2a2a2a;
+@media (hover: hover) and (pointer: fine) {
+  .suggestion-item:hover {
+    background: #2a2a2a;
+  }
 }
 
 .suggestion-name {
@@ -2022,8 +2060,10 @@ body::after {
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
 
-.ufc-subscore-tab:hover {
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .ufc-subscore-tab:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .ufc-subscore-tab.active {
@@ -2083,9 +2123,11 @@ body::after {
   text-decoration: none;
 }
 
-a.pm-tournament-name:hover {
-  text-decoration: underline;
-  text-shadow: 0 0 8px rgba(245, 197, 66, 0.5);
+@media (hover: hover) and (pointer: fine) {
+  a.pm-tournament-name:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 8px rgba(245, 197, 66, 0.5);
+  }
 }
 
 .pm-tournament-search-icon {
@@ -2300,10 +2342,12 @@ a.pm-tournament-name:hover {
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
-.hour-pill:hover {
-  transform: scale(1.1);
-  filter: brightness(1.2);
-  box-shadow: 0 0 10px rgba(245, 197, 66, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .hour-pill:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+    box-shadow: 0 0 10px rgba(245, 197, 66, 0.4);
+  }
 }
 
 .hour-pill.good {
@@ -2351,8 +2395,10 @@ a.pm-tournament-name:hover {
   transition: transform 0.15s ease;
 }
 
-.bw-hour:hover {
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .bw-hour:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .bw-hour.good {
@@ -2427,10 +2473,12 @@ a.pm-tournament-name:hover {
   transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.rank-item:hover {
-  transform: translateX(3px);
-  border-color: var(--yellow);
-  box-shadow: var(--glow-cyan);
+@media (hover: hover) and (pointer: fine) {
+  .rank-item:hover {
+    transform: translateX(3px);
+    border-color: var(--yellow);
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 .rank-day {
@@ -2503,10 +2551,12 @@ a.pm-tournament-name:hover {
   opacity: 0.85;
 }
 
-.calendar-stat:hover {
-  transform: translateY(-2px);
-  border-color: var(--orange);
-  box-shadow: var(--glow-magenta), 0 4px 14px rgba(0, 0, 0, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-stat:hover {
+    transform: translateY(-2px);
+    border-color: var(--orange);
+    box-shadow: var(--glow-magenta), 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .calendar-stat-label {
@@ -2570,8 +2620,10 @@ a.pm-tournament-name:hover {
   cursor: pointer;
 }
 
-.calendar-nav-select:hover {
-  border-color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-nav-select:hover {
+    border-color: var(--yellow);
+  }
 }
 
 .calendar-highlight-btn {
@@ -2586,9 +2638,11 @@ a.pm-tournament-name:hover {
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.calendar-highlight-btn:hover {
-  border-color: var(--yellow);
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-highlight-btn:hover {
+    border-color: var(--yellow);
+    color: var(--yellow);
+  }
 }
 
 .calendar-highlight-btn.active {
@@ -2635,11 +2689,13 @@ a.pm-tournament-name:hover {
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
-.calendar-day:hover {
-  transform: translateY(-2px);
-  border-color: var(--yellow);
-  background: #242424;
-  box-shadow: 0 0 10px rgba(245, 197, 66, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-day:hover {
+    transform: translateY(-2px);
+    border-color: var(--yellow);
+    background: #242424;
+    box-shadow: 0 0 10px rgba(245, 197, 66, 0.3);
+  }
 }
 
 .calendar-day.empty {
@@ -2648,9 +2704,11 @@ a.pm-tournament-name:hover {
   cursor: default;
 }
 
-.calendar-day.empty:hover {
-  transform: none;
-  background: transparent;
+@media (hover: hover) and (pointer: fine) {
+  .calendar-day.empty:hover {
+    transform: none;
+    background: transparent;
+  }
 }
 
 .calendar-day.today {
@@ -2664,9 +2722,11 @@ a.pm-tournament-name:hover {
   border-color: rgba(139, 195, 74, 0.55);
 }
 
-.calendar-day.tier-good:hover {
-  border-color: var(--good);
-  box-shadow: 0 0 10px rgba(139, 195, 74, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-day.tier-good:hover {
+    border-color: var(--good);
+    box-shadow: 0 0 10px rgba(139, 195, 74, 0.35);
+  }
 }
 
 .calendar-day.tier-bad {
@@ -2674,9 +2734,11 @@ a.pm-tournament-name:hover {
   border-color: rgba(229, 57, 63, 0.55);
 }
 
-.calendar-day.tier-bad:hover {
-  border-color: var(--bad);
-  box-shadow: 0 0 10px rgba(229, 57, 63, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .calendar-day.tier-bad:hover {
+    border-color: var(--bad);
+    box-shadow: 0 0 10px rgba(229, 57, 63, 0.35);
+  }
 }
 
 /* Already-passed days: dim and desaturate (including any tier tint) so the
@@ -2686,9 +2748,11 @@ a.pm-tournament-name:hover {
   filter: grayscale(0.7);
 }
 
-.calendar-day.past:hover {
-  transform: none;
-  box-shadow: none;
+@media (hover: hover) and (pointer: fine) {
+  .calendar-day.past:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .calendar-day-num {
@@ -2898,8 +2962,10 @@ a.pm-tournament-name:hover {
   transition: opacity 0.15s ease, filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.astro-filter-chip:hover {
-  opacity: 0.8;
+@media (hover: hover) and (pointer: fine) {
+  .astro-filter-chip:hover {
+    opacity: 0.8;
+  }
 }
 
 .astro-filter-chip.active {
@@ -2924,9 +2990,11 @@ a.pm-tournament-name:hover {
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.filter-bulk-btn:hover {
-  color: var(--yellow);
-  border-color: var(--orange);
+@media (hover: hover) and (pointer: fine) {
+  .filter-bulk-btn:hover {
+    color: var(--yellow);
+    border-color: var(--orange);
+  }
 }
 
 .astro-tooltip {
@@ -3044,8 +3112,10 @@ a.pm-tournament-name:hover {
   clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%);
 }
 
-.astro-nav .icon-btn:hover {
-  box-shadow: var(--glow-magenta);
+@media (hover: hover) and (pointer: fine) {
+  .astro-nav .icon-btn:hover {
+    box-shadow: var(--glow-magenta);
+  }
 }
 
 .astro-today-btn {
@@ -3132,10 +3202,15 @@ a.pm-tournament-name:hover {
   display: none;
 }
 
-.astro-aspect-dropdown summary:hover,
 .astro-aspect-dropdown[open] summary {
   border-color: var(--orange);
   box-shadow: var(--glow-magenta);
+}
+@media (hover: hover) and (pointer: fine) {
+  .astro-aspect-dropdown summary:hover {
+    border-color: var(--orange);
+    box-shadow: var(--glow-magenta);
+  }
 }
 
 .astro-aspect-menu {
@@ -3174,8 +3249,10 @@ a.pm-tournament-name:hover {
   cursor: pointer;
 }
 
-.astro-aspect-option:hover {
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .astro-aspect-option:hover {
+    color: var(--yellow);
+  }
 }
 
 .astro-aspect-swatch {
@@ -3445,12 +3522,16 @@ a.pm-tournament-name:hover {
   transition: border-color 0.15s ease;
 }
 
-.astro-table tbody tr:hover {
-  border-left-color: var(--orange);
+@media (hover: hover) and (pointer: fine) {
+  .astro-table tbody tr:hover {
+    border-left-color: var(--orange);
+  }
 }
 
-.astro-table tr:hover td {
-  background: rgba(245, 197, 66, 0.07);
+@media (hover: hover) and (pointer: fine) {
+  .astro-table tr:hover td {
+    background: rgba(245, 197, 66, 0.07);
+  }
 }
 
 .astro-td-planet {
@@ -3532,10 +3613,12 @@ a.pm-tournament-name:hover {
   border-style: dashed;
 }
 
-.mode-card.disabled:hover {
-  border-color: var(--border);
-  transform: none;
-  box-shadow: none;
+@media (hover: hover) and (pointer: fine) {
+  .mode-card.disabled:hover {
+    border-color: var(--border);
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .coming-soon-tag {
@@ -3582,8 +3665,10 @@ a.pm-tournament-name:hover {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.pm-fight-card:hover {
-  border-color: rgba(245, 197, 66, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .pm-fight-card:hover {
+    border-color: rgba(245, 197, 66, 0.4);
+  }
 }
 
 .pm-fight-head {
@@ -3694,10 +3779,12 @@ a.pm-tournament-name:hover {
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.pm-numerology-clickable:hover {
-  background: rgba(245, 197, 66, 0.08);
-  border-color: rgba(245, 197, 66, 0.4);
-  box-shadow: var(--glow-cyan);
+@media (hover: hover) and (pointer: fine) {
+  .pm-numerology-clickable:hover {
+    background: rgba(245, 197, 66, 0.08);
+    border-color: rgba(245, 197, 66, 0.4);
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 .pm-breakdown-hint {
@@ -3774,8 +3861,10 @@ a.pm-tournament-name:hover {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.pm-modal-tab:hover {
-  border-color: rgba(245, 197, 66, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .pm-modal-tab:hover {
+    border-color: rgba(245, 197, 66, 0.4);
+  }
 }
 
 .pm-modal-tab.active {
@@ -3870,9 +3959,11 @@ a.pm-tournament-name:hover {
   text-shadow: 0 0 6px rgba(167, 107, 214, 0.45);
 }
 
-.pm-unmatched a:hover {
-  text-decoration: underline;
-  text-shadow: 0 0 10px rgba(167, 107, 214, 0.75);
+@media (hover: hover) and (pointer: fine) {
+  .pm-unmatched a:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 10px rgba(167, 107, 214, 0.75);
+  }
 }
 
 .pm-signal {
@@ -3929,8 +4020,10 @@ a.pm-tournament-name:hover {
   transition: background 0.15s ease;
 }
 
-.pm-trade-row:hover {
-  background: rgba(245, 197, 66, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .pm-trade-row:hover {
+    background: rgba(245, 197, 66, 0.05);
+  }
 }
 
 .pm-trade-row:last-child {
@@ -4177,9 +4270,11 @@ a.pm-tournament-name:hover {
 }
 
 /* Tracker fight cards */
-.ufc-page .pm-fight-card:hover {
-  border-color: var(--purple);
-  box-shadow: var(--pglow);
+@media (hover: hover) and (pointer: fine) {
+  .ufc-page .pm-fight-card:hover {
+    border-color: var(--purple);
+    box-shadow: var(--pglow);
+  }
 }
 
 .ufc-page .pm-odds-pill {
@@ -4495,12 +4590,16 @@ body {
   border-color: rgba(167, 107, 214, 0.2);
 }
 
-.btn:hover {
-  box-shadow: 0 0 8px rgba(245, 197, 66, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    box-shadow: 0 0 8px rgba(245, 197, 66, 0.35);
+  }
 }
 
-.collapsible summary:hover {
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .collapsible summary:hover {
+    color: var(--yellow);
+  }
 }
 
 /* ===================== Betting page ===================== */
@@ -4613,7 +4712,9 @@ body {
 
 .bet-ledger-row { cursor: pointer; }
 
-.bet-ledger-row:hover td { background: rgba(245, 197, 66, 0.05); }
+@media (hover: hover) and (pointer: fine) {
+  .bet-ledger-row:hover td { background: rgba(245, 197, 66, 0.05); }
+}
 
 .bet-ledger-detail td {
   background: rgba(5, 4, 3, 0.5);
@@ -4675,8 +4776,10 @@ body {
   color: var(--muted);
 }
 
-.betting-day-details summary:hover {
-  color: var(--yellow);
+@media (hover: hover) and (pointer: fine) {
+  .betting-day-details summary:hover {
+    color: var(--yellow);
+  }
 }
 
 #bettingDayFilterSummary.active {
@@ -4712,8 +4815,10 @@ body {
   cursor: pointer;
 }
 
-.bet-log-head:hover {
-  background: rgba(245, 197, 66, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .bet-log-head:hover {
+    background: rgba(245, 197, 66, 0.05);
+  }
 }
 
 /* A selected bet type that produced nothing. Not an error - the slate is still
@@ -4766,11 +4871,17 @@ body {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.bet-chart-expand:hover,
 .bet-chart-expand:focus-visible {
   border-color: var(--yellow);
   background: rgba(245, 197, 66, 0.1);
   outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bet-chart-expand:hover {
+    border-color: var(--yellow);
+    background: rgba(245, 197, 66, 0.1);
+    outline: none;
+  }
 }
 
 #bettingCurveBox > #bettingCurve,
@@ -4829,11 +4940,17 @@ body {
 }
 
 .bet-cal-cell.selected,
-.bet-cal-cell:hover,
 .bet-cal-cell:focus-visible {
   border-color: var(--yellow);
   transform: scale(1.05);
   outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bet-cal-cell:hover {
+    border-color: var(--yellow);
+    transform: scale(1.05);
+    outline: none;
+  }
 }
 
 .bet-cal-cell.bet-cal-empty {
@@ -4845,9 +4962,11 @@ body {
   transform: none;
 }
 
-.bet-cal-cell.bet-cal-empty:hover {
-  border-color: var(--border);
-  transform: none;
+@media (hover: hover) and (pointer: fine) {
+  .bet-cal-cell.bet-cal-empty:hover {
+    border-color: var(--border);
+    transform: none;
+  }
 }
 
 .bet-cal-roi {
@@ -4909,11 +5028,17 @@ body {
   transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.bet-log-delete:hover,
 .bet-log-delete:focus-visible {
   opacity: 1;
   border-color: var(--bad);
   background: rgba(229, 57, 63, 0.12);
+}
+@media (hover: hover) and (pointer: fine) {
+  .bet-log-delete:hover {
+    opacity: 1;
+    border-color: var(--bad);
+    background: rgba(229, 57, 63, 0.12);
+  }
 }
 
 .bet-log-body {
@@ -5049,7 +5174,9 @@ body {
 }
 
 .stock-radar-row:first-child { border-top: none; }
-.stock-radar-row:hover { background: rgba(255, 255, 255, 0.04); }
+@media (hover: hover) and (pointer: fine) {
+  .stock-radar-row:hover { background: rgba(255, 255, 255, 0.04); }
+}
 
 .stock-radar-ticker {
   font-weight: 800;
@@ -5097,7 +5224,9 @@ body {
   transition: border-color 0.15s, transform 0.1s;
 }
 
-.stock-card:hover { border-color: var(--yellow); transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .stock-card:hover { border-color: var(--yellow); transform: translateY(-1px); }
+}
 .stock-card-long { border-left-color: var(--good); }
 .stock-card-short { border-left-color: var(--bad); }
 
@@ -5592,7 +5721,9 @@ body {
   cursor: pointer;
 }
 
-.stock-trades-btn:hover { border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  .stock-trades-btn:hover { border-color: var(--yellow); }
+}
 
 .stock-trades-box {
   margin-top: 12px;
@@ -5732,7 +5863,9 @@ body {
   letter-spacing: 0.05em;
   cursor: pointer;
 }
-.stock-trade-detail-toggle:hover { color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  .stock-trade-detail-toggle:hover { color: var(--yellow); }
+}
 .stock-trade-detail-chev { font-size: 0.6rem; }
 
 .stock-trade-detail {
@@ -5999,7 +6132,9 @@ body {
   margin-bottom: 14px;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
-.emax-filters-toggle-btn:hover { color: var(--text); border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-filters-toggle-btn:hover { color: var(--text); border-color: var(--yellow); }
+}
 .emax-filters-toggle-btn.has-active { color: var(--yellow); border-color: var(--yellow); }
 .emax-filters-toggle-dot {
   display: none;
@@ -6063,7 +6198,9 @@ body {
 }
 .emax-toggle-group button + button { border-left: 1px solid var(--border); }
 .emax-toggle-group button.active { background: var(--yellow); color: #0c0a08; }
-.emax-toggle-group button:hover:not(.active) { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-toggle-group button:hover:not(.active) { color: var(--text); }
+}
 
 .emax-filter-drawer input[type="number"] {
   width: 70px;
@@ -6090,7 +6227,9 @@ body {
   margin-left: 4px;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
-.emax-unrated-btn:hover { color: var(--text); border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-unrated-btn:hover { color: var(--text); border-color: var(--yellow); }
+}
 .emax-unrated-btn.active { background: var(--yellow); color: #0c0a08; border-color: var(--yellow); }
 
 .emax-filter-clear-row { margin-top: -2px; }
@@ -6124,8 +6263,10 @@ body {
 .emax-tile.good, .emax-tile.bad, .emax-tile.mid {
   box-shadow: 0 0 26px -8px var(--emax-glow);
 }
-.emax-tile.good:hover, .emax-tile.bad:hover, .emax-tile.mid:hover {
-  box-shadow: 0 0 34px -6px var(--emax-glow);
+@media (hover: hover) and (pointer: fine) {
+  .emax-tile.good:hover, .emax-tile.bad:hover, .emax-tile.mid:hover {
+    box-shadow: 0 0 34px -6px var(--emax-glow);
+  }
 }
 /* A "perfect match" deserves to actually announce itself, not just sit in
    the same glow tier as any other good score. */
@@ -6219,7 +6360,9 @@ body {
   line-height: 1;
   cursor: pointer;
 }
-.emax-tile-delete:hover { color: var(--bad); border-color: var(--bad); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-tile-delete:hover { color: var(--bad); border-color: var(--bad); }
+}
 
 /* ---- Popup edit/delete actions (moved off the tile, live here now) ---- */
 .emax-modal-actions {
@@ -6237,8 +6380,12 @@ body {
   cursor: pointer;
   padding: 4px;
 }
-.emax-modal-actions button:hover { color: var(--yellow); }
-.emax-modal-actions .emax-modal-delete:hover { color: var(--bad); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-modal-actions button:hover { color: var(--yellow); }
+}
+@media (hover: hover) and (pointer: fine) {
+  .emax-modal-actions .emax-modal-delete:hover { color: var(--bad); }
+}
 
 .emax-stars {
   display: inline-flex;
@@ -6384,9 +6531,11 @@ body {
   color: #ff5b60;
   text-decoration: none;
 }
-.emax-modal-youtube:hover {
-  background: rgba(229, 57, 63, 0.22);
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .emax-modal-youtube:hover {
+    background: rgba(229, 57, 63, 0.22);
+    text-decoration: none;
+  }
 }
 
 /* ---- Score ring ---- */
@@ -6455,7 +6604,9 @@ button.emax-artist-banner {
   text-align: left;
   transition: border-color 0.15s ease;
 }
-button.emax-artist-banner:hover { border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  button.emax-artist-banner:hover { border-color: var(--yellow); }
+}
 .emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
 .emax-artist-banner-thumb .emax-monogram { width: 36px; height: 36px; font-size: 13px; }
 .emax-artist-banner-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -6526,7 +6677,9 @@ button.emax-fact-tile-tap {
   cursor: pointer;
   padding: 8px 0 0;
 }
-.emax-breakdown-toggle:hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) {
+  .emax-breakdown-toggle:hover { text-decoration: underline; }
+}
 
 /* Reusing renderCompatResults' output for the expanded breakdown - it
    renders its own name/score hero too, which would duplicate the one
