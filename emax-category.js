@@ -855,7 +855,13 @@ function emaxBuildTimeline(birthDate) {
   const ownAnimal = getChineseZodiacYear(birthDate);
   const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
   const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
-  const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal);
+  // Only the friendly match(es) NOT already covered by the trine group -
+  // per the user's own call (2026-08-01): no point in a whole separate
+  // "Friendly Year" section that just re-lists years Trine already listed
+  // (most animals' single table-best match already sits inside their own
+  // trine; Tiger's 3-way tie is the interesting case - Horse and Dog
+  // overlap its trine, but Pig doesn't, so Pig alone is genuinely new).
+  const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
   const startYear = birthDate.getFullYear();
   const endYear = new Date().getFullYear();
   const ownYears = [];
@@ -986,11 +992,19 @@ function emaxTimelineZodiacGroupTitle(animals, label) {
 
 function renderTimelineBody(entry, timeline) {
   const { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
+  // friendlyAnimals is already pre-filtered (emaxBuildTimeline) down to
+  // matches NOT already covered by the trine group - when that leaves
+  // nothing, the whole section is skipped rather than shown empty, since
+  // "None yet" would misleadingly read as "no friendly years exist" when
+  // really they're just already covered by Trine above.
+  const friendlySectionHtml = friendlyAnimals.length
+    ? emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(friendlyAnimals, 'Friendly Year'), friendlyYears)
+    : '';
   document.getElementById('emaxTimelineBody').innerHTML = `
     <div class="box-label">${escapeHtml(entry.name)}'s Timeline</div>
     ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
     ${emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(trineAnimals, 'Trine Year'), trineYears)}
-    ${emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(friendlyAnimals, 'Friendly Year'), friendlyYears)}
+    ${friendlySectionHtml}
     ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
     ${emaxTimelineSectionHtml(entry, 'Personal Year 7', py7Years)}
     ${emaxTimelineSectionHtml(entry, 'Personal Year 11', py11Years)}
