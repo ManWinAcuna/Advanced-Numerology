@@ -808,6 +808,15 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     ? `<button type="button" class="btn-link emax-modal-back" id="itemModalBack">← Back to ${escapeHtml(backTo.entry.name)}</button>`
     : '';
 
+  // Songs only - a plain YouTube SEARCH link (never a guessed video ID,
+  // which could easily land on the wrong upload or a cover), including the
+  // artist name when Look Up/Preload resolved one, for a much more precise
+  // match than the song title alone (a lot of song titles are common
+  // English phrases shared by dozens of unrelated tracks).
+  const youtubeHtml = effectiveCategoryName === 'Songs'
+    ? `<a class="btn-link emax-modal-youtube" id="itemModalYouTube" href="https://www.youtube.com/results?search_query=${encodeURIComponent([entry.name, entry.artistName].filter(Boolean).join(' '))}" target="_blank" rel="noopener noreferrer">▶ Listen on YouTube</a>`
+    : '';
+
   // Edit/Delete moved here from the list tile itself (2026-07-31 redesign) -
   // a poster/avatar tile has nowhere clean to put inline action links, and
   // every entry with a real date already opens this popup on tap anyway.
@@ -830,6 +839,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
       ${starsHtml(entry.id, entry.rating || 0)}
       <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
       <div class="emax-modal-date">${escapeHtml(dateLine)}</div>
+      ${youtubeHtml}
       <div class="emax-score-ring-wrap">
         <svg viewBox="0 0 120 120" class="emax-score-ring ${scoreCls}">
           <circle cx="60" cy="60" r="52" class="emax-score-ring-track"></circle>

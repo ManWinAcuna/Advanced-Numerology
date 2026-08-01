@@ -6329,6 +6329,24 @@ body {
   font-size: 0.85rem;
 }
 
+.emax-modal-youtube {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(229, 57, 63, 0.12);
+  border: 1px solid rgba(229, 57, 63, 0.45);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ff5b60;
+  text-decoration: none;
+}
+.emax-modal-youtube:hover {
+  background: rgba(229, 57, 63, 0.22);
+  text-decoration: none;
+}
+
 /* ---- Score ring ---- */
 
 .emax-score-ring-wrap {
