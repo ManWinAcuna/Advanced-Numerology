@@ -28,6 +28,10 @@ html {
   /* Stops the browser's own edge-swipe gesture (back/forward navigation,
      or the elastic bounce on iOS) from nudging the page sideways. */
   overscroll-behavior-x: none;
+  /* html/body themselves never scroll at all - see .scroll-viewport below
+     for why. */
+  height: 100%;
+  overflow-y: hidden;
 }
 
 @keyframes glow-pulse {
@@ -51,6 +55,38 @@ body {
      scroll - it should scroll within itself instead. */
   overflow-x: hidden;
   overscroll-behavior-x: none;
+  height: 100%;
+  overflow-y: hidden;
+}
+
+/* iOS standalone home-screen apps (this one included - see the manifest)
+   have a long-documented WebKit bug where position:fixed elements (the
+   cloud-sync pill, every popup) visibly drift/glitch during momentum
+   scrolling of the actual DOCUMENT. The fix isn't a better CSS trick on
+   the fixed elements themselves (already tried twice - will-change/
+   translateZ(0) reduces repaint lag but doesn't touch this) - it's to
+   never let the document itself scroll at all. This single div becomes
+   the ONLY thing that scrolls (html/body above are now permanently
+   overflow-hidden); everything fixed OUTSIDE it (auth-widget, every
+   modal-overlay, sports-gate, the big-store banner) sits relative to a
+   viewport that structurally never moves, so there's nothing left for
+   WebKit to get wrong. Every modal in this app already renders correctly
+   nested inside .page/.ufc-page/.astro-page today (position:fixed escapes
+   an ancestor's overflow/scroll regardless of nesting depth) - the one
+   hard rule going forward is that THIS element (and .page/.ufc-page/
+   .astro-page) must never receive transform/filter/perspective/
+   will-change:transform/contain - any of those create a new containing
+   block and would silently break every fixed descendant's positioning.
+   See scroll-viewport.js for how content ends up inside this at runtime -
+   it's injected once per page load, not written into every HTML file by
+   hand, so there's exactly one place this logic lives. */
+.scroll-viewport {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
 }
 
 body::before {
