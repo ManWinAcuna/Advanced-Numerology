@@ -71,40 +71,53 @@
 
     <div class="inline-form emax-search-row">
       <input type="text" id="emaxSearchInput" placeholder="Search by name or artist...">
+      <button class="emax-filters-toggle-btn" id="emaxFiltersToggleBtn" type="button">
+        <span class="emax-filters-toggle-dot"></span>Filters
+      </button>
     </div>
 
-    <div class="inline-form emax-filter-row" id="emaxFilterRow">
-      <label class="emax-filter-label" for="emaxFilterValue">Score</label>
-      <select id="emaxFilterMode">
-        <option value="over">Over</option>
-        <option value="under">Under</option>
-      </select>
-      <input type="number" id="emaxFilterValue" placeholder="e.g. 80" min="0" max="100">
+    <div class="emax-filter-drawer" id="emaxFilterDrawer">
+      <div class="emax-filter-drawer-inner">
+        <div class="emax-filter-block">
+          <span class="emax-filter-label">Score</span>
+          <div class="emax-toggle-group" id="emaxScoreModeToggle">
+            <button type="button" data-value="over" class="active">Over</button>
+            <button type="button" data-value="under">Under</button>
+          </div>
+          <input type="number" id="emaxFilterValue" placeholder="e.g. 80" min="0" max="100">
+        </div>
 
-      <label class="emax-filter-label" for="emaxStarFilterMode">Stars</label>
-      <select id="emaxStarFilterMode">
-        <option value="atLeast">At least</option>
-        <option value="exactly">Exactly</option>
-      </select>
-      <span class="emax-stars emax-star-filter" id="emaxStarFilterPicker">
-        <button class="emax-star" data-star="1" type="button" title="1 star">&#9733;</button>
-        <button class="emax-star" data-star="2" type="button" title="2 stars">&#9733;</button>
-        <button class="emax-star" data-star="3" type="button" title="3 stars">&#9733;</button>
-        <button class="emax-star" data-star="4" type="button" title="4 stars">&#9733;</button>
-        <button class="emax-star" data-star="5" type="button" title="5 stars">&#9733;</button>
-      </span>
+        <div class="emax-filter-block">
+          <span class="emax-filter-label">Stars</span>
+          <div class="emax-toggle-group" id="emaxStarModeToggle">
+            <button type="button" data-value="atLeast" class="active">At least</button>
+            <button type="button" data-value="exactly">Exactly</button>
+          </div>
+          <span class="emax-stars emax-star-filter" id="emaxStarFilterPicker">
+            <button class="emax-star" data-star="1" type="button" title="1 star">&#9733;</button>
+            <button class="emax-star" data-star="2" type="button" title="2 stars">&#9733;</button>
+            <button class="emax-star" data-star="3" type="button" title="3 stars">&#9733;</button>
+            <button class="emax-star" data-star="4" type="button" title="4 stars">&#9733;</button>
+            <button class="emax-star" data-star="5" type="button" title="5 stars">&#9733;</button>
+          </span>
+        </div>
 
-      <label class="emax-filter-label" for="emaxPictureFilter">Picture</label>
-      <select id="emaxPictureFilter">
-        <option value="any">Any</option>
-        <option value="has">Has picture</option>
-        <option value="none">No picture</option>
-      </select>
+        <div class="emax-filter-block">
+          <span class="emax-filter-label">Picture</span>
+          <div class="emax-toggle-group" id="emaxPictureToggle">
+            <button type="button" data-value="any" class="active">Any</button>
+            <button type="button" data-value="has">Has</button>
+            <button type="button" data-value="none">None</button>
+          </div>
+        </div>
 
-      <button class="btn-link" id="emaxFilterClearBtn" type="button" style="display:none;">Clear filters</button>
+        <div class="emax-filter-block emax-filter-clear-row">
+          <button class="btn-link" id="emaxFilterClearBtn" type="button" style="display:none;">Clear filters</button>
+        </div>
+      </div>
     </div>
 
-    <div id="entriesContainer" class="entries-list emax-entries-list"></div>
+    <div id="entriesContainer" class="emax-tile-grid"></div>
 
   </div>
 

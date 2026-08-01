@@ -29,7 +29,7 @@ let pendingArtistQid = null;
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
 
-// emaxFilterRow's filters - each null/'' /'any' means that particular
+// The filter drawer's controls - each null/''/'any' means that particular
 // filter isn't active. All of them combine (AND, not OR) in renderEntries()
 // below; none of them touch sorting or anything else on the page.
 let scoreFilterValue = null;
@@ -354,43 +354,58 @@ function emaxRowScoreHtml(score) {
     </div>`;
 }
 
+// Movies/Songs/Shows/Anime/Video Games/Books (their own poster/cover art IS
+// their identity) get a portrait poster tile; Artists/YouTubers/Historical
+// Figures/Authors and all 5 Brand categories (a face or a logo mark reads
+// better as a circle) get a circular avatar tile instead - derived from the
+// same EMAX_YEAR_FILTER_KIND already used everywhere else in this file, not
+// a second parallel list that could drift out of sync with it. A custom
+// category with no known kind defaults to circle (the original universal
+// treatment, before this redesign existed).
+function emaxTileShapeClass() {
+  const kind = EMAX_YEAR_FILTER_KIND[category.name];
+  return (kind === 'released' || kind === 'aired' || kind === 'anime') ? 'emax-tile-poster' : 'emax-tile-circle';
+}
+
+// Redesigned 2026-07-31 from a one-row-per-item list into a poster/avatar
+// grid (per the user's own brainstormed direction) - Edit/Delete moved into
+// the popup for a normal dated tile (nothing to overlay on the art itself),
+// but a year-only entry has no popup to open at all (no date to compute
+// compatibility from), so it keeps its own small delete corner button and
+// tapping it jumps straight into the edit form instead.
 function entryRowHtml(entry, score) {
+  const shapeCls = emaxTileShapeClass();
+
   if (!entry.date && entry.year) {
-    const yearSign = getChineseZodiacYear(new Date(entry.year, 6, 1));
     return `
-      <div class="entry-item emax-entry-item dim">
-        <div class="emax-entry-thumb">${emaxMonogram(entry.name, false)}</div>
-        <div class="emax-entry-main">
-          <div class="entry-name">${escapeHtml(entry.name)}</div>
-          <div class="entry-date">${entry.year} · year only</div>
+      <div class="emax-tile ${shapeCls} dim" data-year-only="${entry.id}">
+        <div class="emax-tile-media">
+          ${emaxMonogram(entry.name, false)}
+          <button class="emax-tile-delete" data-entry-delete="${entry.id}" title="Delete">&times;</button>
         </div>
-        <div class="emax-entry-side">
-          <span class="badge">${VIETNAMESE_ZODIAC_EMOJI[yearSign] || ''} ${yearSign} year</span>
-          <div class="entry-actions">
-            <button class="btn-link" data-edit="${entry.id}">Add full date</button>
-            <button class="icon-btn" data-entry-delete="${entry.id}" title="Delete">&times;</button>
-          </div>
+        <div class="emax-tile-info">
+          <div class="emax-tile-name">${escapeHtml(entry.name)}</div>
+          <span class="emax-tile-year-badge">${entry.year} · year only</span>
         </div>
       </div>`;
   }
 
-  // The score tier tints the whole card (border + thumbnail glow), not just
-  // the number - per your "no special top-3 badge, keep it to sort + color"
-  // answer, this IS the color coding, just carried through the whole row.
+  // The score tier tints the whole tile (border + glow), not just the badge
+  // number - per your original "no special top-3 badge, keep it to sort +
+  // color" answer, this IS that color, just carried further into the new
+  // poster/avatar treatment. A "perfect" (85+) match additionally pulses -
+  // per "lean into the luxury/glowing aesthetic further" (2026-07-31).
   const tierCls = score == null ? 'dim' : scoreClass(score);
+  const perfectCls = score != null && score >= 85 ? ' perfect' : '';
   return `
-    <div class="entry-item emax-entry-item ${tierCls}" data-open="${entry.id}">
-      <div class="emax-entry-thumb" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
-      <div class="emax-entry-main">
-        <div class="entry-name">${escapeHtml(entry.name)}</div>
-        ${starsHtml(entry.id, entry.rating || 0)}
+    <div class="emax-tile ${shapeCls} ${tierCls}${perfectCls}" data-open="${entry.id}">
+      <div class="emax-tile-media">
+        <div class="emax-tile-media-img" id="emaxThumb-${entry.id}">${entry.imageUrl && !entry.noImage ? `<img src="${escapeHtml(entry.imageUrl)}" alt="">` : emaxMonogram(entry.name, false)}</div>
+        <div class="emax-tile-badge">${emaxRowScoreHtml(score)}</div>
       </div>
-      <div class="emax-entry-side">
-        ${emaxRowScoreHtml(score)}
-        <div class="entry-actions">
-          <button class="btn-link" data-edit="${entry.id}">Edit</button>
-          <button class="icon-btn" data-entry-delete="${entry.id}" title="Delete">&times;</button>
-        </div>
+      <div class="emax-tile-info">
+        <div class="emax-tile-name">${escapeHtml(entry.name)}</div>
+        ${starsHtml(entry.id, entry.rating || 0)}
       </div>
     </div>`;
 }
@@ -465,7 +480,9 @@ function emaxAnyFilterActive() {
   return !!searchQuery || scoreFilterValue != null || starFilterValue != null || pictureFilterMode !== 'any';
 }
 function emaxUpdateFilterClearVisibility() {
-  document.getElementById('emaxFilterClearBtn').style.display = emaxAnyFilterActive() ? '' : 'none';
+  const active = emaxAnyFilterActive();
+  document.getElementById('emaxFilterClearBtn').style.display = active ? '' : 'none';
+  document.getElementById('emaxFiltersToggleBtn').classList.toggle('has-active', active);
 }
 function emaxRenderStarFilterPicker() {
   document.querySelectorAll('#emaxStarFilterPicker .emax-star').forEach((btn) => {
@@ -488,7 +505,35 @@ function emaxClearAllFilters() {
   starFilterValue = null;
   pictureFilterMode = 'any';
   emaxRenderStarFilterPicker();
+  emaxSetToggleGroupActive('emaxPictureToggle', 'any');
   emaxUpdateFilterClearVisibility();
+}
+
+// Shared by all three segmented toggle-pill groups (Score's Over/Under,
+// Stars' At least/Exactly, Picture's Any/Has/None) - replaces the old
+// <select onchange> handling with the same "set state, reflect it visually"
+// split as the star picker above, for the same reason (directly testable
+// without a real click event).
+function emaxSetToggleGroupActive(groupId, value) {
+  document.querySelectorAll(`#${groupId} button`).forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.value === value);
+  });
+}
+function emaxSetScoreMode(mode) {
+  scoreFilterMode = mode;
+  emaxSetToggleGroupActive('emaxScoreModeToggle', mode);
+  if (scoreFilterValue != null) renderEntries();
+}
+function emaxSetStarMode(mode) {
+  starFilterMode = mode;
+  emaxSetToggleGroupActive('emaxStarModeToggle', mode);
+  if (starFilterValue != null) renderEntries();
+}
+function emaxSetPictureMode(mode) {
+  pictureFilterMode = mode;
+  emaxSetToggleGroupActive('emaxPictureToggle', mode);
+  emaxUpdateFilterClearVisibility();
+  renderEntries();
 }
 
 function renderEntries() {
@@ -763,9 +808,24 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     ? `<button type="button" class="btn-link emax-modal-back" id="itemModalBack">← Back to ${escapeHtml(backTo.entry.name)}</button>`
     : '';
 
+  // Edit/Delete moved here from the list tile itself (2026-07-31 redesign) -
+  // a poster/avatar tile has nowhere clean to put inline action links, and
+  // every entry with a real date already opens this popup on tap anyway.
+  // startEdit/deleteEntry both operate on the CURRENT page's own `category`
+  // global, so these only make sense (and only render) when this popup is
+  // actually showing an entry from THIS page's own category - a foreign
+  // entry (an Artist opened from a Songs banner, or a "Back to <song>"
+  // hop) isn't something this page can edit or delete at all.
+  const actionsHtml = effectiveCategoryName === category.name ? `
+    <div class="emax-modal-actions">
+      <button type="button" id="itemModalEditBtn">✎ Edit</button>
+      <button type="button" class="emax-modal-delete" id="itemModalDeleteBtn">🗑 Delete</button>
+    </div>` : '';
+
   document.getElementById('itemModalHeader').innerHTML = `
     <div class="emax-modal-hero-v2">
       ${backHtml}
+      ${actionsHtml}
       <div class="emax-modal-image ${scoreCls}" id="itemModalImage">${emaxMonogram(entry.name, true)}</div>
       ${starsHtml(entry.id, entry.rating || 0)}
       <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
@@ -811,6 +871,22 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     const backBtn = e.target.closest('#itemModalBack');
     if (backBtn) {
       if (backTo) openItemModal(backTo.entry, backTo.categoryNameOverride);
+      return;
+    }
+
+    const editBtn = e.target.closest('#itemModalEditBtn');
+    if (editBtn) {
+      closeItemModal();
+      startEdit(entry);
+      return;
+    }
+
+    const deleteBtn = e.target.closest('#itemModalDeleteBtn');
+    if (deleteBtn) {
+      if (confirm(`Delete "${entry.name}"?`)) {
+        deleteEntry(entry.id);
+        closeItemModal();
+      }
       return;
     }
 
@@ -1067,13 +1143,13 @@ function init() {
     emaxUpdateFilterClearVisibility();
     renderEntries();
   });
-  document.getElementById('emaxFilterMode').addEventListener('change', () => {
-    scoreFilterMode = document.getElementById('emaxFilterMode').value;
-    renderEntries();
+  document.getElementById('emaxScoreModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (btn) emaxSetScoreMode(btn.dataset.value);
   });
-  document.getElementById('emaxStarFilterMode').addEventListener('change', () => {
-    starFilterMode = document.getElementById('emaxStarFilterMode').value;
-    if (starFilterValue != null) renderEntries();
+  document.getElementById('emaxStarModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (btn) emaxSetStarMode(btn.dataset.value);
   });
   document.getElementById('emaxStarFilterPicker').addEventListener('click', (e) => {
     const btn = e.target.closest('.emax-star');
@@ -1081,17 +1157,18 @@ function init() {
     emaxToggleStarFilter(Number(btn.dataset.star));
     renderEntries();
   });
-  document.getElementById('emaxPictureFilter').addEventListener('change', () => {
-    pictureFilterMode = document.getElementById('emaxPictureFilter').value;
-    emaxUpdateFilterClearVisibility();
-    renderEntries();
+  document.getElementById('emaxPictureToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (btn) emaxSetPictureMode(btn.dataset.value);
   });
   document.getElementById('emaxFilterClearBtn').addEventListener('click', () => {
     emaxClearAllFilters();
     document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
-    document.getElementById('emaxPictureFilter').value = 'any';
     renderEntries();
+  });
+  document.getElementById('emaxFiltersToggleBtn').addEventListener('click', () => {
+    document.getElementById('emaxFilterDrawer').classList.toggle('open');
   });
 
   document.getElementById('addEntryBtn').addEventListener('click', () => {
@@ -1197,22 +1274,25 @@ function init() {
     const deleteBtn = e.target.closest('button[data-entry-delete]');
     if (deleteBtn) {
       e.preventDefault();
+      e.stopPropagation();
       deleteEntry(deleteBtn.dataset.entryDelete);
       if (editingEntryId === deleteBtn.dataset.entryDelete) exitEditMode();
       return;
     }
 
-    const editBtn = e.target.closest('button[data-edit]');
-    if (editBtn) {
-      e.preventDefault();
-      const entry = category.entries.find((en) => en.id === editBtn.dataset.edit);
+    // A year-only tile has no popup to open (no full date to compute
+    // compatibility from) - tapping it goes straight to the edit form to
+    // add the missing day, replacing the old separate "Add full date" link.
+    const yearOnlyTile = e.target.closest('[data-year-only]');
+    if (yearOnlyTile) {
+      const entry = category.entries.find((en) => en.id === yearOnlyTile.dataset.yearOnly);
       if (entry) startEdit(entry);
       return;
     }
 
-    const row = e.target.closest('[data-open]');
-    if (row) {
-      const entry = category.entries.find((en) => en.id === row.dataset.open);
+    const tile = e.target.closest('[data-open]');
+    if (tile) {
+      const entry = category.entries.find((en) => en.id === tile.dataset.open);
       if (entry && entry.date) openItemModal(entry);
     }
   });

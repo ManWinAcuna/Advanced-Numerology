@@ -5944,83 +5944,269 @@ body {
   min-width: 0;
 }
 
-.emax-filter-row {
+/* ---- Filters: collapsed-by-default drawer, segmented toggle pills instead
+   of native <select> elements (which render as jarring white boxes against
+   the dark theme - the whole reason this got redesigned, 2026-07-31). ---- */
+
+.emax-filters-toggle-btn {
+  display: inline-flex;
   align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.emax-filters-toggle-btn:hover { color: var(--text); border-color: var(--yellow); }
+.emax-filters-toggle-btn.has-active { color: var(--yellow); border-color: var(--yellow); }
+.emax-filters-toggle-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 6px 1px var(--yellow);
+}
+.emax-filters-toggle-btn.has-active .emax-filters-toggle-dot { display: block; }
+
+.emax-filter-drawer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.emax-filter-drawer.open { max-height: 400px; }
+.emax-filter-drawer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
   margin-bottom: 14px;
 }
-.emax-star-filter {
+.emax-filter-block {
+  display: flex;
   align-items: center;
-}
-.emax-star-filter .emax-star {
-  font-size: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .emax-filter-label {
   font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
-}
-.emax-filter-row select {
-  background: #fff;
-  color: #111;
-  border: none;
-  border-radius: 3px;
-  padding: 7px 10px;
-  font-size: 14px;
-}
-.emax-filter-row input[type="number"] {
-  width: 80px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 52px;
 }
 
-.emax-entry-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-/* Each row's own compatibility score tints the whole card - the thumbnail's
-   glow ring and an ambient shadow off the card itself - not just the number,
-   so rank reads at a glance while scrolling (per your "no top-3 badge, keep
-   it to sort + color" answer, this IS that color, just carried further). */
-.emax-entry-item.good { --emax-glow: rgba(139, 195, 74, 0.5); border-color: rgba(139, 195, 74, 0.35); }
-.emax-entry-item.bad { --emax-glow: rgba(229, 57, 63, 0.5); border-color: rgba(229, 57, 63, 0.35); }
-.emax-entry-item.mid { --emax-glow: rgba(245, 197, 66, 0.5); border-color: rgba(245, 197, 66, 0.35); }
-.emax-entry-item.dim { --emax-glow: rgba(255, 255, 255, 0.12); }
-.emax-entry-item.good, .emax-entry-item.bad, .emax-entry-item.mid {
-  box-shadow: 0 0 18px -10px var(--emax-glow);
-}
-
-.emax-entry-thumb {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+/* Segmented toggle pill group - replaces every <select> in the old filter
+   row. Buttons, not a <select>, so they can be styled to match the theme
+   exactly instead of inheriting the browser's native form-control chrome. */
+.emax-toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   overflow: hidden;
-  box-shadow: 0 0 0 2px var(--panel), 0 0 12px 1px var(--emax-glow, transparent);
 }
-.emax-entry-thumb img {
+.emax-toggle-group button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.emax-toggle-group button + button { border-left: 1px solid var(--border); }
+.emax-toggle-group button.active { background: var(--yellow); color: #0c0a08; }
+.emax-toggle-group button:hover:not(.active) { color: var(--text); }
+
+.emax-filter-drawer input[type="number"] {
+  width: 70px;
+  background: #0c0a08;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-align: center;
+}
+.emax-filter-drawer input[type="number"]::placeholder { color: var(--muted); }
+
+.emax-star-filter .emax-star { font-size: 18px; }
+
+.emax-filter-clear-row { margin-top: -2px; }
+
+/* ---- Poster/avatar grid (replaces the old one-row-per-item list) ---- */
+
+.emax-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.emax-tile {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.emax-tile:active { transform: scale(0.98); }
+/* Each tile's own compatibility score tints the whole card - a glow that's
+   meant to be seen, not a subtle hint (per "lean into the luxury/glowing
+   aesthetic further" - 2026-07-31 redesign). */
+.emax-tile.good { --emax-glow: rgba(139, 195, 74, 0.55); border-color: rgba(139, 195, 74, 0.45); }
+.emax-tile.bad { --emax-glow: rgba(229, 57, 63, 0.55); border-color: rgba(229, 57, 63, 0.45); }
+.emax-tile.mid { --emax-glow: rgba(245, 197, 66, 0.55); border-color: rgba(245, 197, 66, 0.45); }
+.emax-tile.dim { --emax-glow: rgba(255, 255, 255, 0.12); }
+.emax-tile.good, .emax-tile.bad, .emax-tile.mid {
+  box-shadow: 0 0 26px -8px var(--emax-glow);
+}
+.emax-tile.good:hover, .emax-tile.bad:hover, .emax-tile.mid:hover {
+  box-shadow: 0 0 34px -6px var(--emax-glow);
+}
+/* A "perfect match" deserves to actually announce itself, not just sit in
+   the same glow tier as any other good score. */
+.emax-tile.perfect { animation: emax-tile-pulse 2.4s ease-in-out infinite; }
+@keyframes emax-tile-pulse {
+  0%, 100% { box-shadow: 0 0 26px -8px var(--emax-glow); }
+  50% { box-shadow: 0 0 40px -4px var(--emax-glow); }
+}
+
+.emax-tile-media {
+  position: relative;
+  overflow: hidden;
+  background: #0c0a08;
+  border-radius: 10px;
+}
+.emax-tile-poster .emax-tile-media { aspect-ratio: 2 / 3; }
+.emax-tile-circle .emax-tile-media {
+  aspect-ratio: 1 / 1;
+  width: 68%;
+  margin: 6px auto 0;
+  border-radius: 50%;
+}
+.emax-tile-media-img {
+  width: 100%;
+  height: 100%;
+}
+.emax-tile-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-
-.emax-entry-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.emax-tile-media .emax-monogram {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
 }
 
-
-.emax-entry-side {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+/* Corner score badge - the mini ring already used elsewhere in EMAX
+   (emaxRowScoreHtml), just pinned to the tile's corner with its own halo so
+   it reads clearly over any poster/photo underneath it. */
+.emax-tile-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(12, 10, 8, 0.85);
+  border-radius: 50%;
+  box-shadow: 0 0 10px 2px rgba(0, 0, 0, 0.6);
 }
+.emax-tile-circle .emax-tile-badge { top: auto; bottom: 0; right: 0; }
 
-/* Colored initials circle - grid/list stays this always; the real photo
+.emax-tile-info {
+  padding: 10px 4px 2px;
+  text-align: center;
+}
+.emax-tile-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.emax-tile-info .emax-stars { justify-content: center; }
+
+/* Year-only tiles never open the popup (no compatibility to show) - tapping
+   jumps straight into the edit form to add the missing day, so the small
+   delete corner button is the only action that has to live on the tile
+   itself (everything else moved into the popup for dated tiles). */
+.emax-tile.dim .emax-tile-media { display: flex; align-items: center; justify-content: center; }
+.emax-tile-year-badge {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.emax-tile-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(12, 10, 8, 0.85);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.emax-tile-delete:hover { color: var(--bad); border-color: var(--bad); }
+
+/* ---- Popup edit/delete actions (moved off the tile, live here now) ---- */
+.emax-modal-actions {
+  align-self: flex-end;
+  display: flex;
+  gap: 14px;
+  margin: -4px 0 -4px;
+}
+.emax-modal-actions button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px;
+}
+.emax-modal-actions button:hover { color: var(--yellow); }
+.emax-modal-actions .emax-modal-delete:hover { color: var(--bad); }
+
+.emax-stars {
+  display: inline-flex;
+  gap: 2px;
+}
+.emax-star {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--border);
+  cursor: pointer;
+}
+.emax-star.filled { color: var(--yellow); }
+.emax-star:hover { color: var(--yellow); opacity: 0.7; }
+
+/* Colored initials circle - grid stays this always; the real photo
    (auto-fetched or manual) only loads inside an item's own popup. */
 .emax-monogram {
   width: 56px;
