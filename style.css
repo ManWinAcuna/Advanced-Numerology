@@ -6218,7 +6218,15 @@ body {
   cursor: pointer;
 }
 .emax-star.filled { color: var(--yellow); }
-.emax-star:hover { color: var(--yellow); opacity: 0.7; }
+/* :hover on a touchscreen fires on tap and has no real mouseout to clear it
+   - it sticks (dimmed, via the opacity below) on whatever star ends up
+   under your finger after the tap re-renders the row, which reads as the
+   rating "moving" to the wrong star until you tap something else entirely.
+   Scoping this to real hover-capable pointers (a mouse) keeps the desktop
+   hover feedback without that touch-only artifact. */
+@media (hover: hover) and (pointer: fine) {
+  .emax-star:hover { color: var(--yellow); opacity: 0.7; }
+}
 
 /* Colored initials circle - grid stays this always; the real photo
    (auto-fetched or manual) only loads inside an item's own popup. */
@@ -6276,22 +6284,6 @@ body {
   font-weight: 800;
   color: var(--text);
 }
-
-.emax-stars {
-  display: inline-flex;
-  gap: 2px;
-}
-.emax-star {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--border);
-  cursor: pointer;
-}
-.emax-star.filled { color: var(--yellow); }
-.emax-star:hover { color: var(--yellow); opacity: 0.7; }
 
 /* ---- Popup hero v2: centered/stacked, image up top ---- */
 
