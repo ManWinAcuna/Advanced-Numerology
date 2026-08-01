@@ -6490,6 +6490,7 @@ body {
   border-radius: 50%;
   overflow: hidden;
   box-shadow: 0 0 0 3px var(--panel), 0 0 22px 2px var(--emax-glow, rgba(245, 197, 66, 0.35));
+  cursor: pointer;
 }
 .emax-modal-image.good { --emax-glow: rgba(139, 195, 74, 0.45); }
 .emax-modal-image.bad { --emax-glow: rgba(229, 57, 63, 0.45); }
@@ -6687,6 +6688,42 @@ button.emax-fact-tile-tap {
    compat-render.js component itself (Database/Compatibility Calculator's
    own popups still show it, untouched). */
 .emax-breakdown-body .score-hero { display: none; }
+
+/* ---- Timeline mini-popup (tap the item's own picture) ---- */
+.emax-timeline-section {
+  margin-top: 14px;
+}
+.emax-timeline-section:first-of-type {
+  margin-top: 4px;
+}
+.emax-timeline-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.emax-timeline-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.emax-timeline-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.emax-timeline-chip.good { color: var(--good); border-color: var(--good); background: rgba(139, 195, 74, 0.12); }
+.emax-timeline-chip.bad { color: var(--bad); border-color: var(--bad); background: rgba(229, 57, 63, 0.12); }
+.emax-timeline-chip.mid { color: var(--yellow); border-color: var(--yellow); background: rgba(245, 197, 66, 0.12); }
+.emax-timeline-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 
 .emax-year-only-toggle {
   display: inline-flex;

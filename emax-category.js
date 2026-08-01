@@ -76,6 +76,31 @@ const EMAX_LINKED_PERSON_CONFIG = {
   Books: { field: 'author', label: 'Author', lookupFn: lookupAuthorForBook, targetCategory: 'Authors' },
 };
 
+// A plain YouTube SEARCH link (never a guessed video id, which could easily
+// land on the wrong upload or a cover) - `query` builds the search text,
+// `label` is the button's own wording so it reads naturally for what's
+// actually being searched (a trailer isn't "listened to"). Every category
+// gets SOME query, including a custom one you type yourself (the DEFAULT
+// entry below) - "some kind of search for everything", not just Songs.
+const EMAX_YOUTUBE_CONFIG = {
+  Songs: { label: '▶ Listen on YouTube', query: (entry) => [entry.name, entry.artistName].filter(Boolean).join(' ') },
+  Artists: { label: '▶ Watch on YouTube', query: (entry) => `${entry.name} best songs` },
+  Movies: { label: '▶ Watch Trailer', query: (entry) => `${entry.name} trailer` },
+  Shows: { label: '▶ Watch Trailer', query: (entry) => `${entry.name} trailer` },
+  Anime: { label: '▶ Watch Trailer', query: (entry) => `${entry.name} trailer` },
+  'Video Games': { label: '▶ Watch Trailer', query: (entry) => `${entry.name} trailer` },
+  YouTubers: { label: '▶ Watch on YouTube', query: (entry) => entry.name },
+  'Historical Figures': { label: '▶ Watch Documentary', query: (entry) => `${entry.name} documentary` },
+  Authors: { label: '▶ Watch Interview', query: (entry) => `${entry.name} interview` },
+  Books: { label: '▶ Watch Review', query: (entry) => `${entry.name} book review` },
+  'Clothing Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  'Shoe Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  'Technology Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  'Hygiene Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  'Food & Beverage Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  DEFAULT: { label: '▶ Search on YouTube', query: (entry) => entry.name },
+};
+
 if (!category) {
   document.querySelector('.db-page').innerHTML = '<div class="empty-state">Category not found. <a href="emax.html">Back to categories</a></div>';
 } else {
@@ -751,6 +776,104 @@ async function emaxAddArtistToDatabase(artistName, artistQid, targetCategoryName
 // link at the top so following the banner into the artist's own profile
 // doesn't strand you there with no way back except closing the modal
 // outright. undefined for every ordinary open (list row, Preload, etc.).
+
+/* ===================== Timeline mini-popup (2026-08-01) ===================== */
+// Tapping the item's own picture (inside the already-open popup) opens a
+// second, smaller popup on top of it, listing every year across the item's
+// whole life/existence that falls into one of four patterns: their own
+// Chinese zodiac year, the directly-opposing "enemy" zodiac year, and every
+// Personal Year 7 or 11. VIETNAMESE_TABLE (compat-data.js) already encodes
+// each animal's one true clash partner as the unique lowest score in its
+// row (verified live: every animal's minimum is a mutual 10, six pairs,
+// exactly 6 positions apart) - reused here via straight index math rather
+// than a second, separately-maintained lookup table.
+function emaxEnemyZodiacAnimal(animal) {
+  return VIETNAMESE_KEYS[(VIETNAMESE_KEYS.indexOf(animal) + 6) % 12];
+}
+
+// Personal Year for a SPECIFIC calendar year Y, not "as of today" -
+// personalYearRawForYear(birthDate, activeYear) already takes the cycle
+// year directly, skipping getPersonalYearRaw's own today-relative
+// getActiveBirthYear indirection (the cycle actually rolls over on the
+// birthday, not Jan 1, but the timeline buckets by CALENDAR year - the
+// value shown here matches whatever the cycle that STARTS on their Y-th
+// birthday resolves to, same "no standalone 2" reduction rule as
+// computeEnergyFlow uses everywhere else in this app).
+function emaxPersonalYearForYear(birthDate, year) {
+  const raw = personalYearRawForYear(birthDate, year);
+  let py = reduceNumber(raw);
+  if (py === 2) py = 11;
+  return py;
+}
+
+// Numerology supersedes the zodiac read when a single year matches both -
+// per the user's own call (2026-08-01): their own zodiac year doesn't save
+// a Personal Year 7 or 11, since 7/11 are already bearish in this app's own
+// established number meanings (matches Stocks' identical reading). Enemy
+// zodiac year reads as bad on its own; own zodiac year reads as good UNLESS
+// numerology overrides it.
+function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear) {
+  if (personalYear === 7 || personalYear === 11) return 'bad';
+  if (isEnemyYear) return 'bad';
+  if (isOwnYear) return 'good';
+  return 'mid';
+}
+
+// Full lifetime, birth/release year through the current year - however
+// long that list gets, per the user's own call to keep it complete rather
+// than capped to the most recent few.
+function emaxBuildTimeline(birthDate) {
+  const ownAnimal = getChineseZodiacYear(birthDate);
+  const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+  const startYear = birthDate.getFullYear();
+  const endYear = new Date().getFullYear();
+  const ownYears = [];
+  const enemyYears = [];
+  const py7Years = [];
+  const py11Years = [];
+  for (let year = startYear; year <= endYear; year++) {
+    const personalYear = emaxPersonalYearForYear(birthDate, year);
+    // July 1 as a safe mid-year reference for the zodiac animal check only
+    // - well clear of any lunar-new-year boundary ambiguity in Jan/Feb.
+    const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+    const isOwnYear = yearAnimal === ownAnimal;
+    const isEnemyYear = yearAnimal === enemyAnimal;
+    const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear);
+    if (isOwnYear) ownYears.push({ year, verdict });
+    if (isEnemyYear) enemyYears.push({ year, verdict });
+    if (personalYear === 7) py7Years.push({ year, verdict });
+    if (personalYear === 11) py11Years.push({ year, verdict });
+  }
+  return { ownAnimal, enemyAnimal, ownYears, enemyYears, py7Years, py11Years };
+}
+
+function emaxTimelineSectionHtml(title, years) {
+  const chipsHtml = years.length
+    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict }) => `<span class="emax-timeline-chip ${verdict}">${year}</span>`).join('')}</div>`
+    : '<div class="emax-timeline-empty">None yet</div>';
+  return `
+    <div class="emax-timeline-section">
+      <div class="emax-timeline-section-title">${escapeHtml(title)}</div>
+      ${chipsHtml}
+    </div>`;
+}
+
+function openTimelineModal(entry, birthDate) {
+  const { ownAnimal, enemyAnimal, ownYears, enemyYears, py7Years, py11Years } = emaxBuildTimeline(birthDate);
+  document.getElementById('emaxTimelineBody').innerHTML = `
+    <div class="box-label">${escapeHtml(entry.name)}'s Timeline</div>
+    ${emaxTimelineSectionHtml(`${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
+    ${emaxTimelineSectionHtml(`${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
+    ${emaxTimelineSectionHtml('Personal Year 7', py7Years)}
+    ${emaxTimelineSectionHtml('Personal Year 11', py11Years)}
+  `;
+  document.getElementById('emaxTimelineOverlay').classList.add('active');
+}
+
+function closeTimelineModal() {
+  document.getElementById('emaxTimelineOverlay').classList.remove('active');
+}
+
 function openItemModal(entry, categoryNameOverride, backTo) {
   const effectiveCategoryName = categoryNameOverride || category.name;
   const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[effectiveCategoryName];
@@ -825,14 +948,8 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     ? `<button type="button" class="btn-link emax-modal-back" id="itemModalBack">← Back to ${escapeHtml(backTo.entry.name)}</button>`
     : '';
 
-  // Songs only - a plain YouTube SEARCH link (never a guessed video ID,
-  // which could easily land on the wrong upload or a cover), including the
-  // artist name when Look Up/Preload resolved one, for a much more precise
-  // match than the song title alone (a lot of song titles are common
-  // English phrases shared by dozens of unrelated tracks).
-  const youtubeHtml = effectiveCategoryName === 'Songs'
-    ? `<a class="btn-link emax-modal-youtube" id="itemModalYouTube" href="https://www.youtube.com/results?search_query=${encodeURIComponent([entry.name, entry.artistName].filter(Boolean).join(' '))}" target="_blank" rel="noopener noreferrer">▶ Listen on YouTube</a>`
-    : '';
+  const youtubeCfg = EMAX_YOUTUBE_CONFIG[effectiveCategoryName] || EMAX_YOUTUBE_CONFIG.DEFAULT;
+  const youtubeHtml = `<a class="btn-link emax-modal-youtube" id="itemModalYouTube" href="https://www.youtube.com/results?search_query=${encodeURIComponent(youtubeCfg.query(entry))}" target="_blank" rel="noopener noreferrer">${youtubeCfg.label}</a>`;
 
   // Edit/Delete moved here from the list tile itself (2026-07-31 redesign) -
   // a poster/avatar tile has nowhere clean to put inline action links, and
@@ -898,6 +1015,12 @@ function openItemModal(entry, categoryNameOverride, backTo) {
     const backBtn = e.target.closest('#itemModalBack');
     if (backBtn) {
       if (backTo) openItemModal(backTo.entry, backTo.categoryNameOverride);
+      return;
+    }
+
+    const imageEl = e.target.closest('#itemModalImage');
+    if (imageEl) {
+      openTimelineModal(entry, themDate);
       return;
     }
 
@@ -1340,6 +1463,11 @@ function init() {
   document.getElementById('itemModalClose').addEventListener('click', closeItemModal);
   document.getElementById('itemModalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'itemModalOverlay') closeItemModal();
+  });
+
+  document.getElementById('emaxTimelineClose').addEventListener('click', closeTimelineModal);
+  document.getElementById('emaxTimelineOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'emaxTimelineOverlay') closeTimelineModal();
   });
 
   document.getElementById('bulkUploadBtn').addEventListener('click', () => {
