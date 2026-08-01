@@ -87,6 +87,11 @@ body {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
+  /* Paint this box's own background rather than relying on transparency
+     down to body - this box's edges reach the true viewport edges
+     (inset:0), including the strip behind the iOS home-indicator, and
+     that strip should read as page background, not whatever's behind it. */
+  background: var(--bg);
   /* This is now the fixed, viewport-anchored box - body's own
      safe-area padding (further down this file) no longer reaches it at
      all (fixed positioning is relative to the real viewport, not body's
@@ -6726,13 +6731,73 @@ button.emax-fact-tile-tap {
   font-weight: 700;
   border: 1px solid var(--border);
   color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
 }
 .emax-timeline-chip.good { color: var(--good); border-color: var(--good); background: rgba(139, 195, 74, 0.12); }
 .emax-timeline-chip.bad { color: var(--bad); border-color: var(--bad); background: rgba(229, 57, 63, 0.12); }
 .emax-timeline-chip.mid { color: var(--yellow); border-color: var(--yellow); background: rgba(245, 197, 66, 0.12); }
+.emax-timeline-chip.expanded {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px currentColor;
+}
 .emax-timeline-empty {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.emax-timeline-event-row {
+  margin-top: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+.emax-timeline-event-text {
+  color: var(--text);
+  line-height: 1.4;
+}
+.emax-timeline-event-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.emax-timeline-event-meta .btn-link {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.78rem;
+}
+.emax-timeline-event-loading {
+  color: var(--muted);
+  font-style: italic;
+}
+.emax-timeline-event-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+.emax-timeline-event-edit textarea {
+  width: 100%;
+  min-height: 64px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+.emax-timeline-event-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
 }
 
 .emax-year-only-toggle {

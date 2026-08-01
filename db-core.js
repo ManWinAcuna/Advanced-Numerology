@@ -711,6 +711,49 @@ function lookupLaunchDateFromWikipediaProse(title) {
   });
 }
 
+/* ===================== EMAX timeline: real events per flagged year =====================
+ * A bare year mention in Wikipedia prose is usually noise (a chart position,
+ * a citation restating some OTHER work's release year, "as of <year>" stats)
+ * - a sentence pairing the year with real event language is far more likely
+ * to describe something that actually happened that year, not just a
+ * circumstantial mention. Best-effort only, never treated as verified fact -
+ * shown to the user as a Wikipedia excerpt they can overwrite with their own
+ * note (see emaxFetchYearEvents, emax-category.js).
+ */
+const TIMELINE_EVENT_KEYWORDS = /\b(married|marriage|divorce[sd]?|born|died|death|passed away|diagnos(?:ed|is)|hospitali[sz]ed|surger(?:y|ies)|injur(?:ed|y)|accident|award(?:ed)?|won|nominat(?:ed|ion)|arrest(?:ed)?|releas(?:ed|e)|debut(?:ed)?|announc(?:ed|es|ement)|retir(?:ed|es|ement)|signed|joined|departed|founded|launched|graduat(?:ed)?|engag(?:ed|ement)|welcomed|elected|resign(?:ed|ation)|indicted|convicted|scandal|feud|split from|broke up)\b/i;
+
+// wikitext still has [[links]], '''bold''', {{templates}} at this point (the
+// existing date-parsing cascade above never needed to strip these - it only
+// ever fed sentences into a date REGEX, never showed them to a user) - this
+// is display-only cleanup so a shown excerpt reads like plain prose.
+function stripWikiMarkupForDisplay(text) {
+  return text
+    .replace(/\{\{[^{}]*\}\}/g, ' ')
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, '$1')
+    .replace(/'''?([^']*)'''?/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Crude sentence split, same as extractProseLaunchDate above - only a
+// sentence containing BOTH the target year and real event language is even
+// considered, and only then is it length-sanity-checked (too short to be a
+// real sentence, or long enough that it's probably a mangled paragraph/
+// infobox leak rather than one clean sentence).
+function extractYearEventFromWikitext(wikitext, year) {
+  const body = stripWikiRefs(wikitext);
+  const sentences = body.split(/(?<=[.!?])\s+/);
+  const yearRe = new RegExp(`\\b${year}\\b`);
+  for (const raw of sentences) {
+    if (!yearRe.test(raw) || !TIMELINE_EVENT_KEYWORDS.test(raw)) continue;
+    const clean = stripWikiMarkupForDisplay(raw);
+    if (clean.length < 15 || clean.length > 320) continue;
+    return clean;
+  }
+  return null;
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the

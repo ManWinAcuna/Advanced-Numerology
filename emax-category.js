@@ -847,27 +847,129 @@ function emaxBuildTimeline(birthDate) {
   return { ownAnimal, enemyAnimal, ownYears, enemyYears, py7Years, py11Years };
 }
 
-function emaxTimelineSectionHtml(title, years) {
+// entry.timelineEvents is undefined until the very first Wikipedia-scan
+// attempt (emaxFetchYearEvents); after that it's always a real object, even
+// if empty, so "attempted, nothing found" and "never attempted" stay
+// distinguishable per year. entry.timelineEvents[year].manual marks a note
+// the user typed themselves - always wins over a future auto-scan (which
+// only ever runs once per entry anyway, see emaxFetchYearEvents).
+async function emaxFetchYearEvents(entry, years) {
+  if (entry.timelineEvents !== undefined) return entry.timelineEvents;
+  const title = entry.wikiTitle || entry.name;
+  const wikitext = await fetchWikipediaWikitext(title);
+  const events = {};
+  if (wikitext) {
+    for (const year of years) {
+      const text = extractYearEventFromWikitext(wikitext, year);
+      if (text) events[year] = { text, manual: false };
+    }
+  }
+  entry.timelineEvents = events;
+  saveEmaxDB(db);
+  return events;
+}
+
+function emaxTimelineFindEntryById(entryId) {
+  for (const cat of db.categories) {
+    const found = cat.entries.find((e) => e.id === entryId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Module-level, reset at the top of every openTimelineModal call - only one
+// timeline popup is ever open at a time, same convention as
+// emaxPreloading/pendingWikiTitle elsewhere in this file.
+let emaxTimelineExpandedYear = null;
+let emaxTimelineEditingYear = null;
+let emaxTimelineCurrentEntryId = null;
+let emaxTimelineCurrentTimeline = null;
+
+function emaxTimelineChipHtml(year, verdict) {
+  const expanded = String(year) === String(emaxTimelineExpandedYear);
+  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}" data-year="${year}">${year}</button>`;
+}
+
+// A year's expand/edit row is rendered once per SECTION it appears in (the
+// same year, e.g. 2019, can be both an Own Year and a Personal Year 7 at
+// once - see emaxTimelineYearVerdict) - always the same underlying note,
+// shown consistently wherever that year is flagged.
+function emaxTimelineEventRowHtml(entry, year) {
+  const ev = entry.timelineEvents && entry.timelineEvents[year];
+  const editing = String(year) === String(emaxTimelineEditingYear);
+  if (editing) {
+    const current = ev ? ev.text : '';
+    return `
+      <div class="emax-timeline-event-row emax-timeline-event-edit">
+        <textarea id="emaxTimelineNoteInput" placeholder="What happened this year?">${escapeHtml(current)}</textarea>
+        <div class="emax-timeline-event-actions">
+          <button type="button" class="btn-link" data-year-save="${year}">Save</button>
+          <button type="button" class="btn-link" data-year-cancel="${year}">Cancel</button>
+        </div>
+      </div>`;
+  }
+  if (ev) {
+    return `
+      <div class="emax-timeline-event-row">
+        <div class="emax-timeline-event-text">${escapeHtml(ev.text)}</div>
+        <div class="emax-timeline-event-meta">
+          <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
+          <button type="button" class="btn-link" data-year-edit="${year}">Edit</button>
+        </div>
+      </div>`;
+  }
+  if (entry.timelineEvents === undefined) {
+    return '<div class="emax-timeline-event-row emax-timeline-event-loading">Looking up what happened...</div>';
+  }
+  return `
+    <div class="emax-timeline-event-row emax-timeline-event-empty">
+      <span>Nothing found for this year</span>
+      <button type="button" class="btn-link" data-year-edit="${year}">+ Add note</button>
+    </div>`;
+}
+
+function emaxTimelineSectionHtml(entry, title, years) {
   const chipsHtml = years.length
-    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict }) => `<span class="emax-timeline-chip ${verdict}">${year}</span>`).join('')}</div>`
+    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict }) => emaxTimelineChipHtml(year, verdict)).join('')}</div>`
     : '<div class="emax-timeline-empty">None yet</div>';
+  const expandedHere = years.some(({ year }) => String(year) === String(emaxTimelineExpandedYear));
+  const eventRowHtml = expandedHere ? emaxTimelineEventRowHtml(entry, emaxTimelineExpandedYear) : '';
   return `
     <div class="emax-timeline-section">
       <div class="emax-timeline-section-title">${escapeHtml(title)}</div>
       ${chipsHtml}
+      ${eventRowHtml}
     </div>`;
 }
 
-function openTimelineModal(entry, birthDate) {
-  const { ownAnimal, enemyAnimal, ownYears, enemyYears, py7Years, py11Years } = emaxBuildTimeline(birthDate);
+function renderTimelineBody(entry, timeline) {
+  const { ownAnimal, enemyAnimal, ownYears, enemyYears, py7Years, py11Years } = timeline;
   document.getElementById('emaxTimelineBody').innerHTML = `
     <div class="box-label">${escapeHtml(entry.name)}'s Timeline</div>
-    ${emaxTimelineSectionHtml(`${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
-    ${emaxTimelineSectionHtml(`${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
-    ${emaxTimelineSectionHtml('Personal Year 7', py7Years)}
-    ${emaxTimelineSectionHtml('Personal Year 11', py11Years)}
+    ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
+    ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
+    ${emaxTimelineSectionHtml(entry, 'Personal Year 7', py7Years)}
+    ${emaxTimelineSectionHtml(entry, 'Personal Year 11', py11Years)}
   `;
+}
+
+async function openTimelineModal(entry, birthDate) {
+  const timeline = emaxBuildTimeline(birthDate);
+  emaxTimelineExpandedYear = null;
+  emaxTimelineEditingYear = null;
+  emaxTimelineCurrentEntryId = entry.id;
+  emaxTimelineCurrentTimeline = timeline;
+  renderTimelineBody(entry, timeline);
   document.getElementById('emaxTimelineOverlay').classList.add('active');
+
+  if (entry.timelineEvents === undefined) {
+    const { ownYears, enemyYears, py7Years, py11Years } = timeline;
+    const years = [...new Set([...ownYears, ...enemyYears, ...py7Years, ...py11Years].map((y) => y.year))];
+    await emaxFetchYearEvents(entry, years);
+    // The popup may have moved on to a different entry (or closed) while
+    // this fetch was in flight - only repaint if we're still looking at it.
+    if (emaxTimelineCurrentEntryId === entry.id) renderTimelineBody(entry, timeline);
+  }
 }
 
 function closeTimelineModal() {
@@ -1468,6 +1570,44 @@ function init() {
   document.getElementById('emaxTimelineClose').addEventListener('click', closeTimelineModal);
   document.getElementById('emaxTimelineOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'emaxTimelineOverlay') closeTimelineModal();
+  });
+
+  document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
+    const timelineEntry = emaxTimelineFindEntryById(emaxTimelineCurrentEntryId);
+    if (!timelineEntry || !emaxTimelineCurrentTimeline) return;
+
+    const saveBtn = e.target.closest('[data-year-save]');
+    if (saveBtn) {
+      const year = saveBtn.dataset.yearSave;
+      const text = document.getElementById('emaxTimelineNoteInput').value.trim();
+      timelineEntry.timelineEvents = timelineEntry.timelineEvents || {};
+      if (text) timelineEntry.timelineEvents[year] = { text, manual: true };
+      else delete timelineEntry.timelineEvents[year];
+      saveEmaxDB(db);
+      emaxTimelineEditingYear = null;
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+      return;
+    }
+    const cancelBtn = e.target.closest('[data-year-cancel]');
+    if (cancelBtn) {
+      emaxTimelineEditingYear = null;
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+      return;
+    }
+    const editBtn = e.target.closest('[data-year-edit]');
+    if (editBtn) {
+      emaxTimelineEditingYear = editBtn.dataset.yearEdit;
+      emaxTimelineExpandedYear = emaxTimelineEditingYear;
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+      return;
+    }
+    const chip = e.target.closest('.emax-timeline-chip');
+    if (chip) {
+      const year = chip.dataset.year;
+      emaxTimelineEditingYear = null;
+      emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(year)) ? null : year;
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    }
   });
 
   document.getElementById('bulkUploadBtn').addEventListener('click', () => {
