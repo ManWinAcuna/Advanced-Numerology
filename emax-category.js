@@ -1364,6 +1364,55 @@ async function preloadTop50() {
   setLookupStatus(`⚡ Preloaded ${added}/${names.length - skippedExisting}${skipNote} - ${failed} couldn't be matched automatically.`, false);
 }
 
+/* ===================== Find Missing Pictures ===================== */
+// A second, on-demand pass over every entry that currently has NO picture
+// showing (emaxEntryHasPicture false) - unlike the automatic lazy fetch
+// (emaxLoadRowImages, runs once as the list first renders), this DELETES
+// any stale cached "nothing found" result before retrying, since the whole
+// point of a second scan is to give a past failure another shot (the
+// Wikipedia article may have gained an infobox image since, or the first
+// automated match was simply wrong) - per the user's own explicit call
+// (2026-08-01), not a distinction the harness needs to guess at. Entries
+// with entry.noImage (the explicit "remove picture" edit option) are never
+// touched - that is a deliberate choice, not a failed fetch. Same
+// sequential 350ms-gap throttle as Preload Top 50, for the same reason
+// (Wikimedia throttles bursty automated clients).
+let emaxFindingPictures = false;
+
+async function findMissingPictures() {
+  if (emaxPreloading || emaxFindingPictures) return;
+  const isBrandCategory = EMAX_YEAR_FILTER_KIND[category.name] === 'founded';
+  const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  const candidates = category.entries.filter((e) => e.date && !e.noImage && !emaxEntryHasPicture(e));
+  if (!candidates.length) {
+    setLookupStatus('🖼️ Every item with a date already has a picture (or has one intentionally removed).', false);
+    return;
+  }
+  emaxFindingPictures = true;
+  const btn = document.getElementById('findPicturesBtn');
+  btn.disabled = true;
+  let found = 0;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const entry = candidates[i];
+    setLookupStatus(`🖼️ Finding pictures - ${i + 1}/${candidates.length} (${found} found so far)...`, false);
+    const title = entry.wikiTitle || entry.name;
+    delete emaxImageCache[title];
+    let url = await emaxFetchImage(title, isBrandCategory);
+    if (!url) url = await emaxLinkedPersonImageUrl(entry, linkedPersonCfg);
+    if (url) {
+      found++;
+      const thumbEl = document.getElementById(`emaxThumb-${entry.id}`);
+      if (thumbEl) thumbEl.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+
+  btn.disabled = false;
+  emaxFindingPictures = false;
+  setLookupStatus(`🖼️ Found ${found}/${candidates.length} missing pictures.`, false);
+}
+
 /* ===================== Preload by Year ===================== */
 // Only offered on categories listed in EMAX_YEAR_QUERY_CONFIG. One live
 // SPARQL query for what actually exists FROM year X (see
@@ -1704,6 +1753,8 @@ function init() {
     preloadBtn.style.display = '';
     preloadBtn.addEventListener('click', () => preloadTop50());
   }
+
+  document.getElementById('findPicturesBtn').addEventListener('click', () => findMissingPictures());
 
   // Any category with a linked-person config (EMAX_LINKED_PERSON_CONFIG) -
   // see #newEntryArtist's own comments (init's addEntryBtn handler,
