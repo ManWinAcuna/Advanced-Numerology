@@ -6042,6 +6042,20 @@ body {
 .emax-filter-drawer input[type="number"]::placeholder { color: var(--muted); }
 
 .emax-star-filter .emax-star { font-size: 18px; }
+.emax-unrated-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.emax-unrated-btn:hover { color: var(--text); border-color: var(--yellow); }
+.emax-unrated-btn.active { background: var(--yellow); color: #0c0a08; border-color: var(--yellow); }
 
 .emax-filter-clear-row { margin-top: -2px; }
 

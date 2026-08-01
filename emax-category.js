@@ -36,6 +36,10 @@ let scoreFilterValue = null;
 let scoreFilterMode = 'over';
 let starFilterValue = null; // 1-5, or null = off
 let starFilterMode = 'atLeast'; // 'atLeast' | 'exactly'
+// Mutually exclusive with starFilterValue (a numeric floor/exact rating and
+// "has no rating at all" can't both be true at once) - lets you find
+// exactly the items you haven't gotten around to rating yet.
+let unratedOnly = false;
 let pictureFilterMode = 'any'; // 'any' | 'has' | 'none'
 let searchQuery = '';
 
@@ -470,14 +474,15 @@ function emaxEntryHasPicture(entry) {
   return !!emaxImageCache[entry.wikiTitle || entry.name];
 }
 
-function emaxEntryMatchesStars(entry, mode, minStars) {
+function emaxEntryMatchesStars(entry, mode, minStars, wantUnrated) {
+  if (wantUnrated) return !entry.rating;
   if (minStars == null) return true;
   const rating = entry.rating || 0;
   return mode === 'exactly' ? rating === minStars : rating >= minStars;
 }
 
 function emaxAnyFilterActive() {
-  return !!searchQuery || scoreFilterValue != null || starFilterValue != null || pictureFilterMode !== 'any';
+  return !!searchQuery || scoreFilterValue != null || starFilterValue != null || unratedOnly || pictureFilterMode !== 'any';
 }
 function emaxUpdateFilterClearVisibility() {
   const active = emaxAnyFilterActive();
@@ -488,6 +493,8 @@ function emaxRenderStarFilterPicker() {
   document.querySelectorAll('#emaxStarFilterPicker .emax-star').forEach((btn) => {
     btn.classList.toggle('filled', starFilterValue != null && Number(btn.dataset.star) <= starFilterValue);
   });
+  const unratedBtn = document.getElementById('emaxUnratedFilterBtn');
+  if (unratedBtn) unratedBtn.classList.toggle('active', unratedOnly);
 }
 // Clicking the currently-active star again turns the filter off - the same
 // "click again to reset" pattern as most star-picker UIs. Kept as its own
@@ -496,6 +503,15 @@ function emaxRenderStarFilterPicker() {
 // logic itself is directly testable without a real click event.
 function emaxToggleStarFilter(n) {
   starFilterValue = starFilterValue === n ? null : n;
+  if (starFilterValue != null) unratedOnly = false; // mutually exclusive - see unratedOnly's own comment
+  emaxRenderStarFilterPicker();
+  emaxUpdateFilterClearVisibility();
+}
+// "Unrated only" - added 2026-08-01 so items you haven't gotten to yet are
+// actually findable, not just invisible among everything else.
+function emaxToggleUnratedFilter() {
+  unratedOnly = !unratedOnly;
+  if (unratedOnly) starFilterValue = null; // mutually exclusive - see unratedOnly's own comment
   emaxRenderStarFilterPicker();
   emaxUpdateFilterClearVisibility();
 }
@@ -503,6 +519,7 @@ function emaxClearAllFilters() {
   searchQuery = '';
   scoreFilterValue = null;
   starFilterValue = null;
+  unratedOnly = false;
   pictureFilterMode = 'any';
   emaxRenderStarFilterPicker();
   emaxSetToggleGroupActive('emaxPictureToggle', 'any');
@@ -561,7 +578,7 @@ function renderEntries() {
       if (score == null) return false;
       if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
     }
-    if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue)) return false;
+    if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue, unratedOnly)) return false;
     if (pictureFilterMode !== 'any') {
       const hasPic = emaxEntryHasPicture(entry);
       if (pictureFilterMode === 'has' && !hasPic) return false;
@@ -1165,6 +1182,10 @@ function init() {
     const btn = e.target.closest('.emax-star');
     if (!btn) return;
     emaxToggleStarFilter(Number(btn.dataset.star));
+    renderEntries();
+  });
+  document.getElementById('emaxUnratedFilterBtn').addEventListener('click', () => {
+    emaxToggleUnratedFilter();
     renderEntries();
   });
   document.getElementById('emaxPictureToggle').addEventListener('click', (e) => {
