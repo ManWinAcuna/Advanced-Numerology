@@ -6335,11 +6335,14 @@ body {
   border-radius: 10px;
 }
 .emax-tile-poster .emax-tile-media { aspect-ratio: 2 / 3; }
+/* Name is legacy (kept in emax-category.js as emaxTileShapeClass's return
+   value, not worth a wider rename) - this shape is square now, not
+   circular, per the user's own "no round" call (2026-08-02). */
 .emax-tile-circle .emax-tile-media {
   aspect-ratio: 1 / 1;
   width: 68%;
   margin: 6px auto 0;
-  border-radius: 50%;
+  border-radius: 8px;
 }
 .emax-tile-media-img {
   width: 100%;
@@ -6463,12 +6466,16 @@ body {
   .emax-star:hover { color: var(--yellow); opacity: 0.7; }
 }
 
-/* Colored initials circle - grid stays this always; the real photo
-   (auto-fetched or manual) only loads inside an item's own popup. */
+/* Colored initials tile - grid stays this always; the real photo
+   (auto-fetched or manual) only loads inside an item's own popup. Square,
+   not round (2026-08-02) - most contexts (tile media, modal image) already
+   zero this out themselves since their own container provides the actual
+   clip shape; this base value only matters where nothing else overrides it
+   (the artist-banner thumb). */
 .emax-monogram {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6539,7 +6546,7 @@ body {
 .emax-modal-image {
   width: 120px;
   height: 120px;
-  border-radius: 50%;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 0 0 3px var(--panel), 0 0 22px 2px var(--emax-glow, rgba(245, 197, 66, 0.35));
   cursor: pointer;
@@ -6660,7 +6667,7 @@ button.emax-artist-banner {
 @media (hover: hover) and (pointer: fine) {
   button.emax-artist-banner:hover { border-color: var(--yellow); }
 }
-.emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.emax-artist-banner-thumb { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 6px; overflow: hidden; }
 .emax-artist-banner-thumb .emax-monogram { width: 36px; height: 36px; font-size: 13px; }
 .emax-artist-banner-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .emax-artist-banner-name {
