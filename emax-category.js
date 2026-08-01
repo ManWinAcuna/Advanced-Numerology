@@ -29,11 +29,15 @@ let pendingArtistQid = null;
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
 
-// The "show scores over/under X" filter (emaxFilterRow) - null means no
-// filter is active. Only affects which rows renderEntries() prints; sorting
-// and everything else on the page stays exactly as it already was.
+// emaxFilterRow's filters - each null/'' /'any' means that particular
+// filter isn't active. All of them combine (AND, not OR) in renderEntries()
+// below; none of them touch sorting or anything else on the page.
 let scoreFilterValue = null;
 let scoreFilterMode = 'over';
+let starFilterValue = null; // 1-5, or null = off
+let starFilterMode = 'atLeast'; // 'atLeast' | 'exactly'
+let pictureFilterMode = 'any'; // 'any' | 'has' | 'none'
+let searchQuery = '';
 
 // Declared here (ahead of init() below) rather than down by emaxFetchImage
 // itself - renderEntries() now loads row images synchronously off of
@@ -424,6 +428,69 @@ function emaxLoadRowImages(ranked) {
   });
 }
 
+// Matches the item's own name OR (when this category has a linked-person
+// config - Songs' artist, Video Games' director, Books' author) that
+// person's name too - typing "Freddie" finds a song whose listed artist is
+// Freddie Mercury, not just an item literally named Freddie.
+function emaxEntryMatchesSearch(entry, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if (entry.name.toLowerCase().includes(q)) return true;
+  const cfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  const personName = cfg && entry[cfg.field + 'Name'];
+  return !!(personName && personName.toLowerCase().includes(q));
+}
+
+// "Has picture" reflects whatever's ACTUALLY on screen right now, not just
+// entry.imageUrl (only ever set for a manually-typed image URL) - most
+// pictures come from emaxFetchImage's own lazy, cached fetch (emaxImageCache,
+// keyed by wikiTitle/name), which this reads directly. A year-only entry
+// never attempts a fetch at all, so it's always "no picture". An entry whose
+// fetch hasn't resolved YET reads as "no picture" until it does - the same
+// monogram-until-loaded state already visible in the row itself.
+function emaxEntryHasPicture(entry) {
+  if (entry.noImage) return false;
+  if (entry.imageUrl) return true;
+  if (!entry.date) return false;
+  return !!emaxImageCache[entry.wikiTitle || entry.name];
+}
+
+function emaxEntryMatchesStars(entry, mode, minStars) {
+  if (minStars == null) return true;
+  const rating = entry.rating || 0;
+  return mode === 'exactly' ? rating === minStars : rating >= minStars;
+}
+
+function emaxAnyFilterActive() {
+  return !!searchQuery || scoreFilterValue != null || starFilterValue != null || pictureFilterMode !== 'any';
+}
+function emaxUpdateFilterClearVisibility() {
+  document.getElementById('emaxFilterClearBtn').style.display = emaxAnyFilterActive() ? '' : 'none';
+}
+function emaxRenderStarFilterPicker() {
+  document.querySelectorAll('#emaxStarFilterPicker .emax-star').forEach((btn) => {
+    btn.classList.toggle('filled', starFilterValue != null && Number(btn.dataset.star) <= starFilterValue);
+  });
+}
+// Clicking the currently-active star again turns the filter off - the same
+// "click again to reset" pattern as most star-picker UIs. Kept as its own
+// pure-ish state-update function (like reorderCategory/swapCategories on the
+// landing page) rather than inline in the click listener, so the toggle
+// logic itself is directly testable without a real click event.
+function emaxToggleStarFilter(n) {
+  starFilterValue = starFilterValue === n ? null : n;
+  emaxRenderStarFilterPicker();
+  emaxUpdateFilterClearVisibility();
+}
+function emaxClearAllFilters() {
+  searchQuery = '';
+  scoreFilterValue = null;
+  starFilterValue = null;
+  pictureFilterMode = 'any';
+  emaxRenderStarFilterPicker();
+  emaxUpdateFilterClearVisibility();
+}
+
 function renderEntries() {
   const container = document.getElementById('entriesContainer');
 
@@ -439,12 +506,25 @@ function renderEntries() {
 
   // A score filter excludes anything that doesn't HAVE a score yet
   // (year-only entries, or no profile birthday set) - "over 80" can't
-  // meaningfully include an item with no score to compare.
-  const visible = scoreFilterValue == null ? ranked : ranked.filter(({ score }) => {
-    if (score == null) return false;
-    return scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue;
+  // meaningfully include an item with no score to compare. The other
+  // filters (search/stars/picture) apply to every entry regardless of
+  // whether it has a score.
+  const anyFilterActive = emaxAnyFilterActive();
+  const visible = !anyFilterActive ? ranked : ranked.filter(({ entry, score }) => {
+    if (!emaxEntryMatchesSearch(entry, searchQuery)) return false;
+    if (scoreFilterValue != null) {
+      if (score == null) return false;
+      if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
+    }
+    if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue)) return false;
+    if (pictureFilterMode !== 'any') {
+      const hasPic = emaxEntryHasPicture(entry);
+      if (pictureFilterMode === 'has' && !hasPic) return false;
+      if (pictureFilterMode === 'none' && hasPic) return false;
+    }
+    return true;
   });
-  const emptyFilterHtml = (scoreFilterValue != null && visible.length === 0)
+  const emptyFilterHtml = (anyFilterActive && visible.length === 0)
     ? '<div class="empty-state">No items match this filter.</div>'
     : '';
 
@@ -976,20 +1056,41 @@ function init() {
     document.getElementById('addEntryChevron').classList.toggle('open', !body.hidden);
   });
 
+  document.getElementById('emaxSearchInput').addEventListener('input', () => {
+    searchQuery = document.getElementById('emaxSearchInput').value.trim();
+    emaxUpdateFilterClearVisibility();
+    renderEntries();
+  });
   document.getElementById('emaxFilterValue').addEventListener('input', () => {
     const raw = document.getElementById('emaxFilterValue').value;
     scoreFilterValue = raw === '' ? null : Number(raw);
-    document.getElementById('emaxFilterClearBtn').style.display = scoreFilterValue == null ? 'none' : '';
+    emaxUpdateFilterClearVisibility();
     renderEntries();
   });
   document.getElementById('emaxFilterMode').addEventListener('change', () => {
     scoreFilterMode = document.getElementById('emaxFilterMode').value;
     renderEntries();
   });
+  document.getElementById('emaxStarFilterMode').addEventListener('change', () => {
+    starFilterMode = document.getElementById('emaxStarFilterMode').value;
+    if (starFilterValue != null) renderEntries();
+  });
+  document.getElementById('emaxStarFilterPicker').addEventListener('click', (e) => {
+    const btn = e.target.closest('.emax-star');
+    if (!btn) return;
+    emaxToggleStarFilter(Number(btn.dataset.star));
+    renderEntries();
+  });
+  document.getElementById('emaxPictureFilter').addEventListener('change', () => {
+    pictureFilterMode = document.getElementById('emaxPictureFilter').value;
+    emaxUpdateFilterClearVisibility();
+    renderEntries();
+  });
   document.getElementById('emaxFilterClearBtn').addEventListener('click', () => {
-    scoreFilterValue = null;
+    emaxClearAllFilters();
+    document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
-    document.getElementById('emaxFilterClearBtn').style.display = 'none';
+    document.getElementById('emaxPictureFilter').value = 'any';
     renderEntries();
   });
 

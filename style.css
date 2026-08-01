@@ -5936,9 +5936,23 @@ body {
   margin-bottom: 8px;
 }
 
+.emax-search-row {
+  margin-bottom: 10px;
+}
+.emax-search-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .emax-filter-row {
   align-items: center;
   margin-bottom: 14px;
+}
+.emax-star-filter {
+  align-items: center;
+}
+.emax-star-filter .emax-star {
+  font-size: 18px;
 }
 .emax-filter-label {
   font-size: 12px;
