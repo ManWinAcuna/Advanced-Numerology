@@ -675,10 +675,12 @@ function emaxTagPickerHtml() {
   return `<div class="emax-tag-picker">${EMAX_TIMELINE_TAGS.map((t) => `<button type="button" class="emax-tag-chip${emaxTimelineEditingTags.includes(t.key) ? ' active' : ''}" data-tag-toggle="${t.key}">${t.emoji} ${t.label}</button>`).join('')}</div>`;
 }
 
-// Plain-English severity line ("Severity: -2 (2 stacked reasons)") - shown
-// regardless of whether an event was ever found, since the BASE half of
-// magnitude (signal-stacking) is always known immediately; only the event
-// bonus half needs a resolved fetch.
+// Plain-English severity line ("Severity: -2 (2 stacked reasons)") - a
+// year with no confirmed event (never fetched, or fetched and nothing
+// found) always reads a flat "0 (mixed/neutral)" here now, per
+// emaxYearMagnitude's own "if there's nothing found it should not affect
+// the score" rule (db-core.js) - pure zodiac/numerology speculation with
+// no real evidence behind it doesn't get to read as "leans bad/good".
 function emaxTimelineSeverityLabel(magnitude) {
   if (magnitude > 0) return `+${magnitude} (leans good)`;
   if (magnitude < 0) return `${magnitude} (leans bad)`;

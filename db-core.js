@@ -997,7 +997,7 @@ function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendl
   return 'mid';
 }
 
-/* ---- Magnitude (2026-08-02) ----
+/* ---- Magnitude (2026-08-02, corrected 2026-08-02) ----
  * "not just Personal Year 7 is bad, but how bad, compared to this
  * person's other bad years" - a real example settled the design: Enemy
  * Year + Personal Year 7 stacking (two independent negative reasons)
@@ -1007,12 +1007,22 @@ function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendl
  * always mutually exclusive with itself by construction - only one term
  * ever applies - but the numerology axis (Personal Year 7/11) is fully
  * independent and can stack with either zodiac read, which is the whole
- * point. A confirmed event (real Wikipedia excerpt or the user's own
- * note) reinforces the base signal-stacking score rather than replacing
- * it - "combine both", the user's own explicit call. Verdict (good/bad/
- * mid, i.e. the chip's actual color) stays exactly as it already was;
- * magnitude is a separate, finer scale UNDER that same verdict, for
- * ranking same-colored years against each other.
+ * point. Verdict (good/bad/mid, i.e. the chip's actual color) stays
+ * exactly as it already was; magnitude is a separate, finer scale UNDER
+ * that same verdict, for ranking same-colored years against each other.
+ *
+ * "If there's nothing found it should not affect the score" - direct
+ * correction: the base signal-stacking score used to show even for a year
+ * with zero confirmed evidence (a real Wikipedia excerpt or a manual
+ * note), on the theory it was "always known immediately". That's exactly
+ * what let pure zodiac/numerology speculation masquerade as a real
+ * finding - an Enemy Year + Personal Year 7 with nothing actually
+ * recorded read as "-2, leans bad" as confidently as a year with a
+ * genuine documented setback. emaxYearMagnitude now returns a flat 0
+ * whenever entry.timelineEvents[year] doesn't exist (never fetched, or
+ * fetched and nothing found) - a year WITH a confirmed event (even one
+ * whose tags don't clearly lean either way) still combines the base
+ * signal-stacking score with the event's own tag bonus exactly as before.
  */
 function emaxYearBaseMagnitude(isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear) {
   let magnitude = 0;
@@ -1022,10 +1032,9 @@ function emaxYearBaseMagnitude(isOwnYear, isEnemyYear, isTrineYear, isFriendlyYe
   return magnitude;
 }
 
-// Reads whatever's already resolved on entry.timelineEvents (auto-scraped
-// or typed by hand) - a year never yet scanned, or with nothing found,
-// contributes 0 (no bonus, not a penalty), same honest "nothing to go on"
-// default the base function itself uses for a plain neutral year.
+// A negative-tagged event is -1, an achievement-tagged event is +1 (both
+// on the same event cancel out) - a neutral-tagged event (e.g. Career
+// alone) contributes 0, same as no event at all.
 function emaxYearEventMagnitudeBonus(entry, year) {
   const ev = entry && entry.timelineEvents && entry.timelineEvents[year];
   if (!ev || !ev.tags) return 0;
@@ -1036,6 +1045,8 @@ function emaxYearEventMagnitudeBonus(entry, year) {
 }
 
 function emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear) {
+  const hasConfirmedEvent = !!(entry && entry.timelineEvents && entry.timelineEvents[year]);
+  if (!hasConfirmedEvent) return 0;
   return emaxYearBaseMagnitude(isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
     + emaxYearEventMagnitudeBonus(entry, year);
 }
