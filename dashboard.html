@@ -10,18 +10,18 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Sports Betting</title>
+<title>Dashboard</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Owner-only gate for the Sports Betting section - must run before content renders -->
+<!-- Owner-only gate - same script already used by Sports Betting/Polymarket/Stats -->
 <script src="sports-gate.js"></script>
-<div class="page ufc-page">
+<div class="page">
 
   <nav class="topnav">
     <a href="profile.html" class="nav-link">My Profile</a>
-    <a href="dashboard.html" class="nav-link">Dashboard</a>
-    <a href="sports-betting.html" class="nav-link active">Sports Betting</a>
+    <a href="dashboard.html" class="nav-link active">Dashboard</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
     <a href="stocks.html" class="nav-link">Stocks</a>
     <a href="emax.html" class="nav-link">EMAX</a>
     <a href="calculator.html" class="nav-link">Calculator</a>
@@ -33,28 +33,29 @@
   </nav>
   <script src="nav-scroll.js"></script>
 
+  <h1 class="page-title">Dashboard</h1>
+  <p class="dashboard-intro">One glance across everything - each card shows what that section last calculated on its own page. Tap a card for the full detail.</p>
 
-  <div class="compat-mode-select">
-    <a class="mode-card" href="polymarket.html">
-      <div class="mode-icon">📊</div>
-      <div class="mode-title">Polymarket</div>
-      <div class="mode-desc">Track live whale &amp; smart-money bets and compare them against your numerology edge.</div>
+  <div class="dashboard-grid">
+
+    <a class="dashboard-card" href="stocks.html">
+      <div class="dashboard-card-title">📈 Stocks</div>
+      <div id="dashboardStocksBody"></div>
+      <div class="dashboard-card-cta">View Stocks →</div>
     </a>
-    <a class="mode-card" href="stats.html">
-      <div class="mode-icon">📈</div>
-      <div class="mode-title">Stats</div>
-      <div class="mode-desc">Track record of numerology picks vs. actual results, over time.</div>
+
+    <a class="dashboard-card" href="sports-betting.html">
+      <div class="dashboard-card-title">🎰 Betting</div>
+      <div id="dashboardBettingBody"></div>
+      <div class="dashboard-card-cta">View Sports Betting →</div>
     </a>
-    <a class="mode-card" href="betting.html">
-      <div class="mode-icon">🎰</div>
-      <div class="mode-title">Betting</div>
-      <div class="mode-desc">Singles &amp; parlay builder with automatic bankroll-based stake sizing, plus a simulated day-by-day betting track record.</div>
+
+    <a class="dashboard-card" href="emax.html">
+      <div class="dashboard-card-title">🔮 EMAX</div>
+      <div id="dashboardEmaxBody"></div>
+      <div class="dashboard-card-cta">View EMAX →</div>
     </a>
-    <a class="mode-card" href="bet-log.html">
-      <div class="mode-icon">🔒</div>
-      <div class="mode-title">Bet Log</div>
-      <div class="mode-desc">Your locked-in slates &mdash; the permanent, settle-as-they-finish record of every bet you actually took.</div>
-    </a>
+
   </div>
 
 </div>
@@ -63,5 +64,6 @@
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>

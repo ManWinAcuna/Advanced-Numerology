@@ -1466,6 +1466,65 @@ body::after {
   color: var(--muted);
 }
 
+.dashboard-intro {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 700px;
+  margin: -8px 0 20px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  max-width: 900px;
+}
+
+.dashboard-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: left;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dashboard-card:hover {
+    border-color: var(--yellow);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+  }
+}
+
+.dashboard-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--yellow);
+  margin-bottom: 4px;
+}
+
+.dashboard-card-row {
+  font-size: 0.85rem;
+}
+
+.dashboard-card-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dashboard-card-cta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
 .compat-form {
   display: none;
   max-width: 700px;
