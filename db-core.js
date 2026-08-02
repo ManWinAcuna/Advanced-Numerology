@@ -1134,9 +1134,20 @@ function emaxBuildTimeline(birthDate, entry) {
  */
 const EMAX_AUDIT_NEGATIVE_TAGS = ['health', 'loss', 'financial'];
 
-async function emax711Audit(db, onProgress) {
+// categoryIds: optional array of category ids to scan - null/undefined
+// (omitted) scans the whole collection, unchanged from before this
+// existed; an EMPTY array deliberately scans nothing (not the same as
+// "no filter" - a real "Select None" has to actually mean zero, not
+// silently fall back to everything). "a lot of them are songs"
+// (2026-08-02): one dominant category can otherwise swamp every stat, so
+// the filter narrows the SCAN itself, not just what's shown afterward.
+// Recorded onto the returned result (see below) so a later tap into the
+// detail popup re-scans the SAME categories that produced the stat, even
+// if the picker's live selection has since changed.
+async function emax711Audit(db, onProgress, categoryIds) {
+  const cats = categoryIds ? db.categories.filter((c) => categoryIds.includes(c.id)) : db.categories;
   const entries = [];
-  db.categories.forEach((cat) => {
+  cats.forEach((cat) => {
     cat.entries.forEach((entry) => { if (entry.date) entries.push(entry); });
   });
 
@@ -1195,6 +1206,7 @@ async function emax711Audit(db, onProgress) {
   return {
     entryCount: entries.length,
     ranAt: new Date().toISOString(),
+    categoryIds: categoryIds == null ? null : categoryIds,
     py7or11Total, py7or11WithEvent, py7or11WithNegative,
     otherTotal, otherWithEvent, otherWithNegative,
     py7or11AnyEventRate: py7or11Total ? py7or11WithEvent / py7or11Total : null,
@@ -1286,9 +1298,12 @@ function emaxNominationCandidates(map, baselineNegativeRate, baselineAchievement
   return list;
 }
 
-async function emaxNumberNomination(db, onProgress) {
+// categoryIds: same optional scan-narrowing filter as emax711Audit above -
+// see that function's own comment.
+async function emaxNumberNomination(db, onProgress, categoryIds) {
+  const cats = categoryIds ? db.categories.filter((c) => categoryIds.includes(c.id)) : db.categories;
   const entries = [];
-  db.categories.forEach((cat) => {
+  cats.forEach((cat) => {
     cat.entries.forEach((entry) => { if (entry.date) entries.push(entry); });
   });
 
@@ -1354,6 +1369,7 @@ async function emaxNumberNomination(db, onProgress) {
   return {
     entryCount: entries.length,
     ranAt: new Date().toISOString(),
+    categoryIds: categoryIds == null ? null : categoryIds,
     totalYearInstances: overall.n,
     baselineNegativeRate,
     baselineAchievementRate,
@@ -1372,10 +1388,16 @@ async function emaxNumberNomination(db, onProgress) {
  * cheap (pure in-memory, no fetches) and always consistent with whatever
  * db currently holds. */
 
-function emaxAuditDetailEntries(db, is7or11, tagFilter) {
+// categoryIds: same optional filter as emax711Audit - always the exact
+// list stored on the result being tapped into (result.categoryIds), not
+// necessarily the picker's current live selection, so a detail popup never
+// shows entries from a category that wasn't actually part of the run that
+// produced the percentage you tapped.
+function emaxAuditDetailEntries(db, is7or11, tagFilter, categoryIds) {
   const results = [];
   const nowYear = new Date().getFullYear();
-  db.categories.forEach((cat) => {
+  const cats = categoryIds ? db.categories.filter((c) => categoryIds.includes(c.id)) : db.categories;
+  cats.forEach((cat) => {
     cat.entries.forEach((entry) => {
       if (!entry.date) return;
       const birthDate = parseDateStr(entry.date);
@@ -1416,10 +1438,12 @@ function emaxAuditDetailEntries(db, is7or11, tagFilter) {
 // readable scan loops (emax711Audit/emaxNumberNomination already don't
 // share their own loop bodies either) rather than a shared abstraction
 // that would obscure either caller's own logic.
-function emaxNominationDetailEntries(db, dimension, key) {
+// categoryIds: same optional filter as emaxAuditDetailEntries above.
+function emaxNominationDetailEntries(db, dimension, key, categoryIds) {
   const results = [];
   const nowYear = new Date().getFullYear();
-  db.categories.forEach((cat) => {
+  const cats = categoryIds ? db.categories.filter((c) => categoryIds.includes(c.id)) : db.categories;
+  cats.forEach((cat) => {
     cat.entries.forEach((entry) => {
       if (!entry.date) return;
       const birthDate = parseDateStr(entry.date);

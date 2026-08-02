@@ -276,6 +276,90 @@ document.getElementById('categoriesContainer').addEventListener('click', (e) => 
   if (tile) e.preventDefault();
 });
 
+/* ===================== Category filter (2026-08-02) =====================
+ * Shared by both the 7/11 Audit and Number Nomination boxes below - "a lot
+ * of them are songs, I want to toggle between all categories and whatever
+ * I choose" - narrows what each scan actually includes, not just what's
+ * displayed afterward. Persists across visits like every other EMAX filter. */
+const EMAX_CATEGORY_FILTER_KEY = 'numerology_emax_category_filter_v1';
+
+function emaxLoadCategoryFilterIds() {
+  try {
+    const raw = localStorage.getItem(EMAX_CATEGORY_FILTER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function emaxSaveCategoryFilterIds(ids) {
+  try { localStorage.setItem(EMAX_CATEGORY_FILTER_KEY, JSON.stringify(ids)); } catch (e) { /* storage full - just won't persist across visits */ }
+}
+
+// No saved selection at all defaults to every current category (starts at
+// "all", per your own call). A stored id belonging to a category you've
+// since deleted is silently dropped rather than carried along as a phantom
+// selection.
+function emaxActiveCategoryIds() {
+  const allIds = db.categories.map((c) => c.id);
+  const stored = emaxLoadCategoryFilterIds();
+  if (!stored) return allIds;
+  return stored.filter((id) => allIds.includes(id));
+}
+
+// What actually gets passed to emax711Audit/emaxNumberNomination as their
+// categoryIds argument - collapses "every category is checked" down to
+// null (db-core.js's own "no filter at all" signal) rather than the literal
+// full id list, so a completely unfiltered run stores categoryIds: null and
+// the "across N categories" summary line stays silent, exactly as it read
+// before this filter existed. Only a genuine subset (including a
+// deliberate "Select None", which is a real empty array, not null) passes
+// through as an explicit array.
+function emaxCategoryFilterForScan() {
+  const active = emaxActiveCategoryIds();
+  return active.length === db.categories.length ? null : active;
+}
+
+function emaxCategoryFilterItemHtml(cat, checked) {
+  return `
+    <label class="emax-category-filter-item">
+      <input type="checkbox" data-cat-filter="${escapeHtml(cat.id)}"${checked ? ' checked' : ''}>
+      <span>${escapeHtml(cat.name)} <span class="emax-category-filter-count">(${cat.entries.length})</span></span>
+    </label>`;
+}
+
+function emaxRenderCategoryFilterList() {
+  const active = new Set(emaxActiveCategoryIds());
+  document.getElementById('categoryFilterList').innerHTML = db.categories.length
+    ? db.categories.map((cat) => emaxCategoryFilterItemHtml(cat, active.has(cat.id))).join('')
+    : '<div class="emax-nomination-empty">No categories yet.</div>';
+}
+
+document.getElementById('categoryFilterBody').hidden = true;
+document.getElementById('categoryFilterToggle').addEventListener('click', () => {
+  const body = document.getElementById('categoryFilterBody');
+  body.hidden = !body.hidden;
+  document.getElementById('categoryFilterChevron').classList.toggle('open', !body.hidden);
+});
+
+document.getElementById('categoryFilterList').addEventListener('change', (e) => {
+  const checkbox = e.target.closest('[data-cat-filter]');
+  if (!checkbox) return;
+  const active = new Set(emaxActiveCategoryIds());
+  if (checkbox.checked) active.add(checkbox.dataset.catFilter);
+  else active.delete(checkbox.dataset.catFilter);
+  emaxSaveCategoryFilterIds([...active]);
+});
+
+document.getElementById('categoryFilterSelectAll').addEventListener('click', () => {
+  emaxSaveCategoryFilterIds(db.categories.map((c) => c.id));
+  emaxRenderCategoryFilterList();
+});
+document.getElementById('categoryFilterSelectNone').addEventListener('click', () => {
+  emaxSaveCategoryFilterIds([]);
+  emaxRenderCategoryFilterList();
+});
+
+emaxRenderCategoryFilterList();
+
 /* ===================== 7/11 Audit (2026-08-02) ===================== */
 // UI-only wrapper around emax711Audit (db-core.js) - the actual scan/tally
 // engine is shared with the future master dashboard (task #74), this file
@@ -312,9 +396,21 @@ function emaxAuditStatHtml(label, rate, withCount, total, is7or11, tagFilter) {
     </button>`;
 }
 
+// "" when the run covered every category (categoryIds === null) - the
+// summary line only says anything extra when a subset was actually used,
+// so the common case reads exactly as it did before this filter existed.
+// A deliberate "Select None" run is a real empty array, not null - called
+// out explicitly rather than silently reading as if nothing were filtered.
+function emaxCategoryFilterSummaryText(categoryIds) {
+  if (categoryIds == null) return '';
+  if (!categoryIds.length) return ' across 0 categories (none selected)';
+  const names = categoryIds.map((id) => { const c = db.categories.find((x) => x.id === id); return c ? c.name : null; }).filter(Boolean);
+  return ` across ${names.length} categor${names.length === 1 ? 'y' : 'ies'} (${names.join(', ')})`;
+}
+
 function emaxAuditResultsHtml(result) {
   return `
-    <div class="emax-audit-summary">Scanned ${result.entryCount} items - last run ${new Date(result.ranAt).toLocaleString()}. Tap a tile to see the real years behind it.</div>
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items${emaxCategoryFilterSummaryText(result.categoryIds)} - last run ${new Date(result.ranAt).toLocaleString()}. Tap a tile to see the real years behind it.</div>
     <div class="emax-audit-grid">
       ${emaxAuditStatHtml('Personal Yr 7/11 - Any Event', result.py7or11AnyEventRate, result.py7or11WithEvent, result.py7or11Total, true, '')}
       ${emaxAuditStatHtml('Other Years - Any Event', result.otherAnyEventRate, result.otherWithEvent, result.otherTotal, false, '')}
@@ -332,9 +428,13 @@ function emaxRenderAuditResults() {
 
 async function runEmaxAudit() {
   if (emaxAuditRunning) return;
+  const status = document.getElementById('auditStatus');
+  if (!emaxActiveCategoryIds().length) {
+    status.textContent = 'Select at least one category in "Categories to Include" first.';
+    return;
+  }
   emaxAuditRunning = true;
   const btn = document.getElementById('runAuditBtn');
-  const status = document.getElementById('auditStatus');
   btn.disabled = true;
   // try/finally so a total failure (not just one bad entry - emax711Audit's
   // own loop already tolerates those) still resets the running flag and
@@ -345,7 +445,7 @@ async function runEmaxAudit() {
   try {
     const result = await emax711Audit(db, (done, total) => {
       status.textContent = `Scanning ${done}/${total} items...`;
-    });
+    }, emaxCategoryFilterForScan());
     emaxSaveAuditResult(result);
     emaxRenderAuditResults();
     status.textContent = `Done - scanned ${result.entryCount} items.`;
@@ -452,7 +552,7 @@ function emaxNominationDimensionHtml(dim, data) {
 function emaxNominationResultsHtml(result) {
   const dims = ['personalYear', 'zodiacRelation', 'lifePath', 'ownAnimal'];
   return `
-    <div class="emax-audit-summary">Scanned ${result.entryCount} items, ${emaxNominationSampleLabel(result.totalYearInstances)} total - baseline ${Math.round(result.baselineNegativeRate * 100)}% negative / ${Math.round(result.baselineAchievementRate * 100)}% achievement - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items${emaxCategoryFilterSummaryText(result.categoryIds)}, ${emaxNominationSampleLabel(result.totalYearInstances)} total - baseline ${Math.round(result.baselineNegativeRate * 100)}% negative / ${Math.round(result.baselineAchievementRate * 100)}% achievement - last run ${new Date(result.ranAt).toLocaleString()}.</div>
     <div class="emax-nomination-explainer">A "person-year" is one item, one year of its life - the same item can contribute many, summed across your whole collection. Tap a candidate to see the real entries and years behind it.</div>
     ${dims.map((dim) => emaxNominationDimensionHtml(dim, result.dimensions[dim])).join('')}`;
 }
@@ -466,16 +566,20 @@ function emaxRenderNominationResults() {
 
 async function runEmaxNomination() {
   if (emaxNominationRunning) return;
+  const status = document.getElementById('nominationStatus');
+  if (!emaxActiveCategoryIds().length) {
+    status.textContent = 'Select at least one category in "Categories to Include" first.';
+    return;
+  }
   emaxNominationRunning = true;
   const btn = document.getElementById('runNominationBtn');
-  const status = document.getElementById('nominationStatus');
   btn.disabled = true;
   // Same try/finally hardening as runEmaxAudit above, same "stuck at N"
   // bug class.
   try {
     const result = await emaxNumberNomination(db, (done, total) => {
       status.textContent = `Scanning ${done}/${total} items...`;
-    });
+    }, emaxCategoryFilterForScan());
     emaxSaveNominationResult(result);
     emaxRenderNominationResults();
     status.textContent = `Done - scanned ${result.entryCount} items.`;
@@ -573,7 +677,11 @@ document.getElementById('auditResults').addEventListener('click', (e) => {
   if (!btn) return;
   const is7or11 = btn.dataset.auditIs7or11 === 'true';
   const tagFilter = btn.dataset.auditTag || null;
-  const entries = emaxAuditDetailEntries(db, is7or11, tagFilter);
+  // The categories the RUN that produced this tile actually scanned - not
+  // necessarily the picker's current live selection, which may have
+  // changed since without a re-run.
+  const lastResult = emaxLoadAuditResult();
+  const entries = emaxAuditDetailEntries(db, is7or11, tagFilter, lastResult && lastResult.categoryIds);
   const title = `${is7or11 ? 'Personal Year 7/11' : 'Other Years'} - ${tagFilter === 'negative' ? 'Negative Events' : 'Any Event'}`;
   openEmaxDetailModal(title, entries);
 });
@@ -583,7 +691,8 @@ document.getElementById('nominationResults').addEventListener('click', (e) => {
   if (!btn) return;
   const dim = btn.dataset.nomDim;
   const key = btn.dataset.nomKey;
-  const entries = emaxNominationDetailEntries(db, dim, key);
+  const lastResult = emaxLoadNominationResult();
+  const entries = emaxNominationDetailEntries(db, dim, key, lastResult && lastResult.categoryIds);
   openEmaxDetailModal(`${EMAX_NOMINATION_DIMENSION_LABELS[dim] || dim}: ${emaxNominationKeyLabel(dim, key)}`, entries);
 });
 
