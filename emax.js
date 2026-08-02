@@ -356,4 +356,116 @@ document.getElementById('auditToggle').addEventListener('click', () => {
 document.getElementById('runAuditBtn').addEventListener('click', () => runEmaxAudit());
 emaxRenderAuditResults();
 
+/* ===================== Data-led number nomination (2026-08-02) ===================== */
+// UI-only wrapper around emaxNumberNomination (db-core.js) - same
+// collapsible-box/cache-in-localStorage convention as the 7/11 Audit above,
+// the actual scan engine is shared with the future master dashboard.
+let emaxNominationRunning = false;
+
+const EMAX_NOMINATION_DIMENSION_LABELS = {
+  personalYear: 'Personal Year',
+  zodiacRelation: 'Zodiac Year Type',
+  lifePath: 'Life Path',
+  ownAnimal: 'Birth Animal',
+};
+
+const EMAX_NOMINATION_ZODIAC_LABELS = {
+  own: 'Own Year',
+  trine: 'Trine Year',
+  friendly: 'Friendly Year',
+  enemy: 'Enemy Year',
+  neutral: 'Neutral Year (no zodiac flag)',
+};
+
+function emaxNominationKeyLabel(dim, key) {
+  if (dim === 'personalYear') return `Personal Year ${key}`;
+  if (dim === 'zodiacRelation') return EMAX_NOMINATION_ZODIAC_LABELS[key] || key;
+  if (dim === 'lifePath') return `Life Path ${key}`;
+  return key;
+}
+
+function emaxLoadNominationResult() {
+  try {
+    const raw = localStorage.getItem(EMAX_NOMINATION_RESULT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function emaxSaveNominationResult(result) {
+  try { localStorage.setItem(EMAX_NOMINATION_RESULT_KEY, JSON.stringify(result)); } catch (e) { /* storage full - just won't persist across visits */ }
+}
+
+function emaxNominationCandidateRowHtml(dim, candidate, isBearish) {
+  const rate = isBearish ? candidate.negativeRate : candidate.achievementRate;
+  const delta = isBearish ? candidate.deltaNegative : candidate.deltaAchievement;
+  return `
+    <div class="emax-nomination-candidate">
+      <div class="emax-nomination-candidate-name">${escapeHtml(emaxNominationKeyLabel(dim, candidate.key))}</div>
+      <div class="emax-nomination-candidate-rate">${Math.round(rate * 100)}% <span class="emax-nomination-candidate-delta">(+${Math.round(delta * 100)}pt vs baseline)</span></div>
+      <div class="emax-nomination-candidate-n">${candidate.n} year${candidate.n === 1 ? '' : 's'} - avg magnitude ${candidate.avgMagnitude > 0 ? '+' : ''}${candidate.avgMagnitude.toFixed(1)}</div>
+    </div>`;
+}
+
+function emaxNominationDimensionHtml(dim, data) {
+  const bearishHtml = data.bearish.length
+    ? data.bearish.map((c) => emaxNominationCandidateRowHtml(dim, c, true)).join('')
+    : '<div class="emax-nomination-empty">No standout bearish candidates yet</div>';
+  const bullishHtml = data.bullish.length
+    ? data.bullish.map((c) => emaxNominationCandidateRowHtml(dim, c, false)).join('')
+    : '<div class="emax-nomination-empty">No standout bullish candidates yet</div>';
+  return `
+    <div class="emax-nomination-dimension">
+      <div class="emax-nomination-dimension-title">${escapeHtml(EMAX_NOMINATION_DIMENSION_LABELS[dim] || dim)}</div>
+      <div class="emax-nomination-columns">
+        <div class="emax-nomination-column">
+          <div class="emax-nomination-column-label">Bearish candidates</div>
+          ${bearishHtml}
+        </div>
+        <div class="emax-nomination-column">
+          <div class="emax-nomination-column-label">Bullish candidates</div>
+          ${bullishHtml}
+        </div>
+      </div>
+    </div>`;
+}
+
+function emaxNominationResultsHtml(result) {
+  const dims = ['personalYear', 'zodiacRelation', 'lifePath', 'ownAnimal'];
+  return `
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items, ${result.totalYearInstances} year-instances - baseline ${Math.round(result.baselineNegativeRate * 100)}% negative / ${Math.round(result.baselineAchievementRate * 100)}% achievement - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    ${dims.map((dim) => emaxNominationDimensionHtml(dim, result.dimensions[dim])).join('')}`;
+}
+
+function emaxRenderNominationResults() {
+  const result = emaxLoadNominationResult();
+  const btn = document.getElementById('runNominationBtn');
+  document.getElementById('nominationResults').innerHTML = result ? emaxNominationResultsHtml(result) : '';
+  btn.textContent = result ? 'Re-run Nomination' : 'Run Nomination';
+}
+
+async function runEmaxNomination() {
+  if (emaxNominationRunning) return;
+  emaxNominationRunning = true;
+  const btn = document.getElementById('runNominationBtn');
+  const status = document.getElementById('nominationStatus');
+  btn.disabled = true;
+  const result = await emaxNumberNomination(db, (done, total) => {
+    status.textContent = `Scanning ${done}/${total} items...`;
+  });
+  emaxSaveNominationResult(result);
+  emaxRenderNominationResults();
+  status.textContent = `Done - scanned ${result.entryCount} items.`;
+  btn.disabled = false;
+  emaxNominationRunning = false;
+}
+
+document.getElementById('nominationBody').hidden = true;
+document.getElementById('nominationToggle').addEventListener('click', () => {
+  const body = document.getElementById('nominationBody');
+  body.hidden = !body.hidden;
+  document.getElementById('nominationChevron').classList.toggle('open', !body.hidden);
+});
+document.getElementById('runNominationBtn').addEventListener('click', () => runEmaxNomination());
+emaxRenderNominationResults();
+
 render();

@@ -1088,6 +1088,131 @@ async function emax711Audit(db, onProgress) {
   };
 }
 
+/* ===================== Data-led number nomination ===================== */
+// Instead of only ever testing the one hypothesis this app already believes
+// (7/11), scans EVERY number/pattern the app already computes across the
+// whole EMAX collection and lets the DATA nominate which values actually
+// skew bearish or bullish, in either direction - purely candidates to
+// review, nothing here changes any verdict or magnitude automatically (per
+// the user's own call: informational only). Year-level dimensions (Personal
+// Year, zodiac relation to the item's own animal) vary per year within a
+// lifetime; entity-level dimensions (Life Path, own animal) are fixed per
+// person/thing and get tested across every year of their own timeline.
+// Personal Month/Day can't be tested this way - scraped events only ever
+// carry year-level precision, never a specific month or day.
+const EMAX_NOMINATION_MIN_N = 5;
+const EMAX_NOMINATION_RESULT_KEY = 'numerology_emax_nomination_v1';
+
+function emaxNominationBucketAdd(map, key, isNegative, isAchievement, magnitude) {
+  if (!map.has(key)) map.set(key, { n: 0, negative: 0, achievement: 0, magnitudeSum: 0 });
+  const b = map.get(key);
+  b.n += 1;
+  if (isNegative) b.negative += 1;
+  if (isAchievement) b.achievement += 1;
+  b.magnitudeSum += magnitude;
+}
+
+function emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall) {
+  const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+  const isOwnYear = yearAnimal === ownAnimal;
+  const isEnemyYear = yearAnimal === enemyAnimal;
+  const isTrineYear = trineAnimals.includes(yearAnimal);
+  const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
+  const relation = isOwnYear ? 'own' : (isEnemyYear ? 'enemy' : (isTrineYear ? 'trine' : (isFriendlyYear ? 'friendly' : 'neutral')));
+  const ev = entry.timelineEvents && entry.timelineEvents[year];
+  const tags = (ev && ev.tags) || [];
+  const isNegative = tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t));
+  const isAchievement = tags.includes('achievement');
+  const magnitude = emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
+  overall.n += 1;
+  if (isNegative) overall.negative += 1;
+  if (isAchievement) overall.achievement += 1;
+  emaxNominationBucketAdd(dims.personalYear, String(personalYear), isNegative, isAchievement, magnitude);
+  emaxNominationBucketAdd(dims.zodiacRelation, relation, isNegative, isAchievement, magnitude);
+  emaxNominationBucketAdd(dims.lifePath, String(lifePath), isNegative, isAchievement, magnitude);
+  emaxNominationBucketAdd(dims.ownAnimal, ownAnimal, isNegative, isAchievement, magnitude);
+}
+
+// Below EMAX_NOMINATION_MIN_N a bucket's rate is noise, not a signal - a
+// number only 2 items have ever lived through can't nominate itself, no
+// matter how extreme its tiny sample looks.
+function emaxNominationCandidates(map, baselineNegativeRate, baselineAchievementRate) {
+  const list = [];
+  map.forEach((b, key) => {
+    if (b.n < EMAX_NOMINATION_MIN_N) return;
+    const negativeRate = b.negative / b.n;
+    const achievementRate = b.achievement / b.n;
+    list.push({
+      key,
+      n: b.n,
+      negativeRate,
+      achievementRate,
+      avgMagnitude: b.magnitudeSum / b.n,
+      deltaNegative: negativeRate - baselineNegativeRate,
+      deltaAchievement: achievementRate - baselineAchievementRate,
+    });
+  });
+  return list;
+}
+
+async function emaxNumberNomination(db, onProgress) {
+  const entries = [];
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => { if (entry.date) entries.push(entry); });
+  });
+
+  const dims = { personalYear: new Map(), zodiacRelation: new Map(), lifePath: new Map(), ownAnimal: new Map() };
+  const overall = { n: 0, negative: 0, achievement: 0 };
+  const nowYear = new Date().getFullYear();
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const birthDate = parseDateStr(entry.date);
+    const startYear = birthDate.getFullYear();
+    const years = [];
+    for (let year = startYear; year <= nowYear; year++) years.push(year);
+
+    if (entry.timelineEvents === undefined) {
+      await emaxFetchYearEvents(entry, years);
+      // Same throttle as emax711Audit/findMissingPictures - Wikimedia
+      // throttles bursty automated clients.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+
+    const ownAnimal = getChineseZodiacYear(birthDate);
+    const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+    const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
+    const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
+    const lifePath = getLifePathNumeric(birthDate);
+
+    for (const year of years) {
+      const personalYear = emaxPersonalYearForYear(birthDate, year);
+      emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall);
+    }
+    if (onProgress) onProgress(i + 1, entries.length);
+  }
+
+  const baselineNegativeRate = overall.n ? overall.negative / overall.n : 0;
+  const baselineAchievementRate = overall.n ? overall.achievement / overall.n : 0;
+  const dimensions = {};
+  Object.keys(dims).forEach((dim) => {
+    const candidates = emaxNominationCandidates(dims[dim], baselineNegativeRate, baselineAchievementRate);
+    dimensions[dim] = {
+      bearish: candidates.filter((c) => c.deltaNegative > 0).sort((a, b) => b.deltaNegative - a.deltaNegative).slice(0, 5),
+      bullish: candidates.filter((c) => c.deltaAchievement > 0).sort((a, b) => b.deltaAchievement - a.deltaAchievement).slice(0, 5),
+    };
+  });
+
+  return {
+    entryCount: entries.length,
+    ranAt: new Date().toISOString(),
+    totalYearInstances: overall.n,
+    baselineNegativeRate,
+    baselineAchievementRate,
+    dimensions,
+  };
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the
