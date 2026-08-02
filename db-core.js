@@ -720,7 +720,33 @@ function lookupLaunchDateFromWikipediaProse(title) {
  * shown to the user as a Wikipedia excerpt they can overwrite with their own
  * note (see emaxFetchYearEvents, emax-category.js).
  */
-const TIMELINE_EVENT_KEYWORDS = /\b(married|marriage|divorce[sd]?|born|died|death|passed away|diagnos(?:ed|is)|hospitali[sz]ed|surger(?:y|ies)|injur(?:ed|y)|accident|award(?:ed)?|won|nominat(?:ed|ion)|arrest(?:ed)?|releas(?:ed|e)|debut(?:ed)?|announc(?:ed|es|ement)|retir(?:ed|es|ement)|signed|joined|departed|founded|launched|graduat(?:ed)?|engag(?:ed|ement)|welcomed|elected|resign(?:ed|ation)|indicted|convicted|scandal|feud|split from|broke up)\b/i;
+// Per-tag keyword groups (added 2026-08-02 for EMAX's event-tag feature) -
+// a sentence matching ANY group counts as a real event; a union of all of
+// them replaces what used to be one flat TIMELINE_EVENT_KEYWORDS regex, so
+// the "is this worth showing" gate and the auto-tag assignment share the
+// exact same source of truth instead of two lists that could drift apart.
+// Which specific group(s) matched also drives the tag(s) auto-applied to a
+// scraped event (see emaxMatchedTags below, and emaxAutoTagsForSentence in
+// emax-category.js which reuses this same object for manual-tag defaults).
+// Overlap between groups is intentional - a death is both Health and Loss,
+// a divorce is both Relationship and often Financial - matches the "tags
+// on an event, allow more than one" answer.
+const EMAX_TAG_KEYWORDS = {
+  health: /\b(diagnos(?:ed|is)|hospitali[sz]ed|surger(?:y|ies)|injur(?:ed|y)|illness|died|death|passed away|accident|overdose)\b/i,
+  career: /\b(retir(?:ed|es|ement)|signed|joined|departed|founded|launched|debut(?:ed)?|resign(?:ed|ation)|elected|graduat(?:ed)?|hired|fired|promoted|indicted|convicted|arrest(?:ed)?)\b/i,
+  // Deliberately NOT "million"/"billion"/"fortune"/"profit" - those attach
+  // to almost any routine sales/box-office/net-worth STAT sentence ("sold
+  // over a million records"), exactly the noise this whole feature exists
+  // to filter out. Kept to genuine financial EVENTS instead.
+  financial: /\b(bankrupt(?:cy)?|lawsuit|sued|acqui(?:red|sition)|fined|embezzl(?:ed|ement)|fraud|foreclosure|repossess(?:ed)?)\b/i,
+  relationship: /\b(married|marriage|divorce[sd]?|engag(?:ed|ement)|welcomed|gave birth|broke up|split from|feud|born)\b/i,
+  achievement: /\b(award(?:ed)?|\bwon\b|nominat(?:ed|ion))\b/i,
+  loss: /\b(died|death|passed away|scandal)\b/i,
+};
+
+function emaxMatchedTags(sentence) {
+  return Object.keys(EMAX_TAG_KEYWORDS).filter((tag) => EMAX_TAG_KEYWORDS[tag].test(sentence));
+}
 
 // wikitext still has [[links]], '''bold''', {{templates}} at this point (the
 // existing date-parsing cascade above never needed to strip these - it only
@@ -740,16 +766,19 @@ function stripWikiMarkupForDisplay(text) {
 // sentence containing BOTH the target year and real event language is even
 // considered, and only then is it length-sanity-checked (too short to be a
 // real sentence, or long enough that it's probably a mangled paragraph/
-// infobox leak rather than one clean sentence).
+// infobox leak rather than one clean sentence). Returns { text, tags } (the
+// matched sentence plus whichever EMAX_TAG_KEYWORDS group(s) it hit) rather
+// than a bare string, so a scraped event arrives pre-tagged.
 function extractYearEventFromWikitext(wikitext, year) {
   const body = stripWikiRefs(wikitext);
   const sentences = body.split(/(?<=[.!?])\s+/);
   const yearRe = new RegExp(`\\b${year}\\b`);
   for (const raw of sentences) {
-    if (!yearRe.test(raw) || !TIMELINE_EVENT_KEYWORDS.test(raw)) continue;
+    const tags = emaxMatchedTags(raw);
+    if (!yearRe.test(raw) || !tags.length) continue;
     const clean = stripWikiMarkupForDisplay(raw);
     if (clean.length < 15 || clean.length > 320) continue;
-    return clean;
+    return { text: clean, tags };
   }
   return null;
 }

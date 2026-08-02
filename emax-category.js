@@ -953,8 +953,8 @@ async function emaxFetchYearEvents(entry, years) {
   const events = {};
   if (wikitext) {
     for (const year of years) {
-      const text = extractYearEventFromWikitext(wikitext, year);
-      if (text) events[year] = { text, manual: false };
+      const result = extractYearEventFromWikitext(wikitext, year);
+      if (result) events[year] = { text: result.text, tags: result.tags, manual: false };
     }
   }
   entry.timelineEvents = events;
@@ -970,17 +970,50 @@ function emaxTimelineFindEntryById(entryId) {
   return null;
 }
 
+// Ordered so the picker and any future tag-frequency listing render
+// consistently. "other" has no auto-detection tie in EMAX_TAG_KEYWORDS
+// (db-core.js) - a manual-only fallback for whatever doesn't fit the rest.
+const EMAX_TIMELINE_TAGS = [
+  { key: 'health', label: 'Health', emoji: '🏥' },
+  { key: 'career', label: 'Career', emoji: '💼' },
+  { key: 'relationship', label: 'Relationship', emoji: '💞' },
+  { key: 'financial', label: 'Financial', emoji: '💰' },
+  { key: 'achievement', label: 'Achievement', emoji: '🏆' },
+  { key: 'loss', label: 'Loss', emoji: '💔' },
+  { key: 'other', label: 'Other', emoji: '🔹' },
+];
+function emaxTagEmoji(key) {
+  const tag = EMAX_TIMELINE_TAGS.find((t) => t.key === key);
+  return tag ? tag.emoji : '';
+}
+
 // Module-level, reset at the top of every openTimelineModal call - only one
 // timeline popup is ever open at a time, same convention as
 // emaxPreloading/pendingWikiTitle elsewhere in this file.
 let emaxTimelineExpandedYear = null;
 let emaxTimelineEditingYear = null;
+// Which tags are checked in the currently-open edit form - starts from the
+// event's own saved tags (or empty for a fresh note), mutated by tag-toggle
+// clicks before Save writes it back onto the entry.
+let emaxTimelineEditingTags = [];
+// Only ever set right before a tag-toggle click re-renders the whole
+// timeline body - preserves whatever's typed but not yet saved in the
+// textarea, which would otherwise reset back to the stored text on every
+// tag click (a real re-render, same "rebuild the whole innerHTML" pattern
+// every other piece of UI in this app already uses). Cleared on save/cancel
+// and whenever a fresh edit starts.
+let emaxTimelineDraftText = null;
 let emaxTimelineCurrentEntryId = null;
 let emaxTimelineCurrentTimeline = null;
 
-function emaxTimelineChipHtml(year, verdict) {
+function emaxTimelineChipHtml(year, verdict, tags) {
   const expanded = String(year) === String(emaxTimelineExpandedYear);
-  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}" data-year="${year}">${year}</button>`;
+  const tagPrefix = (tags && tags.length) ? tags.map(emaxTagEmoji).join('') + ' ' : '';
+  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}" data-year="${year}">${tagPrefix}${year}</button>`;
+}
+
+function emaxTagPickerHtml() {
+  return `<div class="emax-tag-picker">${EMAX_TIMELINE_TAGS.map((t) => `<button type="button" class="emax-tag-chip${emaxTimelineEditingTags.includes(t.key) ? ' active' : ''}" data-tag-toggle="${t.key}">${t.emoji} ${t.label}</button>`).join('')}</div>`;
 }
 
 // A year's expand/edit row is rendered once per SECTION it appears in (the
@@ -991,10 +1024,11 @@ function emaxTimelineEventRowHtml(entry, year) {
   const ev = entry.timelineEvents && entry.timelineEvents[year];
   const editing = String(year) === String(emaxTimelineEditingYear);
   if (editing) {
-    const current = ev ? ev.text : '';
+    const current = emaxTimelineDraftText != null ? emaxTimelineDraftText : (ev ? ev.text : '');
     return `
       <div class="emax-timeline-event-row emax-timeline-event-edit">
         <textarea id="emaxTimelineNoteInput" placeholder="What happened this year?">${escapeHtml(current)}</textarea>
+        ${emaxTagPickerHtml()}
         <div class="emax-timeline-event-actions">
           <button type="button" class="btn-link" data-year-save="${year}">Save</button>
           <button type="button" class="btn-link" data-year-cancel="${year}">Cancel</button>
@@ -1002,9 +1036,13 @@ function emaxTimelineEventRowHtml(entry, year) {
       </div>`;
   }
   if (ev) {
+    const tagsHtml = (ev.tags && ev.tags.length)
+      ? `<div class="emax-timeline-event-tags">${ev.tags.map((k) => `<span class="emax-timeline-tag-pill">${emaxTagEmoji(k)} ${EMAX_TIMELINE_TAGS.find((t) => t.key === k) ? EMAX_TIMELINE_TAGS.find((t) => t.key === k).label : k}</span>`).join('')}</div>`
+      : '';
     return `
       <div class="emax-timeline-event-row">
         <div class="emax-timeline-event-text">${escapeHtml(ev.text)}</div>
+        ${tagsHtml}
         <div class="emax-timeline-event-meta">
           <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
           <button type="button" class="btn-link" data-year-edit="${year}">Edit</button>
@@ -1023,7 +1061,10 @@ function emaxTimelineEventRowHtml(entry, year) {
 
 function emaxTimelineSectionHtml(entry, title, years) {
   const chipsHtml = years.length
-    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict }) => emaxTimelineChipHtml(year, verdict)).join('')}</div>`
+    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict }) => {
+        const ev = entry.timelineEvents && entry.timelineEvents[year];
+        return emaxTimelineChipHtml(year, verdict, ev && ev.tags);
+      }).join('')}</div>`
     : '<div class="emax-timeline-empty">None yet</div>';
   const expandedHere = years.some(({ year }) => String(year) === String(emaxTimelineExpandedYear));
   const eventRowHtml = expandedHere ? emaxTimelineEventRowHtml(entry, emaxTimelineExpandedYear) : '';
@@ -1065,6 +1106,8 @@ async function openTimelineModal(entry, birthDate) {
   const timeline = emaxBuildTimeline(birthDate);
   emaxTimelineExpandedYear = null;
   emaxTimelineEditingYear = null;
+  emaxTimelineEditingTags = [];
+  emaxTimelineDraftText = null;
   emaxTimelineCurrentEntryId = entry.id;
   emaxTimelineCurrentTimeline = timeline;
   renderTimelineBody(entry, timeline);
@@ -1750,16 +1793,32 @@ function init() {
       const year = saveBtn.dataset.yearSave;
       const text = document.getElementById('emaxTimelineNoteInput').value.trim();
       timelineEntry.timelineEvents = timelineEntry.timelineEvents || {};
-      if (text) timelineEntry.timelineEvents[year] = { text, manual: true };
+      if (text) timelineEntry.timelineEvents[year] = { text, tags: emaxTimelineEditingTags.slice(), manual: true };
       else delete timelineEntry.timelineEvents[year];
       saveEmaxDB(db);
       emaxTimelineEditingYear = null;
+      emaxTimelineEditingTags = [];
+      emaxTimelineDraftText = null;
       renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
       return;
     }
     const cancelBtn = e.target.closest('[data-year-cancel]');
     if (cancelBtn) {
       emaxTimelineEditingYear = null;
+      emaxTimelineEditingTags = [];
+      emaxTimelineDraftText = null;
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+      return;
+    }
+    // Toggling a tag re-renders the whole timeline body (same "rebuild from
+    // state" pattern as everything else here) - capture whatever's already
+    // typed in the textarea first, or it would reset back to the saved text.
+    const tagBtn = e.target.closest('[data-tag-toggle]');
+    if (tagBtn) {
+      emaxTimelineDraftText = document.getElementById('emaxTimelineNoteInput').value;
+      const tag = tagBtn.dataset.tagToggle;
+      const idx = emaxTimelineEditingTags.indexOf(tag);
+      if (idx === -1) emaxTimelineEditingTags.push(tag); else emaxTimelineEditingTags.splice(idx, 1);
       renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
       return;
     }
@@ -1767,6 +1826,9 @@ function init() {
     if (editBtn) {
       emaxTimelineEditingYear = editBtn.dataset.yearEdit;
       emaxTimelineExpandedYear = emaxTimelineEditingYear;
+      const existingEvent = timelineEntry.timelineEvents && timelineEntry.timelineEvents[emaxTimelineEditingYear];
+      emaxTimelineEditingTags = (existingEvent && existingEvent.tags) ? existingEvent.tags.slice() : [];
+      emaxTimelineDraftText = null;
       renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
       return;
     }
@@ -1774,6 +1836,8 @@ function init() {
     if (chip) {
       const year = chip.dataset.year;
       emaxTimelineEditingYear = null;
+      emaxTimelineEditingTags = [];
+      emaxTimelineDraftText = null;
       emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(year)) ? null : year;
       renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
     }

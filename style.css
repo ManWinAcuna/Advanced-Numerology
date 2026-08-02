@@ -6866,6 +6866,45 @@ button.emax-fact-tile-tap {
   margin-top: 6px;
 }
 
+/* ---- Event tags (2026-08-02) ---- */
+.emax-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.emax-tag-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.emax-tag-chip.active {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: rgba(245, 197, 66, 0.12);
+}
+.emax-timeline-event-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.emax-timeline-tag-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 .emax-year-only-toggle {
   display: inline-flex;
   align-items: center;
