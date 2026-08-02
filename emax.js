@@ -298,25 +298,28 @@ function emaxSaveAuditResult(result) {
 // alone isn't necessarily bad, so "any event" and "negative-tagged event"
 // answer two different questions rather than picking one for you. Raw N
 // stays visible next to every percentage so a thin sample still reads as
-// a thin sample, not a false certainty.
-function emaxAuditStatHtml(label, rate, withCount, total) {
+// a thin sample, not a false certainty. Each tile is now a button
+// (2026-08-02) - tapping it opens the real entries/years/event text behind
+// that percentage (emaxAuditDetailEntries, db-core.js), since a number
+// with no examples behind it isn't something you can actually check.
+function emaxAuditStatHtml(label, rate, withCount, total, is7or11, tagFilter) {
   const pct = rate == null ? '—' : `${Math.round(rate * 100)}%`;
   return `
-    <div class="emax-audit-stat">
+    <button type="button" class="emax-audit-stat" data-audit-is7or11="${is7or11}" data-audit-tag="${tagFilter || ''}">
       <div class="emax-audit-stat-label">${escapeHtml(label)}</div>
       <div class="emax-audit-stat-value">${pct}</div>
       <div class="emax-audit-stat-n">${withCount}/${total} years</div>
-    </div>`;
+    </button>`;
 }
 
 function emaxAuditResultsHtml(result) {
   return `
-    <div class="emax-audit-summary">Scanned ${result.entryCount} items - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items - last run ${new Date(result.ranAt).toLocaleString()}. Tap a tile to see the real years behind it.</div>
     <div class="emax-audit-grid">
-      ${emaxAuditStatHtml('Personal Yr 7/11 - Any Event', result.py7or11AnyEventRate, result.py7or11WithEvent, result.py7or11Total)}
-      ${emaxAuditStatHtml('Other Years - Any Event', result.otherAnyEventRate, result.otherWithEvent, result.otherTotal)}
-      ${emaxAuditStatHtml('Personal Yr 7/11 - Negative Event', result.py7or11NegativeRate, result.py7or11WithNegative, result.py7or11Total)}
-      ${emaxAuditStatHtml('Other Years - Negative Event', result.otherNegativeRate, result.otherWithNegative, result.otherTotal)}
+      ${emaxAuditStatHtml('Personal Yr 7/11 - Any Event', result.py7or11AnyEventRate, result.py7or11WithEvent, result.py7or11Total, true, '')}
+      ${emaxAuditStatHtml('Other Years - Any Event', result.otherAnyEventRate, result.otherWithEvent, result.otherTotal, false, '')}
+      ${emaxAuditStatHtml('Personal Yr 7/11 - Negative Event', result.py7or11NegativeRate, result.py7or11WithNegative, result.py7or11Total, true, 'negative')}
+      ${emaxAuditStatHtml('Other Years - Negative Event', result.otherNegativeRate, result.otherWithNegative, result.otherTotal, false, 'negative')}
     </div>`;
 }
 
@@ -407,44 +410,50 @@ function emaxSaveNominationResult(result) {
   try { localStorage.setItem(EMAX_NOMINATION_RESULT_KEY, JSON.stringify(result)); } catch (e) { /* storage full - just won't persist across visits */ }
 }
 
-function emaxNominationCandidateRowHtml(dim, candidate, isBearish) {
-  const rate = isBearish ? candidate.negativeRate : candidate.achievementRate;
-  const delta = isBearish ? candidate.deltaNegative : candidate.deltaAchievement;
+// "Person-years" (2026-08-02): the sample-size N is a count of
+// (entry x year) instances summed across your whole collection, not
+// calendar years - reads as nonsense ("113225 years") without this label.
+function emaxNominationSampleLabel(n) {
+  return `${n.toLocaleString()} person-year${n === 1 ? '' : 's'}`;
+}
+
+// One unified row per candidate (2026-08-02 rework) - a candidate elevated
+// on BOTH sides (like Own Year usually is) gets both badges on the SAME
+// row instead of appearing twice across two columns with identical,
+// unexplained numbers. Tapping the row opens the real entries/years/event
+// text behind it (emaxNominationDetailEntries, db-core.js).
+function emaxNominationCandidateRowHtml(dim, c) {
+  const badges = [];
+  if (c.isBearish) badges.push(`<span class="emax-nomination-badge bearish">Bearish ${Math.round(c.negativeRate * 100)}% <span class="emax-nomination-delta">(+${Math.round(c.deltaNegative * 100)}pt)</span></span>`);
+  if (c.isBullish) badges.push(`<span class="emax-nomination-badge bullish">Bullish ${Math.round(c.achievementRate * 100)}% <span class="emax-nomination-delta">(+${Math.round(c.deltaAchievement * 100)}pt)</span></span>`);
+  const bothNote = (c.isBearish && c.isBullish)
+    ? '<div class="emax-nomination-both-note">Sees more activity overall, not specifically good or bad - both directions are elevated.</div>'
+    : '';
   return `
-    <div class="emax-nomination-candidate">
-      <div class="emax-nomination-candidate-name">${escapeHtml(emaxNominationKeyLabel(dim, candidate.key))}</div>
-      <div class="emax-nomination-candidate-rate">${Math.round(rate * 100)}% <span class="emax-nomination-candidate-delta">(+${Math.round(delta * 100)}pt vs baseline)</span></div>
-      <div class="emax-nomination-candidate-n">${candidate.n} year${candidate.n === 1 ? '' : 's'} - avg magnitude ${candidate.avgMagnitude > 0 ? '+' : ''}${candidate.avgMagnitude.toFixed(1)}</div>
-    </div>`;
+    <button type="button" class="emax-nomination-candidate" data-nom-dim="${dim}" data-nom-key="${escapeHtml(c.key)}">
+      <div class="emax-nomination-candidate-name">${escapeHtml(emaxNominationKeyLabel(dim, c.key))}</div>
+      <div class="emax-nomination-badges">${badges.join('')}</div>
+      ${bothNote}
+      <div class="emax-nomination-candidate-n">${emaxNominationSampleLabel(c.n)} - avg magnitude ${c.avgMagnitude > 0 ? '+' : ''}${c.avgMagnitude.toFixed(1)}</div>
+    </button>`;
 }
 
 function emaxNominationDimensionHtml(dim, data) {
-  const bearishHtml = data.bearish.length
-    ? data.bearish.map((c) => emaxNominationCandidateRowHtml(dim, c, true)).join('')
-    : '<div class="emax-nomination-empty">No standout bearish candidates yet</div>';
-  const bullishHtml = data.bullish.length
-    ? data.bullish.map((c) => emaxNominationCandidateRowHtml(dim, c, false)).join('')
-    : '<div class="emax-nomination-empty">No standout bullish candidates yet</div>';
+  const rowsHtml = data.candidates.length
+    ? data.candidates.map((c) => emaxNominationCandidateRowHtml(dim, c)).join('')
+    : '<div class="emax-nomination-empty">No standout candidates yet</div>';
   return `
     <div class="emax-nomination-dimension">
       <div class="emax-nomination-dimension-title">${escapeHtml(EMAX_NOMINATION_DIMENSION_LABELS[dim] || dim)}</div>
-      <div class="emax-nomination-columns">
-        <div class="emax-nomination-column">
-          <div class="emax-nomination-column-label">Bearish candidates</div>
-          ${bearishHtml}
-        </div>
-        <div class="emax-nomination-column">
-          <div class="emax-nomination-column-label">Bullish candidates</div>
-          ${bullishHtml}
-        </div>
-      </div>
+      ${rowsHtml}
     </div>`;
 }
 
 function emaxNominationResultsHtml(result) {
   const dims = ['personalYear', 'zodiacRelation', 'lifePath', 'ownAnimal'];
   return `
-    <div class="emax-audit-summary">Scanned ${result.entryCount} items, ${result.totalYearInstances} year-instances - baseline ${Math.round(result.baselineNegativeRate * 100)}% negative / ${Math.round(result.baselineAchievementRate * 100)}% achievement - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items, ${emaxNominationSampleLabel(result.totalYearInstances)} total - baseline ${Math.round(result.baselineNegativeRate * 100)}% negative / ${Math.round(result.baselineAchievementRate * 100)}% achievement - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    <div class="emax-nomination-explainer">A "person-year" is one item, one year of its life - the same item can contribute many, summed across your whole collection. Tap a candidate to see the real entries and years behind it.</div>
     ${dims.map((dim) => emaxNominationDimensionHtml(dim, result.dimensions[dim])).join('')}`;
 }
 
@@ -487,6 +496,79 @@ document.getElementById('nominationToggle').addEventListener('click', () => {
 });
 document.getElementById('runNominationBtn').addEventListener('click', () => runEmaxNomination());
 emaxRenderNominationResults();
+
+/* ===================== Tap-to-detail modal (2026-08-02) =====================
+ * Shared by both the Audit tiles and Nomination candidates - "the actual
+ * examples of what happened, and to who" instead of a bare percentage.
+ * Only rows that actually have a recorded event are shown (a bucket like
+ * Neutral Year can carry well over 100,000 person-years, and the vast
+ * majority never had anything found on Wikipedia at all - listing those
+ * wouldn't be an "example", just noise), capped so a huge bucket doesn't
+ * try to render thousands of rows at once; most-recent-year-first per your
+ * own call, which also means the cap keeps the most relevant ones. */
+const EMAX_DETAIL_MAX_ROWS = 300;
+
+function emaxDetailRowHtml(e) {
+  const tagsHtml = e.tags.length
+    ? `<div class="emax-detail-row-tags">${e.tags.map((t) => `<span class="emax-timeline-tag-pill">${escapeHtml(t.charAt(0).toUpperCase() + t.slice(1))}</span>`).join('')}</div>`
+    : '';
+  return `
+    <div class="emax-detail-row">
+      <div class="emax-detail-row-head">
+        <span class="emax-detail-row-name">${escapeHtml(e.entryName)}</span>
+        <span class="emax-detail-row-year">${e.year}</span>
+      </div>
+      <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)}</div>
+      <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
+      ${tagsHtml}
+    </div>`;
+}
+
+function openEmaxDetailModal(title, entries) {
+  const withEvent = entries.filter((e) => e.text);
+  const shown = withEvent.slice(0, EMAX_DETAIL_MAX_ROWS);
+  const truncatedNote = shown.length < withEvent.length
+    ? ` - showing the most recent ${shown.length}`
+    : '';
+  document.getElementById('emaxDetailBody').innerHTML = `
+    <div class="box-label">${escapeHtml(title)}</div>
+    <div class="emax-detail-summary">${withEvent.length.toLocaleString()} of ${entries.length.toLocaleString()} person-years here have a recorded event${truncatedNote}.</div>
+    <div class="emax-detail-list">
+      ${shown.length ? shown.map(emaxDetailRowHtml).join('') : '<div class="emax-nomination-empty">No recorded events in this group yet.</div>'}
+    </div>`;
+  document.getElementById('emaxDetailOverlay').classList.add('active');
+}
+
+function closeEmaxDetailModal() {
+  document.getElementById('emaxDetailOverlay').classList.remove('active');
+}
+
+document.getElementById('emaxDetailClose').addEventListener('click', closeEmaxDetailModal);
+document.getElementById('emaxDetailOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'emaxDetailOverlay') closeEmaxDetailModal();
+});
+
+// Delegated on the stable results containers (their innerHTML gets
+// rebuilt on every render, but the containers themselves never do) - same
+// convention already used for the Timeline modal's data-year-save clicks.
+document.getElementById('auditResults').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-audit-is7or11]');
+  if (!btn) return;
+  const is7or11 = btn.dataset.auditIs7or11 === 'true';
+  const tagFilter = btn.dataset.auditTag || null;
+  const entries = emaxAuditDetailEntries(db, is7or11, tagFilter);
+  const title = `${is7or11 ? 'Personal Year 7/11' : 'Other Years'} - ${tagFilter === 'negative' ? 'Negative Events' : 'Any Event'}`;
+  openEmaxDetailModal(title, entries);
+});
+
+document.getElementById('nominationResults').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-nom-dim]');
+  if (!btn) return;
+  const dim = btn.dataset.nomDim;
+  const key = btn.dataset.nomKey;
+  const entries = emaxNominationDetailEntries(db, dim, key);
+  openEmaxDetailModal(`${EMAX_NOMINATION_DIMENSION_LABELS[dim] || dim}: ${emaxNominationKeyLabel(dim, key)}`, entries);
+});
 
 /* ===================== Reverse Lookup (2026-08-02) ===================== */
 // UI-only wrapper around emaxReverseLookup (db-core.js). Unlike the Audit/

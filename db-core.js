@@ -1111,7 +1111,11 @@ async function emax711Audit(db, onProgress) {
 // Personal Month/Day can't be tested this way - scraped events only ever
 // carry year-level precision, never a specific month or day.
 const EMAX_NOMINATION_MIN_N = 5;
-const EMAX_NOMINATION_RESULT_KEY = 'numerology_emax_nomination_v1';
+// v2 (2026-08-02): dimensions[dim] changed from {bearish, bullish} to a
+// single unified {candidates} list (see emaxNumberNomination) - bumped so
+// a stale v1 cached result never gets rendered against the new UI code
+// expecting the new shape; it's just re-run, not migrated.
+const EMAX_NOMINATION_RESULT_KEY = 'numerology_emax_nomination_v2';
 
 function emaxNominationBucketAdd(map, key, isNegative, isAchievement, magnitude) {
   if (!map.has(key)) map.set(key, { n: 0, negative: 0, achievement: 0, magnitudeSum: 0 });
@@ -1145,21 +1149,32 @@ function emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, tri
 
 // Below EMAX_NOMINATION_MIN_N a bucket's rate is noise, not a signal - a
 // number only 2 items have ever lived through can't nominate itself, no
-// matter how extreme its tiny sample looks.
+// matter how extreme its tiny sample looks. isBearish/isBullish are NOT
+// mutually exclusive (2026-08-02) - a bucket can genuinely run hot on both
+// negative AND achievement events at once (more happens overall in an
+// eventful year, not specifically good or bad), so a candidate only gets
+// dropped here when it clears neither bar.
 function emaxNominationCandidates(map, baselineNegativeRate, baselineAchievementRate) {
   const list = [];
   map.forEach((b, key) => {
     if (b.n < EMAX_NOMINATION_MIN_N) return;
     const negativeRate = b.negative / b.n;
     const achievementRate = b.achievement / b.n;
+    const deltaNegative = negativeRate - baselineNegativeRate;
+    const deltaAchievement = achievementRate - baselineAchievementRate;
+    const isBearish = deltaNegative > 0;
+    const isBullish = deltaAchievement > 0;
+    if (!isBearish && !isBullish) return;
     list.push({
       key,
       n: b.n,
       negativeRate,
       achievementRate,
       avgMagnitude: b.magnitudeSum / b.n,
-      deltaNegative: negativeRate - baselineNegativeRate,
-      deltaAchievement: achievementRate - baselineAchievementRate,
+      deltaNegative,
+      deltaAchievement,
+      isBearish,
+      isBullish,
     });
   });
   return list;
@@ -1212,12 +1227,22 @@ async function emaxNumberNomination(db, onProgress) {
   const baselineNegativeRate = overall.n ? overall.negative / overall.n : 0;
   const baselineAchievementRate = overall.n ? overall.achievement / overall.n : 0;
   const dimensions = {};
+  // 2026-08-02 rework: one unified, ranked list per dimension instead of
+  // two side-by-side bearish/bullish arrays - a dual candidate (elevated on
+  // BOTH sides, like Own Year usually is) used to appear twice, in both
+  // columns, with identical numbers and no explanation, which read like a
+  // bug rather than a real (if nuanced) finding. Selection is unchanged
+  // (still top 5 by each direction's own delta), just merged into one set
+  // and re-sorted by whichever signal is strongest for that candidate.
   Object.keys(dims).forEach((dim) => {
     const candidates = emaxNominationCandidates(dims[dim], baselineNegativeRate, baselineAchievementRate);
-    dimensions[dim] = {
-      bearish: candidates.filter((c) => c.deltaNegative > 0).sort((a, b) => b.deltaNegative - a.deltaNegative).slice(0, 5),
-      bullish: candidates.filter((c) => c.deltaAchievement > 0).sort((a, b) => b.deltaAchievement - a.deltaAchievement).slice(0, 5),
-    };
+    const topBearish = candidates.filter((c) => c.isBearish).sort((a, b) => b.deltaNegative - a.deltaNegative).slice(0, 5);
+    const topBullish = candidates.filter((c) => c.isBullish).sort((a, b) => b.deltaAchievement - a.deltaAchievement).slice(0, 5);
+    const merged = new Map();
+    topBearish.forEach((c) => merged.set(c.key, c));
+    topBullish.forEach((c) => merged.set(c.key, c));
+    const unified = [...merged.values()].sort((a, b) => Math.max(b.deltaNegative, b.deltaAchievement) - Math.max(a.deltaNegative, a.deltaAchievement));
+    dimensions[dim] = { candidates: unified };
   });
 
   return {
@@ -1228,6 +1253,85 @@ async function emaxNumberNomination(db, onProgress) {
     baselineAchievementRate,
     dimensions,
   };
+}
+
+/* ---- Tap-to-detail (2026-08-02) - "who and what actually happened" ----
+ * Deliberately NOT stored alongside the Audit/Nomination results
+ * themselves - the collection is thousands of entries deep, and baking
+ * every matching (entry, year) reference into the cached result would
+ * bloat EMAX_AUDIT_RESULT_KEY/EMAX_NOMINATION_RESULT_KEY by hundreds of KB
+ * to MB, reintroducing the exact localStorage-quota risk saveEmaxDB was
+ * just hardened against. Instead these re-scan the live db fresh, on tap,
+ * using the exact same bucket-assignment logic the aggregate scans use -
+ * cheap (pure in-memory, no fetches) and always consistent with whatever
+ * db currently holds. */
+
+function emaxAuditDetailEntries(db, is7or11, tagFilter) {
+  const results = [];
+  const nowYear = new Date().getFullYear();
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => {
+      if (!entry.date) return;
+      const birthDate = parseDateStr(entry.date);
+      for (let year = birthDate.getFullYear(); year <= nowYear; year++) {
+        const py = emaxPersonalYearForYear(birthDate, year);
+        if ((py === 7 || py === 11) !== is7or11) continue;
+        const ev = entry.timelineEvents && entry.timelineEvents[year];
+        if (!ev) continue;
+        if (tagFilter === 'negative' && !(ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)))) continue;
+        results.push({
+          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year,
+          text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
+        });
+      }
+    });
+  });
+  results.sort((a, b) => b.year - a.year);
+  return results;
+}
+
+// Same 4 bucket-assignment rules emaxNumberNomination's own scan uses,
+// re-derived per (entry, year) rather than shared via a common helper -
+// matches this file's existing convention of parallel, independently-
+// readable scan loops (emax711Audit/emaxNumberNomination already don't
+// share their own loop bodies either) rather than a shared abstraction
+// that would obscure either caller's own logic.
+function emaxNominationDetailEntries(db, dimension, key) {
+  const results = [];
+  const nowYear = new Date().getFullYear();
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => {
+      if (!entry.date) return;
+      const birthDate = parseDateStr(entry.date);
+      const ownAnimal = getChineseZodiacYear(birthDate);
+      const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+      const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
+      const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
+      const lifePath = getLifePathNumeric(birthDate);
+      for (let year = birthDate.getFullYear(); year <= nowYear; year++) {
+        const personalYear = emaxPersonalYearForYear(birthDate, year);
+        const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+        const isOwnYear = yearAnimal === ownAnimal;
+        const isEnemyYear = yearAnimal === enemyAnimal;
+        const isTrineYear = trineAnimals.includes(yearAnimal);
+        const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
+        const relation = isOwnYear ? 'own' : (isEnemyYear ? 'enemy' : (isTrineYear ? 'trine' : (isFriendlyYear ? 'friendly' : 'neutral')));
+        let bucketKey;
+        if (dimension === 'personalYear') bucketKey = String(personalYear);
+        else if (dimension === 'zodiacRelation') bucketKey = relation;
+        else if (dimension === 'lifePath') bucketKey = String(lifePath);
+        else if (dimension === 'ownAnimal') bucketKey = ownAnimal;
+        if (bucketKey !== key) continue;
+        const ev = entry.timelineEvents && entry.timelineEvents[year];
+        results.push({
+          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year,
+          text: ev ? ev.text : null, tags: ev && ev.tags ? ev.tags : [], manual: !!(ev && ev.manual),
+        });
+      }
+    });
+  });
+  results.sort((a, b) => b.year - a.year);
+  return results;
 }
 
 /* ===================== Reverse Lookup ===================== */

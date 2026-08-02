@@ -7113,6 +7113,15 @@ button.emax-fact-tile-tap {
   border-radius: 8px;
   padding: 10px 12px;
   text-align: center;
+  /* button reset (2026-08-02 - tiles became tappable) */
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+.emax-audit-stat:hover {
+  border-color: var(--yellow);
 }
 .emax-audit-stat-label {
   font-size: 0.68rem;
@@ -7132,6 +7141,12 @@ button.emax-fact-tile-tap {
   margin-top: 2px;
 }
 
+.emax-nomination-explainer {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: italic;
+  margin-bottom: 14px;
+}
 .emax-nomination-dimension {
   margin-bottom: 16px;
 }
@@ -7140,48 +7155,118 @@ button.emax-fact-tile-tap {
   font-size: 0.9rem;
   margin-bottom: 8px;
 }
-.emax-nomination-columns {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-.emax-nomination-column-label {
-  font-size: 0.68rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 6px;
-}
 .emax-nomination-candidate {
+  display: block;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   margin-bottom: 6px;
+  width: 100%;
+  text-align: left;
+  /* button reset (2026-08-02 - candidates became tappable) */
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.emax-nomination-candidate:hover {
+  border-color: var(--yellow);
 }
 .emax-nomination-candidate-name {
   font-weight: 700;
   font-size: 0.85rem;
+  margin-bottom: 4px;
 }
-.emax-nomination-candidate-rate {
-  font-size: 0.9rem;
+.emax-nomination-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.emax-nomination-badge {
+  font-size: 0.8rem;
   font-weight: 800;
-  color: var(--yellow);
+  padding: 2px 8px;
+  border-radius: 10px;
 }
-.emax-nomination-candidate-delta {
+.emax-nomination-badge.bearish {
+  color: var(--bad);
+  background: rgba(229, 57, 63, 0.15);
+}
+.emax-nomination-badge.bullish {
+  color: var(--good);
+  background: rgba(139, 195, 74, 0.15);
+}
+.emax-nomination-delta {
   font-size: 0.7rem;
   font-weight: 500;
+  opacity: 0.8;
+}
+.emax-nomination-both-note {
+  font-size: 0.72rem;
   color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
 }
 .emax-nomination-candidate-n {
   font-size: 0.72rem;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .emax-nomination-empty {
   color: var(--muted);
   font-size: 0.8rem;
   font-style: italic;
+}
+
+.emax-detail-summary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 6px 0 14px;
+}
+.emax-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.emax-detail-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.emax-detail-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.emax-detail-row-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.emax-detail-row-year {
+  font-weight: 700;
+  color: var(--yellow);
+  font-size: 0.85rem;
+}
+.emax-detail-row-cat {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+.emax-detail-row-text {
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.emax-detail-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .reverse-lookup-filters {
