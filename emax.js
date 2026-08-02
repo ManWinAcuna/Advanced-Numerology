@@ -508,6 +508,11 @@ emaxRenderNominationResults();
  * own call, which also means the cap keeps the most relevant ones. */
 const EMAX_DETAIL_MAX_ROWS = 300;
 
+// Personal Year shown per row (2026-08-02, real user report: "it doesn't
+// tell me what personal year it was") - a bucket like "Personal Year 7/11 -
+// Any Event" lumps both numbers together, and every Nomination dimension
+// besides personalYear itself never showed the number driving that year's
+// own numerology read at all.
 function emaxDetailRowHtml(e) {
   const tagsHtml = e.tags.length
     ? `<div class="emax-detail-row-tags">${e.tags.map((t) => `<span class="emax-timeline-tag-pill">${escapeHtml(t.charAt(0).toUpperCase() + t.slice(1))}</span>`).join('')}</div>`
@@ -518,7 +523,7 @@ function emaxDetailRowHtml(e) {
         <span class="emax-detail-row-name">${escapeHtml(e.entryName)}</span>
         <span class="emax-detail-row-year">${e.year}</span>
       </div>
-      <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)}</div>
+      <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)} &middot; Personal Year ${e.personalYear}</div>
       <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
       ${tagsHtml}
     </div>`;

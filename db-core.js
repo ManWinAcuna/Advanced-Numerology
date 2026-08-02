@@ -748,18 +748,63 @@ function emaxMatchedTags(sentence) {
   return Object.keys(EMAX_TAG_KEYWORDS).filter((tag) => EMAX_TAG_KEYWORDS[tag].test(sentence));
 }
 
+// {{templates}} can nest (a field's own value can be another template, e.g.
+// a Certification Table Entry whose artist field contains a nested
+// {{small|...}}) - a single non-nesting regex only ever strips the
+// INNERMOST level, leaking the outer template's own {{ }} boundaries and
+// pipe-delimited fields as visible garbage (found live, 2026-08-02: a real
+// user-reported garbled excerpt - "award=Platinum|type=single|relyear=
+// 2019|...}} {{Certification Table Entry|region=Sweden|artist=..."). Strips
+// one full balanced template at a time, from the outside in, so nesting of
+// any depth is fully removed rather than just the shallowest layer.
+function stripWikiTemplates(text) {
+  let result = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === '{' && text[i + 1] === '{') {
+      let depth = 1;
+      let j = i + 2;
+      while (j < text.length && depth > 0) {
+        if (text[j] === '{' && text[j + 1] === '{') { depth += 1; j += 2; }
+        else if (text[j] === '}' && text[j + 1] === '}') { depth -= 1; j += 2; }
+        else j += 1;
+      }
+      result += ' ';
+      i = j;
+    } else {
+      result += text[i];
+      i += 1;
+    }
+  }
+  return result;
+}
+
 // wikitext still has [[links]], '''bold''', {{templates}} at this point (the
 // existing date-parsing cascade above never needed to strip these - it only
 // ever fed sentences into a date REGEX, never showed them to a user) - this
 // is display-only cleanup so a shown excerpt reads like plain prose.
 function stripWikiMarkupForDisplay(text) {
-  return text
-    .replace(/\{\{[^{}]*\}\}/g, ' ')
+  return stripWikiTemplates(text)
     .replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, '$1')
     .replace(/'''?([^']*)'''?/g, '$1')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Final safety net after cleaning - real prose essentially never contains a
+// raw brace (stripping failed to fully remove a template), a template/table
+// pipe separator, or a bare key=value field. All three are near-certain
+// signs the "sentence" is actually leaked wikitext markup (a certification-
+// table row, an unstripped template) rather than something that happened to
+// the subject - this is exactly what let "award=Platinum|type=single|..."
+// through before: "award" is a template FIELD NAME here, not the English
+// word, but it still matched the achievement keyword regex.
+function emaxLooksLikeLeakedMarkup(text) {
+  if (/[{}]/.test(text)) return true;
+  if (text.includes('|')) return true;
+  if (/\b[a-zA-Z]\w*=[^\s=]/.test(text)) return true;
+  return false;
 }
 
 // Crude sentence split, same as extractProseLaunchDate above - only a
@@ -778,6 +823,7 @@ function extractYearEventFromWikitext(wikitext, year) {
     if (!yearRe.test(raw) || !tags.length) continue;
     const clean = stripWikiMarkupForDisplay(raw);
     if (clean.length < 15 || clean.length > 320) continue;
+    if (emaxLooksLikeLeakedMarkup(clean)) continue;
     return { text: clean, tags };
   }
   return null;
@@ -1280,7 +1326,7 @@ function emaxAuditDetailEntries(db, is7or11, tagFilter) {
         if (!ev) continue;
         if (tagFilter === 'negative' && !(ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)))) continue;
         results.push({
-          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year,
+          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear: py,
           text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
         });
       }
@@ -1324,7 +1370,7 @@ function emaxNominationDetailEntries(db, dimension, key) {
         if (bucketKey !== key) continue;
         const ev = entry.timelineEvents && entry.timelineEvents[year];
         results.push({
-          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year,
+          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear,
           text: ev ? ev.text : null, tags: ev && ev.tags ? ev.tags : [], manual: !!(ev && ev.manual),
         });
       }
