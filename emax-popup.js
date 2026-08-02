@@ -1,7 +1,7 @@
-/* ===================== EMAX Item Popup (shared) =====================
+/* ===================== EMAX Item Popup + Timeline (shared) =====================
  * Moved out of emax-category.js (2026-08-02) so the Audit/Nomination
- * "tap-to-detail" list on emax.html can open the exact same item popup
- * in place, instead of needing to navigate to that item's category page
+ * "tap-to-detail" list on emax.html can open the exact same popups in
+ * place, instead of needing to navigate to that item's category page
  * first. Loaded on BOTH emax-category.html and emax.html, after
  * db-core.js/compat-engine.js/compat-render.js/emax-seed-data.js and
  * before that page's own script.
@@ -15,6 +15,10 @@
  * with Edit navigating to the real owning category page (the add/edit
  * form only exists there) and Delete working in place via the
  * category-agnostic emaxRemoveEntryById (db-core.js).
+ *
+ * openTimelineModal (tapping the item popup's own image) never had any
+ * page-scoped dependency at all - it already worked purely off `db` and
+ * the entry itself, so it moved over unchanged, no branching needed.
  */
 
 const EMAX_IMAGE_CACHE_KEY = 'numerology_emax_images_v1';
@@ -511,9 +515,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
 
     const imageEl = e.target.closest('#itemModalImage');
     if (imageEl) {
-      // Only defined on emax-category.html (the Timeline mini-popup) - a
-      // no-op on emax.html rather than a ReferenceError.
-      if (typeof openTimelineModal === 'function') openTimelineModal(entry, themDate);
+      openTimelineModal(entry, themDate);
       return;
     }
 
@@ -605,4 +607,289 @@ document.getElementById('itemModalBody').addEventListener('click', (e) => {
 document.getElementById('itemModalClose').addEventListener('click', closeItemModal);
 document.getElementById('itemModalOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'itemModalOverlay') closeItemModal();
+});
+
+/* ===================== Timeline mini-popup (2026-08-01) ===================== */
+// The pure computation (emaxEnemyZodiacAnimal, emaxTrineZodiacAnimals,
+// emaxFriendlyZodiacAnimals, emaxPersonalYearForYear, emaxTimelineYearVerdict,
+// emaxBuildTimeline, emaxFetchYearEvents) lives in db-core.js - none of them
+// ever depended on a page-scoped `category`, just the ordinary shared-
+// global-scope pattern every script in this app already relies on.
+
+function emaxTimelineFindEntryById(entryId) {
+  for (const cat of db.categories) {
+    const found = cat.entries.find((e) => e.id === entryId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Ordered so the picker and any future tag-frequency listing render
+// consistently. "other" has no auto-detection tie in EMAX_TAG_KEYWORDS
+// (db-core.js) - a manual-only fallback for whatever doesn't fit the rest.
+const EMAX_TIMELINE_TAGS = [
+  { key: 'health', label: 'Health', emoji: '🏥' },
+  { key: 'career', label: 'Career', emoji: '💼' },
+  { key: 'relationship', label: 'Relationship', emoji: '💞' },
+  { key: 'financial', label: 'Financial', emoji: '💰' },
+  { key: 'achievement', label: 'Achievement', emoji: '🏆' },
+  { key: 'loss', label: 'Loss', emoji: '💔' },
+  { key: 'other', label: 'Other', emoji: '🔹' },
+];
+function emaxTagEmoji(key) {
+  const tag = EMAX_TIMELINE_TAGS.find((t) => t.key === key);
+  return tag ? tag.emoji : '';
+}
+
+// Module-level, reset at the top of every openTimelineModal call - only one
+// timeline popup is ever open at a time, same convention as
+// emaxPreloading/pendingWikiTitle elsewhere in this app.
+let emaxTimelineExpandedYear = null;
+let emaxTimelineEditingYear = null;
+// Which tags are checked in the currently-open edit form - starts from the
+// event's own saved tags (or empty for a fresh note), mutated by tag-toggle
+// clicks before Save writes it back onto the entry.
+let emaxTimelineEditingTags = [];
+// Only ever set right before a tag-toggle click re-renders the whole
+// timeline body - preserves whatever's typed but not yet saved in the
+// textarea, which would otherwise reset back to the stored text on every
+// tag click (a real re-render, same "rebuild the whole innerHTML" pattern
+// every other piece of UI in this app already uses). Cleared on save/cancel
+// and whenever a fresh edit starts.
+let emaxTimelineDraftText = null;
+let emaxTimelineCurrentEntryId = null;
+let emaxTimelineCurrentTimeline = null;
+
+// |magnitude| >= 2 means at least 2 stacked/reinforcing signals landed on
+// this one year (e.g. Enemy Year + Personal Year 7 + a confirmed negative
+// event) - gets a visibly heavier chip so a severe year doesn't read
+// identically to one that's only barely on the bad/good side.
+function emaxTimelineChipHtml(year, verdict, tags, magnitude) {
+  const expanded = String(year) === String(emaxTimelineExpandedYear);
+  const severe = typeof magnitude === 'number' && Math.abs(magnitude) >= 2;
+  const tagPrefix = (tags && tags.length) ? tags.map(emaxTagEmoji).join('') + ' ' : '';
+  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}${severe ? ' severe' : ''}" data-year="${year}">${tagPrefix}${year}</button>`;
+}
+
+function emaxTagPickerHtml() {
+  return `<div class="emax-tag-picker">${EMAX_TIMELINE_TAGS.map((t) => `<button type="button" class="emax-tag-chip${emaxTimelineEditingTags.includes(t.key) ? ' active' : ''}" data-tag-toggle="${t.key}">${t.emoji} ${t.label}</button>`).join('')}</div>`;
+}
+
+// Plain-English severity line ("Severity: -2 (2 stacked reasons)") - shown
+// regardless of whether an event was ever found, since the BASE half of
+// magnitude (signal-stacking) is always known immediately; only the event
+// bonus half needs a resolved fetch.
+function emaxTimelineSeverityLabel(magnitude) {
+  if (magnitude > 0) return `+${magnitude} (leans good)`;
+  if (magnitude < 0) return `${magnitude} (leans bad)`;
+  return '0 (mixed/neutral)';
+}
+
+// A year's expand/edit row is rendered once per SECTION it appears in (the
+// same year, e.g. 2019, can be both an Own Year and a Personal Year 7 at
+// once - see emaxTimelineYearVerdict) - always the same underlying note,
+// shown consistently wherever that year is flagged.
+function emaxTimelineEventRowHtml(entry, year, magnitude) {
+  const ev = entry.timelineEvents && entry.timelineEvents[year];
+  const editing = String(year) === String(emaxTimelineEditingYear);
+  const severityHtml = typeof magnitude === 'number'
+    ? `<div class="emax-timeline-severity">Severity: ${emaxTimelineSeverityLabel(magnitude)}</div>`
+    : '';
+  if (editing) {
+    const current = emaxTimelineDraftText != null ? emaxTimelineDraftText : (ev ? ev.text : '');
+    return `
+      <div class="emax-timeline-event-row emax-timeline-event-edit">
+        <textarea id="emaxTimelineNoteInput" placeholder="What happened this year?">${escapeHtml(current)}</textarea>
+        ${emaxTagPickerHtml()}
+        <div class="emax-timeline-event-actions">
+          <button type="button" class="btn-link" data-year-save="${year}">Save</button>
+          <button type="button" class="btn-link" data-year-cancel="${year}">Cancel</button>
+        </div>
+      </div>`;
+  }
+  if (ev) {
+    const tagsHtml = (ev.tags && ev.tags.length)
+      ? `<div class="emax-timeline-event-tags">${ev.tags.map((k) => `<span class="emax-timeline-tag-pill">${emaxTagEmoji(k)} ${EMAX_TIMELINE_TAGS.find((t) => t.key === k) ? EMAX_TIMELINE_TAGS.find((t) => t.key === k).label : k}</span>`).join('')}</div>`
+      : '';
+    return `
+      <div class="emax-timeline-event-row">
+        <div class="emax-timeline-event-text">${escapeHtml(ev.text)}</div>
+        ${tagsHtml}
+        ${severityHtml}
+        <div class="emax-timeline-event-meta">
+          <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
+          <button type="button" class="btn-link" data-year-edit="${year}">Edit</button>
+        </div>
+      </div>`;
+  }
+  if (entry.timelineEvents === undefined) {
+    return `<div class="emax-timeline-event-row emax-timeline-event-loading">Looking up what happened...${severityHtml}</div>`;
+  }
+  return `
+    <div class="emax-timeline-event-row emax-timeline-event-empty">
+      <span>Nothing found for this year</span>
+      ${severityHtml}
+      <button type="button" class="btn-link" data-year-edit="${year}">+ Add note</button>
+    </div>`;
+}
+
+function emaxTimelineSectionHtml(entry, title, years) {
+  const chipsHtml = years.length
+    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict, magnitude }) => {
+        const ev = entry.timelineEvents && entry.timelineEvents[year];
+        return emaxTimelineChipHtml(year, verdict, ev && ev.tags, magnitude);
+      }).join('')}</div>`
+    : '<div class="emax-timeline-empty">None yet</div>';
+  const expandedYearObj = years.find(({ year }) => String(year) === String(emaxTimelineExpandedYear));
+  const eventRowHtml = expandedYearObj ? emaxTimelineEventRowHtml(entry, expandedYearObj.year, expandedYearObj.magnitude) : '';
+  return `
+    <div class="emax-timeline-section">
+      <div class="emax-timeline-section-title">${escapeHtml(title)}</div>
+      ${chipsHtml}
+      ${eventRowHtml}
+    </div>`;
+}
+
+function emaxTimelineZodiacGroupTitle(animals, label) {
+  const emojis = animals.map((a) => VIETNAMESE_ZODIAC_EMOJI[a] || '').join('');
+  return `${emojis} ${label}${animals.length > 1 ? 's' : ''} (${animals.join(', ')})`;
+}
+
+// "Worst Year: 2001, 2013 (-2)" - lists every tied year rather than
+// arbitrarily picking one (same honesty convention as Tiger's own 3-way
+// friendly-animal tie). Omitted entirely when nothing's been flagged yet
+// (worstYears/bestYears both empty - too early in a short lifetime for any
+// signal to have landed at all).
+function emaxMagnitudeSigned(m) {
+  return m > 0 ? `+${m}` : `${m}`;
+}
+
+function emaxTimelineHeadlineHtml(timeline) {
+  const { worstYears, worstMagnitude, bestYears, bestMagnitude } = timeline;
+  if (!worstYears.length && !bestYears.length) return '';
+  const worstPart = worstYears.length ? `Worst Year${worstYears.length > 1 ? 's' : ''}: ${worstYears.join(', ')} (${emaxMagnitudeSigned(worstMagnitude)})` : '';
+  const bestPart = bestYears.length ? `Best Year${bestYears.length > 1 ? 's' : ''}: ${bestYears.join(', ')} (${emaxMagnitudeSigned(bestMagnitude)})` : '';
+  return `<div class="emax-timeline-headline">${[worstPart, bestPart].filter(Boolean).join(' · ')}</div>`;
+}
+
+function renderTimelineBody(entry, timeline) {
+  const { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
+  // friendlyAnimals is already pre-filtered (emaxBuildTimeline) down to
+  // matches NOT already covered by the trine group - when that leaves
+  // nothing, the whole section is skipped rather than shown empty, since
+  // "None yet" would misleadingly read as "no friendly years exist" when
+  // really they're just already covered by Trine above.
+  const friendlySectionHtml = friendlyAnimals.length
+    ? emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(friendlyAnimals, 'Friendly Year'), friendlyYears)
+    : '';
+  document.getElementById('emaxTimelineBody').innerHTML = `
+    <div class="box-label">${escapeHtml(entry.name)}'s Timeline</div>
+    ${emaxTimelineHeadlineHtml(timeline)}
+    ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[ownAnimal] || ''} Own Year (${ownAnimal})`, ownYears)}
+    ${emaxTimelineSectionHtml(entry, emaxTimelineZodiacGroupTitle(trineAnimals, 'Trine Year'), trineYears)}
+    ${friendlySectionHtml}
+    ${emaxTimelineSectionHtml(entry, `${VIETNAMESE_ZODIAC_EMOJI[enemyAnimal] || ''} Enemy Year (${enemyAnimal})`, enemyYears)}
+    ${emaxTimelineSectionHtml(entry, 'Personal Year 7', py7Years)}
+    ${emaxTimelineSectionHtml(entry, 'Personal Year 11', py11Years)}
+  `;
+}
+
+async function openTimelineModal(entry, birthDate) {
+  let timeline = emaxBuildTimeline(birthDate, entry);
+  emaxTimelineExpandedYear = null;
+  emaxTimelineEditingYear = null;
+  emaxTimelineEditingTags = [];
+  emaxTimelineDraftText = null;
+  emaxTimelineCurrentEntryId = entry.id;
+  emaxTimelineCurrentTimeline = timeline;
+  renderTimelineBody(entry, timeline);
+  document.getElementById('emaxTimelineOverlay').classList.add('active');
+
+  if (entry.timelineEvents === undefined) {
+    const { ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
+    const years = [...new Set([...ownYears, ...trineYears, ...friendlyYears, ...enemyYears, ...py7Years, ...py11Years].map((y) => y.year))];
+    await emaxFetchYearEvents(entry, years);
+    // The popup may have moved on to a different entry (or closed) while
+    // this fetch was in flight - only repaint if we're still looking at it.
+    // Rebuilds the timeline (not just re-rendering the old one) - every
+    // year's magnitude bakes in whatever event bonus is now resolved,
+    // which wasn't available yet on the first build above.
+    if (emaxTimelineCurrentEntryId === entry.id) {
+      timeline = emaxBuildTimeline(birthDate, entry);
+      emaxTimelineCurrentTimeline = timeline;
+      renderTimelineBody(entry, timeline);
+    }
+  }
+}
+
+function closeTimelineModal() {
+  document.getElementById('emaxTimelineOverlay').classList.remove('active');
+}
+
+document.getElementById('emaxTimelineClose').addEventListener('click', closeTimelineModal);
+document.getElementById('emaxTimelineOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'emaxTimelineOverlay') closeTimelineModal();
+});
+
+document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
+  const timelineEntry = emaxTimelineFindEntryById(emaxTimelineCurrentEntryId);
+  if (!timelineEntry || !emaxTimelineCurrentTimeline) return;
+
+  const saveBtn = e.target.closest('[data-year-save]');
+  if (saveBtn) {
+    const year = saveBtn.dataset.yearSave;
+    const text = document.getElementById('emaxTimelineNoteInput').value.trim();
+    timelineEntry.timelineEvents = timelineEntry.timelineEvents || {};
+    if (text) timelineEntry.timelineEvents[year] = { text, tags: emaxTimelineEditingTags.slice(), manual: true };
+    else delete timelineEntry.timelineEvents[year];
+    saveEmaxDB(db);
+    emaxTimelineEditingYear = null;
+    emaxTimelineEditingTags = [];
+    emaxTimelineDraftText = null;
+    // Rebuilds (not just re-renders the old one) - the tags just saved
+    // can change that year's magnitude (emaxYearEventMagnitudeBonus),
+    // which was baked in at the timeline's last build, before this save.
+    emaxTimelineCurrentTimeline = emaxBuildTimeline(parseDateStr(timelineEntry.date), timelineEntry);
+    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    return;
+  }
+  const cancelBtn = e.target.closest('[data-year-cancel]');
+  if (cancelBtn) {
+    emaxTimelineEditingYear = null;
+    emaxTimelineEditingTags = [];
+    emaxTimelineDraftText = null;
+    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    return;
+  }
+  // Toggling a tag re-renders the whole timeline body (same "rebuild from
+  // state" pattern as everything else here) - capture whatever's already
+  // typed in the textarea first, or it would reset back to the saved text.
+  const tagBtn = e.target.closest('[data-tag-toggle]');
+  if (tagBtn) {
+    emaxTimelineDraftText = document.getElementById('emaxTimelineNoteInput').value;
+    const tag = tagBtn.dataset.tagToggle;
+    const idx = emaxTimelineEditingTags.indexOf(tag);
+    if (idx === -1) emaxTimelineEditingTags.push(tag); else emaxTimelineEditingTags.splice(idx, 1);
+    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    return;
+  }
+  const editBtn = e.target.closest('[data-year-edit]');
+  if (editBtn) {
+    emaxTimelineEditingYear = editBtn.dataset.yearEdit;
+    emaxTimelineExpandedYear = emaxTimelineEditingYear;
+    const existingEvent = timelineEntry.timelineEvents && timelineEntry.timelineEvents[emaxTimelineEditingYear];
+    emaxTimelineEditingTags = (existingEvent && existingEvent.tags) ? existingEvent.tags.slice() : [];
+    emaxTimelineDraftText = null;
+    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    return;
+  }
+  const chip = e.target.closest('.emax-timeline-chip');
+  if (chip) {
+    const year = chip.dataset.year;
+    emaxTimelineEditingYear = null;
+    emaxTimelineEditingTags = [];
+    emaxTimelineDraftText = null;
+    emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(year)) ? null : year;
+    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+  }
 });
