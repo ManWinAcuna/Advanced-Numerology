@@ -261,7 +261,10 @@ function stocksTransitSignal(bodyKey, natalSunLon, onDate) {
   const aspect = STOCKS_ASPECTS.find((a) => Math.abs(diff - a.angle) <= a.orb);
   if (!aspect) return null;
   const dir = aspect.key === 'conjunction' ? STOCKS_TRANSIT_CONJUNCTION_DIR[bodyKey] : STOCKS_TRANSIT_ASPECT_DIR[aspect.key];
-  return dir ? { dir, why: `${bodyKey} ${aspect.key} natal Sun` } : null;
+  // aspect.key added 2026-08-02 for the Transit Backtest's own by-aspect
+  // breakdown - existing callers only ever destructured dir/why, so this is
+  // purely additive.
+  return dir ? { dir, why: `${bodyKey} ${aspect.key} natal Sun`, aspect: aspect.key } : null;
 }
 
 // All active transit signals for one anchor at one timeframe, on a given
@@ -272,6 +275,207 @@ function stocksTransitSignalsFor(anchorDate, level, onDate) {
   return STOCKS_TRANSIT_PLANETS[level]
     .map((body) => stocksTransitSignal(body, natalSunLon, onDate))
     .filter(Boolean);
+}
+
+/* ===================== Transit Backtest (2026-08-02, CODE13 backlog 8/8) =====================
+ * Validates the transit-aspect signal above against real historical price
+ * moves. Standalone from the Combined Track Record's own persisted ledger
+ * (per the user's own call) - reuses the SAME cached daily price history
+ * (STOCKS_CYCLES_PX_CACHE_KEY, via stocksFetchSeries) that ledger already
+ * warms, rather than a separate fetch, but never touches that ledger's own
+ * store or versioning.
+ *
+ * Grades a plain point-to-point return over a FIXED holding period keyed
+ * to each planet's own cadence (Moon=1 trading day, Mercury/Venus/Mars=21,
+ * Jupiter through Pluto=252 - the user's own call) - not the path-based
+ * Right/Wrong/Mixed grading Calendar/Cal+Price use, since a transit signal
+ * fires on an arbitrary day with no cycle-window boundary to grade a path
+ * against. Binary right/wrong on whether the return's sign matched the
+ * predicted direction - no "mixed" band, since there is no established
+ * flat-return threshold for this simpler point-return shape to reuse.
+ */
+const STOCKS_TRANSIT_HOLD_DAYS = { day: 1, month: 21, year: 252 };
+
+function stocksTransitPlanetLevel(bodyKey) {
+  return Object.keys(STOCKS_TRANSIT_PLANETS).find((level) => STOCKS_TRANSIT_PLANETS[level].includes(bodyKey));
+}
+
+// Every active transit signal on one date, across all 9 planets - unlike
+// stocksTransitSignalsFor (which only checks whichever ONE level's planets
+// the live signal display cares about at a time), a backtest needs every
+// planet's own independent read on every day.
+function stocksTransitAllSignalsOnDate(natalSunLon, onDate) {
+  return Object.values(STOCKS_TRANSIT_PLANETS).flat()
+    .map((bodyKey) => {
+      const signal = stocksTransitSignal(bodyKey, natalSunLon, onDate);
+      return signal ? { bodyKey, level: stocksTransitPlanetLevel(bodyKey), ...signal } : null;
+    })
+    .filter(Boolean);
+}
+
+// One anchor's full backtest across its own price history - every bar with
+// an active signal, graded against the real return over that planet's own
+// fixed holding period. A signal too close to the end of the available
+// history (not enough future bars to reach its holding period yet) is
+// skipped rather than graded on a truncated window.
+function stocksTransitBacktestAnchor(anchorDate, bars) {
+  const natalSunLon = astroEclipticLongitude('Sun', anchorDate);
+  const trades = [];
+  for (let i = 0; i < bars.length; i++) {
+    const onDate = stocksParseDate(bars[i][0]);
+    stocksTransitAllSignalsOnDate(natalSunLon, onDate).forEach((sig) => {
+      const holdDays = STOCKS_TRANSIT_HOLD_DAYS[sig.level];
+      const exitIdx = i + holdDays;
+      if (exitIdx >= bars.length) return;
+      const entryClose = bars[i][4];
+      const exitClose = bars[exitIdx][4];
+      const returnPct = ((exitClose - entryClose) / entryClose) * 100;
+      const predictedUp = sig.dir === 'bull';
+      const grade = (returnPct > 0) === predictedUp && returnPct !== 0 ? 'right' : 'wrong';
+      trades.push({
+        date: bars[i][0], bodyKey: sig.bodyKey, level: sig.level, aspect: sig.aspect, dir: sig.dir,
+        returnPct: Math.round(returnPct * 100) / 100, grade,
+      });
+    });
+  }
+  return trades;
+}
+
+function stocksTransitTally(list) {
+  const right = list.filter((t) => t.grade === 'right').length;
+  return { n: list.length, right, wrong: list.length - right, rate: list.length ? right / list.length : null };
+}
+
+// Flat trade list -> overall / by-aspect-type / by-planet win rates, per
+// the user's own "all of them" call on backtest output.
+function stocksTransitAggregate(trades) {
+  const overall = stocksTransitTally(trades);
+  const byAspect = {};
+  STOCKS_ASPECTS.forEach((a) => { byAspect[a.key] = stocksTransitTally(trades.filter((t) => t.aspect === a.key)); });
+  const byPlanet = {};
+  Object.values(STOCKS_TRANSIT_PLANETS).flat().forEach((bodyKey) => { byPlanet[bodyKey] = stocksTransitTally(trades.filter((t) => t.bodyKey === bodyKey)); });
+  return { overall, byAspect, byPlanet };
+}
+
+// Runs the backtest across every instrument's primary anchor(s), fetching
+// (or reusing the day's already-cached) price history one instrument at a
+// time - same throttle as every other price-history loop on this page,
+// since Twelve Data's free tier caps at 8 credits/minute.
+async function stocksTransitBacktestAll(instruments, onProgress) {
+  let allTrades = [];
+  for (let i = 0; i < instruments.length; i++) {
+    const inst = instruments[i];
+    const anchors = inst.anchors.filter((a) => a.primary && a.date);
+    if (anchors.length) {
+      const wasCached = stocksCyclesCacheHit(inst.px.symbol);
+      const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+      anchors.forEach((a) => {
+        allTrades = allTrades.concat(stocksTransitBacktestAnchor(stocksParseDate(a.date), bars));
+      });
+      if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
+    }
+    if (onProgress) onProgress(i + 1, instruments.length);
+  }
+  return { ranAt: new Date().toISOString(), instrumentCount: instruments.length, ...stocksTransitAggregate(allTrades) };
+}
+
+/* ---- Transit Backtest UI - own instruments var, own result cache, both
+   deliberately separate from the Combined Track Record above (stocksCombinedInstruments,
+   STOCKS_COMBINED_STORE_KEY) per the "standalone" call this feature's own
+   clarifying round settled on. ---- */
+const STOCKS_TRANSIT_RESULT_KEY = 'numerology_stock_transit_backtest_v1';
+let stocksTransitCollapsed = true;
+let stocksTransitRunning = false;
+let stocksTransitInstruments = null;
+
+function stocksTransitLoadResult() {
+  try {
+    const raw = localStorage.getItem(STOCKS_TRANSIT_RESULT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function stocksTransitSaveResult(result) {
+  try { localStorage.setItem(STOCKS_TRANSIT_RESULT_KEY, JSON.stringify(result)); } catch (e) { /* storage full - still shown this session */ }
+}
+
+function stocksTransitRateRowHtml(label, tally) {
+  if (!tally || tally.rate == null) {
+    return `
+      <div class="stock-combined-record-row">
+        <span class="stock-combined-record-label" style="font-weight:400;color:var(--muted);">${escapeHtml(label)}</span>
+        <span class="stock-trades-note">no signals</span>
+      </div>`;
+  }
+  const pct = Math.round(tally.rate * 100);
+  const cls = pct >= 55 ? 'good' : pct <= 45 ? 'bad' : '';
+  return `
+    <div class="stock-combined-record-row">
+      <span class="stock-combined-record-label">${escapeHtml(label)}</span>
+      <span class="score-inline ${cls}">${pct}% <span style="font-weight:400;">(${tally.right}/${tally.wrong} of ${tally.n})</span></span>
+    </div>`;
+}
+
+function renderStocksTransitBacktestBody(box, result) {
+  const runBtnLabel = result ? 'Re-run Backtest' : 'Run Backtest';
+  let bodyHtml;
+  if (!result) {
+    bodyHtml = `<div class="stock-trades-note">Not run yet - checks every transit-aspect signal already live on this page (Moon/Mercury/Venus/Mars/Jupiter/Saturn/Uranus/Neptune/Pluto vs. each instrument's natal Sun) against real historical price moves. One price fetch per instrument, throttled - takes a while the first time.</div>`;
+  } else {
+    const aspectRows = STOCKS_ASPECTS.map((a) => stocksTransitRateRowHtml(a.key.charAt(0).toUpperCase() + a.key.slice(1), result.byAspect[a.key])).join('');
+    const planetRows = Object.values(STOCKS_TRANSIT_PLANETS).flat().map((bodyKey) => stocksTransitRateRowHtml(bodyKey, result.byPlanet[bodyKey])).join('');
+    bodyHtml = `
+      <div class="stock-trades-note">Scanned ${result.instrumentCount} instruments - last run ${new Date(result.ranAt).toLocaleString()}. Graded on a fixed hold (1 trading day for Moon, 21 for Mercury/Venus/Mars, 252 for Jupiter through Pluto) - right/wrong only, no mixed band.</div>
+      ${stocksTransitRateRowHtml('Overall', result.overall)}
+      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By aspect type</div>
+      ${aspectRows}
+      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By planet</div>
+      ${planetRows}`;
+  }
+  box.innerHTML = `
+    <div class="stock-group${stocksTransitCollapsed ? ' collapsed' : ''}" id="stockTransitGroup">
+      <div class="stock-group-head">
+        <span>🪐 Transit Backtest</span>
+        <span class="stock-group-chev">▾</span>
+      </div>
+      <div class="stock-group-grid">
+        ${bodyHtml}
+        <button class="btn" id="stockTransitRunBtn" type="button">${runBtnLabel}</button>
+        <div class="famous-status" id="stockTransitStatus"></div>
+      </div>
+    </div>`;
+  box.querySelector('.stock-group-head').addEventListener('click', () => {
+    stocksTransitCollapsed = !stocksTransitCollapsed;
+    box.querySelector('#stockTransitGroup').classList.toggle('collapsed', stocksTransitCollapsed);
+  });
+  box.querySelector('#stockTransitRunBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    stocksRunTransitBacktest();
+  });
+}
+
+async function stocksRunTransitBacktest() {
+  if (stocksTransitRunning || !stocksTransitInstruments) return;
+  stocksTransitRunning = true;
+  const box = document.getElementById('stocksTransitBacktest');
+  const btn = document.getElementById('stockTransitRunBtn');
+  if (btn) btn.disabled = true;
+  const result = await stocksTransitBacktestAll(stocksTransitInstruments, (done, total) => {
+    const status = document.getElementById('stockTransitStatus');
+    if (status) status.textContent = `Scanning ${done}/${total} instruments...`;
+  });
+  stocksTransitSaveResult(result);
+  renderStocksTransitBacktestBody(box, result);
+  const statusAfter = document.getElementById('stockTransitStatus');
+  if (statusAfter) statusAfter.textContent = `Done - scanned ${result.instrumentCount} instruments.`;
+  stocksTransitRunning = false;
+}
+
+function stocksInitTransitBacktest(instruments) {
+  const box = document.getElementById('stocksTransitBacktest');
+  if (!box) return;
+  stocksTransitInstruments = instruments;
+  renderStocksTransitBacktestBody(box, stocksTransitLoadResult());
 }
 
 /* ===================== Western Sun-sign compat (Month level) ===================== */
@@ -2951,6 +3155,7 @@ function initStocksPage() {
   // open every modal one at a time to see what's coming up next.
   stocksRenderRadar(instruments, today);
   stocksLoadCombinedRecord(instruments, today); // async - throttled, see the Combined Track Record section above
+  stocksInitTransitBacktest(instruments); // shell + any cached result only - the real scan waits for the Run button
 
   document.querySelectorAll('#stocksDirFilter .stocks-filter-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
