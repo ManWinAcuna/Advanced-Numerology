@@ -515,7 +515,7 @@ function emaxDetailRowHtml(e) {
   const zodiacEmoji = VIETNAMESE_ZODIAC_EMOJI[e.zodiacAnimal] || '';
   const ownEmoji = VIETNAMESE_ZODIAC_EMOJI[e.ownAnimal] || '';
   return `
-    <div class="emax-detail-row">
+    <button type="button" class="emax-detail-row" data-detail-open="${escapeHtml(e.entryId)}">
       <div class="emax-detail-row-head">
         <span class="emax-detail-row-name">${escapeHtml(e.entryName)}</span>
         <span class="emax-detail-row-year">${zodiacEmoji} ${e.year}</span>
@@ -524,7 +524,7 @@ function emaxDetailRowHtml(e) {
       <div class="emax-detail-row-facts">Born ${e.ownYear} ${ownEmoji} &middot; Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath}</div>
       <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
       ${tagsHtml}
-    </div>`;
+    </button>`;
 }
 
 function openEmaxDetailModal(title, entries) {
@@ -549,6 +549,20 @@ function closeEmaxDetailModal() {
 document.getElementById('emaxDetailClose').addEventListener('click', closeEmaxDetailModal);
 document.getElementById('emaxDetailOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'emaxDetailOverlay') closeEmaxDetailModal();
+});
+
+// Tapping a row opens the real EMAX item popup (emax-popup.js, shared with
+// emax-category.html) right on top of this one - "not having to go all the
+// way to EMAX category etc, just popup right there" (2026-08-02). Stacks
+// visually over emaxDetailOverlay since itemModalOverlay comes later in
+// the DOM; closing it returns to this list untouched.
+document.getElementById('emaxDetailBody').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-detail-open]');
+  if (!row) return;
+  const entry = emaxFindEntryById(db, row.dataset.detailOpen);
+  if (!entry) return;
+  const ownerCat = db.categories.find((c) => c.entries.some((en) => en.id === entry.id));
+  if (ownerCat) openItemModal(entry, ownerCat.name);
 });
 
 // Delegated on the stable results containers (their innerHTML gets

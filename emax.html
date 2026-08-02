@@ -110,6 +110,16 @@
     </div>
   </div>
 
+  <!-- Shared item popup (emax-popup.js) - tapping an entry in the
+       Audit/Nomination detail list above opens the real EMAX popup right
+       here, no navigation to that item's category page needed. -->
+  <div class="modal-overlay" id="itemModalOverlay">
+    <div class="modal-box">
+      <button class="modal-close" id="itemModalClose" title="Close">&times;</button>
+      <div id="itemModalBody"></div>
+    </div>
+  </div>
+
 </div>
 
 <script src="scroll-viewport.js"></script>
@@ -117,9 +127,13 @@
 <script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
+<script src="emax-seed-data.js"></script>
+<script src="emax-popup.js"></script>
 <script src="emax.js"></script>
 </body>
 </html>

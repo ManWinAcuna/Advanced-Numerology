@@ -7232,10 +7232,21 @@ button.emax-fact-tile-tap {
   overflow-y: auto;
 }
 .emax-detail-row {
+  display: block;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
+  width: 100%;
+  text-align: left;
+  /* button reset (2026-08-02 - rows became tappable, open the item popup) */
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.emax-detail-row:hover {
+  border-color: var(--yellow);
 }
 .emax-detail-row-head {
   display: flex;

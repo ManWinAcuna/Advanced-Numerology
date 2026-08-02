@@ -1456,6 +1456,28 @@ function emaxNominationDetailEntries(db, dimension, key) {
   return results;
 }
 
+// Category-agnostic entry lookup/removal (2026-08-02, "tap an item in the
+// Audit/Nomination popup and it opens the real EMAX popup right there") -
+// unlike emax-category.js's own emaxTimelineFindEntryById/deleteEntry,
+// callers here (emax.js, the landing page) have no single "current
+// category" to assume an entry belongs to, since a detail row can be from
+// any category in the whole collection.
+function emaxFindEntryById(db, entryId) {
+  for (const cat of db.categories) {
+    const found = cat.entries.find((e) => e.id === entryId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function emaxRemoveEntryById(db, entryId) {
+  for (const cat of db.categories) {
+    const idx = cat.entries.findIndex((e) => e.id === entryId);
+    if (idx !== -1) { cat.entries.splice(idx, 1); return true; }
+  }
+  return false;
+}
+
 /* ===================== Reverse Lookup ===================== */
 // "Traits -> EMAX matches" (2026-08-02, CODE13 backlog 6/8): pick ABSOLUTE
 // trait filters and get back every EMAX entry, across every category,
