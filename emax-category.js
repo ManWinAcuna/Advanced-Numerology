@@ -1825,3 +1825,18 @@ function init() {
 
   renderEntries();
 }
+
+// Reverse Lookup deep link (emax.html?...&open=<entryId>) - auto-opens the
+// exact matched entry's popup, so a search result lands you straight on the
+// match instead of a scroll through however many hundred entries this
+// category has. Runs at the very end of the file, after every const/function
+// this needs (openItemModal and everything it references, e.g.
+// EMAX_DATE_KIND_LABEL further down) has actually finished declaring -
+// calling it any earlier hits those bindings' temporal dead zone.
+if (category) {
+  const openEntryId = params.get('open');
+  if (openEntryId) {
+    const openEntry = category.entries.find((e) => e.id === openEntryId);
+    if (openEntry && openEntry.date) openItemModal(openEntry);
+  }
+}

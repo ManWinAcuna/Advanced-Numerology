@@ -72,10 +72,28 @@
       </div>
     </div>
 
+    <div class="box emax-audit-box">
+      <button class="box-label-row emax-collapsible-toggle" id="reverseLookupToggle" type="button">
+        <span class="box-label">🔎 Reverse Lookup</span>
+        <span class="emax-collapse-chevron" id="reverseLookupChevron">▸</span>
+      </button>
+      <div class="emax-collapsible-body" id="reverseLookupBody" hidden>
+        <p class="emax-audit-intro">Pick the traits you're after - Life Path, today's Personal Year, Chinese zodiac animal, or any planetary sign - and find every item in your whole collection whose real birthdate already matches. Leave a filter on "Any" to ignore it.</p>
+        <div id="reverseLookupFilters" class="reverse-lookup-filters"></div>
+        <div class="reverse-lookup-actions">
+          <button id="reverseLookupSearchBtn" class="btn" type="button">Search</button>
+          <button id="reverseLookupClearBtn" class="btn-link" type="button">Clear filters</button>
+        </div>
+        <div id="reverseLookupResults"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script src="scroll-viewport.js"></script>
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
 <script src="big-store.js"></script>

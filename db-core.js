@@ -1213,6 +1213,56 @@ async function emaxNumberNomination(db, onProgress) {
   };
 }
 
+/* ===================== Reverse Lookup ===================== */
+// "Traits -> EMAX matches" (2026-08-02, CODE13 backlog 6/8): pick ABSOLUTE
+// trait filters and get back every EMAX entry, across every category,
+// whose real birthdate already matches all of them. Deliberately absolute,
+// not relational - own/trine/friendly/enemy (emaxTimelineYearVerdict and
+// friends) only make sense compared to one specific person's own animal, so
+// they don't fit a standalone "find me X" search the way a fixed Life Path,
+// Personal Year, zodiac animal, or planetary sign does. Every filter here
+// combines with AND; a filter left at null/undefined means "any". Pure
+// synchronous arithmetic over already-known dates - no network calls, no
+// caching (unlike the Audit/Nomination boxes, a fresh filter selection
+// always searches live since it's cheap and the results depend on exactly
+// what was picked).
+//
+// Year-only entries (entry.year, no entry.date) are excluded outright, same
+// as everywhere else in EMAX (entryRowHtml's own comment: "no popup to open
+// at all, no date to compute compatibility from") - a bare year can't give
+// a real Life Path, Personal Year, or planetary sign, and this app never
+// fabricates the missing month/day to make one up.
+function emaxReverseLookupEntryMatches(entry, filters) {
+  if (!entry.date) return false;
+  const birthDate = parseDateStr(entry.date);
+
+  if (filters.lifePath != null && getLifePathNumeric(birthDate) !== filters.lifePath) return false;
+  if (filters.personalYear != null && emaxPersonalYearForYear(birthDate, new Date().getFullYear()) !== filters.personalYear) return false;
+  if (filters.zodiacAnimal && getChineseZodiacYear(birthDate) !== filters.zodiacAnimal) return false;
+
+  if (filters.bodies) {
+    const bodyKeys = Object.keys(filters.bodies);
+    for (let i = 0; i < bodyKeys.length; i++) {
+      const bodyKey = bodyKeys[i];
+      if (getAstroBodyInfo(bodyKey, birthDate).sign !== filters.bodies[bodyKey]) return false;
+    }
+  }
+
+  return true;
+}
+
+function emaxReverseLookup(db, filters) {
+  const results = [];
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => {
+      if (emaxReverseLookupEntryMatches(entry, filters)) {
+        results.push({ entry, categoryId: cat.id, categoryName: cat.name });
+      }
+    });
+  });
+  return results;
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the

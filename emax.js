@@ -468,4 +468,100 @@ document.getElementById('nominationToggle').addEventListener('click', () => {
 document.getElementById('runNominationBtn').addEventListener('click', () => runEmaxNomination());
 emaxRenderNominationResults();
 
+/* ===================== Reverse Lookup (2026-08-02) ===================== */
+// UI-only wrapper around emaxReverseLookup (db-core.js). Unlike the Audit/
+// Nomination boxes above, this never caches - a fresh filter selection
+// always searches live, since it's pure synchronous arithmetic over
+// already-known dates (no network calls) and the result depends entirely
+// on whatever was just picked.
+
+// Life Path can genuinely be 2 (reduceNumber has no 2->11 remap - that's
+// specific to Personal Year/Day sums); Personal Year can't, since
+// emaxPersonalYearForYear explicitly folds a raw 2 into 11.
+const EMAX_REVERSE_LOOKUP_LIFE_PATH_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33];
+const EMAX_REVERSE_LOOKUP_PERSONAL_YEAR_VALUES = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33];
+
+function reverseLookupOptionsHtml(values, labelFn) {
+  return `<option value="">Any</option>${values.map((v) => `<option value="${escapeHtml(String(v))}">${escapeHtml(labelFn ? labelFn(v) : String(v))}</option>`).join('')}`;
+}
+
+function reverseLookupFiltersHtml() {
+  const rows = [
+    `<div class="reverse-lookup-filter"><label for="rlFilterLifePath">Life Path</label><select id="rlFilterLifePath">${reverseLookupOptionsHtml(EMAX_REVERSE_LOOKUP_LIFE_PATH_VALUES)}</select></div>`,
+    `<div class="reverse-lookup-filter"><label for="rlFilterPersonalYear">Personal Year (today)</label><select id="rlFilterPersonalYear">${reverseLookupOptionsHtml(EMAX_REVERSE_LOOKUP_PERSONAL_YEAR_VALUES)}</select></div>`,
+    `<div class="reverse-lookup-filter"><label for="rlFilterZodiacAnimal">Chinese Zodiac Animal</label><select id="rlFilterZodiacAnimal">${reverseLookupOptionsHtml(VIETNAMESE_KEYS)}</select></div>`,
+  ];
+  ASTRO_BODIES.forEach((body) => {
+    rows.push(`<div class="reverse-lookup-filter"><label for="rlFilterBody_${body.key}">${body.symbol} ${escapeHtml(body.label)} Sign</label><select id="rlFilterBody_${body.key}">${reverseLookupOptionsHtml(ASTRO_ZODIAC_SIGNS)}</select></div>`);
+  });
+  return rows.join('');
+}
+
+function reverseLookupReadFilters() {
+  const filters = {};
+  const lifePathVal = document.getElementById('rlFilterLifePath').value;
+  if (lifePathVal) filters.lifePath = Number(lifePathVal);
+  const personalYearVal = document.getElementById('rlFilterPersonalYear').value;
+  if (personalYearVal) filters.personalYear = Number(personalYearVal);
+  const zodiacVal = document.getElementById('rlFilterZodiacAnimal').value;
+  if (zodiacVal) filters.zodiacAnimal = zodiacVal;
+  const bodies = {};
+  ASTRO_BODIES.forEach((body) => {
+    const val = document.getElementById(`rlFilterBody_${body.key}`).value;
+    if (val) bodies[body.key] = val;
+  });
+  if (Object.keys(bodies).length) filters.bodies = bodies;
+  return filters;
+}
+
+function reverseLookupHasAnyFilter(filters) {
+  return filters.lifePath != null || filters.personalYear != null || !!filters.zodiacAnimal || !!(filters.bodies && Object.keys(filters.bodies).length);
+}
+
+// Every filter select's id, by exact name rather than a querySelectorAll
+// sweep - keeps Clear filters explicit about exactly which controls it
+// touches (same convention as this file's other collapsible-state code,
+// which sets .hidden in JS too rather than leaning on markup alone).
+function reverseLookupSelectIds() {
+  return ['rlFilterLifePath', 'rlFilterPersonalYear', 'rlFilterZodiacAnimal', ...ASTRO_BODIES.map((body) => `rlFilterBody_${body.key}`)];
+}
+
+function reverseLookupResultRowHtml(result) {
+  return `
+    <a class="reverse-lookup-result" href="emax-category.html?id=${encodeURIComponent(result.categoryId)}&open=${encodeURIComponent(result.entry.id)}">
+      <span class="reverse-lookup-result-name">${escapeHtml(result.entry.name)}</span>
+      <span class="reverse-lookup-result-category">${escapeHtml(result.categoryName)}</span>
+    </a>`;
+}
+
+function runReverseLookup() {
+  const filters = reverseLookupReadFilters();
+  const resultsEl = document.getElementById('reverseLookupResults');
+  if (!reverseLookupHasAnyFilter(filters)) {
+    resultsEl.innerHTML = '<div class="emax-nomination-empty">Pick at least one filter - searching with none would just list your whole collection.</div>';
+    return;
+  }
+  const results = emaxReverseLookup(db, filters);
+  if (!results.length) {
+    resultsEl.innerHTML = '<div class="emax-nomination-empty">No items in your collection match every filter picked.</div>';
+    return;
+  }
+  resultsEl.innerHTML = `
+    <div class="emax-audit-summary">${results.length} match${results.length === 1 ? '' : 'es'}.</div>
+    <div class="reverse-lookup-results-list">${results.map(reverseLookupResultRowHtml).join('')}</div>`;
+}
+
+document.getElementById('reverseLookupFilters').innerHTML = reverseLookupFiltersHtml();
+document.getElementById('reverseLookupBody').hidden = true;
+document.getElementById('reverseLookupToggle').addEventListener('click', () => {
+  const body = document.getElementById('reverseLookupBody');
+  body.hidden = !body.hidden;
+  document.getElementById('reverseLookupChevron').classList.toggle('open', !body.hidden);
+});
+document.getElementById('reverseLookupSearchBtn').addEventListener('click', () => runReverseLookup());
+document.getElementById('reverseLookupClearBtn').addEventListener('click', () => {
+  reverseLookupSelectIds().forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('reverseLookupResults').innerHTML = '';
+});
+
 render();

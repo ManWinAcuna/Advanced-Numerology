@@ -7088,5 +7088,65 @@ button.emax-fact-tile-tap {
   font-style: italic;
 }
 
+.reverse-lookup-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.reverse-lookup-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.reverse-lookup-filter label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.reverse-lookup-filter select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.reverse-lookup-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.reverse-lookup-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reverse-lookup-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease;
+}
+.reverse-lookup-result:hover {
+  border-color: var(--yellow);
+}
+.reverse-lookup-result-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.reverse-lookup-result-category {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 #preloadYearInput { width: 90px; }
 .stock-cycles-table tr.lean-flat td.lean-cell { color: var(--orange); font-weight: 700; }
