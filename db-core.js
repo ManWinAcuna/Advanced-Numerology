@@ -891,10 +891,56 @@ function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendl
   return 'mid';
 }
 
+/* ---- Magnitude (2026-08-02) ----
+ * "not just Personal Year 7 is bad, but how bad, compared to this
+ * person's other bad years" - a real example settled the design: Enemy
+ * Year + Personal Year 7 stacking (two independent negative reasons)
+ * should read worse than Personal Year 7 alone overriding an otherwise-
+ * good Own Year (one reason winning over another). The zodiac axis
+ * (own/trine/friendly is positive XOR enemy is negative XOR neither) is
+ * always mutually exclusive with itself by construction - only one term
+ * ever applies - but the numerology axis (Personal Year 7/11) is fully
+ * independent and can stack with either zodiac read, which is the whole
+ * point. A confirmed event (real Wikipedia excerpt or the user's own
+ * note) reinforces the base signal-stacking score rather than replacing
+ * it - "combine both", the user's own explicit call. Verdict (good/bad/
+ * mid, i.e. the chip's actual color) stays exactly as it already was;
+ * magnitude is a separate, finer scale UNDER that same verdict, for
+ * ranking same-colored years against each other.
+ */
+function emaxYearBaseMagnitude(isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear) {
+  let magnitude = 0;
+  if (isOwnYear || isTrineYear || isFriendlyYear) magnitude += 1;
+  if (isEnemyYear) magnitude -= 1;
+  if (personalYear === 7 || personalYear === 11) magnitude -= 1;
+  return magnitude;
+}
+
+// Reads whatever's already resolved on entry.timelineEvents (auto-scraped
+// or typed by hand) - a year never yet scanned, or with nothing found,
+// contributes 0 (no bonus, not a penalty), same honest "nothing to go on"
+// default the base function itself uses for a plain neutral year.
+function emaxYearEventMagnitudeBonus(entry, year) {
+  const ev = entry && entry.timelineEvents && entry.timelineEvents[year];
+  if (!ev || !ev.tags) return 0;
+  let bonus = 0;
+  if (ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t))) bonus -= 1;
+  if (ev.tags.includes('achievement')) bonus += 1;
+  return bonus;
+}
+
+function emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear) {
+  return emaxYearBaseMagnitude(isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
+    + emaxYearEventMagnitudeBonus(entry, year);
+}
+
 // Full lifetime, birth/release year through the current year - however
 // long that list gets, per the user's own call to keep it complete rather
-// than capped to the most recent few.
-function emaxBuildTimeline(birthDate) {
+// than capped to the most recent few. `entry` (added 2026-08-02) feeds the
+// event half of each year's magnitude - every OTHER caller/test that only
+// needs verdicts (not magnitude) can still pass a bare {} since a missing
+// entry.timelineEvents just means every year's event bonus is 0.
+function emaxBuildTimeline(birthDate, entry) {
   const ownAnimal = getChineseZodiacYear(birthDate);
   const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
   const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
@@ -913,6 +959,7 @@ function emaxBuildTimeline(birthDate) {
   const enemyYears = [];
   const py7Years = [];
   const py11Years = [];
+  const yearMagnitudes = new Map();
   for (let year = startYear; year <= endYear; year++) {
     const personalYear = emaxPersonalYearForYear(birthDate, year);
     // July 1 as a safe mid-year reference for the zodiac animal check only
@@ -923,14 +970,42 @@ function emaxBuildTimeline(birthDate) {
     const isTrineYear = trineAnimals.includes(yearAnimal);
     const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
     const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
-    if (isOwnYear) ownYears.push({ year, verdict });
-    if (isTrineYear) trineYears.push({ year, verdict });
-    if (isFriendlyYear) friendlyYears.push({ year, verdict });
-    if (isEnemyYear) enemyYears.push({ year, verdict });
-    if (personalYear === 7) py7Years.push({ year, verdict });
-    if (personalYear === 11) py11Years.push({ year, verdict });
+    const magnitude = emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
+    const isFlagged = isOwnYear || isTrineYear || isFriendlyYear || isEnemyYear || personalYear === 7 || personalYear === 11;
+    if (isFlagged) yearMagnitudes.set(year, magnitude);
+    if (isOwnYear) ownYears.push({ year, verdict, magnitude });
+    if (isTrineYear) trineYears.push({ year, verdict, magnitude });
+    if (isFriendlyYear) friendlyYears.push({ year, verdict, magnitude });
+    if (isEnemyYear) enemyYears.push({ year, verdict, magnitude });
+    if (personalYear === 7) py7Years.push({ year, verdict, magnitude });
+    if (personalYear === 11) py11Years.push({ year, verdict, magnitude });
   }
-  return { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years };
+
+  // "Worst year"/"best year" - only among years that were actually flagged
+  // by something (a truly neutral year with nothing going on shouldn't win
+  // "best year" just by elimination). Ties list every tied year rather
+  // than arbitrarily picking one, same honesty convention as Tiger's own
+  // 3-way friendly-animal tie elsewhere in this file.
+  let worstMagnitude = null;
+  let bestMagnitude = null;
+  yearMagnitudes.forEach((m) => {
+    if (worstMagnitude === null || m < worstMagnitude) worstMagnitude = m;
+    if (bestMagnitude === null || m > bestMagnitude) bestMagnitude = m;
+  });
+  const worstYears = [];
+  const bestYears = [];
+  yearMagnitudes.forEach((m, year) => {
+    if (m === worstMagnitude) worstYears.push(year);
+    if (m === bestMagnitude) bestYears.push(year);
+  });
+  worstYears.sort((a, b) => a - b);
+  bestYears.sort((a, b) => a - b);
+
+  return {
+    ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals,
+    ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years,
+    worstYears, worstMagnitude, bestYears, bestMagnitude,
+  };
 }
 
 /* ===================== EMAX 7/11 audit (2026-08-02) =====================

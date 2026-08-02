@@ -6806,9 +6806,30 @@ button.emax-fact-tile-tap {
 .emax-timeline-chip.expanded {
   box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px currentColor;
 }
+/* |magnitude| >= 2 - at least 2 stacked/reinforcing signals landed on this
+   one year, gets visibly more weight than a chip only barely bad/good. */
+.emax-timeline-chip.severe {
+  border-width: 2px;
+  font-weight: 800;
+  box-shadow: 0 0 8px -1px currentColor;
+}
+.emax-timeline-chip.severe.expanded {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px currentColor, 0 0 10px 1px currentColor;
+}
 .emax-timeline-empty {
   color: var(--muted);
   font-size: 0.85rem;
+}
+.emax-timeline-headline {
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: -2px 0 12px;
+}
+.emax-timeline-severity {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-top: 6px;
 }
 
 .emax-timeline-event-row {
