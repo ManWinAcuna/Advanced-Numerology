@@ -276,4 +276,84 @@ document.getElementById('categoriesContainer').addEventListener('click', (e) => 
   if (tile) e.preventDefault();
 });
 
+/* ===================== 7/11 Audit (2026-08-02) ===================== */
+// UI-only wrapper around emax711Audit (db-core.js) - the actual scan/tally
+// engine is shared with the future master dashboard (task #74), this file
+// just renders the button/progress/result and caches the last run so it's
+// still there next time you open the page, not lost the moment you leave.
+let emaxAuditRunning = false;
+
+function emaxLoadAuditResult() {
+  try {
+    const raw = localStorage.getItem(EMAX_AUDIT_RESULT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function emaxSaveAuditResult(result) {
+  try { localStorage.setItem(EMAX_AUDIT_RESULT_KEY, JSON.stringify(result)); } catch (e) { /* storage full - just won't persist across visits */ }
+}
+
+// Both rates shown side by side, per your own call - a recorded event
+// alone isn't necessarily bad, so "any event" and "negative-tagged event"
+// answer two different questions rather than picking one for you. Raw N
+// stays visible next to every percentage so a thin sample still reads as
+// a thin sample, not a false certainty.
+function emaxAuditStatHtml(label, rate, withCount, total) {
+  const pct = rate == null ? '—' : `${Math.round(rate * 100)}%`;
+  return `
+    <div class="emax-audit-stat">
+      <div class="emax-audit-stat-label">${escapeHtml(label)}</div>
+      <div class="emax-audit-stat-value">${pct}</div>
+      <div class="emax-audit-stat-n">${withCount}/${total} years</div>
+    </div>`;
+}
+
+function emaxAuditResultsHtml(result) {
+  return `
+    <div class="emax-audit-summary">Scanned ${result.entryCount} items - last run ${new Date(result.ranAt).toLocaleString()}.</div>
+    <div class="emax-audit-grid">
+      ${emaxAuditStatHtml('Personal Yr 7/11 - Any Event', result.py7or11AnyEventRate, result.py7or11WithEvent, result.py7or11Total)}
+      ${emaxAuditStatHtml('Other Years - Any Event', result.otherAnyEventRate, result.otherWithEvent, result.otherTotal)}
+      ${emaxAuditStatHtml('Personal Yr 7/11 - Negative Event', result.py7or11NegativeRate, result.py7or11WithNegative, result.py7or11Total)}
+      ${emaxAuditStatHtml('Other Years - Negative Event', result.otherNegativeRate, result.otherWithNegative, result.otherTotal)}
+    </div>`;
+}
+
+function emaxRenderAuditResults() {
+  const result = emaxLoadAuditResult();
+  const btn = document.getElementById('runAuditBtn');
+  document.getElementById('auditResults').innerHTML = result ? emaxAuditResultsHtml(result) : '';
+  btn.textContent = result ? 'Re-run Audit' : 'Run Audit';
+}
+
+async function runEmaxAudit() {
+  if (emaxAuditRunning) return;
+  emaxAuditRunning = true;
+  const btn = document.getElementById('runAuditBtn');
+  const status = document.getElementById('auditStatus');
+  btn.disabled = true;
+  const result = await emax711Audit(db, (done, total) => {
+    status.textContent = `Scanning ${done}/${total} items...`;
+  });
+  emaxSaveAuditResult(result);
+  emaxRenderAuditResults();
+  status.textContent = `Done - scanned ${result.entryCount} items.`;
+  btn.disabled = false;
+  emaxAuditRunning = false;
+}
+
+// The HTML's own `hidden` attribute already starts this collapsed (avoids
+// a flash of the open box before this script runs) - set it again here too
+// so the collapsed state doesn't quietly depend on that markup alone (same
+// convention as emax-category.js's addEntryBody).
+document.getElementById('auditBody').hidden = true;
+document.getElementById('auditToggle').addEventListener('click', () => {
+  const body = document.getElementById('auditBody');
+  body.hidden = !body.hidden;
+  document.getElementById('auditChevron').classList.toggle('open', !body.hidden);
+});
+document.getElementById('runAuditBtn').addEventListener('click', () => runEmaxAudit());
+emaxRenderAuditResults();
+
 render();

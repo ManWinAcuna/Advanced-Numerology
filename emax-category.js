@@ -198,17 +198,6 @@ function setRating(entryId, rating) {
   return entry;
 }
 
-function parseDateStr(dateStr) {
-  // setFullYear (not the multi-arg constructor) sidesteps JS's legacy
-  // two-digit-year quirk, where `new Date(y, ...)` silently remaps any y in
-  // 0-99 to 1900+y.
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date();
-  date.setFullYear(y, m - 1, d);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
 /* ===================== Images: auto-fetch + monogram fallback ===================== */
 // Same pattern Stocks already uses for CEO portraits: the real photo loads
 // lazily (an item's own popup, or - now - each dated list row) with a
@@ -828,139 +817,13 @@ async function emaxAddArtistToDatabase(artistName, artistQid, targetCategoryName
 // outright. undefined for every ordinary open (list row, Preload, etc.).
 
 /* ===================== Timeline mini-popup (2026-08-01) ===================== */
-// Tapping the item's own picture (inside the already-open popup) opens a
-// second, smaller popup on top of it, listing every year across the item's
-// whole life/existence that falls into one of four patterns: their own
-// Chinese zodiac year, the directly-opposing "enemy" zodiac year, and every
-// Personal Year 7 or 11. VIETNAMESE_TABLE (compat-data.js) already encodes
-// each animal's one true clash partner as the unique lowest score in its
-// row (verified live: every animal's minimum is a mutual 10, six pairs,
-// exactly 6 positions apart) - reused here via straight index math rather
-// than a second, separately-maintained lookup table.
-function emaxEnemyZodiacAnimal(animal) {
-  return VIETNAMESE_KEYS[(VIETNAMESE_KEYS.indexOf(animal) + 6) % 12];
-}
-
-// Chinese zodiac's traditional "Three Harmonies" trine - a FIXED grouping
-// (every 4th animal around the 12-year cycle forms a harmonious trio: e.g.
-// Rat-Dragon-Monkey), always the same 2 partners regardless of any
-// compatibility scoring. Independent of VIETNAMESE_TABLE below - shown as
-// its own section alongside whatever the table separately calls
-// "friendly", per the user's own explicit call (2026-08-01): always show
-// the trine, and on top of that whatever the table itself flags as
-// friendly, even where the two don't fully agree.
-function emaxTrineZodiacAnimals(animal) {
-  const i = VIETNAMESE_KEYS.indexOf(animal);
-  return [VIETNAMESE_KEYS[(i + 4) % 12], VIETNAMESE_KEYS[(i + 8) % 12]];
-}
-
-// The "friendliest" animal(s) for a given sign - unlike the enemy pair
-// (a clean, symmetric 10 for every animal, always exactly 6 positions
-// apart), the table's HIGHEST score per row isn't a uniform offset or even
-// always symmetric (Cat's best is Goat at 85, but Goat's own best is Pig at
-// 93, not Cat back) - so this reads straight from VIETNAMESE_TABLE itself
-// rather than a shortcut formula. Most animals have one clear best match;
-// Tiger ties 3-way (Horse/Dog/Pig, all 80) - returns every animal tied at
-// the row's max score rather than picking one arbitrarily.
-function emaxFriendlyZodiacAnimals(animal) {
-  const row = VIETNAMESE_TABLE[animal];
-  const selfIndex = VIETNAMESE_KEYS.indexOf(animal);
-  let max = -Infinity;
-  row.forEach((score, i) => { if (i !== selfIndex && score > max) max = score; });
-  return VIETNAMESE_KEYS.filter((a, i) => i !== selfIndex && row[i] === max);
-}
-
-// Personal Year for a SPECIFIC calendar year Y, not "as of today" -
-// personalYearRawForYear(birthDate, activeYear) already takes the cycle
-// year directly, skipping getPersonalYearRaw's own today-relative
-// getActiveBirthYear indirection (the cycle actually rolls over on the
-// birthday, not Jan 1, but the timeline buckets by CALENDAR year - the
-// value shown here matches whatever the cycle that STARTS on their Y-th
-// birthday resolves to, same "no standalone 2" reduction rule as
-// computeEnergyFlow uses everywhere else in this app).
-function emaxPersonalYearForYear(birthDate, year) {
-  const raw = personalYearRawForYear(birthDate, year);
-  let py = reduceNumber(raw);
-  if (py === 2) py = 11;
-  return py;
-}
-
-// Numerology supersedes the zodiac read when a single year matches both -
-// per the user's own call (2026-08-01): their own zodiac year doesn't save
-// a Personal Year 7 or 11, since 7/11 are already bearish in this app's own
-// established number meanings (matches Stocks' identical reading). Enemy
-// zodiac year reads as bad on its own; own, trine, or friendly zodiac year
-// reads as good UNLESS numerology overrides it.
-function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear) {
-  if (personalYear === 7 || personalYear === 11) return 'bad';
-  if (isEnemyYear) return 'bad';
-  if (isOwnYear || isFriendlyYear || isTrineYear) return 'good';
-  return 'mid';
-}
-
-// Full lifetime, birth/release year through the current year - however
-// long that list gets, per the user's own call to keep it complete rather
-// than capped to the most recent few.
-function emaxBuildTimeline(birthDate) {
-  const ownAnimal = getChineseZodiacYear(birthDate);
-  const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
-  const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
-  // Only the friendly match(es) NOT already covered by the trine group -
-  // per the user's own call (2026-08-01): no point in a whole separate
-  // "Friendly Year" section that just re-lists years Trine already listed
-  // (most animals' single table-best match already sits inside their own
-  // trine; Tiger's 3-way tie is the interesting case - Horse and Dog
-  // overlap its trine, but Pig doesn't, so Pig alone is genuinely new).
-  const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
-  const startYear = birthDate.getFullYear();
-  const endYear = new Date().getFullYear();
-  const ownYears = [];
-  const trineYears = [];
-  const friendlyYears = [];
-  const enemyYears = [];
-  const py7Years = [];
-  const py11Years = [];
-  for (let year = startYear; year <= endYear; year++) {
-    const personalYear = emaxPersonalYearForYear(birthDate, year);
-    // July 1 as a safe mid-year reference for the zodiac animal check only
-    // - well clear of any lunar-new-year boundary ambiguity in Jan/Feb.
-    const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
-    const isOwnYear = yearAnimal === ownAnimal;
-    const isEnemyYear = yearAnimal === enemyAnimal;
-    const isTrineYear = trineAnimals.includes(yearAnimal);
-    const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
-    const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
-    if (isOwnYear) ownYears.push({ year, verdict });
-    if (isTrineYear) trineYears.push({ year, verdict });
-    if (isFriendlyYear) friendlyYears.push({ year, verdict });
-    if (isEnemyYear) enemyYears.push({ year, verdict });
-    if (personalYear === 7) py7Years.push({ year, verdict });
-    if (personalYear === 11) py11Years.push({ year, verdict });
-  }
-  return { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years };
-}
-
-// entry.timelineEvents is undefined until the very first Wikipedia-scan
-// attempt (emaxFetchYearEvents); after that it's always a real object, even
-// if empty, so "attempted, nothing found" and "never attempted" stay
-// distinguishable per year. entry.timelineEvents[year].manual marks a note
-// the user typed themselves - always wins over a future auto-scan (which
-// only ever runs once per entry anyway, see emaxFetchYearEvents).
-async function emaxFetchYearEvents(entry, years) {
-  if (entry.timelineEvents !== undefined) return entry.timelineEvents;
-  const title = entry.wikiTitle || entry.name;
-  const wikitext = await fetchWikipediaWikitext(title);
-  const events = {};
-  if (wikitext) {
-    for (const year of years) {
-      const result = extractYearEventFromWikitext(wikitext, year);
-      if (result) events[year] = { text: result.text, tags: result.tags, manual: false };
-    }
-  }
-  entry.timelineEvents = events;
-  saveEmaxDB(db);
-  return events;
-}
+// The pure computation (emaxEnemyZodiacAnimal, emaxTrineZodiacAnimals,
+// emaxFriendlyZodiacAnimals, emaxPersonalYearForYear, emaxTimelineYearVerdict,
+// emaxBuildTimeline, emaxFetchYearEvents) moved to db-core.js on 2026-08-02
+// so the 7/11 audit (emax.js, the EMAX landing page) can reuse the exact
+// same engine instead of duplicating it - none of them ever depended on
+// this page's own `category`/`db` beyond the ordinary shared-global-scope
+// pattern every script in this app already relies on.
 
 function emaxTimelineFindEntryById(entryId) {
   for (const cat of db.categories) {

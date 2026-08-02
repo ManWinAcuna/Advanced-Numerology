@@ -783,6 +783,236 @@ function extractYearEventFromWikitext(wikitext, year) {
   return null;
 }
 
+// entry.timelineEvents is undefined until the very first Wikipedia-scan
+// attempt (emaxFetchYearEvents below); after that it's always a real
+// object, even if empty, so "attempted, nothing found" and "never
+// attempted" stay distinguishable per year. entry.timelineEvents[year].manual
+// marks a note the user typed themselves - always wins over a future
+// auto-scan (which only ever runs once per entry anyway).
+async function emaxFetchYearEvents(entry, years) {
+  if (entry.timelineEvents !== undefined) return entry.timelineEvents;
+  const title = entry.wikiTitle || entry.name;
+  const wikitext = await fetchWikipediaWikitext(title);
+  const events = {};
+  if (wikitext) {
+    for (const year of years) {
+      const result = extractYearEventFromWikitext(wikitext, year);
+      if (result) events[year] = { text: result.text, tags: result.tags, manual: false };
+    }
+  }
+  entry.timelineEvents = events;
+  saveEmaxDB(db);
+  return events;
+}
+
+/* ===================== EMAX zodiac/personal-year engine =====================
+ * Moved here from emax-category.js on 2026-08-02 - the 7/11 audit needs to
+ * run from the EMAX landing page (emax.js), which never loaded that page's
+ * own popup/timeline UI code. None of these ever depended on any one page's
+ * own `category` global, only on parameters and the shared numerology.js/
+ * compat-data.js functions - safe to relocate as-is.
+ */
+
+// Same two-digit-year-safe parsing already used for EMAX entry dates
+// elsewhere in this app - setFullYear (not the multi-arg Date constructor)
+// sidesteps JS's legacy quirk where `new Date(y, ...)` silently remaps any
+// y in 0-99 to 1900+y.
+function parseDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date();
+  date.setFullYear(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// VIETNAMESE_TABLE (compat-data.js) already encodes each animal's one true
+// clash partner as the unique lowest score in its row (verified live: every
+// animal's minimum is a mutual 10, six pairs, exactly 6 positions apart) -
+// reused here via straight index math rather than a second, separately-
+// maintained lookup table.
+function emaxEnemyZodiacAnimal(animal) {
+  return VIETNAMESE_KEYS[(VIETNAMESE_KEYS.indexOf(animal) + 6) % 12];
+}
+
+// Chinese zodiac's traditional "Three Harmonies" trine - a FIXED grouping
+// (every 4th animal around the 12-year cycle forms a harmonious trio: e.g.
+// Rat-Dragon-Monkey), always the same 2 partners regardless of any
+// compatibility scoring. Independent of VIETNAMESE_TABLE below - shown as
+// its own section alongside whatever the table separately calls
+// "friendly", per the user's own explicit call (2026-08-01): always show
+// the trine, and on top of that whatever the table itself flags as
+// friendly, even where the two don't fully agree.
+function emaxTrineZodiacAnimals(animal) {
+  const i = VIETNAMESE_KEYS.indexOf(animal);
+  return [VIETNAMESE_KEYS[(i + 4) % 12], VIETNAMESE_KEYS[(i + 8) % 12]];
+}
+
+// The "friendliest" animal(s) for a given sign - unlike the enemy pair
+// (a clean, symmetric 10 for every animal, always exactly 6 positions
+// apart), the table's HIGHEST score per row isn't a uniform offset or even
+// always symmetric (Cat's best is Goat at 85, but Goat's own best is Pig at
+// 93, not Cat back) - so this reads straight from VIETNAMESE_TABLE itself
+// rather than a shortcut formula. Most animals have one clear best match;
+// Tiger ties 3-way (Horse/Dog/Pig, all 80) - returns every animal tied at
+// the row's max score rather than picking one arbitrarily.
+function emaxFriendlyZodiacAnimals(animal) {
+  const row = VIETNAMESE_TABLE[animal];
+  const selfIndex = VIETNAMESE_KEYS.indexOf(animal);
+  let max = -Infinity;
+  row.forEach((score, i) => { if (i !== selfIndex && score > max) max = score; });
+  return VIETNAMESE_KEYS.filter((a, i) => i !== selfIndex && row[i] === max);
+}
+
+// Personal Year for a SPECIFIC calendar year Y, not "as of today" -
+// personalYearRawForYear(birthDate, activeYear) already takes the cycle
+// year directly, skipping getPersonalYearRaw's own today-relative
+// getActiveBirthYear indirection (the cycle actually rolls over on the
+// birthday, not Jan 1, but the timeline buckets by CALENDAR year - the
+// value shown here matches whatever the cycle that STARTS on their Y-th
+// birthday resolves to, same "no standalone 2" reduction rule as
+// computeEnergyFlow uses everywhere else in this app).
+function emaxPersonalYearForYear(birthDate, year) {
+  const raw = personalYearRawForYear(birthDate, year);
+  let py = reduceNumber(raw);
+  if (py === 2) py = 11;
+  return py;
+}
+
+// Numerology supersedes the zodiac read when a single year matches both -
+// per the user's own call (2026-08-01): their own zodiac year doesn't save
+// a Personal Year 7 or 11, since 7/11 are already bearish in this app's own
+// established number meanings (matches Stocks' identical reading). Enemy
+// zodiac year reads as bad on its own; own, trine, or friendly zodiac year
+// reads as good UNLESS numerology overrides it.
+function emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear) {
+  if (personalYear === 7 || personalYear === 11) return 'bad';
+  if (isEnemyYear) return 'bad';
+  if (isOwnYear || isFriendlyYear || isTrineYear) return 'good';
+  return 'mid';
+}
+
+// Full lifetime, birth/release year through the current year - however
+// long that list gets, per the user's own call to keep it complete rather
+// than capped to the most recent few.
+function emaxBuildTimeline(birthDate) {
+  const ownAnimal = getChineseZodiacYear(birthDate);
+  const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+  const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
+  // Only the friendly match(es) NOT already covered by the trine group -
+  // per the user's own call (2026-08-01): no point in a whole separate
+  // "Friendly Year" section that just re-lists years Trine already listed
+  // (most animals' single table-best match already sits inside their own
+  // trine; Tiger's 3-way tie is the interesting case - Horse and Dog
+  // overlap its trine, but Pig doesn't, so Pig alone is genuinely new).
+  const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
+  const startYear = birthDate.getFullYear();
+  const endYear = new Date().getFullYear();
+  const ownYears = [];
+  const trineYears = [];
+  const friendlyYears = [];
+  const enemyYears = [];
+  const py7Years = [];
+  const py11Years = [];
+  for (let year = startYear; year <= endYear; year++) {
+    const personalYear = emaxPersonalYearForYear(birthDate, year);
+    // July 1 as a safe mid-year reference for the zodiac animal check only
+    // - well clear of any lunar-new-year boundary ambiguity in Jan/Feb.
+    const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+    const isOwnYear = yearAnimal === ownAnimal;
+    const isEnemyYear = yearAnimal === enemyAnimal;
+    const isTrineYear = trineAnimals.includes(yearAnimal);
+    const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
+    const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
+    if (isOwnYear) ownYears.push({ year, verdict });
+    if (isTrineYear) trineYears.push({ year, verdict });
+    if (isFriendlyYear) friendlyYears.push({ year, verdict });
+    if (isEnemyYear) enemyYears.push({ year, verdict });
+    if (personalYear === 7) py7Years.push({ year, verdict });
+    if (personalYear === 11) py11Years.push({ year, verdict });
+  }
+  return { ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years };
+}
+
+/* ===================== EMAX 7/11 audit (2026-08-02) =====================
+ * "Run it now, show me the real numbers" - a real statistical check across
+ * the WHOLE collection (every category, every dated entry) of whether
+ * Personal Year 7/11 years actually carry more real-world events than any
+ * other year, comparing both a plain "any event" rate and a "negative-
+ * tagged event" rate side by side (both were asked for). This is NOT the
+ * adversarial/control-group version (explicitly declined) - just an honest
+ * count, raw N included so small samples read as small samples.
+ *
+ * A full run scans every never-yet-checked entry's whole life on Wikipedia
+ * (the user's own choice over the faster "only what's cached" option) -
+ * genuinely slow on a big collection (same 350ms-apart throttle as Find
+ * Missing Pictures, so hundreds of entries can mean several minutes).
+ * onProgress(done, total) fires after each entry so a caller can show a
+ * live counter. Returns the tally; renders nothing itself, so both emax.js
+ * (the landing page) and the future master dashboard can call this same
+ * function and build their own UI around the result.
+ */
+const EMAX_AUDIT_NEGATIVE_TAGS = ['health', 'loss', 'financial'];
+
+async function emax711Audit(db, onProgress) {
+  const entries = [];
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => { if (entry.date) entries.push(entry); });
+  });
+
+  let py7or11Total = 0;
+  let py7or11WithEvent = 0;
+  let py7or11WithNegative = 0;
+  let otherTotal = 0;
+  let otherWithEvent = 0;
+  let otherWithNegative = 0;
+  const nowYear = new Date().getFullYear();
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const birthDate = parseDateStr(entry.date);
+    const startYear = birthDate.getFullYear();
+    const years = [];
+    for (let year = startYear; year <= nowYear; year++) years.push(year);
+
+    if (entry.timelineEvents === undefined) {
+      await emaxFetchYearEvents(entry, years);
+      // Same throttle as findMissingPictures (emax-category.js) - Wikimedia
+      // throttles bursty automated clients, and this can mean hundreds of
+      // sequential fetches across a real collection.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+
+    for (const year of years) {
+      const personalYear = emaxPersonalYearForYear(birthDate, year);
+      const is7or11 = personalYear === 7 || personalYear === 11;
+      const ev = entry.timelineEvents && entry.timelineEvents[year];
+      const hasEvent = !!ev;
+      const hasNegative = !!(ev && ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)));
+      if (is7or11) {
+        py7or11Total++;
+        if (hasEvent) py7or11WithEvent++;
+        if (hasNegative) py7or11WithNegative++;
+      } else {
+        otherTotal++;
+        if (hasEvent) otherWithEvent++;
+        if (hasNegative) otherWithNegative++;
+      }
+    }
+    if (onProgress) onProgress(i + 1, entries.length);
+  }
+
+  return {
+    entryCount: entries.length,
+    ranAt: new Date().toISOString(),
+    py7or11Total, py7or11WithEvent, py7or11WithNegative,
+    otherTotal, otherWithEvent, otherWithNegative,
+    py7or11AnyEventRate: py7or11Total ? py7or11WithEvent / py7or11Total : null,
+    otherAnyEventRate: otherTotal ? otherWithEvent / otherTotal : null,
+    py7or11NegativeRate: py7or11Total ? py7or11WithNegative / py7or11Total : null,
+    otherNegativeRate: otherTotal ? otherWithNegative / otherTotal : null,
+  };
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the
@@ -1381,6 +1611,11 @@ function pickCategoryEmoji(name) {
 
 const EMAX_STORAGE_KEY = 'numerology_emax_db';
 const EMAX_SEEN_STARTERS_KEY = 'numerology_emax_starters_seen_v1';
+// Local-only cache, same convention as EMAX_IMAGE_CACHE_KEY (emax-category.js)
+// - a re-runnable derived result, not primary data, so it's never registered
+// for cloud sync. Read by both the EMAX landing page and (once built) the
+// master dashboard.
+const EMAX_AUDIT_RESULT_KEY = 'numerology_emax_audit_v1';
 
 const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',

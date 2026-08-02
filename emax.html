@@ -45,10 +45,25 @@
 
     <div id="categoriesContainer"></div>
 
+    <div class="box emax-audit-box">
+      <button class="box-label-row emax-collapsible-toggle" id="auditToggle" type="button">
+        <span class="box-label">🔬 7/11 Audit</span>
+        <span class="emax-collapse-chevron" id="auditChevron">▸</span>
+      </button>
+      <div class="emax-collapsible-body" id="auditBody" hidden>
+        <p class="emax-audit-intro">Scans your whole collection - every item, every year of its real life - and checks whether Personal Year 7/11 actually carries more real events than any other year.</p>
+        <button id="runAuditBtn" class="btn" type="button">Run Audit</button>
+        <div class="famous-status" id="auditStatus"></div>
+        <div id="auditResults"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script src="scroll-viewport.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>

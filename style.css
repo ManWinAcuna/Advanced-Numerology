@@ -6915,5 +6915,46 @@ button.emax-fact-tile-tap {
   white-space: nowrap;
 }
 
+/* ---- 7/11 Audit (2026-08-02) ---- */
+.emax-audit-intro {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 10px;
+}
+.emax-audit-summary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 10px 0 8px;
+}
+.emax-audit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.emax-audit-stat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.emax-audit-stat-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+.emax-audit-stat-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--yellow);
+}
+.emax-audit-stat-n {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 #preloadYearInput { width: 90px; }
 .stock-cycles-table tr.lean-flat td.lean-cell { color: var(--orange); font-weight: 700; }
