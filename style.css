@@ -7258,6 +7258,12 @@ button.emax-fact-tile-tap {
   letter-spacing: 0.03em;
   margin-bottom: 4px;
 }
+.emax-detail-row-facts {
+  color: var(--yellow);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
 .emax-detail-row-text {
   font-size: 0.85rem;
   line-height: 1.4;

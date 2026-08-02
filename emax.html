@@ -88,6 +88,19 @@
       </div>
     </div>
 
+    <div class="box emax-audit-box">
+      <button class="box-label-row emax-collapsible-toggle" id="cleanupToggle" type="button">
+        <span class="box-label">🧹 Clean Up Garbled Events</span>
+        <span class="emax-collapse-chevron" id="cleanupChevron">▸</span>
+      </button>
+      <div class="emax-collapsible-body" id="cleanupBody" hidden>
+        <p class="emax-audit-intro">Events scraped before the wikitext-cleanup fix can still show raw markup instead of real prose. This finds every item with a leftover garbled event, clears just those, and re-scrapes them fresh. Items with a manual note mixed in are skipped automatically (never overwritten) - fix those yourself via their Timeline popup.</p>
+        <button id="runCleanupBtn" class="btn" type="button">Scan &amp; Fix Garbled Events</button>
+        <div class="famous-status" id="cleanupStatus"></div>
+        <div id="cleanupResults"></div>
+      </div>
+    </div>
+
   </div>
 
   <div class="modal-overlay" id="emaxDetailOverlay">

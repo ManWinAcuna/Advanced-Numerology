@@ -851,6 +851,66 @@ async function emaxFetchYearEvents(entry, years) {
   return events;
 }
 
+/* ---- Clean up already-scraped garbled events (2026-08-02) ----
+ * The stripWikiTemplates/emaxLooksLikeLeakedMarkup fix above only changes
+ * what a FUTURE scrape returns - emaxFetchYearEvents only ever fetches
+ * once per entry (timelineEvents !== undefined skips it forever after), so
+ * an entry scraped before the fix keeps its garbled text until something
+ * clears timelineEvents back to undefined and re-fetches. Real user report,
+ * with a screenshot, of exactly this: "Despacito"/"In My Feelings" still
+ * showing raw wikitext after the fix landed, because they were scraped
+ * before it and never got a fresh look.
+ */
+
+// Entries with even ONE manual note mixed in are deliberately excluded -
+// emaxFetchYearEvents always overwrites the whole timelineEvents object
+// fresh on a re-fetch (no merge step exists), so resetting an entry that
+// has a hand-typed note would silently wipe it. Those get reported
+// separately so they're not silently ignored, for the user to fix by hand
+// via the Timeline popup's own Edit button instead.
+function emaxFindGarbledEntries(db) {
+  const garbled = [];
+  const skippedWithManualNotes = [];
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => {
+      if (!entry.timelineEvents) return;
+      const events = Object.values(entry.timelineEvents);
+      const hasGarbled = events.some((ev) => ev && ev.text && emaxLooksLikeLeakedMarkup(ev.text));
+      if (!hasGarbled) return;
+      if (events.some((ev) => ev && ev.manual)) skippedWithManualNotes.push(entry);
+      else garbled.push(entry);
+    });
+  });
+  return { garbled, skippedWithManualNotes };
+}
+
+// Resets each fully-auto-scraped garbled entry back to undefined and
+// re-fetches it fresh (through the now-fixed extractor), throttled the
+// same 350ms as every other Wikipedia scan loop in this file.
+async function emaxCleanAndRescanGarbled(db, onProgress) {
+  const { garbled, skippedWithManualNotes } = emaxFindGarbledEntries(db);
+  for (let i = 0; i < garbled.length; i++) {
+    const entry = garbled[i];
+    delete entry.timelineEvents;
+    const birthDate = parseDateStr(entry.date);
+    const nowYear = new Date().getFullYear();
+    const years = [];
+    for (let year = birthDate.getFullYear(); year <= nowYear; year++) years.push(year);
+    try {
+      await emaxFetchYearEvents(entry, years);
+    } catch (e) {
+      console.error('[EMAX Cleanup] could not re-fetch', entry.name, e);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    if (onProgress) onProgress(i + 1, garbled.length);
+  }
+  return {
+    rescannedCount: garbled.length,
+    skippedCount: skippedWithManualNotes.length,
+    skippedNames: skippedWithManualNotes.map((e) => e.name),
+  };
+}
+
 /* ===================== EMAX zodiac/personal-year engine =====================
  * Moved here from emax-category.js on 2026-08-02 - the 7/11 audit needs to
  * run from the EMAX landing page (emax.js), which never loaded that page's
@@ -1319,14 +1379,27 @@ function emaxAuditDetailEntries(db, is7or11, tagFilter) {
     cat.entries.forEach((entry) => {
       if (!entry.date) return;
       const birthDate = parseDateStr(entry.date);
+      // Entity-fixed traits (same for every year of this entry's life) -
+      // computed once per entry, not per year.
+      const ownAnimal = getChineseZodiacYear(birthDate);
+      const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+      const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
+      const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
+      const lifePath = getLifePathNumeric(birthDate);
       for (let year = birthDate.getFullYear(); year <= nowYear; year++) {
         const py = emaxPersonalYearForYear(birthDate, year);
         if ((py === 7 || py === 11) !== is7or11) continue;
         const ev = entry.timelineEvents && entry.timelineEvents[year];
         if (!ev) continue;
         if (tagFilter === 'negative' && !(ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)))) continue;
+        const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+        const zodiacRelation = yearAnimal === ownAnimal ? 'own'
+          : (yearAnimal === enemyAnimal ? 'enemy'
+            : (trineAnimals.includes(yearAnimal) ? 'trine'
+              : (friendlyAnimals.includes(yearAnimal) ? 'friendly' : 'neutral')));
         results.push({
           entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear: py,
+          lifePath, zodiacAnimal: yearAnimal, zodiacRelation,
           text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
         });
       }
@@ -1371,6 +1444,7 @@ function emaxNominationDetailEntries(db, dimension, key) {
         const ev = entry.timelineEvents && entry.timelineEvents[year];
         results.push({
           entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear,
+          lifePath, zodiacAnimal: yearAnimal, zodiacRelation: relation,
           text: ev ? ev.text : null, tags: ev && ev.tags ? ev.tags : [], manual: !!(ev && ev.manual),
         });
       }

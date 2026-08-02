@@ -508,22 +508,30 @@ emaxRenderNominationResults();
  * own call, which also means the cap keeps the most relevant ones. */
 const EMAX_DETAIL_MAX_ROWS = 300;
 
-// Personal Year shown per row (2026-08-02, real user report: "it doesn't
-// tell me what personal year it was") - a bucket like "Personal Year 7/11 -
-// Any Event" lumps both numbers together, and every Nomination dimension
-// besides personalYear itself never showed the number driving that year's
-// own numerology read at all.
+// Personal Year / Life Path / Chinese Zodiac Year shown per row (2026-08-02,
+// direct user requests) - a bucket like "Personal Year 7/11 - Any Event"
+// lumps both numbers together, and every Nomination dimension besides its
+// own showed none of these at all. Zodiac relation (own/trine/friendly/
+// enemy/neutral) is shown alongside the animal itself, not just the bare
+// animal name - a bare "Horse Year" means nothing without knowing whether
+// that's this entry's own year, a clash, or neutral.
+const EMAX_DETAIL_ZODIAC_RELATION_LABELS = {
+  own: 'Own', trine: 'Trine', friendly: 'Friendly', enemy: 'Enemy', neutral: 'Neutral',
+};
+
 function emaxDetailRowHtml(e) {
   const tagsHtml = e.tags.length
     ? `<div class="emax-detail-row-tags">${e.tags.map((t) => `<span class="emax-timeline-tag-pill">${escapeHtml(t.charAt(0).toUpperCase() + t.slice(1))}</span>`).join('')}</div>`
     : '';
+  const relationLabel = EMAX_DETAIL_ZODIAC_RELATION_LABELS[e.zodiacRelation] || e.zodiacRelation;
   return `
     <div class="emax-detail-row">
       <div class="emax-detail-row-head">
         <span class="emax-detail-row-name">${escapeHtml(e.entryName)}</span>
         <span class="emax-detail-row-year">${e.year}</span>
       </div>
-      <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)} &middot; Personal Year ${e.personalYear}</div>
+      <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)}</div>
+      <div class="emax-detail-row-facts">Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath} &middot; ${escapeHtml(e.zodiacAnimal)} Year (${escapeHtml(relationLabel)})</div>
       <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
       ${tagsHtml}
     </div>`;
@@ -670,5 +678,57 @@ document.getElementById('reverseLookupClearBtn').addEventListener('click', () =>
   reverseLookupSelectIds().forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('reverseLookupResults').innerHTML = '';
 });
+
+/* ===================== Clean Up Garbled Events (2026-08-02) =====================
+ * UI-only wrapper around emaxCleanAndRescanGarbled (db-core.js) - real user
+ * report, with a screenshot, that already-scraped entries kept showing raw
+ * wikitext after the extractor fix landed, since that fix only changes
+ * what a FUTURE scrape returns. Not cached across visits like Audit/
+ * Nomination - this is a one-off maintenance action, not something you'd
+ * re-run repeatedly once your collection is clean.
+ */
+let emaxCleanupRunning = false;
+
+async function runEmaxCleanup() {
+  if (emaxCleanupRunning) return;
+  emaxCleanupRunning = true;
+  const btn = document.getElementById('runCleanupBtn');
+  const status = document.getElementById('cleanupStatus');
+  const results = document.getElementById('cleanupResults');
+  btn.disabled = true;
+  results.innerHTML = '';
+  try {
+    const found = emaxFindGarbledEntries(db);
+    if (!found.garbled.length && !found.skippedWithManualNotes.length) {
+      status.textContent = 'No garbled events found - your collection is clean.';
+      return;
+    }
+    if (!found.garbled.length) {
+      status.textContent = `Found ${found.skippedWithManualNotes.length} garbled item(s), but all have a manual note mixed in - skipped automatically. Fix those yourself via their Timeline popup.`;
+      return;
+    }
+    const outcome = await emaxCleanAndRescanGarbled(db, (done, total) => {
+      status.textContent = `Re-scanning ${done}/${total} garbled items...`;
+    });
+    status.textContent = `Done - re-scraped ${outcome.rescannedCount} item${outcome.rescannedCount === 1 ? '' : 's'}.`;
+    if (outcome.skippedCount) {
+      results.innerHTML = `<div class="emax-audit-summary">${outcome.skippedCount} item${outcome.skippedCount === 1 ? '' : 's'} skipped (manual note mixed in - fix by hand): ${escapeHtml(outcome.skippedNames.join(', '))}</div>`;
+    }
+  } catch (e) {
+    console.error('[EMAX Cleanup] failed', e);
+    status.textContent = `Cleanup failed: ${e.message || 'unknown error'}. Try again.`;
+  } finally {
+    btn.disabled = false;
+    emaxCleanupRunning = false;
+  }
+}
+
+document.getElementById('cleanupBody').hidden = true;
+document.getElementById('cleanupToggle').addEventListener('click', () => {
+  const body = document.getElementById('cleanupBody');
+  body.hidden = !body.hidden;
+  document.getElementById('cleanupChevron').classList.toggle('open', !body.hidden);
+});
+document.getElementById('runCleanupBtn').addEventListener('click', () => runEmaxCleanup());
 
 render();
