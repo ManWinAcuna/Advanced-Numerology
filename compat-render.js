@@ -216,3 +216,77 @@ function renderMonthDetail(containerEl, m) {
     </div>
   `;
 }
+
+// Renders a computeYearRoadmap() result (db-core.js) - every calendar year
+// across the user's current Pinnacle period, in chronological order (a
+// roadmap, not a ranking - unlike Month Outlook's best-to-worst list).
+function renderYearRoadmap(containerEl, roadmap) {
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, true);
+  const pinnacleOrdinal = ['1st', '2nd', '3rd', '4th'][roadmap.pinnacleIndex - 1];
+  containerEl.innerHTML = `
+    <div class="score-hero month-outlook-hero">
+      <div class="month-outlook-icon">🗺️</div>
+      <div class="score-names">Personal Year Roadmap</div>
+      <div class="year-roadmap-subhead">Your ${pinnacleOrdinal} Pinnacle &middot; ${roadmap.startYear}&ndash;${roadmap.endYear}</div>
+    </div>
+    <div class="calendar-rank-list year-roadmap-list">
+      ${roadmap.years.map((y) => `
+        <div class="year-roadmap-row" data-year="${y.year}" title="Personal Year ${y.personalYear} &middot; ${y.animal} &middot; click for the breakdown">
+          <span class="year-roadmap-year">${y.year}</span>
+          <span class="year-roadmap-mid">${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''} PY ${y.personalYear}<span class="year-roadmap-animal">${y.animal}</span></span>
+          <span class="year-roadmap-verdict ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">${y.verdict.toUpperCase()}</span>
+          <span class="rank-score ${scoreClass(y.finalScore)}">${y.finalScore}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div id="yearRoadmapCompareResults"></div>
+  `;
+
+  containerEl.querySelectorAll('.year-roadmap-row').forEach((rowEl) => {
+    rowEl.addEventListener('click', () => {
+      const year = Number(rowEl.dataset.year);
+      const y = roadmap.years.find((row) => row.year === year);
+      if (!y) return;
+      renderYearRoadmapDetail(document.getElementById('yearRoadmapCompareResults'), roadmap, y);
+      document.getElementById('yearRoadmapCompareResults').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+}
+
+// Drills into a single year from computeYearRoadmap()'s result - reuses the
+// exact same numbers already shown in the list (finalScore, vietnameseScore,
+// personalYearScore, universalYearScore, verdict, magnitude) rather than
+// running a different comparison, so this breakdown always adds up to the
+// same score/verdict the list already showed for that year.
+const YEAR_ROADMAP_VERDICT_NOTE = {
+  good: 'Own, Trine, or Friendly zodiac year, with no Personal Year 7/11 override.',
+  bad: 'Either an Enemy zodiac year, or Personal Year 7/11 (which overrides even an otherwise-good zodiac year).',
+  mid: 'Neither a matched zodiac year nor Personal Year 7/11 - a neutral year.',
+};
+function renderYearRoadmapDetail(containerEl, roadmap, y) {
+  const numerologyRows = [
+    { label: `Personal Year (Lifepath &harr; ${y.personalYear})`, score: y.personalYearScore },
+    { label: `Universal Year (Lifepath &harr; ${y.universalYear})`, score: y.universalYearScore },
+  ];
+  const vietnameseRows = [
+    { label: `${VIETNAMESE_ZODIAC_EMOJI[roadmap.ownAnimal] || ''} Birth Animal (${roadmap.ownAnimal} &harr; ${y.animal})`, score: y.vietnameseScore },
+  ];
+
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+  containerEl.innerHTML = `
+    <div class="score-hero">
+      <div class="score-names">You <span class="score-vs">&times;</span> ${y.year}</div>
+      <div class="score-big ${scoreClass(y.finalScore)}">${y.finalScore}<span class="score-out-of">/100</span></div>
+    </div>
+    <div class="year-roadmap-emax-callout ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">
+      <div class="year-roadmap-emax-verdict">${y.verdict.toUpperCase()} <span class="year-roadmap-emax-magnitude">(${y.magnitude > 0 ? '+' : ''}${y.magnitude})</span></div>
+      <div class="year-roadmap-emax-note">${YEAR_ROADMAP_VERDICT_NOTE[y.verdict]}</div>
+    </div>
+    <div class="score-breakdown">
+      ${breakdownSection('Numerology', y.numerologyScore, numerologyRows)}
+      ${breakdownSection('Vietnamese Zodiac', y.vietnameseScore, vietnameseRows)}
+    </div>
+  `;
+}

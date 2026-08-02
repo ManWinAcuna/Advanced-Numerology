@@ -377,6 +377,17 @@ if (pmReducedEl) {
   });
 }
 
+const pyReducedEl = document.getElementById('pyReduced');
+if (pyReducedEl) {
+  pyReducedEl.title = 'Click for Personal Year Roadmap';
+  pyReducedEl.addEventListener('click', () => {
+    if (!lastBirthDate) return;
+    const roadmap = computeYearRoadmap(lastBirthDate);
+    renderYearRoadmap(document.getElementById('compatModalBody'), roadmap);
+    openModal();
+  });
+}
+
 const compatMeBox = document.getElementById('compatMeBox');
 if (compatMeBox) {
   compatMeBox.addEventListener('click', () => {

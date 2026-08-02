@@ -1263,6 +1263,97 @@ function emaxReverseLookup(db, filters) {
   return results;
 }
 
+/* ===================== Personal-Year Roadmap (Profile) ===================== */
+// "Tap Personal Year like Personal Month already does" (2026-08-02, CODE13
+// backlog 7/8) - lists every calendar year across the user's CURRENT
+// Pinnacle period (getPinnacles' own age boundaries, numerology.js).
+// Pinnacles 2/3 are always exactly 9 years, but 1 and 4 can run much
+// longer or have no natural end - shown in FULL either way per the user's
+// own call, with Pinnacle 4's genuinely open "rest of your life" end
+// capped at a realistic age rather than computed forever.
+//
+// Each year gets BOTH an EMAX-style verdict (own/trine/friendly/enemy
+// zodiac + Personal Year 7/11 - the exact same emaxTimelineYearVerdict/
+// emaxYearMagnitude engine every EMAX item's own timeline already uses;
+// entry passed as {} since a personal profile has no scraped-event history
+// to bonus off of, same as any other caller that only needs a verdict) AND
+// a percentage score in the spirit of the existing Month Outlook popup
+// (compat-engine.js's computeMonthOutlook), but with the Western component
+// DROPPED and Vietnamese/Numerology proportionally re-weighted
+// (45/35 -> the same 56.25/43.75 ratio, not a new invented split) - per the
+// user's own call, there's no real "this year is an Aries year" system
+// anywhere in this app the way every calendar MONTH maps to a Western
+// sign, so nothing stands in for it. No lucky-number bonus either, for the
+// same "nothing invented" reason.
+const PROFILE_ROADMAP_PINNACLE4_MAX_AGE = 100;
+const PROFILE_ROADMAP_VIETNAMESE_WEIGHT = 45 / (45 + 35);
+const PROFILE_ROADMAP_NUMEROLOGY_WEIGHT = 35 / (45 + 35);
+
+function computeYearRoadmapRange(birthDate) {
+  const { ages } = getPinnacles(birthDate);
+  const [age1, age2, age3] = ages;
+  const today = new Date();
+  let currentAge = today.getFullYear() - birthDate.getFullYear();
+  const hasHadBirthdayThisYear = (today.getMonth() > birthDate.getMonth())
+    || (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+  if (!hasHadBirthdayThisYear) currentAge -= 1;
+
+  let pinnacleIndex;
+  let startAge;
+  let endAge;
+  if (currentAge < age1) { pinnacleIndex = 1; startAge = 0; endAge = age1; }
+  else if (currentAge < age2) { pinnacleIndex = 2; startAge = age1; endAge = age2; }
+  else if (currentAge < age3) { pinnacleIndex = 3; startAge = age2; endAge = age3; }
+  else { pinnacleIndex = 4; startAge = age3; endAge = PROFILE_ROADMAP_PINNACLE4_MAX_AGE; }
+
+  return {
+    pinnacleIndex,
+    startYear: birthDate.getFullYear() + startAge,
+    endYear: birthDate.getFullYear() + endAge,
+  };
+}
+
+function computeYearRoadmapYear(birthDate, year, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals) {
+  const personalYear = emaxPersonalYearForYear(birthDate, year);
+  const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+  const isOwnYear = yearAnimal === ownAnimal;
+  const isEnemyYear = yearAnimal === enemyAnimal;
+  const isTrineYear = trineAnimals.includes(yearAnimal);
+  const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
+  const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
+  const magnitude = emaxYearMagnitude({}, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
+
+  const vietnameseScore = vietnameseCompat(ownAnimal, yearAnimal);
+  const personalYearScore = numerologyCompat(lifePathNum, personalYear);
+  const universalYear = getUniversalYear(new Date(year, 0, 1));
+  const universalYearScore = numerologyCompat(lifePathNum, universalYear);
+  const numerologyScore = Math.round(0.5 * personalYearScore + 0.5 * universalYearScore);
+  const finalScore = Math.min(100, Math.round(
+    PROFILE_ROADMAP_VIETNAMESE_WEIGHT * vietnameseScore + PROFILE_ROADMAP_NUMEROLOGY_WEIGHT * numerologyScore,
+  ));
+
+  return {
+    year, personalYear, animal: yearAnimal, verdict, magnitude,
+    finalScore, vietnameseScore, numerologyScore, personalYearScore, universalYear, universalYearScore,
+  };
+}
+
+function computeYearRoadmap(birthDate) {
+  const ownAnimal = getChineseZodiacYear(birthDate);
+  const enemyAnimal = emaxEnemyZodiacAnimal(ownAnimal);
+  const trineAnimals = emaxTrineZodiacAnimals(ownAnimal);
+  const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
+  const lifePathNum = getLifePathNumeric(birthDate);
+  const { pinnacleIndex, startYear, endYear } = computeYearRoadmapRange(birthDate);
+
+  const years = [];
+  for (let year = startYear; year <= endYear; year++) {
+    years.push(computeYearRoadmapYear(birthDate, year, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals));
+  }
+
+  return { pinnacleIndex, startYear, endYear, ownAnimal, years };
+}
+
 /* ===================== Place lookup: country fallback ===================== */
 // A US state's founding date used elsewhere in this app is its statehood
 // (joined-the-union) date, not "when this land was first settled" - the

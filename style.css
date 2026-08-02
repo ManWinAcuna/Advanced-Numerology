@@ -559,7 +559,7 @@ body::after {
   }
 }
 
-#pmReduced {
+#pmReduced, #pyReduced {
   cursor: pointer;
 }
 
@@ -677,6 +677,102 @@ body::after {
   font-size: 12px;
   font-weight: 400;
   margin-left: 4px;
+}
+
+.year-roadmap-subhead {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.year-roadmap-list {
+  margin-top: 16px;
+  gap: 6px;
+}
+
+.year-roadmap-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(160deg, #1c160d, #120e08);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .year-roadmap-row:hover {
+    border-color: var(--yellow);
+    box-shadow: var(--glow-cyan);
+    transform: translateX(3px);
+  }
+}
+
+.year-roadmap-year {
+  font-weight: 700;
+  font-size: 14px;
+  width: 42px;
+  flex-shrink: 0;
+}
+
+.year-roadmap-mid {
+  flex: 1;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.year-roadmap-animal {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.year-roadmap-verdict {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(240, 230, 210, 0.08);
+}
+.year-roadmap-verdict.good { color: var(--good); background: rgba(139, 195, 74, 0.15); }
+.year-roadmap-verdict.bad { color: var(--bad); background: rgba(229, 57, 63, 0.15); }
+.year-roadmap-verdict.mid { color: var(--yellow); background: rgba(245, 197, 66, 0.12); }
+.year-roadmap-verdict.severe { box-shadow: 0 0 8px currentColor; }
+
+.year-roadmap-emax-callout {
+  margin: 14px 20px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border-left: 3px solid var(--border);
+  background: var(--panel);
+}
+.year-roadmap-emax-callout.good { border-left-color: var(--good); }
+.year-roadmap-emax-callout.bad { border-left-color: var(--bad); }
+.year-roadmap-emax-callout.mid { border-left-color: var(--yellow); }
+.year-roadmap-emax-callout.severe { box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); }
+
+.year-roadmap-emax-verdict {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.year-roadmap-emax-magnitude {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.year-roadmap-emax-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 #monthOutlookCompareResults:not(:empty) {
