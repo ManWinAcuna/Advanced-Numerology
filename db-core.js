@@ -1400,6 +1400,7 @@ function emaxAuditDetailEntries(db, is7or11, tagFilter) {
         results.push({
           entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear: py,
           lifePath, zodiacAnimal: yearAnimal, zodiacRelation,
+          ownYear: birthDate.getFullYear(), ownAnimal,
           text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
         });
       }
@@ -1445,6 +1446,7 @@ function emaxNominationDetailEntries(db, dimension, key) {
         results.push({
           entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear,
           lifePath, zodiacAnimal: yearAnimal, zodiacRelation: relation,
+          ownYear: birthDate.getFullYear(), ownAnimal,
           text: ev ? ev.text : null, tags: ev && ev.tags ? ev.tags : [], manual: !!(ev && ev.manual),
         });
       }

@@ -525,6 +525,7 @@ function emaxDetailRowHtml(e) {
     : '';
   const relationLabel = EMAX_DETAIL_ZODIAC_RELATION_LABELS[e.zodiacRelation] || e.zodiacRelation;
   const zodiacEmoji = VIETNAMESE_ZODIAC_EMOJI[e.zodiacAnimal] || '';
+  const ownEmoji = VIETNAMESE_ZODIAC_EMOJI[e.ownAnimal] || '';
   return `
     <div class="emax-detail-row">
       <div class="emax-detail-row-head">
@@ -532,7 +533,7 @@ function emaxDetailRowHtml(e) {
         <span class="emax-detail-row-year">${zodiacEmoji} ${e.year}</span>
       </div>
       <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)}</div>
-      <div class="emax-detail-row-facts">Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath} &middot; ${escapeHtml(e.zodiacAnimal)} Year (${escapeHtml(relationLabel)})</div>
+      <div class="emax-detail-row-facts">Born ${e.ownYear} ${ownEmoji} &middot; Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath} &middot; ${escapeHtml(e.zodiacAnimal)} Year (${escapeHtml(relationLabel)})</div>
       <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
       ${tagsHtml}
     </div>`;
