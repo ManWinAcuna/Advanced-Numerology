@@ -367,12 +367,22 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
     const inst = instruments[i];
     const anchors = inst.anchors.filter((a) => a.primary && a.date);
     if (anchors.length) {
-      const wasCached = stocksCyclesCacheHit(inst.px.symbol);
-      const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
-      anchors.forEach((a) => {
-        allTrades = allTrades.concat(stocksTransitBacktestAnchor(stocksParseDate(a.date), bars));
-      });
-      if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
+      // One bad symbol or a rate-limit hiccup shouldn't block the rest -
+      // same doctrine as stocksLoadCombinedRecord/stocksLoadStopLossRecord
+      // above, which this function originally missed (the "stuck at 11/16"
+      // bug: a single failed fetch was propagating all the way up through
+      // stocksRunTransitBacktest with nothing catching it, freezing the
+      // progress line and leaving the Run button disabled forever).
+      try {
+        const wasCached = stocksCyclesCacheHit(inst.px.symbol);
+        const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+        anchors.forEach((a) => {
+          allTrades = allTrades.concat(stocksTransitBacktestAnchor(stocksParseDate(a.date), bars));
+        });
+        if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
+      } catch (e) {
+        console.error('[Transit Backtest] could not fetch', inst.ticker, e);
+      }
     }
     if (onProgress) onProgress(i + 1, instruments.length);
   }
@@ -460,15 +470,27 @@ async function stocksRunTransitBacktest() {
   const box = document.getElementById('stocksTransitBacktest');
   const btn = document.getElementById('stockTransitRunBtn');
   if (btn) btn.disabled = true;
-  const result = await stocksTransitBacktestAll(stocksTransitInstruments, (done, total) => {
-    const status = document.getElementById('stockTransitStatus');
-    if (status) status.textContent = `Scanning ${done}/${total} instruments...`;
-  });
-  stocksTransitSaveResult(result);
-  renderStocksTransitBacktestBody(box, result);
-  const statusAfter = document.getElementById('stockTransitStatus');
-  if (statusAfter) statusAfter.textContent = `Done - scanned ${result.instrumentCount} instruments.`;
-  stocksTransitRunning = false;
+  // try/finally as a second, outer layer on top of stocksTransitBacktestAll's
+  // own per-instrument try/catch - even a total failure (not just one bad
+  // symbol) still resets the running flag and re-enables the button,
+  // instead of freezing mid-scan forever (the "stuck at 11/16" bug).
+  try {
+    const result = await stocksTransitBacktestAll(stocksTransitInstruments, (done, total) => {
+      const status = document.getElementById('stockTransitStatus');
+      if (status) status.textContent = `Scanning ${done}/${total} instruments...`;
+    });
+    stocksTransitSaveResult(result);
+    renderStocksTransitBacktestBody(box, result);
+    const statusAfter = document.getElementById('stockTransitStatus');
+    if (statusAfter) statusAfter.textContent = `Done - scanned ${result.instrumentCount} instruments.`;
+  } catch (e) {
+    console.error('[Transit Backtest] failed', e);
+    const statusErr = document.getElementById('stockTransitStatus');
+    if (statusErr) statusErr.textContent = `Backtest failed: ${e.message || 'unknown error'}. Try again.`;
+  } finally {
+    stocksTransitRunning = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 function stocksInitTransitBacktest(instruments) {

@@ -1050,7 +1050,17 @@ async function emax711Audit(db, onProgress) {
     for (let year = startYear; year <= nowYear; year++) years.push(year);
 
     if (entry.timelineEvents === undefined) {
-      await emaxFetchYearEvents(entry, years);
+      // One bad entry (a title Wikipedia can't resolve, a network hiccup,
+      // a storage-quota save failure) must not kill a scan that can be
+      // hundreds of entries deep - it's left ungraded this run (still
+      // undefined, so it's retried on the next run) and the loop moves on,
+      // same "don't let one bad symbol block the rest" doctrine
+      // stocksLoadCombinedRecord already uses for price fetches.
+      try {
+        await emaxFetchYearEvents(entry, years);
+      } catch (e) {
+        console.error('[EMAX Audit] could not fetch events for', entry.name, e);
+      }
       // Same throttle as findMissingPictures (emax-category.js) - Wikimedia
       // throttles bursty automated clients, and this can mean hundreds of
       // sequential fetches across a real collection.
@@ -1173,7 +1183,14 @@ async function emaxNumberNomination(db, onProgress) {
     for (let year = startYear; year <= nowYear; year++) years.push(year);
 
     if (entry.timelineEvents === undefined) {
-      await emaxFetchYearEvents(entry, years);
+      // Same "one bad entry can't kill the whole scan" doctrine as
+      // emax711Audit right above - left ungraded (still undefined, retried
+      // next run) rather than throwing the whole nomination scan away.
+      try {
+        await emaxFetchYearEvents(entry, years);
+      } catch (e) {
+        console.error('[EMAX Nomination] could not fetch events for', entry.name, e);
+      }
       // Same throttle as emax711Audit/findMissingPictures - Wikimedia
       // throttles bursty automated clients.
       await new Promise((resolve) => setTimeout(resolve, 350));
@@ -1974,8 +1991,24 @@ function loadEmaxDB() {
   }
 }
 
+// The one big exception to this codebase's "every localStorage.setItem is
+// try/catch-guarded" convention (2026-08-02 fix) - EMAX isn't routed
+// through big-store.js (unlike MLB/UFC/Betting), so it's still capped at
+// localStorage's ~5MB, and the collection has grown into the thousands of
+// entries across 10 categories, each now carrying real scraped
+// timelineEvents text. An unguarded quota error here was propagating
+// straight up through emaxFetchYearEvents -> emax711Audit/
+// emaxNumberNomination's scan loop -> runEmaxAudit/runEmaxNomination,
+// with nothing catching it anywhere on the way - freezing the progress
+// bar mid-scan and leaving the Run button permanently disabled (the
+// "stuck at 293" bug).
 function saveEmaxDB(db) {
-  localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify(db));
+  try {
+    localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify(db));
+  } catch (e) {
+    console.error('[EMAX] could not save - storage may be full', e);
+    return;
+  }
   cloudPushKey(EMAX_STORAGE_KEY);
 }
 

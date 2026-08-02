@@ -333,14 +333,26 @@ async function runEmaxAudit() {
   const btn = document.getElementById('runAuditBtn');
   const status = document.getElementById('auditStatus');
   btn.disabled = true;
-  const result = await emax711Audit(db, (done, total) => {
-    status.textContent = `Scanning ${done}/${total} items...`;
-  });
-  emaxSaveAuditResult(result);
-  emaxRenderAuditResults();
-  status.textContent = `Done - scanned ${result.entryCount} items.`;
-  btn.disabled = false;
-  emaxAuditRunning = false;
+  // try/finally so a total failure (not just one bad entry - emax711Audit's
+  // own loop already tolerates those) still resets the running flag and
+  // re-enables the button, instead of freezing the progress line and
+  // silently no-opping every future click forever (the "stuck at 293" bug -
+  // emax711Audit itself is now hardened per-entry too, this is the second,
+  // outer layer of the same fix).
+  try {
+    const result = await emax711Audit(db, (done, total) => {
+      status.textContent = `Scanning ${done}/${total} items...`;
+    });
+    emaxSaveAuditResult(result);
+    emaxRenderAuditResults();
+    status.textContent = `Done - scanned ${result.entryCount} items.`;
+  } catch (e) {
+    console.error('[EMAX Audit] failed', e);
+    status.textContent = `Audit failed: ${e.message || 'unknown error'}. Try again.`;
+  } finally {
+    btn.disabled = false;
+    emaxAuditRunning = false;
+  }
 }
 
 // The HTML's own `hidden` attribute already starts this collapsed (avoids
@@ -449,14 +461,22 @@ async function runEmaxNomination() {
   const btn = document.getElementById('runNominationBtn');
   const status = document.getElementById('nominationStatus');
   btn.disabled = true;
-  const result = await emaxNumberNomination(db, (done, total) => {
-    status.textContent = `Scanning ${done}/${total} items...`;
-  });
-  emaxSaveNominationResult(result);
-  emaxRenderNominationResults();
-  status.textContent = `Done - scanned ${result.entryCount} items.`;
-  btn.disabled = false;
-  emaxNominationRunning = false;
+  // Same try/finally hardening as runEmaxAudit above, same "stuck at N"
+  // bug class.
+  try {
+    const result = await emaxNumberNomination(db, (done, total) => {
+      status.textContent = `Scanning ${done}/${total} items...`;
+    });
+    emaxSaveNominationResult(result);
+    emaxRenderNominationResults();
+    status.textContent = `Done - scanned ${result.entryCount} items.`;
+  } catch (e) {
+    console.error('[EMAX Nomination] failed', e);
+    status.textContent = `Nomination failed: ${e.message || 'unknown error'}. Try again.`;
+  } finally {
+    btn.disabled = false;
+    emaxNominationRunning = false;
+  }
 }
 
 document.getElementById('nominationBody').hidden = true;
