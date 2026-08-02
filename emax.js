@@ -508,22 +508,10 @@ emaxRenderNominationResults();
  * own call, which also means the cap keeps the most relevant ones. */
 const EMAX_DETAIL_MAX_ROWS = 300;
 
-// Personal Year / Life Path / Chinese Zodiac Year shown per row (2026-08-02,
-// direct user requests) - a bucket like "Personal Year 7/11 - Any Event"
-// lumps both numbers together, and every Nomination dimension besides its
-// own showed none of these at all. Zodiac relation (own/trine/friendly/
-// enemy/neutral) is shown alongside the animal itself, not just the bare
-// animal name - a bare "Horse Year" means nothing without knowing whether
-// that's this entry's own year, a clash, or neutral.
-const EMAX_DETAIL_ZODIAC_RELATION_LABELS = {
-  own: 'Own', trine: 'Trine', friendly: 'Friendly', enemy: 'Enemy', neutral: 'Neutral',
-};
-
 function emaxDetailRowHtml(e) {
   const tagsHtml = e.tags.length
     ? `<div class="emax-detail-row-tags">${e.tags.map((t) => `<span class="emax-timeline-tag-pill">${escapeHtml(t.charAt(0).toUpperCase() + t.slice(1))}</span>`).join('')}</div>`
     : '';
-  const relationLabel = EMAX_DETAIL_ZODIAC_RELATION_LABELS[e.zodiacRelation] || e.zodiacRelation;
   const zodiacEmoji = VIETNAMESE_ZODIAC_EMOJI[e.zodiacAnimal] || '';
   const ownEmoji = VIETNAMESE_ZODIAC_EMOJI[e.ownAnimal] || '';
   return `
@@ -533,7 +521,7 @@ function emaxDetailRowHtml(e) {
         <span class="emax-detail-row-year">${zodiacEmoji} ${e.year}</span>
       </div>
       <div class="emax-detail-row-cat">${escapeHtml(e.categoryName)}</div>
-      <div class="emax-detail-row-facts">Born ${e.ownYear} ${ownEmoji} &middot; Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath} &middot; ${escapeHtml(e.zodiacAnimal)} Year (${escapeHtml(relationLabel)})</div>
+      <div class="emax-detail-row-facts">Born ${e.ownYear} ${ownEmoji} &middot; Personal Year ${e.personalYear} &middot; Life Path ${e.lifePath}</div>
       <div class="emax-detail-row-text">${escapeHtml(e.text)}</div>
       ${tagsHtml}
     </div>`;
