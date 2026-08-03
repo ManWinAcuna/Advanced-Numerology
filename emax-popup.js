@@ -347,11 +347,16 @@ async function emaxAutoAddLinkedPerson(personName, personQid, targetCategoryName
 // (Inventors' own Invention) whose date is already known directly - no
 // Wikidata fetch to make, so this is synchronous and can run inline before
 // the entry itself even saves.
-function emaxAutoAddLinkedEntityWithDate(name, date, targetCategoryName) {
-  if (!name || !date || !targetCategoryName) return;
+// year: a fallback for when only a real, sourced YEAR is known for the
+// linked entity (most pre-modern inventions), not a fabricated day - same
+// "never invent precision the source doesn't support" rule as everywhere
+// else, just reaching this function through the manualDate path instead of
+// a live lookup's own year-only fallback.
+function emaxAutoAddLinkedEntityWithDate(name, date, targetCategoryName, year) {
+  if (!name || !targetCategoryName || (!date && !year)) return;
   const targetCat = db.categories.find((c) => c.name === targetCategoryName);
   if (!targetCat || targetCat.entries.some((e) => e.name.toLowerCase() === name.toLowerCase())) return;
-  targetCat.entries.push({ id: uid(), name, date });
+  targetCat.entries.push(date ? { id: uid(), name, date } : { id: uid(), name, year });
   saveEmaxDB(db);
 }
 

@@ -740,8 +740,15 @@ async function preloadTop50() {
     // dateKind comes from the category's own EMAX_YEAR_FILTER_KIND default
     // (e.g. 'started' for Wars, not the generic 'occurred' every other
     // baked-date category uses) so the popup's date line reads correctly.
-    if (isSeedObject && seed.date) {
-      const entry = { id: uid(), name: displayName, date: seed.date, dateKind: EMAX_YEAR_FILTER_KIND[category.name] };
+    // A seed with `year` instead of `date` (a real, sourced year, but no
+    // day-precision source exists for it) becomes a genuine year-only entry
+    // - same "never fabricate finer precision than the source supports"
+    // rule every live lookup's own year-only fallback already follows,
+    // just fed from a baked value instead of a live Wikidata property.
+    if (isSeedObject && (seed.date || seed.year)) {
+      const entry = seed.date
+        ? { id: uid(), name: displayName, date: seed.date, dateKind: EMAX_YEAR_FILTER_KIND[category.name] }
+        : { id: uid(), name: displayName, year: seed.year };
       if (severityCfg && seed[severityCfg.field] != null) entry[severityCfg.field] = seed[severityCfg.field];
       category.entries.push(entry);
       existing.add(displayName.toLowerCase());
@@ -754,10 +761,14 @@ async function preloadTop50() {
       if (info) {
         const entry = { id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind };
         if (linkedPersonCfg && linkedPersonCfg.manualDate) {
-          if (isSeedObject && seed.invention && seed.inventionDate) {
+          // inventionYear: a real, sourced year with no day-precision
+          // source behind it (most pre-modern inventions) - never a
+          // fabricated day, same as the item's own year-only fallback.
+          if (isSeedObject && seed.invention && (seed.inventionDate || seed.inventionYear)) {
             entry[linkedPersonCfg.field + 'Name'] = seed.invention;
-            entry[linkedPersonCfg.field + 'Date'] = seed.inventionDate;
-            emaxAutoAddLinkedEntityWithDate(seed.invention, seed.inventionDate, linkedPersonCfg.targetCategory);
+            if (seed.inventionDate) entry[linkedPersonCfg.field + 'Date'] = seed.inventionDate;
+            else entry[linkedPersonCfg.field + 'Year'] = seed.inventionYear;
+            emaxAutoAddLinkedEntityWithDate(seed.invention, seed.inventionDate, linkedPersonCfg.targetCategory, seed.inventionYear);
           }
         } else if (linkedPersonCfg && linkedPersonCfg.lookupFn) {
           try {
