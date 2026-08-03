@@ -232,8 +232,8 @@ function renderYearRoadmap(containerEl, roadmap) {
     </div>
     <div class="calendar-rank-list year-roadmap-list">
       ${roadmap.years.map((y) => `
-        <div class="year-roadmap-row" data-year="${y.year}" title="Personal Year ${y.personalYear} &middot; ${y.animal} &middot; click for the breakdown">
-          <span class="year-roadmap-year">${y.year}</span>
+        <div class="year-roadmap-row" data-year-key="${y.year}:${y.part}" title="Personal Year ${y.personalYear} &middot; ${y.animal} &middot; click for the breakdown">
+          <span class="year-roadmap-year">${emaxYearPeriodLabel(y.year, y.part)}</span>
           <span class="year-roadmap-mid">${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''} PY ${y.personalYear}<span class="year-roadmap-animal">${y.animal}</span></span>
           <span class="year-roadmap-verdict ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">${y.verdict.toUpperCase()}</span>
           <span class="rank-score ${scoreClass(y.finalScore)}">${y.finalScore}</span>
@@ -245,8 +245,8 @@ function renderYearRoadmap(containerEl, roadmap) {
 
   containerEl.querySelectorAll('.year-roadmap-row').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
-      const year = Number(rowEl.dataset.year);
-      const y = roadmap.years.find((row) => row.year === year);
+      const key = rowEl.dataset.yearKey;
+      const y = roadmap.years.find((row) => `${row.year}:${row.part}` === key);
       if (!y) return;
       renderYearRoadmapDetail(document.getElementById('yearRoadmapCompareResults'), roadmap, y);
       document.getElementById('yearRoadmapCompareResults').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -277,7 +277,7 @@ function renderYearRoadmapDetail(containerEl, roadmap, y) {
   setModalWidth(containerEl, false);
   containerEl.innerHTML = `
     <div class="score-hero">
-      <div class="score-names">You <span class="score-vs">&times;</span> ${y.year}</div>
+      <div class="score-names">You <span class="score-vs">&times;</span> ${emaxYearPeriodLabel(y.year, y.part)}</div>
       <div class="score-big ${scoreClass(y.finalScore)}">${y.finalScore}<span class="score-out-of">/100</span></div>
     </div>
     <div class="year-roadmap-emax-callout ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">

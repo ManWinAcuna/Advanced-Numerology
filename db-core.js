@@ -1709,8 +1709,14 @@ function computeYearRoadmapRange(birthDate) {
   };
 }
 
-function computeYearRoadmapYear(birthDate, year, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals) {
-  const personalYear = emaxPersonalYearForYear(birthDate, year);
+// One row per Personal-Year PERIOD within this calendar year (see
+// emaxYearPersonalYearPeriods) - a Roadmap year whose birthday splits it
+// produces two rows here, each with its own personalYear/verdict/
+// magnitude/scores. Unlike an EMAX item's timeline, the Roadmap has no
+// scraped event to worry about confirming - it's pure zodiac/numerology
+// signal-stacking, so every period's numbers are fully knowable from the
+// birthdate alone and need no exclusion logic.
+function computeYearRoadmapYear(year, part, personalYear, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals) {
   const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
   const isOwnYear = yearAnimal === ownAnimal;
   const isEnemyYear = yearAnimal === enemyAnimal;
@@ -1737,7 +1743,7 @@ function computeYearRoadmapYear(birthDate, year, lifePathNum, ownAnimal, enemyAn
   ));
 
   return {
-    year, personalYear, animal: yearAnimal, verdict, magnitude,
+    year, part, personalYear, animal: yearAnimal, verdict, magnitude,
     finalScore, vietnameseScore, numerologyScore, personalYearScore, universalYear, universalYearScore,
   };
 }
@@ -1752,7 +1758,10 @@ function computeYearRoadmap(birthDate) {
 
   const years = [];
   for (let year = startYear; year <= endYear; year++) {
-    years.push(computeYearRoadmapYear(birthDate, year, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals));
+    const periods = emaxYearPersonalYearPeriods(birthDate, year);
+    periods.forEach(({ personalYear, part }) => {
+      years.push(computeYearRoadmapYear(year, part, personalYear, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals));
+    });
   }
 
   return { pinnacleIndex, startYear, endYear, ownAnimal, years };
