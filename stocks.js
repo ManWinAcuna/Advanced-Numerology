@@ -2773,7 +2773,12 @@ const STOCKS_COMBINED_FETCH_GAP_MS = 8000;
 // returns behind each grade (expectancy/avg-win-loss/worst-trade), not just
 // the grade string - v6 entries have no size data to backfill, so the
 // ledger rebuilds.
-const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v7';
+// v8 (2026-08-03): stocksAnchorTimeframeSignals dropped the Vietnamese
+// zodiac vote and neutralized square/sextile at Year cadence (Signal
+// Backtest showed both flat-or-backwards against baseline) - every v7 entry
+// was graded under the old vote mix, so the ledger rebuilds to reflect the
+// new one immediately instead of phasing in as old windows age out.
+const STOCKS_COMBINED_STORE_KEY = 'numerology_stock_combined_record_v8';
 
 function stocksDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
