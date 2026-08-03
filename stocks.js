@@ -346,6 +346,93 @@ function stocksTransitTally(list) {
   return { n: list.length, right, wrong: list.length - right, rate: list.length ? right / list.length : null };
 }
 
+// One anchor's numerology + Vietnamese zodiac signals across its own price
+// history, same fixed-hold grading shape as the transit signals above.
+// computeEnergyFlow (compat-engine.js) already derives personalYear/Month/
+// Day and the Vietnamese clash/ally scores for any given date - this reuses
+// it directly rather than re-deriving those numbers.
+//
+// Unlike transits (rare - an aspect is only in orb some days), a personal
+// number and a Vietnamese relation exist on EVERY day, so there's no
+// established bull/bear direction to grade "right/wrong" against for most
+// of them (STOCKS_NUMBER_MEANINGS only tags 7/8/28/11; the rest are
+// unflagged). So this tracks plain up/down instead of right/wrong, bucketed
+// by whichever number or clash/ally/neutral band was active - the discovery
+// question is "does THIS bucket skew toward up-moves", not "did a
+// prediction land". Same {n, right(=up), wrong(=down), rate} shape as
+// stocksTransitBaselineForBars, for the same reason: reuses the same row
+// renderer even though "right" here just means "up".
+function stocksSignalBacktestAnchor(anchorDate, bars) {
+  const numerologyTrades = [];
+  const vietnameseTrades = [];
+  for (let i = 0; i < bars.length; i++) {
+    const onDate = stocksParseDate(bars[i][0]);
+    const flow = computeEnergyFlow(anchorDate, onDate);
+    Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+      const holdDays = STOCKS_TRANSIT_HOLD_DAYS[level];
+      const exitIdx = i + holdDays;
+      if (exitIdx >= bars.length) return;
+      const entryClose = bars[i][4];
+      const exitClose = bars[exitIdx][4];
+      const returnPct = ((exitClose - entryClose) / entryClose) * 100;
+      if (returnPct === 0) return;
+      const up = returnPct > 0;
+      const roundedReturn = Math.round(returnPct * 100) / 100;
+
+      const numKey = level === 'year' ? 'personalYear' : level === 'month' ? 'personalMonth' : 'personalDay';
+      numerologyTrades.push({ date: bars[i][0], level, num: flow.numerology[numKey], returnPct: roundedReturn, up });
+
+      const scoreKey = level === 'year' ? 'yearScore' : level === 'month' ? 'monthScore' : 'daySignScore';
+      const score = flow.vietnamese[scoreKey];
+      const band = score <= 10 ? 'clash' : score >= 85 ? 'ally' : 'neutral';
+      vietnameseTrades.push({ date: bars[i][0], level, band, returnPct: roundedReturn, up });
+    });
+  }
+  return { numerologyTrades, vietnameseTrades };
+}
+
+function stocksUpTally(list) {
+  const up = list.filter((t) => t.up).length;
+  return { n: list.length, right: up, wrong: list.length - up, rate: list.length ? up / list.length : null };
+}
+
+// Numerology: %up per distinct personal-number value actually observed,
+// split by level - the same number (e.g. 8) means a very different holding
+// period depending which cycle it's the personal-X of, so a Day-level 8 and
+// a Year-level 8 are kept separate rather than pooled. Every number that
+// shows up gets its own bucket, not just the 4 STOCKS_NUMBER_MEANINGS
+// already tags - the point is to discover whether an untagged number
+// carries real edge too.
+function stocksNumerologyAggregate(trades) {
+  const overall = stocksUpTally(trades);
+  const byLevel = {};
+  Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+    const levelTrades = trades.filter((t) => t.level === level);
+    const byNumber = {};
+    Array.from(new Set(levelTrades.map((t) => t.num))).sort((a, b) => a - b)
+      .forEach((num) => { byNumber[num] = stocksUpTally(levelTrades.filter((t) => t.num === num)); });
+    byLevel[level] = { overall: stocksUpTally(levelTrades), byNumber };
+  });
+  return { overall, byLevel };
+}
+
+// Vietnamese zodiac: %up per relation band (clash/neutral/ally, the same
+// <=10 / 11-84 / >=85 thresholds stocksAnchorTimeframeSignals already uses
+// live), split by level for the same reason numerology is.
+const STOCKS_VIETNAMESE_BANDS = ['clash', 'neutral', 'ally'];
+
+function stocksVietnameseAggregate(trades) {
+  const overall = stocksUpTally(trades);
+  const byLevel = {};
+  Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+    const levelTrades = trades.filter((t) => t.level === level);
+    const byBand = {};
+    STOCKS_VIETNAMESE_BANDS.forEach((band) => { byBand[band] = stocksUpTally(levelTrades.filter((t) => t.band === band)); });
+    byLevel[level] = { overall: stocksUpTally(levelTrades), byBand };
+  });
+  return { overall, byLevel };
+}
+
 // Flat trade list -> overall / by-aspect-type / by-planet win rates, per
 // the user's own "all of them" call on backtest output. byAspectByLevel
 // splits each aspect by cadence (day/month/year) too - byAspect alone pools
@@ -416,6 +503,8 @@ function stocksTransitBaselineMerge(list) {
 // since Twelve Data's free tier caps at 8 credits/minute.
 async function stocksTransitBacktestAll(instruments, onProgress) {
   let allTrades = [];
+  let allNumerologyTrades = [];
+  let allVietnameseTrades = [];
   const baselines = [];
   for (let i = 0; i < instruments.length; i++) {
     const inst = instruments[i];
@@ -432,7 +521,11 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
         const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
         baselines.push(stocksTransitBaselineForBars(bars));
         anchors.forEach((a) => {
-          allTrades = allTrades.concat(stocksTransitBacktestAnchor(stocksParseDate(a.date), bars));
+          const anchorDate = stocksParseDate(a.date);
+          allTrades = allTrades.concat(stocksTransitBacktestAnchor(anchorDate, bars));
+          const sig = stocksSignalBacktestAnchor(anchorDate, bars);
+          allNumerologyTrades = allNumerologyTrades.concat(sig.numerologyTrades);
+          allVietnameseTrades = allVietnameseTrades.concat(sig.vietnameseTrades);
         });
         if (!wasCached) await stocksDelay(STOCKS_COMBINED_FETCH_GAP_MS);
       } catch (e) {
@@ -444,6 +537,8 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
   return {
     ranAt: new Date().toISOString(), instrumentCount: instruments.length,
     ...stocksTransitAggregate(allTrades), baseline: stocksTransitBaselineMerge(baselines),
+    numerology: stocksNumerologyAggregate(allNumerologyTrades),
+    vietnamese: stocksVietnameseAggregate(allVietnameseTrades),
   };
 }
 
@@ -451,13 +546,23 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
    deliberately separate from the Combined Track Record above (stocksCombinedInstruments,
    STOCKS_COMBINED_STORE_KEY) per the "standalone" call this feature's own
    clarifying round settled on. ---- */
-// v2 (2026-08-03): added baseline + byAspectByLevel - bumped so a v1 cached
-// result (missing those fields) doesn't render broken rows, just prompts a
-// re-run like no result existed yet.
-const STOCKS_TRANSIT_RESULT_KEY = 'numerology_stock_transit_backtest_v2';
+// v3 (2026-08-03): added baseline + byAspectByLevel + numerology + vietnamese
+// - bumped so an older cached result (missing those fields) doesn't render
+// broken rows, just prompts a re-run like no result existed yet.
+const STOCKS_TRANSIT_RESULT_KEY = 'numerology_stock_transit_backtest_v3';
 let stocksTransitCollapsed = true;
 let stocksTransitRunning = false;
 let stocksTransitInstruments = null;
+// Which signal family's breakdown is showing - a view toggle over one
+// shared backtest run (all three families are graded in the same pass, off
+// the same bars, against the same baseline), same "one run, pick a lens on
+// it" idea as the EMAX Distribution chart's dimension toggle.
+let stocksTransitActiveFamily = 'astrology';
+const STOCKS_TRANSIT_FAMILIES = [
+  { key: 'astrology', label: 'Astrology' },
+  { key: 'numerology', label: 'Numerology' },
+  { key: 'vietnamese', label: 'Vietnamese Zodiac' },
+];
 
 function stocksTransitLoadResult() {
   try {
@@ -490,40 +595,78 @@ function stocksTransitRateRowHtml(label, tally, sub) {
 
 const STOCKS_TRANSIT_LEVEL_LABELS = { day: 'Day (1d hold)', month: 'Month (21d hold)', year: 'Year (252d hold)' };
 
+function stocksTransitAstrologyBodyHtml(result) {
+  const aspectRows = STOCKS_ASPECTS.map((a) => {
+    const label = a.key.charAt(0).toUpperCase() + a.key.slice(1);
+    const overallRow = stocksTransitRateRowHtml(label, result.byAspect[a.key]);
+    const byLevel = result.byAspectByLevel && result.byAspectByLevel[a.key];
+    const subRows = byLevel
+      ? Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => stocksTransitRateRowHtml(STOCKS_TRANSIT_LEVEL_LABELS[level], byLevel[level], true)).join('')
+      : '';
+    return overallRow + subRows;
+  }).join('');
+  const planetRows = Object.values(STOCKS_TRANSIT_PLANETS).flat().map((bodyKey) => stocksTransitRateRowHtml(bodyKey, result.byPlanet[bodyKey])).join('');
+  return `
+    ${stocksTransitRateRowHtml('Overall', result.overall)}
+    <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By aspect type (indented rows split by cadence)</div>
+    ${aspectRows}
+    <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By planet</div>
+    ${planetRows}`;
+}
+
+// Shared renderer for numerology (bucketField 'byNumber') and Vietnamese
+// zodiac (bucketField 'byBand') - both share the same {overall, byLevel:
+// {day/month/year: {overall, byNumber|byBand}}} shape from
+// stocksNumerologyAggregate/stocksVietnameseAggregate.
+function stocksTransitBucketBodyHtml(agg, bucketField, labelFor) {
+  const levelSections = Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => {
+    const levelAgg = agg.byLevel[level];
+    const buckets = levelAgg[bucketField];
+    const rows = Object.keys(buckets).map((key) => stocksTransitRateRowHtml(labelFor(key), buckets[key], true)).join('');
+    return `
+      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">${STOCKS_TRANSIT_LEVEL_LABELS[level]}</div>
+      ${stocksTransitRateRowHtml('Overall this level', levelAgg.overall)}
+      ${rows}`;
+  }).join('');
+  return `${stocksTransitRateRowHtml('Overall', agg.overall)}${levelSections}`;
+}
+
+function stocksTransitFamilyToggleHtml() {
+  const buttons = STOCKS_TRANSIT_FAMILIES.map((f) => `<button class="stocks-filter-btn${stocksTransitActiveFamily === f.key ? ' active' : ''}" data-family="${f.key}">${escapeHtml(f.label)}</button>`).join('');
+  return `<div class="stocks-filter-seg" id="stockTransitFamilyToggle">${buttons}</div>`;
+}
+
 function renderStocksTransitBacktestBody(box, result) {
   const runBtnLabel = result ? 'Re-run Backtest' : 'Run Backtest';
   let bodyHtml;
   if (!result) {
-    bodyHtml = `<div class="stock-trades-note">Not run yet - checks every transit-aspect signal already live on this page (Moon/Mercury/Venus/Mars/Jupiter/Saturn/Uranus/Neptune/Pluto vs. each instrument's natal Sun) against real historical price moves. One price fetch per instrument, throttled - takes a while the first time.</div>`;
+    bodyHtml = `<div class="stock-trades-note">Not run yet - checks every astrology transit, numerology, and Vietnamese zodiac signal already live on this page against real historical price moves. One price fetch per instrument, throttled - takes a while the first time.</div>`;
   } else {
     const baselineRows = result.baseline
       ? Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => stocksTransitRateRowHtml(STOCKS_TRANSIT_LEVEL_LABELS[level], result.baseline[level])).join('')
       : '<div class="stock-trades-note">Re-run to compute (added after your last run).</div>';
-    const aspectRows = STOCKS_ASPECTS.map((a) => {
-      const label = a.key.charAt(0).toUpperCase() + a.key.slice(1);
-      const overallRow = stocksTransitRateRowHtml(label, result.byAspect[a.key]);
-      const byLevel = result.byAspectByLevel && result.byAspectByLevel[a.key];
-      const subRows = byLevel
-        ? Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => stocksTransitRateRowHtml(STOCKS_TRANSIT_LEVEL_LABELS[level], byLevel[level], true)).join('')
-        : '';
-      return overallRow + subRows;
-    }).join('');
-    const planetRows = Object.values(STOCKS_TRANSIT_PLANETS).flat().map((bodyKey) => stocksTransitRateRowHtml(bodyKey, result.byPlanet[bodyKey])).join('');
+    let familyBody;
+    if (stocksTransitActiveFamily === 'numerology' && result.numerology) {
+      familyBody = stocksTransitBucketBodyHtml(result.numerology, 'byNumber', (num) => `Number ${num}`);
+    } else if (stocksTransitActiveFamily === 'vietnamese' && result.vietnamese) {
+      familyBody = stocksTransitBucketBodyHtml(result.vietnamese, 'byBand', (band) => band.charAt(0).toUpperCase() + band.slice(1));
+    } else if (stocksTransitActiveFamily !== 'astrology') {
+      familyBody = '<div class="stock-trades-note">Re-run to compute (added after your last run).</div>';
+    } else {
+      familyBody = stocksTransitAstrologyBodyHtml(result);
+    }
     bodyHtml = `
-      <div class="stock-trades-note">Scanned ${result.instrumentCount} instruments - last run ${new Date(result.ranAt).toLocaleString()}. Graded on a fixed hold (1 trading day for Moon, 21 for Mercury/Venus/Mars, 252 for Jupiter through Pluto) - right/wrong only, no mixed band.</div>
-      ${stocksTransitRateRowHtml('Overall', result.overall)}
+      <div class="stock-trades-note">Scanned ${result.instrumentCount} instruments - last run ${new Date(result.ranAt).toLocaleString()}. Graded on a fixed hold matched to each signal's own cadence (1 trading day for Moon/Personal Day/Day sign, 21 for Mercury-Venus-Mars/Personal Month/Month sign, 252 for Jupiter-through-Pluto/Personal Year/Year sign).</div>
       <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">Baseline (no signal, same holds)</div>
-      <div class="stock-trades-note">Unconditional % of up-moves at each hold length, same price bars, no aspect required. A win rate above only means something if it clears the matching line here.</div>
+      <div class="stock-trades-note">Unconditional % of up-moves at each hold length, same price bars, no signal required. Every rate below only means something if it clears the matching line here.</div>
       ${baselineRows}
-      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By aspect type (indented rows split by cadence)</div>
-      ${aspectRows}
-      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By planet</div>
-      ${planetRows}`;
+      ${stocksTransitFamilyToggleHtml()}
+      ${familyBody}`;
   }
   box.innerHTML = `
     <div class="stock-group${stocksTransitCollapsed ? ' collapsed' : ''}" id="stockTransitGroup">
       <div class="stock-group-head">
-        <span>🪐 Transit Backtest</span>
+        <span>🔮 Signal Backtest</span>
         <span class="stock-group-chev">▾</span>
       </div>
       <div class="stock-group-grid">
@@ -540,6 +683,16 @@ function renderStocksTransitBacktestBody(box, result) {
     e.stopPropagation();
     stocksRunTransitBacktest();
   });
+  if (result) {
+    box.querySelectorAll('#stockTransitFamilyToggle .stocks-filter-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (stocksTransitActiveFamily === btn.dataset.family) return;
+        stocksTransitActiveFamily = btn.dataset.family;
+        renderStocksTransitBacktestBody(box, result);
+      });
+    });
+  }
 }
 
 async function stocksRunTransitBacktest() {
