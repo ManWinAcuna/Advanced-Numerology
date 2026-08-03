@@ -704,6 +704,14 @@ function emaxTimelineSeverityLabel(magnitude) {
 // split year's early/late periods share the one slot; which period (if
 // any) the note applies to is tracked separately via ev.confirmedPart
 // ('early'/'late'), set by the per-period confirm checkbox below.
+//
+// A quick way to actually go find out what happened - opens a Google
+// search for "<name> in <year> events timeline" in a new tab, right next
+// to that year's Edit/+ Add note action.
+function emaxYearSearchUrl(name, year) {
+  return `https://www.google.com/search?q=${encodeURIComponent(`${name} in ${year} events timeline`)}`;
+}
+
 function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
   const ev = entry.timelineEvents && entry.timelineEvents[year];
   const key = `${year}:${part}`;
@@ -752,7 +760,10 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
         ${severityHtml}
         <div class="emax-timeline-event-meta">
           <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
-          <button type="button" class="btn-link" data-year-edit="${key}">Edit</button>
+          <div class="emax-timeline-event-actions">
+            <a class="btn-link" href="${emaxYearSearchUrl(entry.name, year)}" target="_blank" rel="noopener">Search</a>
+            <button type="button" class="btn-link" data-year-edit="${key}">Edit</button>
+          </div>
         </div>
       </div>`;
   }
@@ -763,7 +774,10 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
     <div class="emax-timeline-event-row emax-timeline-event-empty">
       <span>Nothing found for this year</span>
       ${severityHtml}
-      <button type="button" class="btn-link" data-year-edit="${key}">+ Add note</button>
+      <div class="emax-timeline-event-actions">
+        <a class="btn-link" href="${emaxYearSearchUrl(entry.name, year)}" target="_blank" rel="noopener">Search</a>
+        <button type="button" class="btn-link" data-year-edit="${key}">+ Add note</button>
+      </div>
     </div>`;
 }
 
