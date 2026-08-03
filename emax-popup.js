@@ -781,6 +781,11 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
     </div>`;
 }
 
+// A chip's note used to expand INLINE right below it - on a long timeline
+// (dozens of sections, hundreds of years for something centuries old) that
+// meant scrolling all the way down to actually see what you just tapped.
+// Tapping a chip now opens it in a small popup on top instead (see
+// openEmaxYearDetailPopup below) - this section only ever renders chips.
 function emaxTimelineSectionHtml(entry, title, years) {
   const chipsHtml = years.length
     ? `<div class="emax-timeline-chips">${years.map(({ year, part, verdict, magnitude }) => {
@@ -788,13 +793,10 @@ function emaxTimelineSectionHtml(entry, title, years) {
         return emaxTimelineChipHtml(year, part, verdict, ev && ev.tags, magnitude);
       }).join('')}</div>`
     : '<div class="emax-timeline-empty">None yet</div>';
-  const expandedYearObj = years.find(({ year, part }) => `${year}:${part}` === String(emaxTimelineExpandedYear));
-  const eventRowHtml = expandedYearObj ? emaxTimelineEventRowHtml(entry, expandedYearObj.year, expandedYearObj.part, expandedYearObj.magnitude) : '';
   return `
     <div class="emax-timeline-section">
       <div class="emax-timeline-section-title">${escapeHtml(title)}</div>
       ${chipsHtml}
-      ${eventRowHtml}
     </div>`;
 }
 
@@ -812,11 +814,28 @@ function emaxMagnitudeSigned(m) {
   return m > 0 ? `+${m}` : `${m}`;
 }
 
+// A centuries-old historical figure's timeline can have dozens or hundreds
+// of years tied at the same magnitude (no confirmed events for most of a
+// 500-year span, so the base zodiac/numerology signal alone repeats
+// constantly) - listing every single one turns the headline into a wall of
+// text. Past this many ties, state the count instead of the list itself -
+// still honest about how many really tied (no arbitrary pick of which few
+// to show), just not an unreadable dump of every year.
+const EMAX_TIMELINE_HEADLINE_MAX_LISTED = 6;
+function emaxTimelineHeadlinePart(label, years, magnitude) {
+  if (!years.length) return '';
+  const plural = years.length > 1 ? 's' : '';
+  if (years.length > EMAX_TIMELINE_HEADLINE_MAX_LISTED) {
+    return `${label} Year${plural}: ${years.length} tied at ${emaxMagnitudeSigned(magnitude)}`;
+  }
+  return `${label} Year${plural}: ${years.join(', ')} (${emaxMagnitudeSigned(magnitude)})`;
+}
+
 function emaxTimelineHeadlineHtml(timeline) {
   const { worstYears, worstMagnitude, bestYears, bestMagnitude } = timeline;
   if (!worstYears.length && !bestYears.length) return '';
-  const worstPart = worstYears.length ? `Worst Year${worstYears.length > 1 ? 's' : ''}: ${worstYears.join(', ')} (${emaxMagnitudeSigned(worstMagnitude)})` : '';
-  const bestPart = bestYears.length ? `Best Year${bestYears.length > 1 ? 's' : ''}: ${bestYears.join(', ')} (${emaxMagnitudeSigned(bestMagnitude)})` : '';
+  const worstPart = emaxTimelineHeadlinePart('Worst', worstYears, worstMagnitude);
+  const bestPart = emaxTimelineHeadlinePart('Best', bestYears, bestMagnitude);
   return `<div class="emax-timeline-headline">${[worstPart, bestPart].filter(Boolean).join(' · ')}</div>`;
 }
 
@@ -842,6 +861,61 @@ function renderTimelineBody(entry, timeline) {
   `;
 }
 
+// A chip's year/part is guaranteed to exist in at least one of these 6
+// arrays (that's the only way it could have rendered a chip at all) - the
+// SAME row object (magnitude included) can be flagged into more than one
+// (e.g. both an Own Year and a Personal Year 7), so any match is correct.
+function emaxFindTimelineRow(timeline, year, part) {
+  const all = [...timeline.ownYears, ...timeline.trineYears, ...timeline.friendlyYears, ...timeline.enemyYears, ...timeline.py7Years, ...timeline.py11Years];
+  return all.find((r) => r.year === year && r.part === part);
+}
+
+// Opens a single year/period's note in its own small popup, stacked on top
+// of the Timeline modal (same "later in the DOM stacks visually over the
+// modal behind it" convention as the Audit/Nomination detail popup opening
+// the real item popup on top of itself) - "just open a mini popup, not
+// make me scroll down for it" (2026-08-02): a long timeline's chip used to
+// expand inline, which could be far below the fold.
+function openEmaxYearDetailPopup(entry, year, part, magnitude) {
+  emaxTimelineExpandedYear = `${year}:${part}`;
+  emaxTimelineEditingYear = null;
+  emaxTimelineEditingTags = [];
+  emaxTimelineDraftText = null;
+  renderEmaxYearDetailPopup(entry, year, part, magnitude);
+  document.getElementById('emaxYearDetailOverlay').classList.add('active');
+}
+
+function renderEmaxYearDetailPopup(entry, year, part, magnitude) {
+  document.getElementById('emaxYearDetailBody').innerHTML = `
+    <div class="box-label">${escapeHtml(entry.name)} &middot; ${emaxYearPeriodLabel(year, part)}</div>
+    ${emaxTimelineEventRowHtml(entry, year, part, magnitude)}
+  `;
+}
+
+// Re-renders the popup for whichever year/part is currently open, looking
+// its (possibly just-changed) magnitude back up from the current timeline
+// - used after save/cancel/confirm/tag-toggle, the same way those used to
+// just re-render the whole Timeline body when the note lived inline.
+function refreshEmaxYearDetailPopup(entry) {
+  if (!emaxTimelineExpandedYear) return;
+  const [yearStr, part] = String(emaxTimelineExpandedYear).split(':');
+  const year = Number(yearStr);
+  const row = emaxFindTimelineRow(emaxTimelineCurrentTimeline, year, part);
+  renderEmaxYearDetailPopup(entry, year, part, row ? row.magnitude : null);
+}
+
+function closeEmaxYearDetailPopup() {
+  document.getElementById('emaxYearDetailOverlay').classList.remove('active');
+  const timelineEntry = emaxTimelineFindEntryById(emaxTimelineCurrentEntryId);
+  emaxTimelineExpandedYear = null;
+  emaxTimelineEditingYear = null;
+  emaxTimelineEditingTags = [];
+  emaxTimelineDraftText = null;
+  // Un-highlights the chip and picks up anything changed while the popup
+  // was open (a new tag emoji, an updated Worst/Best Years headline).
+  if (timelineEntry && emaxTimelineCurrentTimeline) renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+}
+
 async function openTimelineModal(entry, birthDate) {
   let timeline = emaxBuildTimeline(birthDate, entry);
   emaxTimelineExpandedYear = null;
@@ -852,6 +926,7 @@ async function openTimelineModal(entry, birthDate) {
   emaxTimelineCurrentTimeline = timeline;
   renderTimelineBody(entry, timeline);
   document.getElementById('emaxTimelineOverlay').classList.add('active');
+  document.getElementById('emaxYearDetailOverlay').classList.remove('active');
 
   if (entry.timelineEvents === undefined) {
     const { ownYears, trineYears, friendlyYears, enemyYears, py7Years, py11Years } = timeline;
@@ -872,6 +947,7 @@ async function openTimelineModal(entry, birthDate) {
 
 function closeTimelineModal() {
   document.getElementById('emaxTimelineOverlay').classList.remove('active');
+  document.getElementById('emaxYearDetailOverlay').classList.remove('active');
 }
 
 document.getElementById('emaxTimelineClose').addEventListener('click', closeTimelineModal);
@@ -879,7 +955,27 @@ document.getElementById('emaxTimelineOverlay').addEventListener('click', (e) => 
   if (e.target.id === 'emaxTimelineOverlay') closeTimelineModal();
 });
 
+document.getElementById('emaxYearDetailClose').addEventListener('click', closeEmaxYearDetailPopup);
+document.getElementById('emaxYearDetailOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'emaxYearDetailOverlay') closeEmaxYearDetailPopup();
+});
+
+// Only chip clicks happen here now - the note/edit UI itself lives in the
+// year-detail popup below, opened fresh for whichever chip was tapped.
 document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
+  const timelineEntry = emaxTimelineFindEntryById(emaxTimelineCurrentEntryId);
+  if (!timelineEntry || !emaxTimelineCurrentTimeline) return;
+  const chip = e.target.closest('.emax-timeline-chip');
+  if (!chip) return;
+  const key = chip.dataset.yearKey;
+  const [yearStr, part] = key.split(':');
+  const year = Number(yearStr);
+  const row = emaxFindTimelineRow(emaxTimelineCurrentTimeline, year, part);
+  openEmaxYearDetailPopup(timelineEntry, year, part, row ? row.magnitude : null);
+  renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+});
+
+document.getElementById('emaxYearDetailBody').addEventListener('click', (e) => {
   const timelineEntry = emaxTimelineFindEntryById(emaxTimelineCurrentEntryId);
   if (!timelineEntry || !emaxTimelineCurrentTimeline) return;
 
@@ -901,6 +997,7 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
     // can change that year's magnitude (emaxYearEventMagnitudeBonus),
     // which was baked in at the timeline's last build, before this save.
     emaxTimelineCurrentTimeline = emaxBuildTimeline(parseDateStr(timelineEntry.date), timelineEntry);
+    refreshEmaxYearDetailPopup(timelineEntry);
     renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
     return;
   }
@@ -909,7 +1006,7 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
     emaxTimelineEditingYear = null;
     emaxTimelineEditingTags = [];
     emaxTimelineDraftText = null;
-    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    refreshEmaxYearDetailPopup(timelineEntry);
     return;
   }
   const confirmCheckbox = e.target.closest('[data-year-confirm]');
@@ -927,20 +1024,21 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
       // emaxEventConfirmedForPart), which was baked in at the timeline's
       // last build, before this toggle.
       emaxTimelineCurrentTimeline = emaxBuildTimeline(parseDateStr(timelineEntry.date), timelineEntry);
+      refreshEmaxYearDetailPopup(timelineEntry);
       renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
     }
     return;
   }
-  // Toggling a tag re-renders the whole timeline body (same "rebuild from
-  // state" pattern as everything else here) - capture whatever's already
-  // typed in the textarea first, or it would reset back to the saved text.
+  // Toggling a tag re-renders the popup (same "rebuild from state" pattern
+  // as everything else here) - capture whatever's already typed in the
+  // textarea first, or it would reset back to the saved text.
   const tagBtn = e.target.closest('[data-tag-toggle]');
   if (tagBtn) {
     emaxTimelineDraftText = document.getElementById('emaxTimelineNoteInput').value;
     const tag = tagBtn.dataset.tagToggle;
     const idx = emaxTimelineEditingTags.indexOf(tag);
     if (idx === -1) emaxTimelineEditingTags.push(tag); else emaxTimelineEditingTags.splice(idx, 1);
-    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    refreshEmaxYearDetailPopup(timelineEntry);
     return;
   }
   const editBtn = e.target.closest('[data-year-edit]');
@@ -953,16 +1051,7 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
     const existingEvent = timelineEntry.timelineEvents && timelineEntry.timelineEvents[bareYear];
     emaxTimelineEditingTags = (existingEvent && existingEvent.tags) ? existingEvent.tags.slice() : [];
     emaxTimelineDraftText = null;
-    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    refreshEmaxYearDetailPopup(timelineEntry);
     return;
-  }
-  const chip = e.target.closest('.emax-timeline-chip');
-  if (chip) {
-    const key = chip.dataset.yearKey;
-    emaxTimelineEditingYear = null;
-    emaxTimelineEditingTags = [];
-    emaxTimelineDraftText = null;
-    emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(key)) ? null : key;
-    renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
   }
 });

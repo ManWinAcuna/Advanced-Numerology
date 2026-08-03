@@ -140,6 +140,18 @@
     </div>
   </div>
 
+  <!-- Single-year detail mini-popup (emax-popup.js) - tapping a Timeline
+       chip opens its note here, stacked on top of the Timeline modal
+       (later in the DOM = higher z-index, same convention as the Audit
+       detail popup opening the item popup on top of itself), instead of
+       expanding inline and needing a scroll to reach it. -->
+  <div class="modal-overlay" id="emaxYearDetailOverlay">
+    <div class="modal-box modal-box-narrow">
+      <button class="modal-close" id="emaxYearDetailClose" title="Close">&times;</button>
+      <div id="emaxYearDetailBody"></div>
+    </div>
+  </div>
+
 </div>
 
 <script src="scroll-viewport.js"></script>
