@@ -106,16 +106,47 @@
     }
 
     explicitAuthAction = true;
+    const submitBtn = document.getElementById('authSubmitBtn');
+    submitBtn.disabled = true;
+    document.getElementById('authError').textContent = '';
 
-    if (authMode === 'signup') {
-      firebase.auth().createUserWithEmailAndPassword(email, password)
-        .then(() => { cloudPushAll(); closeAuthModal(); })
-        .catch((err) => { explicitAuthAction = false; showAuthError(err); });
-    } else {
-      firebase.auth().signInWithEmailAndPassword(email, password)
-        .then(() => closeAuthModal())
-        .catch((err) => { explicitAuthAction = false; showAuthError(err); });
+    let settled = false;
+    function finishWithError(err) {
+      if (settled) return;
+      settled = true;
+      explicitAuthAction = false;
+      submitBtn.disabled = false;
+      showAuthError(err);
     }
+
+    let call;
+    try {
+      call = authMode === 'signup'
+        ? firebase.auth().createUserWithEmailAndPassword(email, password).then(() => cloudPushAll())
+        : firebase.auth().signInWithEmailAndPassword(email, password);
+    } catch (err) {
+      // A broken/evicted local session (seen on iOS after storage pressure)
+      // can make firebase.auth() throw synchronously instead of rejecting a
+      // promise - without this, that exception would just abort the click
+      // handler with no visible feedback at all.
+      finishWithError(err);
+      return;
+    }
+
+    call.then(() => {
+      if (settled) return;
+      settled = true;
+      submitBtn.disabled = false;
+      closeAuthModal();
+    }).catch(finishWithError);
+
+    // The same broken persistence layer can also leave this promise
+    // permanently pending instead of throwing - neither resolving nor
+    // rejecting, so the button would otherwise sit there forever with no
+    // feedback ("nothing happens"). Time out and say so instead.
+    setTimeout(() => {
+      finishWithError({ message: "This is taking too long — your device's saved sign-in data may be stuck. Try closing and reopening the app, then sign in again." });
+    }, 15000);
   });
 
   function updateWidgetUI(user) {
@@ -186,6 +217,11 @@
         cloudPullAll();
       }
     }
+  }, (err) => {
+    // Firebase's listener contract supports this second callback for
+    // errors reading persisted auth state (e.g. a broken/evicted iOS
+    // IndexedDB session) - without it those failures were invisible.
+    console.warn('Auth state listener error:', err);
   });
 
   // The click that triggered loading Firebase in the first place happened

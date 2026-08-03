@@ -69,7 +69,10 @@
       if (!email || !pass) { document.getElementById('sgErr').textContent = 'Enter your email and password.'; return; }
       go.disabled = true; go.textContent = 'Signing in…';
       signingIn = true;
-      firebase.auth().signInWithEmailAndPassword(email, pass).catch(function (err) {
+      var settled = false;
+      function fail(err) {
+        if (settled) return;
+        settled = true;
         signingIn = false;
         go.disabled = false; go.textContent = 'Sign in';
         var code = err && err.code;
@@ -77,8 +80,24 @@
           (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || code === 'auth/invalid-email')
             ? 'Incorrect email or password.'
             : ((err && err.message) || 'Something went wrong.');
-      });
-      // success is handled by onAuthStateChanged -> decide()
+      }
+      try {
+        // success is handled by onAuthStateChanged -> decide()
+        firebase.auth().signInWithEmailAndPassword(email, pass).then(function () { settled = true; }).catch(fail);
+      } catch (err) {
+        // A broken/evicted local session (seen on iOS after storage
+        // pressure) can make firebase.auth() throw synchronously instead
+        // of rejecting a promise - catch that so the form doesn't just go
+        // dead with no feedback.
+        fail(err);
+        return;
+      }
+      // The same broken persistence layer can also leave the promise
+      // permanently pending instead of throwing - time out and say so
+      // rather than leaving the button stuck forever.
+      setTimeout(function () {
+        fail({ message: "This is taking too long — your device's saved sign-in data may be stuck. Try closing and reopening the app, then sign in again." });
+      }, 15000);
     }
     go.addEventListener('click', submit);
     document.getElementById('sgPass').addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
@@ -120,12 +139,21 @@
     else renderSignIn();
   }
 
+  function onAuthError(err) {
+    // A broken/evicted local session (seen on iOS after storage pressure)
+    // can make the auth-state listener error out instead of ever calling
+    // decide() - without this the gate just sits on "Checking access…"
+    // forever with no way forward.
+    console.warn('Auth state listener error:', err);
+    renderSignIn('Something went wrong checking your sign-in status. Try closing and reopening the app, then sign in again.');
+  }
+
   function begin() {
     if (window.firebase && firebase.auth) {
-      firebase.auth().onAuthStateChanged(decide);
+      firebase.auth().onAuthStateChanged(decide, onAuthError);
     } else if (window.loadFirebaseSdk) {
       window.loadFirebaseSdk()
-        .then(function () { firebase.auth().onAuthStateChanged(decide); })
+        .then(function () { firebase.auth().onAuthStateChanged(decide, onAuthError); })
         .catch(function () { card.innerHTML = '<div style="opacity:.7;">Couldn’t reach the sign-in service. Check your connection and reload.</div>'; });
     } else {
       // firebase-loader.js hasn't defined the loader yet - it runs at the end
