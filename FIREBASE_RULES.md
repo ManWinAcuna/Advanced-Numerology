@@ -5,10 +5,17 @@ is a **client-side deterrent only** — the page files are served publicly by
 GitHub Pages, so a technical visitor can read them regardless. The *real* privacy
 guarantee is on the **data**, enforced by Firestore security rules on the server.
 
-All synced data lives in Firestore at `users/{uid}` (one document per account,
+Synced data lives in Firestore at `users/{uid}` (one document per account,
 keyed by the signed-in user's Firebase UID — see `cloudPushKey`/`cloudPullAll`
-in `db-core.js`). The rules below make each account able to read and write **only
-its own** document, so no one can pull the owner's betting records but the owner.
+in `db-core.js`) **plus a subcollection** `users/{uid}/emaxCats/{categoryId}`
+(one small document per EMAX category — the whole collection outgrew the main
+document's 1MiB cap, see `cloudPushEmax` in `db-core.js`). The rules below make
+each account able to read and write **only its own** data, so no one can pull
+the owner's records but the owner.
+
+> **The `{document=**}` wildcard is required.** A plain `match /users/{userId}`
+> covers only the document itself — Firestore rules do NOT cascade to
+> subcollections, so without the wildcard every EMAX category sync is denied.
 
 ## How to apply
 
@@ -25,7 +32,7 @@ login (it keeps their sync working while still making your data private to you):
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
+    match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
@@ -41,7 +48,7 @@ other account from syncing anything at all:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
+    match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null
         && request.auth.uid == userId
         && request.auth.token.email == 'horseyear2026manuel@gmail.com';

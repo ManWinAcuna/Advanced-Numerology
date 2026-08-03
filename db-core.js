@@ -4545,7 +4545,10 @@ function initBreakdownToggle(selectId, boxIds) {
 
 const CLOUD_SYNC_FIELDS = {
   [STORAGE_KEY]: 'db',
-  [EMAX_STORAGE_KEY]: 'emax',
+  // EMAX_STORAGE_KEY is deliberately NOT in this map anymore - it syncs
+  // through its own chunked per-category path (cloudPushEmax /
+  // cloudPullEmaxChunked below) because the whole collection outgrew the
+  // single-document shape this map writes to. See the comment on that block.
   // Syncs the starter-category migration state itself (see
   // EMAX_SEEN_STARTERS_KEY above) so a second device that already pulled
   // down a newly-added starter category (e.g. Anime/Shows/Songs) doesn't
@@ -4588,6 +4591,7 @@ function cloudPushKey(storageKey) {
   }
   const user = firebase.auth().currentUser;
   if (!user) return Promise.resolve();
+  if (storageKey === EMAX_STORAGE_KEY) return cloudPushEmax();
   const field = CLOUD_SYNC_FIELDS[storageKey];
   if (!field) return Promise.resolve();
 
@@ -4606,10 +4610,156 @@ function cloudPushKey(storageKey) {
 
 // Pushes every locally-stored key up to Firestore - used right after signup,
 // so a brand-new account's initial cloud backup is whatever's already on
-// this device, rather than waiting for the next edit to create it.
+// this device, rather than waiting for the next edit to create it. EMAX is
+// pushed explicitly since it no longer lives in CLOUD_SYNC_FIELDS.
 function cloudPushAll() {
   if (typeof firebase === 'undefined') return;
   Object.keys(CLOUD_SYNC_FIELDS).forEach((storageKey) => cloudPushKey(storageKey));
+  cloudPushKey(EMAX_STORAGE_KEY);
+}
+
+/* ---- EMAX cloud sync: chunked per-category (2026-08-03) ---- */
+// EMAX used to sync as one `emax` field on the main users/{uid} document,
+// but a fully-preloaded collection measures ~1MB of JSON on its own -
+// right at Firestore's hard 1MiB per-document cap, before the same
+// document's db/profile/betting fields even count. Once the doc crossed
+// the cap, every emax push silently failed (the exact failure class the
+// MLB comment above documents), freezing the cloud copy at "categories
+// seeded, 0 entries" - and every later pull overwrote the user's real
+// local entries with that stale snapshot. Preloaded categories kept
+// vanishing on app relaunch because of this.
+//
+// Now each category syncs as its own document under
+// users/{uid}/emaxCats/{categoryId} (~5-15KB each, nowhere near any cap),
+// with the category order kept in a tiny emaxCategoryIds array field on
+// the main doc. The first chunked push also deletes the legacy `emax`
+// field, reclaiming ~1MB of the main doc's budget for everything else.
+//
+// REQUIRES a Firestore rules update: `match /users/{userId}` does NOT
+// cover subcollections - the rules must use
+// `match /users/{userId}/{document=**}`. See FIREBASE_RULES.md.
+
+const EMAX_CLOUD_HASHES_KEY = 'numerology_emax_cloud_hashes_v1';
+
+// Cheap change-detector so a save only writes the category docs that
+// actually changed - a single rating tap shouldn't cost 23 writes. djb2
+// plus the length; a collision only costs one skipped push until that
+// category next changes, and the length term makes near-collisions rarer.
+function emaxCloudHash(json) {
+  let h = 5381;
+  for (let i = 0; i < json.length; i++) h = ((h << 5) + h + json.charCodeAt(i)) | 0;
+  return json.length + ':' + h;
+}
+
+function loadEmaxCloudHashes() {
+  try { return JSON.parse(localStorage.getItem(EMAX_CLOUD_HASHES_KEY)) || {}; } catch (e) { return {}; }
+}
+
+function saveEmaxCloudHashes(hashes) {
+  try { localStorage.setItem(EMAX_CLOUD_HASHES_KEY, JSON.stringify(hashes)); } catch (e) { /* non-fatal */ }
+}
+
+// Assumes firebase is loaded and a user is signed in - cloudPushKey (the
+// only caller) checks both before routing here.
+function cloudPushEmax() {
+  const user = firebase.auth().currentUser;
+  if (!user) return Promise.resolve();
+  let db = null;
+  try { db = JSON.parse(localStorage.getItem(EMAX_STORAGE_KEY)); } catch (e) { /* corrupt - push nothing */ }
+  const cats = db && Array.isArray(db.categories) ? db.categories : [];
+  const hashes = loadEmaxCloudHashes();
+  const inFlight = window.__inFlightCloudPushes || (window.__inFlightCloudPushes = new Set());
+  const col = firebase.firestore().collection('users').doc(user.uid).collection('emaxCats');
+  const writes = [];
+
+  // Same in-flight tracking as cloudPushKey, so cloudPullAll keeps waiting
+  // for these writes before any read. Failures are logged, not swallowed
+  // silently - a silent .catch(() => {}) is precisely what let the old
+  // over-cap pushes fail invisibly for weeks.
+  const track = (p) => {
+    const write = p
+      .catch((e) => console.warn('[cloud] EMAX push failed', e))
+      .then(() => inFlight.delete(write));
+    inFlight.add(write);
+    writes.push(write);
+  };
+
+  cats.forEach((cat) => {
+    if (!cat || !cat.id) return;
+    const json = JSON.stringify(cat);
+    const h = emaxCloudHash(json);
+    if (hashes[cat.id] === h) return;
+    track(col.doc(String(cat.id)).set(JSON.parse(json)).then(() => {
+      const latest = loadEmaxCloudHashes();
+      latest[cat.id] = h;
+      saveEmaxCloudHashes(latest);
+    }));
+  });
+
+  const ids = cats.map((c) => String(c.id));
+  const idsJson = JSON.stringify(ids);
+  if (hashes.__ids !== idsJson) {
+    // Categories deleted locally: remove their cloud docs too. Pull only
+    // ever assembles ids listed in emaxCategoryIds, so an orphan doc could
+    // never resurrect - this is hygiene, not correctness.
+    Object.keys(hashes).forEach((id) => {
+      if (id !== '__ids' && !ids.includes(id)) {
+        track(col.doc(id).delete().then(() => {
+          const latest = loadEmaxCloudHashes();
+          delete latest[id];
+          saveEmaxCloudHashes(latest);
+        }));
+      }
+    });
+    // The ids array is tiny. Writing it also deletes the legacy `emax`
+    // field (first time only, in effect) - that's what frees the main
+    // doc's ~1MB budget back up for db/profile/betting.
+    track(firebase.firestore().collection('users').doc(user.uid)
+      .set({ emaxCategoryIds: ids, emax: firebase.firestore.FieldValue.delete() }, { merge: true })
+      .then(() => {
+        const latest = loadEmaxCloudHashes();
+        latest.__ids = idsJson;
+        saveEmaxCloudHashes(latest);
+      }));
+  }
+  return Promise.all(writes);
+}
+
+// The EMAX half of cloudPullAll. Never leaves local EMAX in a worse state
+// than it found it: any failure or incomplete cloud copy keeps the local
+// data untouched rather than overwriting it with a partial snapshot -
+// overwriting local with less-than-everything is the exact bug class this
+// chunked sync exists to end.
+function cloudPullEmaxChunked(user, data) {
+  if (!Array.isArray(data.emaxCategoryIds)) {
+    // Pre-chunking cloud shape (or chunked push never ran yet): fall back
+    // to the legacy single-field copy so existing accounts migrate
+    // seamlessly - their first save after this pull re-pushes chunked.
+    if (data.emax !== undefined && data.emax !== null) {
+      localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify(data.emax));
+    }
+    return Promise.resolve();
+  }
+  return firebase.firestore().collection('users').doc(user.uid).collection('emaxCats').get()
+    .then((snap) => {
+      const byId = {};
+      snap.forEach((d) => { byId[d.id] = d.data(); });
+      const cats = data.emaxCategoryIds.map((id) => byId[String(id)]);
+      if (cats.some((c) => !c)) {
+        // A listed category's doc is missing - a half-landed push (e.g.
+        // the ids write survived a rules/permissions failure that blocked
+        // the per-category writes). Applying this would BE data loss.
+        console.warn('[cloud] EMAX pull skipped - cloud copy is incomplete, keeping local data');
+        return;
+      }
+      localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify({ categories: cats }));
+      // Sync the local hash record to what was just pulled, so the next
+      // save only pushes what the user actually changes from here on.
+      const hashes = { __ids: JSON.stringify(data.emaxCategoryIds.map(String)) };
+      cats.forEach((c) => { if (c && c.id) hashes[c.id] = emaxCloudHash(JSON.stringify(c)); });
+      saveEmaxCloudHashes(hashes);
+    })
+    .catch((e) => console.warn('[cloud] EMAX pull failed - keeping local data', e));
 }
 
 // A push kicked off moments earlier (e.g. saveEmaxDB() seeding starter
@@ -4640,6 +4790,7 @@ function cloudPullAll() {
           localStorage.setItem(storageKey, JSON.stringify(data[field]));
         }
       });
+      return cloudPullEmaxChunked(user, data);
     });
 }
 
