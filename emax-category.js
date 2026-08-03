@@ -826,6 +826,96 @@ async function preloadTop50() {
   setLookupStatus(`⚡ Preloaded ${added}/${names.length - skippedExisting}${skipNote} - ${failed} couldn't be matched automatically.`, false);
 }
 
+/* ===================== Sync from Seed Data ===================== */
+// preloadTop50 above always skips a name already in the category (its own
+// `existing.has` check) - so when a seed entry's baked-in date/severity/
+// invention info later gets corrected (e.g. a year-only inventionYear
+// upgraded to a real inventionDate after re-researching it), an entry
+// someone already preloaded is frozen with whatever was baked in at the
+// time and never picks the correction up on its own. This button (2026-08-03)
+// re-matches every existing entry against the CURRENT seed data by name and
+// updates just the baked fields the seed is actually the source of truth
+// for - never touches rating/picture/notes/the entry's own compatibility
+// date. Only offered where there's baked seed data to even sync FROM:
+// Inventors (manualDate's invention/inventionDate/inventionYear) and the
+// baked-date event categories (Earthquakes/Hurricanes/Power Outages/Wars/
+// Plane Crashes - their own date/year/severity). Every other category's
+// seed is just a name list resolved live at add-time, so there's nothing
+// baked to go stale - emaxCategoryHasSyncableSeedData() gates the button
+// off entirely for those. A RENAMED seed entry (this session's own
+// J.D. Estes -> Joseph Fourestier Simpson, Charles Rudabaker -> Charles D.
+// Scanlon corrections) won't match by the old saved name - a known, narrow
+// gap; those need a manual delete + re-preload instead.
+function emaxCategoryHasSyncableSeedData() {
+  const seed = EMAX_SEED_LISTS[category.name];
+  if (!seed || !seed.length) return false;
+  const linkedCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  if (linkedCfg && linkedCfg.manualDate) return true;
+  const first = seed[0];
+  return first !== null && typeof first === 'object' && !Array.isArray(first) && ('date' in first || 'year' in first);
+}
+
+function emaxSyncFromSeedData() {
+  const seed = EMAX_SEED_LISTS[category.name];
+  const linkedCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
+  const byName = new Map();
+  seed.forEach((s) => {
+    if (s !== null && typeof s === 'object' && !Array.isArray(s)) byName.set(s.name.toLowerCase(), s);
+  });
+
+  let updated = 0;
+  category.entries.forEach((entry) => {
+    const s = byName.get(entry.name.toLowerCase());
+    if (!s) return;
+    let changed = false;
+
+    if (linkedCfg && linkedCfg.manualDate) {
+      if (!s.invention) return;
+      const nameField = linkedCfg.field + 'Name';
+      const dateField = linkedCfg.field + 'Date';
+      const yearField = linkedCfg.field + 'Year';
+      if (entry[nameField] !== s.invention) { entry[nameField] = s.invention; changed = true; }
+      if (s.inventionDate) {
+        if (entry[dateField] !== s.inventionDate || entry[yearField] != null) {
+          entry[dateField] = s.inventionDate;
+          delete entry[yearField];
+          changed = true;
+        }
+      } else if (s.inventionYear != null && entry[yearField] !== s.inventionYear) {
+        entry[yearField] = s.inventionYear;
+        delete entry[dateField];
+        changed = true;
+      }
+    } else if (s.date || s.year != null) {
+      if (s.date) {
+        if (entry.date !== s.date || entry.year != null) {
+          entry.date = s.date;
+          delete entry.year;
+          changed = true;
+        }
+      } else if (entry.year !== s.year) {
+        entry.year = s.year;
+        delete entry.date;
+        changed = true;
+      }
+      if (severityCfg && s[severityCfg.field] != null && entry[severityCfg.field] !== s[severityCfg.field]) {
+        entry[severityCfg.field] = s[severityCfg.field];
+        changed = true;
+      }
+    }
+
+    if (changed) updated++;
+  });
+
+  if (updated) saveEmaxDB(db);
+  renderEntries();
+  setLookupStatus(updated
+    ? `🔄 Synced ${updated} entr${updated === 1 ? 'y' : 'ies'} to the latest seed data.`
+    : '🔄 Everything already matches the latest seed data - nothing to sync.', false);
+  return updated;
+}
+
 /* ===================== Find Missing Pictures ===================== */
 // A second, on-demand pass over every entry that currently has NO picture
 // showing (emaxEntryHasPicture false) - unlike the automatic lazy fetch
@@ -1279,6 +1369,11 @@ function init() {
     preloadBtn.textContent = `⚡ Preload Top ${EMAX_SEED_LISTS[category.name].length}`;
     preloadBtn.style.display = '';
     preloadBtn.addEventListener('click', () => preloadTop50());
+  }
+  if (emaxCategoryHasSyncableSeedData()) {
+    const syncBtn = document.getElementById('syncSeedDataBtn');
+    syncBtn.style.display = '';
+    syncBtn.addEventListener('click', () => emaxSyncFromSeedData());
   }
 
   document.getElementById('findPicturesBtn').addEventListener('click', () => findMissingPictures());
