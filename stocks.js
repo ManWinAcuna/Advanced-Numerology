@@ -249,6 +249,18 @@ const STOCKS_TRANSIT_CONJUNCTION_DIR = {
   Saturn: 'bear', Mars: 'bear', Uranus: 'bear', Neptune: 'bear', Pluto: 'bear',
 };
 
+// Signal Backtest (2026-08-03) baseline-matched square/sextile at Year
+// cadence and both came back backwards or worse than doing nothing: Square's
+// "bear" call was less accurate than the base down-rate (21% vs a 24% base
+// down-rate), and Sextile's "bull" call underperformed the base up-rate (72%
+// vs 76%) - both are flat (harmless) at Day/Month, so only Year is
+// neutralized here rather than dropping the aspect everywhere or flipping
+// its label on a still-thin edge. Scoped to the LIVE signal path
+// (stocksTransitSignalsFor) only - the backtest itself keeps measuring the
+// raw, unfiltered picture so this call can keep being checked against real
+// data going forward instead of the backtest quietly grading its own filter.
+const STOCKS_TRANSIT_YEAR_NEUTRAL_ASPECTS = ['square', 'sextile'];
+
 // One planet's current read against an anchor's natal Sun - null most days,
 // for most planets, since an active aspect is the exception not the rule.
 // Uses astroEclipticLongitude directly rather than getAstroBodyInfo, since
@@ -274,7 +286,8 @@ function stocksTransitSignalsFor(anchorDate, level, onDate) {
   const natalSunLon = astroEclipticLongitude('Sun', anchorDate);
   return STOCKS_TRANSIT_PLANETS[level]
     .map((body) => stocksTransitSignal(body, natalSunLon, onDate))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((sig) => !(level === 'year' && STOCKS_TRANSIT_YEAR_NEUTRAL_ASPECTS.includes(sig.aspect)));
 }
 
 /* ===================== Transit Backtest (2026-08-02, CODE13 backlog 8/8) =====================
@@ -858,25 +871,25 @@ const STOCKS_LEVEL_WEIGHTS = {
   day: { day: 0.6, month: 0.3, year: 0.1 },
 };
 
-// One anchor's bulls/bears at one timeframe - numerology meaning-number +
-// Vietnamese zodiac relation always, real transits at every timeframe (which
-// planets depends on the timeframe), western Sun-sign only at Month.
+// One anchor's bulls/bears at one timeframe - numerology meaning-number
+// always, real transits at every timeframe (which planets depends on the
+// timeframe), western Sun-sign only at Month. Vietnamese zodiac clash/ally
+// used to vote here too, but the Signal Backtest (2026-08-03) showed it
+// flat against baseline at every cadence (Day 53/53/52, Month 59/60/60,
+// Year 73/76/75 for clash/neutral/ally) - pure noise, so it was dropped
+// from the vote. The relation itself still shows on the card (see
+// stocksCycleBoxHtml) - only its use as a bull/bear signal was removed.
 function stocksAnchorTimeframeSignals(read, level, historical, today) {
   if (!read.flow) return { bulls: [], bears: [] };
   const f = read.flow;
   const who = read.person || read.label;
   const meta = STOCKS_LEVEL_NUM_META[level];
   const num = f.numerology[meta.numKey];
-  const signScore = f.vietnamese[meta.signKey];
-  const mySign = f.vietnamese[meta.mySignKey];
-  const nowSign = f.vietnamese[meta.nowSignKey];
   const bulls = [];
   const bears = [];
 
   const meaning = STOCKS_NUMBER_MEANINGS[num];
-  if (signScore <= 10) bears.push(`${who}'s ${mySign} clashes the ${nowSign} ${meta.signWord}`);
   if (meaning && meaning.dir === 'bear') bears.push(`${who} runs a ${meta.numName} ${num} ${meaning.label.toLowerCase()}`);
-  if (signScore >= 85) bulls.push(`${who}'s ${mySign} allies the ${nowSign} ${meta.signWord}`);
   if (meaning && meaning.dir === 'bull') bulls.push(`${who} runs a ${meta.numName} ${num} ${meaning.label.toLowerCase()}`);
 
   const anchorDate = stocksParseDate(read.date);
