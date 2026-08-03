@@ -6271,8 +6271,18 @@ body {
 }
 .emax-preload-btn-row {
   display: flex;
+  align-items: center;
   gap: 14px;
   margin-bottom: 8px;
+}
+#preloadTopCountInput {
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 10px;
+  font-size: 14px;
+  width: 90px;
 }
 
 .emax-search-row {

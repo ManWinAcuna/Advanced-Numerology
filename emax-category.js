@@ -738,10 +738,16 @@ function setLookupStatus(text, isError) {
 // db-core.js), and ~50 lookups in a tight loop is exactly that pattern.
 let emaxPreloading = false;
 
-async function preloadTop50() {
+// `count`: how many of the seed list to preload, chosen by the user via
+// #preloadTopCountInput (2026-08-03, generalized to every category the same
+// way - was previously always the FULL list, no way to ask for fewer).
+// Omitted/invalid/out-of-range falls back to the whole list, same as the
+// original always-everything behavior.
+async function preloadTop50(count) {
   if (emaxPreloading) return;
-  const names = EMAX_SEED_LISTS[category.name];
-  if (!names) return;
+  const fullNames = EMAX_SEED_LISTS[category.name];
+  if (!fullNames) return;
+  const names = (Number.isInteger(count) && count > 0 && count < fullNames.length) ? fullNames.slice(0, count) : fullNames;
   // Gates the prose "first product launch" long-shot tier in
   // lookupKeyDateByNameWithTitle - only meaningful for brand/company
   // categories, never people or movies (see that function's own comment).
@@ -1014,7 +1020,7 @@ async function preloadByYear(targetYear, targetCount) {
 
   const existing = new Set(category.entries.map((e) => e.name.toLowerCase()));
   let added = 0;
-  let addedYearOnly = 0;
+  let skippedNoExactDate = 0;
   let skippedExisting = 0;
 
   for (let i = 0; i < sampled.length; i++) {
@@ -1022,28 +1028,27 @@ async function preloadByYear(targetYear, targetCount) {
     setLookupStatus(`⚡ Adding ${category.name.toLowerCase()} from ${targetYear} - ${i + 1}/${sampled.length}...`, false);
     if (existing.has(cand.name.toLowerCase())) { skippedExisting++; continue; }
 
-    if (cand.dayPrecision) {
-      const entry = { id: uid(), name: cand.name, date: cand.date, wikiTitle: cand.wikiTitle, dateKind: kind };
-      // manualDate configs (Inventors) have no live lookupFn to call here -
-      // there's no Wikidata-driven way to know what a randomly-sampled
-      // year's candidate invented, so the Invention field stays empty from
-      // this path (addable afterward by hand via Edit).
-      if (linkedPersonCfg && linkedPersonCfg.lookupFn) {
-        let person = null;
-        try { person = await linkedPersonCfg.lookupFn(cand.wikiTitle); } catch (e2) { /* no linked person found - the item still saves fine without one */ }
-        if (person) {
-          entry[linkedPersonCfg.field + 'Name'] = person.title;
-          entry[linkedPersonCfg.field + 'Qid'] = person.qid;
-          emaxAutoAddLinkedPerson(person.title, person.qid, linkedPersonCfg.targetCategory);
-        }
+    // A candidate whose Wikidata precision is coarser than a real day is
+    // skipped outright (2026-08-03, per the user's own explicit call) -
+    // never saved as a year-only entry, even from this SPARQL-driven path.
+    if (!cand.dayPrecision) { skippedNoExactDate++; continue; }
+
+    const entry = { id: uid(), name: cand.name, date: cand.date, wikiTitle: cand.wikiTitle, dateKind: kind };
+    // manualDate configs (Inventors) have no live lookupFn to call here -
+    // there's no Wikidata-driven way to know what a randomly-sampled
+    // year's candidate invented, so the Invention field stays empty from
+    // this path (addable afterward by hand via Edit).
+    if (linkedPersonCfg && linkedPersonCfg.lookupFn) {
+      let person = null;
+      try { person = await linkedPersonCfg.lookupFn(cand.wikiTitle); } catch (e2) { /* no linked person found - the item still saves fine without one */ }
+      if (person) {
+        entry[linkedPersonCfg.field + 'Name'] = person.title;
+        entry[linkedPersonCfg.field + 'Qid'] = person.qid;
+        emaxAutoAddLinkedPerson(person.title, person.qid, linkedPersonCfg.targetCategory);
       }
-      category.entries.push(entry);
-      added++;
-    } else {
-      category.entries.push({ id: uid(), name: cand.name, year: cand.year });
-      added++;
-      addedYearOnly++;
     }
+    category.entries.push(entry);
+    added++;
     existing.add(cand.name.toLowerCase());
   }
 
@@ -1051,9 +1056,9 @@ async function preloadByYear(targetYear, targetCount) {
   renderEntries();
   btn.disabled = false;
   emaxPreloading = false;
-  const yearOnlyNote = addedYearOnly ? ` (${addedYearOnly} year-only precision)` : '';
+  const skipDateNote = skippedNoExactDate ? ` · ${skippedNoExactDate} skipped (no exact date on Wikidata)` : '';
   const skipNote = skippedExisting ? ` · ${skippedExisting} already in your list` : '';
-  setLookupStatus(`⚡ Added ${added}/${sampled.length} ${category.name.toLowerCase()} from ${targetYear}${yearOnlyNote}${skipNote} - ${candidates.length} found total on Wikidata.`, false);
+  setLookupStatus(`⚡ Added ${added}/${sampled.length} ${category.name.toLowerCase()} from ${targetYear}${skipDateNote}${skipNote} - ${candidates.length} found total on Wikidata.`, false);
 }
 
 function init() {
@@ -1381,12 +1386,19 @@ function init() {
 
   if (EMAX_SEED_LISTS[category.name]) {
     const preloadBtn = document.getElementById('preloadTop50Btn');
-    // Labeled with the list's REAL length, not a fixed number - each
-    // category's pool grew to a different size (quality over forcing an
-    // exact count), so the button always says what it actually offers.
-    preloadBtn.textContent = `⚡ Preload Top ${EMAX_SEED_LISTS[category.name].length}`;
+    const preloadCountInput = document.getElementById('preloadTopCountInput');
+    const seedLen = EMAX_SEED_LISTS[category.name].length;
+    // Defaults to the full list (unchanged behavior if left alone), but is
+    // now editable (2026-08-03, the user's own call, generalized to every
+    // category the same way) - previously this was always a fixed "preload
+    // everything," no way to ask for fewer.
+    preloadCountInput.value = seedLen;
+    preloadCountInput.min = 1;
+    preloadCountInput.max = seedLen;
+    preloadCountInput.placeholder = `Up to ${seedLen}`;
+    preloadCountInput.style.display = '';
     preloadBtn.style.display = '';
-    preloadBtn.addEventListener('click', () => preloadTop50());
+    preloadBtn.addEventListener('click', () => preloadTop50(Number(preloadCountInput.value)));
   }
   if (emaxCategoryHasSyncableSeedData()) {
     const syncBtn = document.getElementById('syncSeedDataBtn');

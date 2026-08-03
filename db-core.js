@@ -161,111 +161,59 @@ function fetchKeyDate(qid) {
   });
 }
 
-// Year-only sibling of dateFromClaim - EMAX's "Preload by Year" needs to
-// know a brand's founding YEAR even when Wikidata only records that (a
-// precision-9 claim, no exact day/month), unlike every other caller of
-// dateFromClaim, which needs a real calendar date for a full numerology
-// profile and correctly rejects anything coarser.
-function yearFromClaim(claims) {
-  if (!claims || claims.length === 0) return null;
-  const snak = claims[0].mainsnak;
-  if (!snak || !snak.datavalue) return null;
-  const value = snak.datavalue.value;
-  if (value.precision < 9) return null; // coarser than a year (decade/century) - never usable
-  const time = value.time;
-  if (time.charAt(0) === '-') return null;
-  return Number(time.slice(1, 5));
-}
-
-// EMAX-only: resolves a real date (day-precision) for the given Wikidata
-// property when available, or just the YEAR when that's all Wikidata
-// records - never a fabricated day. `propKindPairs` is tried in priority
-// order as TWO passes: first every pair is checked for a day-precision date
-// (the first one found wins, even if it's a lower-priority pair - a real day
-// always beats a bare year), and only if NONE of them have a real day does
-// it fall back to the best available year (highest-priority pair first).
-// This is how a brand's inception (P571) being year-only doesn't shadow its
-// official-opening date (P1619) when THAT has a real day on file. Returns
-// { date, kind } or { year, kind } or null - `kind` is whichever pair
-// actually matched, not necessarily the first one in the list.
-function fetchBestDateOrYear(qid, propKindPairs) {
+// EMAX-only: resolves a real, day-precision date for the given Wikidata
+// property when available - never a fabricated day, and (2026-08-03, per
+// the user's own explicit call) never a bare year either. `propKindPairs`
+// is tried in priority order; the first one with a real day wins. Returns
+// { date, kind } or null - `kind` is whichever pair actually matched, not
+// necessarily the first one in the list.
+function fetchBestDate(qid, propKindPairs) {
   return fetchWikidataClaims(qid).then((claims) => {
     if (!claims) return null;
     for (const [prop, kind] of propKindPairs) {
       const exact = dateFromClaim(claims[prop]);
       if (exact) return { date: exact, kind };
     }
-    for (const [prop, kind] of propKindPairs) {
-      const year = yearFromClaim(claims[prop]);
-      if (year) return { year, kind };
-    }
     return null;
   });
 }
 
 // wikipediaFallback: when NEITHER Wikidata property has a real day, tries
-// the Wikipedia article itself before settling for a bare Wikidata year - a
-// real day found there still beats a bare year, same "exact day always
-// wins" rule as fetchBestDateOrYear's own two-property cascade. Falsy (the
-// common case) skips this entirely - only worth trying for categories where
-// Wikidata itself is frequently missing a day-precision claim. When present,
-// it's { infobox, prose } - two tiers, each only tried if the previous one
+// the Wikipedia article itself before giving up entirely. Falsy (the common
+// case) skips this - only worth trying for categories where Wikidata itself
+// is frequently missing a day-precision claim. When present, it's
+// { infobox, prose } - two tiers, each only tried if the previous one
 // missed, and each caller supplies its OWN scrape functions rather than this
 // shared cascade hardcoding one category's field names/keywords (a brand's
 // "founded/opened" infobox fields and product-launch prose scan are useless
-// noise on a song's article, and vice versa - see lookupFoundingDateOrYearWithTitle
-// vs lookupReleaseDateOrYearWithTitle below). `prose` may be null/omitted to
+// noise on a song's article, and vice versa). `prose` may be null/omitted to
 // skip that tier - it's the true long-shot, not every category needs it.
-function lookupBestDateOrYearWithTitle(name, propKindPairs, wikipediaFallback) {
+// Returns { date, kind, title } or null - a miss everywhere is a real miss,
+// never downgraded to a bare year.
+function lookupBestDateWithTitle(name, propKindPairs, wikipediaFallback) {
   return fetchWikidataIdWithTitle(name).then((hit) => {
     if (!hit) return null;
-    return fetchBestDateOrYear(hit.qid, propKindPairs).then((result) => {
-      if (result && result.date) return { ...result, title: hit.title };
-      if (!wikipediaFallback) return result ? { ...result, title: hit.title } : null;
+    return fetchBestDate(hit.qid, propKindPairs).then((result) => {
+      if (result) return { ...result, title: hit.title };
+      if (!wikipediaFallback) return null;
       return wikipediaFallback.infobox(hit.title).then((infoboxResult) => {
         if (infoboxResult) return { ...infoboxResult, title: hit.title };
-        if (!wikipediaFallback.prose) return result ? { ...result, title: hit.title } : null;
+        if (!wikipediaFallback.prose) return null;
         return wikipediaFallback.prose(hit.title).then((proseResult) => {
-          if (proseResult) return { ...proseResult, title: hit.title };
-          return result ? { ...result, title: hit.title } : null;
+          return proseResult ? { ...proseResult, title: hit.title } : null;
         });
       });
     });
   });
 }
 
-// EMAX "Preload by Year" - one wrapper per category kind. Brands try
-// inception (P571) first, falling back to the date of official opening
-// (P1619) when inception has no real day, then the Wikipedia infobox scrape,
-// then the prose scrape, when NEITHER Wikidata property has one - see
-// fetchBestDateOrYear and lookupBestDateOrYearWithTitle above. Songs try
-// release (P577) first, then their own Infobox song "released" field scrape
-// (no prose tier - the brand prose scanner's "first product launched"
-// wording doesn't fit a song, and a bespoke one isn't worth the false-
-// positive risk for what's already a rarer miss than brands see). Artists
-// filter by birth year (P569) with no fallback at all - a person's Wikidata
-// item is reliably complete enough not to need one.
-function lookupFoundingDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P571', 'founded'], ['P1619', 'opened']], { infobox: lookupKeyDateFromWikipediaInfobox, prose: lookupLaunchDateFromWikipediaProse });
-}
-function lookupBirthDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P569', 'born']], false);
-}
-function lookupReleaseDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P577', 'released']], { infobox: lookupReleaseDateFromWikipediaInfobox, prose: null });
-}
-// TV series only (EMAX Shows) - P580 start time, no P577 fallback since a
-// show isn't a single "publication."
-function lookupAiredDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P580', 'aired']], false);
-}
-// EMAX Anime - a mixed list of both series and films, so both properties are
-// tried per entity (whichever one the actual Wikidata item has); P577 first
-// since standalone films are the more common day-precision hit, P580 as the
-// fallback for series entries. See fetchBestDateOrYear above for how ties
-// (both present) resolve - the first pair in the list wins.
-function lookupAnimeDateOrYearWithTitle(name) {
-  return lookupBestDateOrYearWithTitle(name, [['P577', 'released'], ['P580', 'aired']], false);
+// EMAX Artists - filters by real birth date (P569) only, no wikipediaFallback
+// tier - a person's Wikidata item is reliably complete enough not to need
+// one. Used by the "+ Add to Database"/auto-add-linked-person paths
+// (emax-popup.js) - a miss here means the person is skipped, never added
+// with just a year.
+function lookupBirthDateWithTitle(name) {
+  return lookupBestDateWithTitle(name, [['P569', 'born']], false);
 }
 
 // EMAX brand logos only: Wikidata's P154 (logo image) is a structured,

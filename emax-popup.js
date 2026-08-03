@@ -304,30 +304,24 @@ async function emaxAddArtistToDatabase(artistName, artistQid, targetCategoryName
 
   let info = null;
   try {
-    info = artistQid ? await fetchKeyDate(artistQid) : await lookupBirthDateOrYearWithTitle(artistName);
+    info = artistQid ? await fetchKeyDate(artistQid) : await lookupBirthDateWithTitle(artistName);
   } catch (e) { info = null; }
 
   // Nothing found at all (most often a BAND typed in by hand - a group has
-  // no birthdate to find, no matter how many times this runs) - nothing is
-  // added, so the name isn't permanently stuck past the "already in the
-  // database" guard above with no way to retry after fixing the name.
-  if (!info || (!info.date && !info.year)) {
+  // no birthdate to find, no matter how many times this runs, or Wikidata
+  // only has a bare year - 2026-08-03, never saved as a year-only entry
+  // either) - nothing is added, so the name isn't permanently stuck past the
+  // "already in the database" guard above with no way to retry after fixing
+  // the name.
+  if (!info || !info.date) {
     if (btn) { btn.disabled = false; btn.textContent = "Couldn't find a birthdate - try the person's own name"; }
     return;
   }
 
-  const newEntry = { id: uid(), name: artistName };
-  if (info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
-  else { newEntry.year = info.year; }
+  const newEntry = { id: uid(), name: artistName, date: info.date, dateKind: info.kind };
   targetCat.entries.push(newEntry);
   saveEmaxDB(db);
-
-  if (newEntry.date) {
-    openItemModal(newEntry, targetCategoryName, backTo);
-  } else if (btn) {
-    btn.disabled = false;
-    btn.textContent = 'Added (year only)';
-  }
+  openItemModal(newEntry, targetCategoryName, backTo);
 }
 
 // Silent counterpart to "+ Add to Database" above (2026-08-03, the user's
@@ -346,17 +340,17 @@ async function emaxAutoAddLinkedPerson(personName, personQid, targetCategoryName
 
   let info = null;
   try {
-    info = personQid ? await fetchKeyDate(personQid) : await lookupBirthDateOrYearWithTitle(personName);
+    info = personQid ? await fetchKeyDate(personQid) : await lookupBirthDateWithTitle(personName);
   } catch (e) { info = null; }
-  if (!info || (!info.date && !info.year)) return; // nothing found (often a band) - silently skip, same as before this existed
+  // Nothing found (often a band), or Wikidata only has a bare year -
+  // 2026-08-03, never saved as a year-only entry either - silently skip.
+  if (!info || !info.date) return;
 
   // Re-check right before pushing - another call already in flight (e.g.
   // two songs by the same artist added back to back) could have added them
   // while this fetch was running.
   if (targetCat.entries.some((e) => e.name.toLowerCase() === personName.toLowerCase())) return;
-  const newEntry = { id: uid(), name: personName };
-  if (info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
-  else { newEntry.year = info.year; }
+  const newEntry = { id: uid(), name: personName, date: info.date, dateKind: info.kind };
   targetCat.entries.push(newEntry);
   saveEmaxDB(db);
 }
