@@ -347,14 +347,67 @@ function stocksTransitTally(list) {
 }
 
 // Flat trade list -> overall / by-aspect-type / by-planet win rates, per
-// the user's own "all of them" call on backtest output.
+// the user's own "all of them" call on backtest output. byAspectByLevel
+// splits each aspect by cadence (day/month/year) too - byAspect alone pools
+// e.g. Moon-square (1-day hold) with Saturn-square (252-day hold) into one
+// number, which can hide or fake a pattern since the three cadences have
+// very different baseline drift (see stocksTransitBaselineForBars). byPlanet
+// doesn't need the same split - each planet only ever belongs to one level.
 function stocksTransitAggregate(trades) {
   const overall = stocksTransitTally(trades);
   const byAspect = {};
   STOCKS_ASPECTS.forEach((a) => { byAspect[a.key] = stocksTransitTally(trades.filter((t) => t.aspect === a.key)); });
+  const byAspectByLevel = {};
+  STOCKS_ASPECTS.forEach((a) => {
+    byAspectByLevel[a.key] = {};
+    Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+      byAspectByLevel[a.key][level] = stocksTransitTally(trades.filter((t) => t.aspect === a.key && t.level === level));
+    });
+  });
   const byPlanet = {};
   Object.values(STOCKS_TRANSIT_PLANETS).flat().forEach((bodyKey) => { byPlanet[bodyKey] = stocksTransitTally(trades.filter((t) => t.bodyKey === bodyKey)); });
-  return { overall, byAspect, byPlanet };
+  return { overall, byAspect, byAspectByLevel, byPlanet };
+}
+
+// Unconditional positive-return rate at each holding cadence, off the exact
+// same bars the signal backtest above already fetched - no extra fetches.
+// This is the number a win rate has to beat to mean anything: if a given
+// aspect/level's "right" rate barely clears this, most of that apparent
+// edge is just the instrument's own drift over that hold, not the aspect.
+// Shaped like a tally ({n, right, wrong, rate}) so it reuses the same row
+// renderer as everything else, even though there's no "prediction" here -
+// right/wrong just means up/down.
+function stocksTransitBaselineForBars(bars) {
+  const out = {};
+  Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+    const holdDays = STOCKS_TRANSIT_HOLD_DAYS[level];
+    let n = 0;
+    let up = 0;
+    for (let i = 0; i + holdDays < bars.length; i++) {
+      const entryClose = bars[i][4];
+      const exitClose = bars[i + holdDays][4];
+      const returnPct = ((exitClose - entryClose) / entryClose) * 100;
+      if (returnPct === 0) continue; // same no-flat-band treatment as the signal grading
+      n++;
+      if (returnPct > 0) up++;
+    }
+    out[level] = { n, right: up, wrong: n - up, rate: n ? up / n : null };
+  });
+  return out;
+}
+
+// Pools every instrument's own baseline into one figure per cadence - one
+// call per instrument regardless of how many primary anchors it has (an
+// instrument with e.g. Company + CEO anchors would otherwise double-count
+// the exact same price series into its own baseline).
+function stocksTransitBaselineMerge(list) {
+  const out = {};
+  Object.keys(STOCKS_TRANSIT_HOLD_DAYS).forEach((level) => {
+    const n = list.reduce((s, b) => s + b[level].n, 0);
+    const right = list.reduce((s, b) => s + b[level].right, 0);
+    out[level] = { n, right, wrong: n - right, rate: n ? right / n : null };
+  });
+  return out;
 }
 
 // Runs the backtest across every instrument's primary anchor(s), fetching
@@ -363,6 +416,7 @@ function stocksTransitAggregate(trades) {
 // since Twelve Data's free tier caps at 8 credits/minute.
 async function stocksTransitBacktestAll(instruments, onProgress) {
   let allTrades = [];
+  const baselines = [];
   for (let i = 0; i < instruments.length; i++) {
     const inst = instruments[i];
     const anchors = inst.anchors.filter((a) => a.primary && a.date);
@@ -376,6 +430,7 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
       try {
         const wasCached = stocksCyclesCacheHit(inst.px.symbol);
         const bars = await stocksFetchSeries(inst.px.symbol, { outputsize: STOCKS_CYCLES_OUTPUTSIZE, cacheKey: STOCKS_CYCLES_PX_CACHE_KEY });
+        baselines.push(stocksTransitBaselineForBars(bars));
         anchors.forEach((a) => {
           allTrades = allTrades.concat(stocksTransitBacktestAnchor(stocksParseDate(a.date), bars));
         });
@@ -386,14 +441,20 @@ async function stocksTransitBacktestAll(instruments, onProgress) {
     }
     if (onProgress) onProgress(i + 1, instruments.length);
   }
-  return { ranAt: new Date().toISOString(), instrumentCount: instruments.length, ...stocksTransitAggregate(allTrades) };
+  return {
+    ranAt: new Date().toISOString(), instrumentCount: instruments.length,
+    ...stocksTransitAggregate(allTrades), baseline: stocksTransitBaselineMerge(baselines),
+  };
 }
 
 /* ---- Transit Backtest UI - own instruments var, own result cache, both
    deliberately separate from the Combined Track Record above (stocksCombinedInstruments,
    STOCKS_COMBINED_STORE_KEY) per the "standalone" call this feature's own
    clarifying round settled on. ---- */
-const STOCKS_TRANSIT_RESULT_KEY = 'numerology_stock_transit_backtest_v1';
+// v2 (2026-08-03): added baseline + byAspectByLevel - bumped so a v1 cached
+// result (missing those fields) doesn't render broken rows, just prompts a
+// re-run like no result existed yet.
+const STOCKS_TRANSIT_RESULT_KEY = 'numerology_stock_transit_backtest_v2';
 let stocksTransitCollapsed = true;
 let stocksTransitRunning = false;
 let stocksTransitInstruments = null;
@@ -409,10 +470,11 @@ function stocksTransitSaveResult(result) {
   try { localStorage.setItem(STOCKS_TRANSIT_RESULT_KEY, JSON.stringify(result)); } catch (e) { /* storage full - still shown this session */ }
 }
 
-function stocksTransitRateRowHtml(label, tally) {
+function stocksTransitRateRowHtml(label, tally, sub) {
+  const rowCls = sub ? ' sub' : '';
   if (!tally || tally.rate == null) {
     return `
-      <div class="stock-combined-record-row">
+      <div class="stock-combined-record-row${rowCls}">
         <span class="stock-combined-record-label" style="font-weight:400;color:var(--muted);">${escapeHtml(label)}</span>
         <span class="stock-trades-note">no signals</span>
       </div>`;
@@ -420,11 +482,13 @@ function stocksTransitRateRowHtml(label, tally) {
   const pct = Math.round(tally.rate * 100);
   const cls = pct >= 55 ? 'good' : pct <= 45 ? 'bad' : '';
   return `
-    <div class="stock-combined-record-row">
-      <span class="stock-combined-record-label">${escapeHtml(label)}</span>
+    <div class="stock-combined-record-row${rowCls}">
+      <span class="stock-combined-record-label"${sub ? ' style="font-weight:400;"' : ''}>${escapeHtml(label)}</span>
       <span class="score-inline ${cls}">${pct}% <span style="font-weight:400;">(${tally.right}/${tally.wrong} of ${tally.n})</span></span>
     </div>`;
 }
+
+const STOCKS_TRANSIT_LEVEL_LABELS = { day: 'Day (1d hold)', month: 'Month (21d hold)', year: 'Year (252d hold)' };
 
 function renderStocksTransitBacktestBody(box, result) {
   const runBtnLabel = result ? 'Re-run Backtest' : 'Run Backtest';
@@ -432,12 +496,26 @@ function renderStocksTransitBacktestBody(box, result) {
   if (!result) {
     bodyHtml = `<div class="stock-trades-note">Not run yet - checks every transit-aspect signal already live on this page (Moon/Mercury/Venus/Mars/Jupiter/Saturn/Uranus/Neptune/Pluto vs. each instrument's natal Sun) against real historical price moves. One price fetch per instrument, throttled - takes a while the first time.</div>`;
   } else {
-    const aspectRows = STOCKS_ASPECTS.map((a) => stocksTransitRateRowHtml(a.key.charAt(0).toUpperCase() + a.key.slice(1), result.byAspect[a.key])).join('');
+    const baselineRows = result.baseline
+      ? Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => stocksTransitRateRowHtml(STOCKS_TRANSIT_LEVEL_LABELS[level], result.baseline[level])).join('')
+      : '<div class="stock-trades-note">Re-run to compute (added after your last run).</div>';
+    const aspectRows = STOCKS_ASPECTS.map((a) => {
+      const label = a.key.charAt(0).toUpperCase() + a.key.slice(1);
+      const overallRow = stocksTransitRateRowHtml(label, result.byAspect[a.key]);
+      const byLevel = result.byAspectByLevel && result.byAspectByLevel[a.key];
+      const subRows = byLevel
+        ? Object.keys(STOCKS_TRANSIT_LEVEL_LABELS).map((level) => stocksTransitRateRowHtml(STOCKS_TRANSIT_LEVEL_LABELS[level], byLevel[level], true)).join('')
+        : '';
+      return overallRow + subRows;
+    }).join('');
     const planetRows = Object.values(STOCKS_TRANSIT_PLANETS).flat().map((bodyKey) => stocksTransitRateRowHtml(bodyKey, result.byPlanet[bodyKey])).join('');
     bodyHtml = `
       <div class="stock-trades-note">Scanned ${result.instrumentCount} instruments - last run ${new Date(result.ranAt).toLocaleString()}. Graded on a fixed hold (1 trading day for Moon, 21 for Mercury/Venus/Mars, 252 for Jupiter through Pluto) - right/wrong only, no mixed band.</div>
       ${stocksTransitRateRowHtml('Overall', result.overall)}
-      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By aspect type</div>
+      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">Baseline (no signal, same holds)</div>
+      <div class="stock-trades-note">Unconditional % of up-moves at each hold length, same price bars, no aspect required. A win rate above only means something if it clears the matching line here.</div>
+      ${baselineRows}
+      <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By aspect type (indented rows split by cadence)</div>
       ${aspectRows}
       <div class="stock-combined-record-label" style="margin-top:10px;font-weight:700;">By planet</div>
       ${planetRows}`;

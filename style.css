@@ -5372,6 +5372,13 @@ body {
 .stock-combined-record-row:first-child { border-top: none; }
 .stock-combined-record-label { font-weight: 700; }
 
+.stock-combined-record-row.sub {
+  padding: 5px 0 5px 16px;
+  border-top: none;
+  font-size: 0.74rem;
+  opacity: 0.85;
+}
+
 .stock-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
