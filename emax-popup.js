@@ -660,15 +660,23 @@ let emaxTimelineDraftText = null;
 let emaxTimelineCurrentEntryId = null;
 let emaxTimelineCurrentTimeline = null;
 
+// key: "1990" for a year with no birthday split, "1990:early"/"1990:late"
+// for the two real periods of a year that does split (see
+// emaxYearPersonalYearPeriods, db-core.js) - keeps expand/edit state
+// independently addressable per period even though they share a calendar
+// year number. emaxYearPeriodLabel (db-core.js) builds the matching
+// human-readable chip text ("1990" vs "1990 (early)"/"1990 (late)").
+//
 // |magnitude| >= 2 means at least 2 stacked/reinforcing signals landed on
-// this one year (e.g. Enemy Year + Personal Year 7 + a confirmed negative
-// event) - gets a visibly heavier chip so a severe year doesn't read
-// identically to one that's only barely on the bad/good side.
-function emaxTimelineChipHtml(year, verdict, tags, magnitude) {
-  const expanded = String(year) === String(emaxTimelineExpandedYear);
+// this one period (e.g. Enemy Year + Personal Year 7 + a confirmed
+// negative event) - gets a visibly heavier chip so a severe period doesn't
+// read identically to one that's only barely on the bad/good side.
+function emaxTimelineChipHtml(year, part, verdict, tags, magnitude) {
+  const key = `${year}:${part}`;
+  const expanded = key === String(emaxTimelineExpandedYear);
   const severe = typeof magnitude === 'number' && Math.abs(magnitude) >= 2;
   const tagPrefix = (tags && tags.length) ? tags.map(emaxTagEmoji).join('') + ' ' : '';
-  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}${severe ? ' severe' : ''}" data-year="${year}">${tagPrefix}${year}</button>`;
+  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}${severe ? ' severe' : ''}" data-year-key="${key}">${tagPrefix}${emaxYearPeriodLabel(year, part)}</button>`;
 }
 
 function emaxTagPickerHtml() {
@@ -690,22 +698,35 @@ function emaxTimelineSeverityLabel(magnitude) {
 // A year's expand/edit row is rendered once per SECTION it appears in (the
 // same year, e.g. 2019, can be both an Own Year and a Personal Year 7 at
 // once - see emaxTimelineYearVerdict) - always the same underlying note,
-// shown consistently wherever that year is flagged.
-function emaxTimelineEventRowHtml(entry, year, magnitude) {
+// shown consistently wherever that year/period is flagged. The note itself
+// is still stored per bare calendar year (entry.timelineEvents[year]) -
+// splitting storage per period would need a real data migration, so a
+// split year's early/late periods share the one slot; a caveat below
+// explains why it's excluded from magnitude/scoring either way.
+function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
   const ev = entry.timelineEvents && entry.timelineEvents[year];
-  const editing = String(year) === String(emaxTimelineEditingYear);
+  const key = `${year}:${part}`;
+  const editing = key === String(emaxTimelineEditingYear);
   const severityHtml = typeof magnitude === 'number'
     ? `<div class="emax-timeline-severity">Severity: ${emaxTimelineSeverityLabel(magnitude)}</div>`
+    : '';
+  // part !== 'whole' means this calendar year straddles two different
+  // Personal Years and a scraped/manual event can't be confirmed to
+  // either side of the birthday - "if there's nothing found it should not
+  // affect the score", extended to "found, but can't confirm which period".
+  const splitCaveatHtml = part !== 'whole'
+    ? `<div class="emax-timeline-split-caveat">This calendar year spans two Personal Years (your birthday falls inside it) - only the year is known for any note here, not which side of the birthday it happened on, so it doesn't count toward either period's score.</div>`
     : '';
   if (editing) {
     const current = emaxTimelineDraftText != null ? emaxTimelineDraftText : (ev ? ev.text : '');
     return `
       <div class="emax-timeline-event-row emax-timeline-event-edit">
+        ${splitCaveatHtml}
         <textarea id="emaxTimelineNoteInput" placeholder="What happened this year?">${escapeHtml(current)}</textarea>
         ${emaxTagPickerHtml()}
         <div class="emax-timeline-event-actions">
-          <button type="button" class="btn-link" data-year-save="${year}">Save</button>
-          <button type="button" class="btn-link" data-year-cancel="${year}">Cancel</button>
+          <button type="button" class="btn-link" data-year-save="${key}">Save</button>
+          <button type="button" class="btn-link" data-year-cancel="${key}">Cancel</button>
         </div>
       </div>`;
   }
@@ -717,10 +738,11 @@ function emaxTimelineEventRowHtml(entry, year, magnitude) {
       <div class="emax-timeline-event-row">
         <div class="emax-timeline-event-text">${escapeHtml(ev.text)}</div>
         ${tagsHtml}
+        ${splitCaveatHtml}
         ${severityHtml}
         <div class="emax-timeline-event-meta">
           <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
-          <button type="button" class="btn-link" data-year-edit="${year}">Edit</button>
+          <button type="button" class="btn-link" data-year-edit="${key}">Edit</button>
         </div>
       </div>`;
   }
@@ -730,20 +752,21 @@ function emaxTimelineEventRowHtml(entry, year, magnitude) {
   return `
     <div class="emax-timeline-event-row emax-timeline-event-empty">
       <span>Nothing found for this year</span>
+      ${splitCaveatHtml}
       ${severityHtml}
-      <button type="button" class="btn-link" data-year-edit="${year}">+ Add note</button>
+      <button type="button" class="btn-link" data-year-edit="${key}">+ Add note</button>
     </div>`;
 }
 
 function emaxTimelineSectionHtml(entry, title, years) {
   const chipsHtml = years.length
-    ? `<div class="emax-timeline-chips">${years.map(({ year, verdict, magnitude }) => {
+    ? `<div class="emax-timeline-chips">${years.map(({ year, part, verdict, magnitude }) => {
         const ev = entry.timelineEvents && entry.timelineEvents[year];
-        return emaxTimelineChipHtml(year, verdict, ev && ev.tags, magnitude);
+        return emaxTimelineChipHtml(year, part, verdict, ev && ev.tags, magnitude);
       }).join('')}</div>`
     : '<div class="emax-timeline-empty">None yet</div>';
-  const expandedYearObj = years.find(({ year }) => String(year) === String(emaxTimelineExpandedYear));
-  const eventRowHtml = expandedYearObj ? emaxTimelineEventRowHtml(entry, expandedYearObj.year, expandedYearObj.magnitude) : '';
+  const expandedYearObj = years.find(({ year, part }) => `${year}:${part}` === String(emaxTimelineExpandedYear));
+  const eventRowHtml = expandedYearObj ? emaxTimelineEventRowHtml(entry, expandedYearObj.year, expandedYearObj.part, expandedYearObj.magnitude) : '';
   return `
     <div class="emax-timeline-section">
       <div class="emax-timeline-section-title">${escapeHtml(title)}</div>
@@ -839,7 +862,10 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
 
   const saveBtn = e.target.closest('[data-year-save]');
   if (saveBtn) {
-    const year = saveBtn.dataset.yearSave;
+    // data-year-save carries the compound "year:part" key (UI state), but
+    // the note itself is always stored under the bare calendar year - a
+    // split year's early/late periods share the one slot.
+    const year = saveBtn.dataset.yearSave.split(':')[0];
     const text = document.getElementById('emaxTimelineNoteInput').value.trim();
     timelineEntry.timelineEvents = timelineEntry.timelineEvents || {};
     if (text) timelineEntry.timelineEvents[year] = { text, tags: emaxTimelineEditingTags.slice(), manual: true };
@@ -877,9 +903,12 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
   }
   const editBtn = e.target.closest('[data-year-edit]');
   if (editBtn) {
+    // data-year-edit carries the compound "year:part" key - the note
+    // itself is looked up by the bare year (its actual storage key).
     emaxTimelineEditingYear = editBtn.dataset.yearEdit;
     emaxTimelineExpandedYear = emaxTimelineEditingYear;
-    const existingEvent = timelineEntry.timelineEvents && timelineEntry.timelineEvents[emaxTimelineEditingYear];
+    const bareYear = emaxTimelineEditingYear.split(':')[0];
+    const existingEvent = timelineEntry.timelineEvents && timelineEntry.timelineEvents[bareYear];
     emaxTimelineEditingTags = (existingEvent && existingEvent.tags) ? existingEvent.tags.slice() : [];
     emaxTimelineDraftText = null;
     renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
@@ -887,11 +916,11 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
   }
   const chip = e.target.closest('.emax-timeline-chip');
   if (chip) {
-    const year = chip.dataset.year;
+    const key = chip.dataset.yearKey;
     emaxTimelineEditingYear = null;
     emaxTimelineEditingTags = [];
     emaxTimelineDraftText = null;
-    emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(year)) ? null : year;
+    emaxTimelineExpandedYear = (String(emaxTimelineExpandedYear) === String(key)) ? null : key;
     renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
   }
 });

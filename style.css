@@ -6986,6 +6986,12 @@ button.emax-fact-tile-tap {
   font-size: 0.72rem;
   margin-top: 6px;
 }
+.emax-timeline-split-caveat {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: italic;
+  margin-top: 6px;
+}
 
 .emax-timeline-event-row {
   margin-top: 8px;
