@@ -230,8 +230,26 @@ function emaxLinkedPersonBannerHtml(entry, meDate, cfg) {
   // look anything up from - by the time this popup is ever opened, the
   // invention should already have been auto-added (emaxAutoAddLinkedEntity
   // WithDate, called synchronously at save time) if a date was ever given
-  // for it at all. Nothing left to offer here if it somehow still isn't.
-  if (cfg.manualDate) return '';
+  // for it at all.
+  if (cfg.manualDate) {
+    // A year-only invention (no exact patent/event day was ever findable)
+    // used to fall all the way through to the empty '' below and vanish
+    // from the popup entirely - the user's own report (2026-08-03) that a
+    // real invention was showing nowhere at all. A plain pill (name + year)
+    // beats that silent gap - not a button, since there's no full date to
+    // score a compatibility off of and the linked Inventions entry is
+    // itself year-only with no popup of its own to open either.
+    const inventionYear = entry[cfg.field + 'Year'];
+    if (inventionYear != null) {
+      return `
+        <div class="emax-artist-banner">
+          <div class="emax-artist-banner-thumb" id="emaxArtistBannerThumb">${thumb}</div>
+          <div class="emax-artist-banner-name">${escapeHtml(personName)}</div>
+          <span class="emax-tile-year-badge">${inventionYear} · year only</span>
+        </div>`;
+    }
+    return '';
+  }
 
   return `
     <div class="emax-artist-banner">

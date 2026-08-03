@@ -6638,6 +6638,24 @@ body {
   padding: 2px 8px;
   margin-bottom: 6px;
 }
+
+/* What the inventor invented, right on the tile (Inventors only) - same
+   pill weight as the severity badge above, but a name can run longer than a
+   magnitude number, so it truncates instead of wrapping/overflowing. */
+.emax-tile-invention-pill {
+  display: block;
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin: 0 auto 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .emax-modal-severity {
   font-size: 13px;
   color: var(--muted);

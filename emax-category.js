@@ -276,6 +276,7 @@ function entryRowHtml(entry, score) {
       <div class="emax-tile-info">
         <div class="emax-tile-name">${escapeHtml(entry.name)}</div>
         ${emaxTileSeverityBadgeHtml(entry)}
+        ${emaxTileInventionPillHtml(entry)}
         ${starsHtml(entry.id, entry.rating || 0)}
       </div>
     </div>`;
@@ -291,6 +292,23 @@ function emaxTileSeverityBadgeHtml(entry) {
   if (value == null) return '';
   const display = cfg.kind === 'numeric' ? Number(value).toFixed(1) : `Cat ${value}`;
   return `<span class="emax-tile-severity-badge">${escapeHtml(display)}</span>`;
+}
+
+// What the inventor invented, right on the row - Inventors only
+// (EMAX_LINKED_PERSON_CONFIG's manualDate config). Previously this was only
+// ever visible inside the popup (and not even there for a year-only
+// invention - see emaxLinkedPersonBannerHtml's own fix), so an entry with a
+// well-known inventor but a year-only invention date read as a plain name
+// with no hint of what they actually invented (2026-08-03, the user's own
+// report/request). Shown regardless of whether the invention itself has a
+// full date or just a year - the row doesn't distinguish; the popup banner
+// still does.
+function emaxTileInventionPillHtml(entry) {
+  const cfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  if (!cfg || !cfg.manualDate) return '';
+  const name = entry[cfg.field + 'Name'];
+  if (!name) return '';
+  return `<span class="emax-tile-invention-pill">${escapeHtml(name)}</span>`;
 }
 
 // Same auto-fetch (real photo/logo, cached, monogram-fallback) the popup
