@@ -100,7 +100,7 @@ function emaxIsLogoCategory(categoryName) {
 // entry's own dateKind when a lookup resolved one) as a human verb on the
 // date line - no match (a custom category with no known kind, or a
 // hand-typed date) just shows the bare date with no verb prefix.
-const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed', launched: 'Launched', aired: 'Aired' };
+const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Released', opened: 'Opened', renamed: 'Renamed', launched: 'Launched', aired: 'Aired', invented: 'Invented', occurred: 'Occurred', started: 'Started' };
 
 // A fact-grid tile. When `compound` is given and differs from the reduced
 // value shown, the tile becomes tappable - clicking toggles the displayed
@@ -122,11 +122,50 @@ function emaxFactTile(icon, label, reduced, compound) {
 // artist, Video Games' designer/director, Books' author): the QID a
 // successful "Look up" resolved that person to - lets "+ Add to Database"
 // (in the popup) skip straight to fetchKeyDate instead of a name re-search.
+//
+// manualDate (Inventors' own Invention field, 2026-08-03): the linked
+// "thing" here is an invention, not a person - there's no reliable live
+// Wikidata lookup for "what did this specific person invent and when", so
+// its date is typed by hand alongside its name instead of resolved via
+// lookupFn (null for this one). See emaxAutoAddLinkedEntityWithDate below,
+// and emaxLinkedPersonBannerHtml's own manualDate branch (no "+ Add to
+// Database" fallback offered - there's nothing left for it to look up).
 const EMAX_LINKED_PERSON_CONFIG = {
   Songs: { field: 'artist', label: 'Artist', lookupFn: lookupPerformerForSong, targetCategory: 'Artists' },
   'Video Games': { field: 'director', label: 'Director', lookupFn: lookupDirectorForGame, targetCategory: 'Artists' },
   Books: { field: 'author', label: 'Author', lookupFn: lookupAuthorForBook, targetCategory: 'Authors' },
+  Inventors: { field: 'invention', label: 'Invention', lookupFn: null, targetCategory: 'Inventions', manualDate: true },
 };
+
+// A "how big/destructive was it" severity field, orthogonal to the
+// compatibility date every category already has - Earthquakes/Hurricanes
+// are the user's own explicit request (2026-08-03: "there should be a
+// different filter for their strength / how big or destructive they
+// were"), Saffir-Simpson Category 1-5 for hurricanes per their own choice.
+// 'numeric' is a free decimal value with an Over/Under filter (same shape
+// as the existing Score filter); 'scale' is a small fixed 1-max integer
+// range with an At least/Exactly filter (same shape as the existing Stars
+// filter) - two different real-world scales, so two different UI shapes,
+// same as EMAX_LINKED_PERSON_CONFIG's own manualDate branch exists because
+// Inventors' Invention needed different UI than Songs' Artist. No live
+// Wikidata lookup for either (unlike a date) - always typed by hand or
+// baked into a seed entry, same reasoning as Inventors' invention date.
+const EMAX_SEVERITY_CONFIG = {
+  Earthquakes: { field: 'magnitude', kind: 'numeric', label: 'Magnitude', min: 0, max: 10, step: 0.1 },
+  Hurricanes: { field: 'hurricaneCategory', kind: 'scale', label: 'Category', min: 1, max: 5 },
+};
+
+// The popup header's own severity line, right under the date - entirely
+// absent (returns '') for any category with no EMAX_SEVERITY_CONFIG entry,
+// or an entry that was saved/preloaded with no severity value at all.
+function emaxSeverityLine(entry, categoryName) {
+  const cfg = EMAX_SEVERITY_CONFIG[categoryName];
+  if (!cfg) return '';
+  const value = entry[cfg.field];
+  if (value == null) return '';
+  const display = cfg.kind === 'numeric' ? Number(value).toFixed(1) : String(value);
+  return `<div class="emax-modal-severity">${escapeHtml(cfg.label)} ${escapeHtml(display)}</div>`;
+}
 
 // A plain YouTube SEARCH link (never a guessed video id, which could easily
 // land on the wrong upload or a cover) - `query` builds the search text,
@@ -148,6 +187,14 @@ const EMAX_YOUTUBE_CONFIG = {
   'Technology Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
   'Hygiene Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
   'Food & Beverage Brands': { label: '▶ Watch Commercial', query: (entry) => `${entry.name} commercial` },
+  Inventors: { label: '▶ Watch Documentary', query: (entry) => `${entry.name} inventor documentary` },
+  Inventions: { label: '▶ Watch Explainer', query: (entry) => `${entry.name} invention history` },
+  'US Presidents': { label: '▶ Watch Documentary', query: (entry) => `${entry.name} president documentary` },
+  Earthquakes: { label: '▶ Watch Footage', query: (entry) => `${entry.name} earthquake footage` },
+  Hurricanes: { label: '▶ Watch Footage', query: (entry) => `${entry.name} hurricane footage` },
+  'Power Outages': { label: '▶ Watch News Coverage', query: (entry) => `${entry.name} news coverage` },
+  Wars: { label: '▶ Watch Documentary', query: (entry) => `${entry.name} documentary` },
+  'Plane Crashes': { label: '▶ Watch Documentary', query: (entry) => `${entry.name} documentary` },
   DEFAULT: { label: '▶ Search on YouTube', query: (entry) => entry.name },
 };
 
@@ -178,6 +225,13 @@ function emaxLinkedPersonBannerHtml(entry, meDate, cfg) {
         <div class="emax-score ${scoreClass(personScore)}">${personScore}%</div>
       </button>`;
   }
+
+  // manualDate (Inventors' Invention) has no live source a button could
+  // look anything up from - by the time this popup is ever opened, the
+  // invention should already have been auto-added (emaxAutoAddLinkedEntity
+  // WithDate, called synchronously at save time) if a date was ever given
+  // for it at all. Nothing left to offer here if it somehow still isn't.
+  if (cfg.manualDate) return '';
 
   return `
     <div class="emax-artist-banner">
@@ -256,6 +310,49 @@ async function emaxAddArtistToDatabase(artistName, artistQid, targetCategoryName
     btn.disabled = false;
     btn.textContent = 'Added (year only)';
   }
+}
+
+// Silent counterpart to "+ Add to Database" above (2026-08-03, the user's
+// own call) - fires automatically the moment a linked person's name+qid is
+// newly attached to an entry (manual add/edit, Look Up, Preload), instead
+// of waiting for a button click. No UI side effects (no button state, no
+// popup navigation) - safe to call mid-loop during a bulk preload just as
+// easily as from a single manual add. The button in
+// emaxLinkedPersonBannerHtml is still there as a manual retry path for
+// whatever this couldn't resolve (most often a group/band with no
+// birthdate at all) or a pre-existing entry saved before this existed.
+async function emaxAutoAddLinkedPerson(personName, personQid, targetCategoryName) {
+  if (!personName || !targetCategoryName) return;
+  const targetCat = db.categories.find((c) => c.name === targetCategoryName);
+  if (!targetCat || targetCat.entries.some((e) => e.name.toLowerCase() === personName.toLowerCase())) return;
+
+  let info = null;
+  try {
+    info = personQid ? await fetchKeyDate(personQid) : await lookupBirthDateOrYearWithTitle(personName);
+  } catch (e) { info = null; }
+  if (!info || (!info.date && !info.year)) return; // nothing found (often a band) - silently skip, same as before this existed
+
+  // Re-check right before pushing - another call already in flight (e.g.
+  // two songs by the same artist added back to back) could have added them
+  // while this fetch was running.
+  if (targetCat.entries.some((e) => e.name.toLowerCase() === personName.toLowerCase())) return;
+  const newEntry = { id: uid(), name: personName };
+  if (info.date) { newEntry.date = info.date; newEntry.dateKind = info.kind; }
+  else { newEntry.year = info.year; }
+  targetCat.entries.push(newEntry);
+  saveEmaxDB(db);
+}
+
+// Same idea as emaxAutoAddLinkedPerson, but for a manualDate config
+// (Inventors' own Invention) whose date is already known directly - no
+// Wikidata fetch to make, so this is synchronous and can run inline before
+// the entry itself even saves.
+function emaxAutoAddLinkedEntityWithDate(name, date, targetCategoryName) {
+  if (!name || !date || !targetCategoryName) return;
+  const targetCat = db.categories.find((c) => c.name === targetCategoryName);
+  if (!targetCat || targetCat.entries.some((e) => e.name.toLowerCase() === name.toLowerCase())) return;
+  targetCat.entries.push({ id: uid(), name, date });
+  saveEmaxDB(db);
 }
 
 /* ---- Same-sign zodiac override ---- */
@@ -468,6 +565,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
       ${starsHtml(entry.id, entry.rating || 0)}
       <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
       <div class="emax-modal-date">${escapeHtml(dateLine)}</div>
+      ${emaxSeverityLine(entry, effectiveCategoryName)}
       ${youtubeHtml}
       <div class="emax-score-ring-wrap">
         <svg viewBox="0 0 120 120" class="emax-score-ring ${scoreCls}">

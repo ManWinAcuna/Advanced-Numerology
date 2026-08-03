@@ -49,6 +49,32 @@ const EMAX_YEAR_FILTER_KIND = {
   'Historical Figures': 'born',
   'Books': 'released',
   'Authors': 'born',
+  'Inventors': 'born',
+  // 'invented' (2026-08-03) - a NEW date kind, not reused 'founded': an
+  // invention isn't a company, "Invented 1879" reads right where "Founded
+  // 1879" wouldn't. Inventions entries are never preloaded from a seed
+  // list of their own - they're auto-created from Inventors' own Invention
+  // field (emaxAutoAddLinkedEntityWithDate, emax-popup.js) the moment an
+  // inventor with a real invention date is saved.
+  'Inventions': 'invented',
+  'US Presidents': 'born',
+  // 'occurred' - Earthquakes/Hurricanes are events, not people/brands/
+  // media, so neither 'born' nor 'founded'/'released' reads right. Every
+  // seed entry's date is baked directly into EMAX_SEED_LISTS (like
+  // Inventors' invention date) rather than resolved live - there's no
+  // reliable Wikidata property to fetch "when did this natural disaster
+  // happen" from the way P569/P571/P577 already cover people/brands/media.
+  'Earthquakes': 'occurred',
+  'Hurricanes': 'occurred',
+  'Power Outages': 'occurred',
+  // 'started' (not 'occurred') - a war isn't a single-instant event the way
+  // an earthquake/blackout is, it's a real, well-documented single START
+  // date that then runs for years, so "Started 1939-09-01" reads right
+  // where "Occurred 1939-09-01" wouldn't for a war lasting until 1945. The
+  // war's own numerology is computed from this start date, same as every
+  // other 'occurred'-kind category uses its own single defining date.
+  'Wars': 'started',
+  'Plane Crashes': 'occurred',
 };
 
 // "Preload by Year" v2 - a live Wikidata SPARQL query for what actually
@@ -97,6 +123,19 @@ const EMAX_YEAR_QUERY_CONFIG = {
   'Anime': { queryKind: 'instance', dateProp: 'P580', altDateProp: 'P577', values: ['Q63952888'] },
   'Video Games': { queryKind: 'instance', dateProp: 'P577', values: ['Q7889'] },
   'Books': { queryKind: 'instance', dateProp: 'P577', values: ['Q571', 'Q7725634'] },
+  'Inventors': { queryKind: 'occupation', dateProp: 'P569', values: ['Q205375'] },
+  // 'US Presidents' deliberately has no entry here - "Preload by Year"
+  // means "sample the top N of a large, ongoing real-world category born/
+  // released in year X", which doesn't fit a small, fixed, already-complete
+  // set of exactly 45 people (same reasoning as 'Inventions' never getting
+  // its own Preload Top N button - the feature just doesn't map onto this
+  // kind of list). "Preload Top" alone (the full 45-name seed list below)
+  // already covers the entire category.
+  // 'Earthquakes'/'Hurricanes'/'Power Outages'/'Wars'/'Plane Crashes'
+  // deliberately have no entry here either - their own date is baked into
+  // each seed object (see EMAX_YEAR_FILTER_KIND's own comment above), not
+  // resolved from a live per-item Wikidata fetch the way this "by year"
+  // query needs to run against.
 };
 
 const EMAX_SEED_LISTS = {
@@ -1157,5 +1196,206 @@ const EMAX_SEED_LISTS = {
     // Essayists / social critics
     "bell hooks", "Audre Lorde", "Angela Davis", "Gloria Steinem", "Naomi Klein",
     "Noam Chomsky", "Christopher Hitchens", "Sam Harris", "Bill Bryson", "Anthony Bourdain",
+  ],
+  // Object-shaped entries only (see preloadTop50, emax-category.js): the
+  // inventor's own birth date is still looked up live from Wikidata same as
+  // every other person category here, but invention/inventionDate are
+  // real, day-precision facts checked individually (WebSearch, 2026-08-03)
+  // and baked in - Inventors is a manualDate linked-person config
+  // (EMAX_LINKED_PERSON_CONFIG, emax-popup.js), so there is no live source
+  // to resolve the invention's date from at preload time the way an
+  // Artist/Director/Author gets looked up for Songs/Video Games/Books.
+  'Inventors': [
+    { name: 'Thomas Edison', invention: 'Light Bulb', inventionDate: '1879-10-21' },
+    { name: 'Alexander Graham Bell', invention: 'Telephone', inventionDate: '1876-03-07' },
+    { name: 'Orville Wright', invention: 'Airplane', inventionDate: '1903-12-17' },
+    { name: 'Wilbur Wright', invention: 'Airplane', inventionDate: '1903-12-17' },
+    { name: 'Karl Benz', invention: 'Automobile', inventionDate: '1886-01-29' },
+    { name: 'John Logie Baird', invention: 'Television', inventionDate: '1926-01-26' },
+    { name: 'Tim Berners-Lee', invention: 'World Wide Web', inventionDate: '1989-03-12' },
+    { name: 'Eli Whitney', invention: 'Cotton Gin', inventionDate: '1794-03-14' },
+    { name: 'Samuel Morse', invention: 'Telegraph', inventionDate: '1844-05-24' },
+    { name: 'Nikola Tesla', invention: 'AC Induction Motor', inventionDate: '1888-05-01' },
+    { name: 'George Eastman', invention: 'Kodak Camera', inventionDate: '1888-09-04' },
+    { name: 'Charles Goodyear', invention: 'Vulcanized Rubber', inventionDate: '1844-06-15' },
+    { name: 'Willis Carrier', invention: 'Air Conditioner', inventionDate: '1906-01-02' },
+    { name: 'Philo Farnsworth', invention: 'Electronic Television', inventionDate: '1927-09-07' },
+    { name: 'Chester Carlson', invention: 'Photocopier', inventionDate: '1938-10-22' },
+    { name: 'Garrett Morgan', invention: 'Traffic Signal', inventionDate: '1923-11-20' },
+    { name: 'Martin Cooper', searchTerm: 'Martin Cooper (inventor)', invention: 'Mobile Phone', inventionDate: '1973-04-03' },
+    { name: 'Jacob Davis', searchTerm: 'Jacob Davis (tailor)', invention: 'Riveted Blue Jeans', inventionDate: '1873-05-20' },
+    { name: 'Levi Strauss', searchTerm: 'Levi Strauss (businessman)', invention: 'Riveted Blue Jeans', inventionDate: '1873-05-20' },
+    { name: 'Igor Sikorsky', invention: 'Helicopter', inventionDate: '1939-09-14' },
+    { name: 'Robert Goddard', searchTerm: 'Robert H. Goddard', invention: 'Liquid-Fueled Rocket', inventionDate: '1926-03-16' },
+    { name: 'Wilhelm Röntgen', invention: 'X-ray', inventionDate: '1895-11-08' },
+    { name: 'Alexander Fleming', invention: 'Penicillin', inventionDate: '1928-09-28' },
+    { name: 'Alessandro Volta', invention: 'Voltaic Pile', inventionDate: '1800-03-20' },
+    { name: 'Percy Spencer', invention: 'Microwave Oven', inventionDate: '1945-10-08' },
+  ],
+  // All 45 people who have ever held the office (Grover Cleveland's two
+  // non-consecutive terms and Donald Trump's two non-consecutive terms each
+  // count once, same as every "X people have served as president" trivia
+  // fact - this is a list of PEOPLE, not term-numbers) - plain names, no
+  // baked-in dates: the birthdate every other person-category here uses is
+  // looked up live the same way (P569), not treated as a fact special to
+  // this list.
+  'US Presidents': [
+    'George Washington', 'John Adams', 'Thomas Jefferson', 'James Madison', 'James Monroe',
+    'John Quincy Adams', 'Andrew Jackson', 'Martin Van Buren', 'William Henry Harrison', 'John Tyler',
+    'James K. Polk', 'Zachary Taylor', 'Millard Fillmore', 'Franklin Pierce', 'James Buchanan',
+    'Abraham Lincoln', 'Andrew Johnson', 'Ulysses S. Grant', 'Rutherford B. Hayes', 'James A. Garfield',
+    'Chester A. Arthur', 'Grover Cleveland', 'Benjamin Harrison', 'William McKinley', 'Theodore Roosevelt',
+    'William Howard Taft', 'Woodrow Wilson', 'Warren G. Harding', 'Calvin Coolidge', 'Herbert Hoover',
+    'Franklin D. Roosevelt', 'Harry S. Truman', 'Dwight D. Eisenhower', 'John F. Kennedy', 'Lyndon B. Johnson',
+    'Richard Nixon', 'Gerald Ford', 'Jimmy Carter', 'Ronald Reagan', 'George H. W. Bush',
+    'Bill Clinton', 'George W. Bush', 'Barack Obama', 'Donald Trump', 'Joe Biden',
+  ],
+  // 24 real, individually WebSearch-verified (2026-08-03) major
+  // earthquakes - day-precision date + moment magnitude baked in directly
+  // (EMAX_YEAR_FILTER_KIND's own comment explains why: no live "when did
+  // this happen" lookup exists here the way P569/P571/P577 cover people/
+  // brands/media). Where sources disagreed slightly on the exact magnitude
+  // (common for pre-instrumental or multi-scale-reported events), the
+  // widely-cited modern moment-magnitude (Mw) figure was used.
+  'Earthquakes': [
+    { name: 'Great Chilean Earthquake (Valdivia)', date: '1960-05-22', magnitude: 9.5 },
+    { name: 'Alaska Good Friday Earthquake', date: '1964-03-27', magnitude: 9.2 },
+    { name: 'Indian Ocean Earthquake (Sumatra-Andaman)', date: '2004-12-26', magnitude: 9.1 },
+    { name: 'Tōhoku Earthquake', date: '2011-03-11', magnitude: 9.1 },
+    { name: 'Kamchatka Earthquake', date: '1952-11-04', magnitude: 9.0 },
+    { name: 'Chile Maule Earthquake', date: '2010-02-27', magnitude: 8.8 },
+    { name: 'Mexico City Earthquake', date: '1985-09-19', magnitude: 8.0 },
+    { name: 'Sichuan Earthquake', date: '2008-05-12', magnitude: 7.9 },
+    { name: 'San Francisco Earthquake', date: '1906-04-18', magnitude: 7.9 },
+    { name: 'Great Kantō Earthquake', date: '1923-09-01', magnitude: 7.9 },
+    { name: 'Nepal Gorkha Earthquake', date: '2015-04-25', magnitude: 7.8 },
+    { name: 'Turkey-Syria Earthquake', date: '2023-02-06', magnitude: 7.8 },
+    { name: 'Kaikōura Earthquake', date: '2016-11-14', magnitude: 7.8 },
+    { name: 'Kashmir Earthquake', date: '2005-10-08', magnitude: 7.6 },
+    { name: 'İzmit Earthquake', date: '1999-08-17', magnitude: 7.6 },
+    { name: 'Tangshan Earthquake', date: '1976-07-28', magnitude: 7.6 },
+    { name: 'Chi-Chi Earthquake', date: '1999-09-21', magnitude: 7.6 },
+    { name: 'Gujarat Bhuj Earthquake', date: '2001-01-26', magnitude: 7.6 },
+    { name: 'Haiti Earthquake', date: '2010-01-12', magnitude: 7.0 },
+    { name: 'Kobe Earthquake (Great Hanshin)', date: '1995-01-17', magnitude: 6.9 },
+    { name: 'Loma Prieta Earthquake', date: '1989-10-17', magnitude: 6.9 },
+    { name: 'Armenia Spitak Earthquake', date: '1988-12-07', magnitude: 6.9 },
+    { name: 'Northridge Earthquake', date: '1994-01-17', magnitude: 6.7 },
+    { name: 'Christchurch Earthquake', date: '2011-02-22', magnitude: 6.3 },
+  ],
+  // 24 real, individually WebSearch-verified (2026-08-03) Atlantic
+  // hurricanes - the date and Saffir-Simpson Category used throughout are
+  // both the storm's own U.S./Caribbean LANDFALL (not its peak intensity
+  // at sea, which several of these reached briefly before weakening) - one
+  // real, singular, well-documented event per storm, same "why THIS one
+  // date" reasoning as an earthquake's own occurrence date.
+  'Hurricanes': [
+    { name: 'Hurricane Katrina', date: '2005-08-29', hurricaneCategory: 3 },
+    { name: 'Hurricane Harvey', date: '2017-08-25', hurricaneCategory: 4 },
+    { name: 'Hurricane Irma', date: '2017-09-10', hurricaneCategory: 4 },
+    { name: 'Hurricane Maria', date: '2017-09-20', hurricaneCategory: 4 },
+    { name: 'Hurricane Michael', date: '2018-10-10', hurricaneCategory: 5 },
+    { name: 'Hurricane Andrew', date: '1992-08-24', hurricaneCategory: 5 },
+    { name: 'Hurricane Camille', date: '1969-08-17', hurricaneCategory: 5 },
+    { name: 'Hurricane Wilma', date: '2005-10-24', hurricaneCategory: 3 },
+    { name: 'Hurricane Rita', date: '2005-09-24', hurricaneCategory: 3 },
+    { name: 'Hurricane Ida', date: '2021-08-29', hurricaneCategory: 4 },
+    { name: 'Hurricane Dorian', date: '2019-09-01', hurricaneCategory: 5 },
+    { name: 'Hurricane Florence', date: '2018-09-14', hurricaneCategory: 1 },
+    { name: 'Hurricane Charley', date: '2004-08-13', hurricaneCategory: 4 },
+    { name: 'Hurricane Ivan', date: '2004-09-16', hurricaneCategory: 3 },
+    { name: 'Hurricane Frances', date: '2004-09-05', hurricaneCategory: 2 },
+    { name: 'Hurricane Jeanne', date: '2004-09-26', hurricaneCategory: 3 },
+    { name: 'Hurricane Hugo', date: '1989-09-22', hurricaneCategory: 4 },
+    { name: 'Hurricane Gilbert', date: '1988-09-14', hurricaneCategory: 5 },
+    { name: 'Hurricane Allen', date: '1980-08-10', hurricaneCategory: 3 },
+    { name: 'Galveston Hurricane of 1900', date: '1900-09-08', hurricaneCategory: 4 },
+    { name: 'Hurricane Opal', date: '1995-10-04', hurricaneCategory: 3 },
+    { name: 'Hurricane Fran', date: '1996-09-05', hurricaneCategory: 3 },
+    { name: 'Hurricane Isabel', date: '2003-09-18', hurricaneCategory: 2 },
+    { name: 'Hurricane Milton', date: '2024-10-09', hurricaneCategory: 3 },
+  ],
+  // 20 real, individually WebSearch-verified (2026-08-03) major power
+  // outages/blackouts - no severity field (unlike Earthquakes/Hurricanes,
+  // the user's own request only asked for a strength filter on those two
+  // specifically), just a real, baked-in date, same 'occurred' reasoning.
+  'Power Outages': [
+    { name: 'Northeast Blackout of 2003', date: '2003-08-14' },
+    { name: 'Northeast Blackout of 1965', date: '1965-11-09' },
+    { name: 'New York City Blackout of 1977', date: '1977-07-13' },
+    { name: '2012 India Blackout (30 July)', date: '2012-07-30' },
+    { name: '2012 India Blackout (31 July)', date: '2012-07-31' },
+    { name: '2003 Italy Blackout', date: '2003-09-28' },
+    { name: '2019 Argentina-Uruguay Blackout', date: '2019-06-16' },
+    { name: '2021 Texas Power Crisis', date: '2021-02-15' },
+    { name: '2003 London Blackout', date: '2003-08-28' },
+    { name: '2005 Java-Bali Blackout', date: '2005-08-18' },
+    { name: '2019 United Kingdom Blackout', date: '2019-08-09' },
+    { name: '2015 Turkey Blackout', date: '2015-03-31' },
+    { name: '2015 Pakistan Blackout', date: '2015-01-24' },
+    { name: '2016 South Australia Blackout', date: '2016-09-28' },
+    { name: '2003 Sweden-Denmark Blackout', date: '2003-09-23' },
+    { name: '2009 Brazil-Paraguay Blackout', date: '2009-11-10' },
+    { name: '2019 Venezuela Blackout', date: '2019-03-07' },
+    { name: '1999 Southern Brazil Blackout', date: '1999-03-11' },
+    { name: '2024 Cuba Nationwide Blackout', date: '2024-10-18' },
+    { name: '2025 Spain-Portugal Blackout', date: '2025-04-28' },
+  ],
+  // 20 real, individually WebSearch-verified (2026-08-03) wars - the date
+  // used for each is its own widely-cited, single START date (not any
+  // later peak/end), same "one real defining date" reasoning as every
+  // other 'occurred'/'started'-kind category here. A few real wars whose
+  // start date is genuinely disputed across sources even after checking
+  // (e.g. the exact day the Crimean War or the 2008 Russo-Georgian War
+  // "started") were deliberately left off this list rather than guessed at
+  // - "no placeholder dates" applies to picking among disputed candidates
+  // too, not just to missing data.
+  'Wars': [
+    { name: 'World War I', date: '1914-07-28' },
+    { name: 'World War II', date: '1939-09-01' },
+    { name: 'Korean War', date: '1950-06-25' },
+    { name: 'Vietnam War', date: '1955-11-01' },
+    { name: 'Gulf War', date: '1990-08-02' },
+    { name: 'Iraq War', date: '2003-03-20' },
+    { name: 'War in Afghanistan (2001-2021)', date: '2001-10-07' },
+    { name: 'American Civil War', date: '1861-04-12' },
+    { name: 'American Revolutionary War', date: '1775-04-19' },
+    { name: 'Franco-Prussian War', date: '1870-07-19' },
+    { name: 'Russo-Japanese War', date: '1904-02-08' },
+    { name: 'Spanish Civil War', date: '1936-07-17' },
+    { name: 'Falklands War', date: '1982-04-02' },
+    { name: 'Six-Day War', date: '1967-06-05' },
+    { name: 'Yom Kippur War', date: '1973-10-06' },
+    { name: 'Iran-Iraq War', date: '1980-09-22' },
+    { name: 'Russian Invasion of Ukraine', date: '2022-02-24' },
+    { name: 'Syrian Civil War', date: '2011-03-15' },
+    { name: 'Bosnian War', date: '1992-04-06' },
+    { name: 'War of 1812', date: '1812-06-18' },
+  ],
+  // 20 real, individually WebSearch-verified (2026-08-03) plane crashes/
+  // aviation disasters - no severity field (the user's own request only
+  // asked for a strength filter on Earthquakes/Hurricanes specifically),
+  // just a real, baked-in date, same 'occurred' reasoning as Power Outages.
+  'Plane Crashes': [
+    { name: 'Tenerife Airport Disaster', date: '1977-03-27' },
+    { name: 'Japan Airlines Flight 123', date: '1985-08-12' },
+    { name: 'Malaysia Airlines Flight 370', date: '2014-03-08' },
+    { name: 'Malaysia Airlines Flight 17', date: '2014-07-17' },
+    { name: 'Pan Am Flight 103 (Lockerbie Bombing)', date: '1988-12-21' },
+    { name: 'Air France Flight 447', date: '2009-06-01' },
+    { name: 'Germanwings Flight 9525', date: '2015-03-24' },
+    { name: 'EgyptAir Flight 990', date: '1999-10-31' },
+    { name: 'TWA Flight 800', date: '1996-07-17' },
+    { name: 'Air France Flight 4590 (Concorde)', date: '2000-07-25' },
+    { name: 'Lion Air Flight 610', date: '2018-10-29' },
+    { name: 'Ethiopian Airlines Flight 302', date: '2019-03-10' },
+    { name: 'Turkish Airlines Flight 981', date: '1974-03-03' },
+    { name: 'Saudia Flight 163', date: '1980-08-19' },
+    { name: 'Charkhi Dadri Mid-Air Collision', date: '1996-11-12' },
+    { name: 'American Airlines Flight 587', date: '2001-11-12' },
+    { name: 'American Airlines Flight 191', date: '1979-05-25' },
+    { name: 'Korean Air Lines Flight 007', date: '1983-09-01' },
+    { name: 'US Airways Flight 1549 (Miracle on the Hudson)', date: '2009-01-15' },
+    { name: 'Air India Flight 182', date: '1985-06-23' },
   ],
 };

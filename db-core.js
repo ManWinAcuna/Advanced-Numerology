@@ -2417,8 +2417,16 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['youtuber', 'streamer', 'influencer', 'creator'], emoji: '📹' },
   { keywords: ['food', 'beverage', 'drink', 'restaurant', 'snack'], emoji: '🍔' },
   { keywords: ['historical', 'politician'], emoji: '🏛️' },
+  { keywords: ['president'], emoji: '🇺🇸' },
+  { keywords: ['earthquake'], emoji: '🌍' },
+  { keywords: ['hurricane'], emoji: '🌀' },
+  { keywords: ['power outage', 'blackout'], emoji: '🔌' },
+  { keywords: ['war'], emoji: '⚔️' },
+  { keywords: ['plane crash'], emoji: '💥' },
   { keywords: ['book', 'novel'], emoji: '📚' },
   { keywords: ['author', 'writer'], emoji: '✍️' },
+  { keywords: ['inventor'], emoji: '💡' },
+  { keywords: ['invention'], emoji: '⚙️' },
 ];
 
 const CATEGORY_EMOJI_FALLBACK = ['🎉', '🎈', '🎊', '🌟', '💫', '🎁', '✨', '🎆', '🪩', '🎇'];
@@ -2460,6 +2468,7 @@ const EMAX_STARTER_CATEGORIES = [
   'Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands',
   'Anime', 'Shows', 'Songs', 'Video Games', 'YouTubers',
   'Food & Beverage Brands', 'Historical Figures', 'Books', 'Authors',
+  'Inventors', 'Inventions', 'US Presidents', 'Earthquakes', 'Hurricanes', 'Power Outages', 'Wars', 'Plane Crashes',
 ];
 
 function loadEmaxDB() {

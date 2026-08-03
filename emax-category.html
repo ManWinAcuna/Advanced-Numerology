@@ -61,6 +61,18 @@
         </div>
         <div class="inline-form" id="newEntryArtistRow" style="display:none;">
           <input type="text" id="newEntryArtist" placeholder="Artist (optional) - auto-filled by Look Up, or type your own">
+          <input type="text" id="newEntryArtistDate" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off" style="display:none;">
+        </div>
+        <div class="inline-form" id="newEntrySeverityRow" style="display:none;">
+          <span class="emax-filter-label" id="newEntrySeverityLabel">Severity</span>
+          <input type="number" id="newEntrySeverityNumeric" placeholder="" style="display:none;">
+          <span class="emax-severity-picker" id="newEntrySeverityScale" style="display:none;">
+            <button class="emax-severity-btn" data-value="1" type="button">1</button>
+            <button class="emax-severity-btn" data-value="2" type="button">2</button>
+            <button class="emax-severity-btn" data-value="3" type="button">3</button>
+            <button class="emax-severity-btn" data-value="4" type="button">4</button>
+            <button class="emax-severity-btn" data-value="5" type="button">5</button>
+          </span>
         </div>
         <div class="inline-form" id="preloadByYearRow" style="display:none;">
           <input type="number" id="preloadYearInput" placeholder="Year" inputmode="numeric">
@@ -106,6 +118,26 @@
             <button type="button" data-value="under">Under</button>
           </div>
           <input type="number" id="emaxFilterValue" placeholder="e.g. 80" min="0" max="100">
+        </div>
+
+        <div class="emax-filter-block" id="emaxSeverityFilterBlock" style="display:none;">
+          <span class="emax-filter-label" id="emaxSeverityFilterLabel">Severity</span>
+          <div class="emax-toggle-group" id="emaxSeverityNumericModeToggle" style="display:none;">
+            <button type="button" data-value="over" class="active">Over</button>
+            <button type="button" data-value="under">Under</button>
+          </div>
+          <input type="number" id="emaxSeverityFilterValue" placeholder="" style="display:none;">
+          <div class="emax-toggle-group" id="emaxSeverityScaleModeToggle" style="display:none;">
+            <button type="button" data-value="atLeast" class="active">At least</button>
+            <button type="button" data-value="exactly">Exactly</button>
+          </div>
+          <span class="emax-severity-picker" id="emaxSeverityFilterPicker" style="display:none;">
+            <button class="emax-severity-btn" data-value="1" type="button">1</button>
+            <button class="emax-severity-btn" data-value="2" type="button">2</button>
+            <button class="emax-severity-btn" data-value="3" type="button">3</button>
+            <button class="emax-severity-btn" data-value="4" type="button">4</button>
+            <button class="emax-severity-btn" data-value="5" type="button">5</button>
+          </span>
         </div>
 
         <div class="emax-filter-block">

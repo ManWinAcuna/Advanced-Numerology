@@ -6624,6 +6624,50 @@ body {
 }
 .emax-tile-info .emax-stars { justify-content: center; }
 
+/* Severity badge (Earthquakes' Magnitude / Hurricanes' Category,
+   EMAX_SEVERITY_CONFIG) - a small pill above the star rating, same visual
+   weight as the year-only badge below but shown alongside a real dated
+   tile instead of replacing it. */
+.emax-tile-severity-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-bottom: 6px;
+}
+.emax-modal-severity {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: -6px;
+  margin-bottom: 4px;
+}
+
+/* Severity picker (Hurricanes' 1-5 Category, both the add/edit form and the
+   filter drawer) - plain numbered pills, deliberately NOT reusing .emax-star
+   markup/styling: this is a real-world 1-5 severity scale, not the app's
+   own personal star rating, and looking identical to it would read as the
+   same kind of value. */
+.emax-severity-picker { display: inline-flex; gap: 4px; }
+.emax-severity-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.emax-severity-btn.filled { background: var(--yellow); color: #0c0a08; border-color: var(--yellow); }
+@media (hover: hover) and (pointer: fine) {
+  .emax-severity-btn:hover:not(.filled) { border-color: var(--yellow); color: var(--text); }
+}
+
 /* Year-only tiles never open the popup (no compatibility to show) - tapping
    jumps straight into the edit form to add the missing day, so the small
    delete corner button is the only action that has to live on the tile

@@ -25,6 +25,11 @@ let pendingDateKind = null;
 // for every item and there was previously no way to attach one by hand at
 // all. Same cleared-on-hand-edit lifecycle as pendingWikiTitle/pendingDateKind.
 let pendingArtistQid = null;
+// The add/edit form's own scale-kind severity picker (Hurricanes'
+// Category) - a click-based widget needs its own state the same way
+// starFilterValue does for the filter drawer's picker, separate from that
+// one since this is what's ABOUT TO be saved, not a list filter.
+let formSeverityScaleValue = null;
 // Guards a lookup response against a newer one that started after it (e.g.
 // fixing a typo and re-clicking Look Up before the first request lands).
 let lookupToken = 0;
@@ -41,6 +46,13 @@ let starFilterMode = 'atLeast'; // 'atLeast' | 'exactly'
 // exactly the items you haven't gotten around to rating yet.
 let unratedOnly = false;
 let pictureFilterMode = 'any'; // 'any' | 'has' | 'none'
+// Earthquakes' Magnitude / Hurricanes' Category (EMAX_SEVERITY_CONFIG,
+// emax-popup.js) - severityFilterMode holds whichever mode string applies
+// to THIS category's own kind ('over'/'under' for numeric, 'atLeast'/
+// 'exactly' for scale), set to the right default the first time init()
+// sees a category with a severity config.
+let severityFilterValue = null;
+let severityFilterMode = null;
 let searchQuery = '';
 
 // Distribution chart (2026-08-02) - which of the 5 dimensions is charted,
@@ -76,12 +88,21 @@ if (!category) {
 
 /* ===================== Entries CRUD ===================== */
 
-// linkedPersonName/linkedPersonQid: only meaningful for a category with an
-// EMAX_LINKED_PERSON_CONFIG entry (Songs' artist, Video Games' director) -
-// stored under that category's own field prefix (entry.artistName for
-// Songs, entry.directorName for Video Games) so existing Songs data keeps
-// working under its already-shipped literal field names unchanged.
-function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid) {
+// linkedPersonName/linkedPersonQid/linkedPersonDate: only meaningful for a
+// category with an EMAX_LINKED_PERSON_CONFIG entry (Songs' artist, Video
+// Games' director, Inventors' invention) - stored under that category's
+// own field prefix (entry.artistName for Songs, entry.inventionName for
+// Inventors) so existing Songs data keeps working under its
+// already-shipped literal field names unchanged. linkedPersonDate only
+// applies to a manualDate config (Inventors) - a QID-resolving config
+// (Songs/Video Games/Books) ignores it and uses linkedPersonQid instead.
+//
+// The linked person/thing is auto-added to its own target category right
+// here (2026-08-03, the user's own call) - manualDate does it synchronously
+// (the date's already known, nothing to fetch), the QID-resolving kind
+// fires emaxAutoAddLinkedPerson in the background (fetches their real
+// birthdate) without blocking this entry's own save.
+function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid, linkedPersonDate, severityValue) {
   name = name.trim();
   if (!name || !date) return;
   const entry = { id: uid(), name, date };
@@ -92,14 +113,22 @@ function addEntry(name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPers
   const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   if (linkedPersonCfg && linkedPersonName) {
     entry[linkedPersonCfg.field + 'Name'] = linkedPersonName;
-    entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+    if (linkedPersonCfg.manualDate) {
+      if (linkedPersonDate) entry[linkedPersonCfg.field + 'Date'] = linkedPersonDate;
+      emaxAutoAddLinkedEntityWithDate(linkedPersonName, linkedPersonDate, linkedPersonCfg.targetCategory);
+    } else {
+      entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+      emaxAutoAddLinkedPerson(linkedPersonName, linkedPersonQid, linkedPersonCfg.targetCategory);
+    }
   }
+  const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
+  if (severityCfg && severityValue != null) entry[severityCfg.field] = severityValue;
   category.entries.push(entry);
   saveEmaxDB(db);
   renderEntries();
 }
 
-function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid) {
+function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind, linkedPersonName, linkedPersonQid, linkedPersonDate, severityValue) {
   name = name.trim();
   if (!name || !date) return;
   const entry = category.entries.find((e) => e.id === entryId);
@@ -114,14 +143,25 @@ function updateEntry(entryId, name, date, imageUrl, wikiTitle, noImage, dateKind
   // monogram, skipping the fetch (and any manual imageUrl) entirely.
   if (noImage) entry.noImage = true; else delete entry.noImage;
   if (dateKind) entry.dateKind = dateKind; else delete entry.dateKind;
+  const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
+  if (severityCfg) {
+    if (severityValue != null) entry[severityCfg.field] = severityValue; else delete entry[severityCfg.field];
+  }
   const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   if (linkedPersonCfg) {
     if (linkedPersonName) {
       entry[linkedPersonCfg.field + 'Name'] = linkedPersonName;
-      entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+      if (linkedPersonCfg.manualDate) {
+        if (linkedPersonDate) entry[linkedPersonCfg.field + 'Date'] = linkedPersonDate; else delete entry[linkedPersonCfg.field + 'Date'];
+        emaxAutoAddLinkedEntityWithDate(linkedPersonName, linkedPersonDate, linkedPersonCfg.targetCategory);
+      } else {
+        entry[linkedPersonCfg.field + 'Qid'] = linkedPersonQid;
+        emaxAutoAddLinkedPerson(linkedPersonName, linkedPersonQid, linkedPersonCfg.targetCategory);
+      }
     } else {
       delete entry[linkedPersonCfg.field + 'Name'];
       delete entry[linkedPersonCfg.field + 'Qid'];
+      delete entry[linkedPersonCfg.field + 'Date'];
     }
   }
   saveEmaxDB(db);
@@ -235,9 +275,22 @@ function entryRowHtml(entry, score) {
       </div>
       <div class="emax-tile-info">
         <div class="emax-tile-name">${escapeHtml(entry.name)}</div>
+        ${emaxTileSeverityBadgeHtml(entry)}
         ${starsHtml(entry.id, entry.rating || 0)}
       </div>
     </div>`;
+}
+
+// A small badge naming the entry's own Magnitude/Category (EMAX_SEVERITY_
+// CONFIG) right on the tile - '' for any category with no severity config,
+// or an entry that was saved/preloaded with no severity value at all.
+function emaxTileSeverityBadgeHtml(entry) {
+  const cfg = EMAX_SEVERITY_CONFIG[category.name];
+  if (!cfg) return '';
+  const value = entry[cfg.field];
+  if (value == null) return '';
+  const display = cfg.kind === 'numeric' ? Number(value).toFixed(1) : `Cat ${value}`;
+  return `<span class="emax-tile-severity-badge">${escapeHtml(display)}</span>`;
 }
 
 // Same auto-fetch (real photo/logo, cached, monogram-fallback) the popup
@@ -308,7 +361,18 @@ function emaxEntryMatchesStars(entry, mode, minStars, wantUnrated) {
 }
 
 function emaxAnyFilterActive() {
-  return !!searchQuery || scoreFilterValue != null || starFilterValue != null || unratedOnly || pictureFilterMode !== 'any';
+  return !!searchQuery || scoreFilterValue != null || starFilterValue != null || unratedOnly || pictureFilterMode !== 'any' || severityFilterValue != null;
+}
+// True when `value` (an entry's severity field) matches the active
+// severity filter, under the given config's own kind. A missing value
+// never matches - same "no score, can't be over/under anything" rule the
+// existing Score filter already follows.
+function emaxEntryMatchesSeverity(cfg, value, filterValue, mode) {
+  if (filterValue == null) return true;
+  if (value == null) return false;
+  return cfg.kind === 'numeric'
+    ? (mode === 'under' ? value < filterValue : value > filterValue)
+    : (mode === 'exactly' ? value === filterValue : value >= filterValue);
 }
 function emaxUpdateFilterClearVisibility() {
   const active = emaxAnyFilterActive();
@@ -341,13 +405,26 @@ function emaxToggleUnratedFilter() {
   emaxRenderStarFilterPicker();
   emaxUpdateFilterClearVisibility();
 }
+function emaxRenderFormSeverityPicker(value) {
+  formSeverityScaleValue = value;
+  document.querySelectorAll('#newEntrySeverityScale .emax-severity-btn').forEach((btn) => {
+    btn.classList.toggle('filled', value != null && Number(btn.dataset.value) <= value);
+  });
+}
+function emaxRenderSeverityFilterPicker() {
+  document.querySelectorAll('#emaxSeverityFilterPicker .emax-severity-btn').forEach((btn) => {
+    btn.classList.toggle('filled', severityFilterValue != null && Number(btn.dataset.value) <= severityFilterValue);
+  });
+}
 function emaxClearAllFilters() {
   searchQuery = '';
   scoreFilterValue = null;
   starFilterValue = null;
   unratedOnly = false;
   pictureFilterMode = 'any';
+  severityFilterValue = null;
   emaxRenderStarFilterPicker();
+  emaxRenderSeverityFilterPicker();
   emaxSetToggleGroupActive('emaxPictureToggle', 'any');
   emaxUpdateFilterClearVisibility();
 }
@@ -404,6 +481,7 @@ function emaxToggleDistributionBar(key) {
     emaxClearAllFilters();
     document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
+    document.getElementById('emaxSeverityFilterValue').value = '';
   }
   renderDistributionChart();
 }
@@ -439,6 +517,17 @@ function emaxSetStarMode(mode) {
   starFilterMode = mode;
   emaxSetToggleGroupActive('emaxStarModeToggle', mode);
   if (starFilterValue != null) { emaxCurrentPage = 1; renderEntries(); }
+}
+function emaxSetSeverityMode(mode) {
+  severityFilterMode = mode;
+  const cfg = EMAX_SEVERITY_CONFIG[category.name];
+  emaxSetToggleGroupActive(cfg && cfg.kind === 'numeric' ? 'emaxSeverityNumericModeToggle' : 'emaxSeverityScaleModeToggle', mode);
+  if (severityFilterValue != null) { emaxCurrentPage = 1; renderEntries(); }
+}
+function emaxToggleSeverityFilter(n) {
+  severityFilterValue = severityFilterValue === n ? null : n;
+  emaxRenderSeverityFilterPicker();
+  emaxUpdateFilterClearVisibility();
 }
 function emaxSetPictureMode(mode) {
   pictureFilterMode = mode;
@@ -507,6 +596,8 @@ function renderEntries() {
         if (pictureFilterMode === 'has' && !hasPic) return false;
         if (pictureFilterMode === 'none' && hasPic) return false;
       }
+      const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
+      if (severityCfg && !emaxEntryMatchesSeverity(severityCfg, entry[severityCfg.field], severityFilterValue, severityFilterMode)) return false;
       return true;
     }));
   const emptyFilterHtml = (anyFilterActive && visible.length === 0)
@@ -546,6 +637,12 @@ function startEdit(entry) {
   document.getElementById('newEntryName').value = entry.name;
   document.getElementById('newEntryDate').value = entry.date ? isoToDisplay(entry.date) : '';
   document.getElementById('newEntryArtist').value = (linkedPersonCfg && entry[linkedPersonCfg.field + 'Name']) || '';
+  document.getElementById('newEntryArtistDate').value = (linkedPersonCfg && linkedPersonCfg.manualDate && entry[linkedPersonCfg.field + 'Date'])
+    ? isoToDisplay(entry[linkedPersonCfg.field + 'Date']) : '';
+  const severityCfgForEdit = EMAX_SEVERITY_CONFIG[category.name];
+  const severityValueForEdit = severityCfgForEdit ? entry[severityCfgForEdit.field] : null;
+  document.getElementById('newEntrySeverityNumeric').value = (severityCfgForEdit && severityCfgForEdit.kind === 'numeric' && severityValueForEdit != null) ? String(severityValueForEdit) : '';
+  emaxRenderFormSeverityPicker(severityCfgForEdit && severityCfgForEdit.kind === 'scale' ? severityValueForEdit : null);
   document.getElementById('newEntryImage').value = entry.imageUrl || '';
   document.getElementById('newEntryNoImage').checked = !!entry.noImage;
   document.getElementById('entryFormLabel').textContent = `Edit Item - ${entry.name}`;
@@ -566,6 +663,9 @@ function exitEditMode() {
   document.getElementById('newEntryName').value = '';
   document.getElementById('newEntryDate').value = '';
   document.getElementById('newEntryArtist').value = '';
+  document.getElementById('newEntryArtistDate').value = '';
+  document.getElementById('newEntrySeverityNumeric').value = '';
+  emaxRenderFormSeverityPicker(null);
   document.getElementById('newEntryImage').value = '';
   document.getElementById('newEntryNoImage').checked = false;
   document.getElementById('entryFormLabel').textContent = 'Add Item';
@@ -606,6 +706,11 @@ async function preloadTop50() {
   // alongside the item's own date, for the banner in the item's own popup -
   // see EMAX_LINKED_PERSON_CONFIG and openItemModal's banner section.
   const linkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
+  // Earthquakes/Hurricanes (EMAX_SEVERITY_CONFIG) - their own severity
+  // value, baked into the seed object same as an Inventors seed's
+  // invention/inventionDate, since there's no live lookup for "how
+  // destructive was this event" either.
+  const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
   emaxPreloading = true;
   const btn = document.getElementById('preloadTop50Btn');
   btn.disabled = true;
@@ -615,23 +720,53 @@ async function preloadTop50() {
   let failed = 0;
 
   for (let i = 0; i < names.length; i++) {
-    // Each seed entry is either a plain display name, or [displayName,
-    // searchTerm] when the clean name alone is too ambiguous to resolve
-    // reliably - the search term only finds the right Wikidata item, the
-    // display name is always what actually gets saved/shown.
+    // Each seed entry is a plain display name, [displayName, searchTerm]
+    // when the clean name alone is too ambiguous to resolve reliably, or
+    // (Inventors only) { name, searchTerm, invention, inventionDate } -
+    // there's no reliable live Wikidata lookup for "what did this person
+    // invent and when" (manualDate config, EMAX_LINKED_PERSON_CONFIG), so
+    // that pairing is baked directly into the seed data instead of
+    // resolved here, same as the item's own date always is otherwise.
     const seed = names[i];
-    const displayName = Array.isArray(seed) ? seed[0] : seed;
-    const searchTerm = Array.isArray(seed) ? seed[1] : seed;
+    const isSeedObject = seed !== null && typeof seed === 'object' && !Array.isArray(seed);
+    const displayName = isSeedObject ? seed.name : (Array.isArray(seed) ? seed[0] : seed);
+    const searchTerm = isSeedObject ? (seed.searchTerm || seed.name) : (Array.isArray(seed) ? seed[1] : seed);
     setLookupStatus(`⚡ Preloading Top ${names.length} - ${i + 1}/${names.length} (${added} added so far)...`, false);
     if (existing.has(displayName.toLowerCase())) { skippedExisting++; continue; }
+    // A baked-in date (Earthquakes/Hurricanes/Power Outages/Wars' own real
+    // date - no reliable live lookup for "when did this happen" exists,
+    // same reasoning as Inventors' invention date) skips the live fetch
+    // entirely and uses the seed's own verified date/severity directly.
+    // dateKind comes from the category's own EMAX_YEAR_FILTER_KIND default
+    // (e.g. 'started' for Wars, not the generic 'occurred' every other
+    // baked-date category uses) so the popup's date line reads correctly.
+    if (isSeedObject && seed.date) {
+      const entry = { id: uid(), name: displayName, date: seed.date, dateKind: EMAX_YEAR_FILTER_KIND[category.name] };
+      if (severityCfg && seed[severityCfg.field] != null) entry[severityCfg.field] = seed[severityCfg.field];
+      category.entries.push(entry);
+      existing.add(displayName.toLowerCase());
+      added++;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      continue;
+    }
     try {
       const info = await lookupKeyDateByNameWithTitle(searchTerm, isBrandCategory);
       if (info) {
         const entry = { id: uid(), name: displayName, date: info.date, wikiTitle: info.title, dateKind: info.kind };
-        if (linkedPersonCfg) {
+        if (linkedPersonCfg && linkedPersonCfg.manualDate) {
+          if (isSeedObject && seed.invention && seed.inventionDate) {
+            entry[linkedPersonCfg.field + 'Name'] = seed.invention;
+            entry[linkedPersonCfg.field + 'Date'] = seed.inventionDate;
+            emaxAutoAddLinkedEntityWithDate(seed.invention, seed.inventionDate, linkedPersonCfg.targetCategory);
+          }
+        } else if (linkedPersonCfg && linkedPersonCfg.lookupFn) {
           try {
             const person = await linkedPersonCfg.lookupFn(searchTerm);
-            if (person) { entry[linkedPersonCfg.field + 'Name'] = person.title; entry[linkedPersonCfg.field + 'Qid'] = person.qid; }
+            if (person) {
+              entry[linkedPersonCfg.field + 'Name'] = person.title;
+              entry[linkedPersonCfg.field + 'Qid'] = person.qid;
+              emaxAutoAddLinkedPerson(person.title, person.qid, linkedPersonCfg.targetCategory);
+            }
           } catch (e2) { /* no linked person found - the item still saves fine without one */ }
         }
         category.entries.push(entry);
@@ -744,10 +879,18 @@ async function preloadByYear(targetYear, targetCount) {
 
     if (cand.dayPrecision) {
       const entry = { id: uid(), name: cand.name, date: cand.date, wikiTitle: cand.wikiTitle, dateKind: kind };
-      if (linkedPersonCfg) {
+      // manualDate configs (Inventors) have no live lookupFn to call here -
+      // there's no Wikidata-driven way to know what a randomly-sampled
+      // year's candidate invented, so the Invention field stays empty from
+      // this path (addable afterward by hand via Edit).
+      if (linkedPersonCfg && linkedPersonCfg.lookupFn) {
         let person = null;
         try { person = await linkedPersonCfg.lookupFn(cand.wikiTitle); } catch (e2) { /* no linked person found - the item still saves fine without one */ }
-        if (person) { entry[linkedPersonCfg.field + 'Name'] = person.title; entry[linkedPersonCfg.field + 'Qid'] = person.qid; }
+        if (person) {
+          entry[linkedPersonCfg.field + 'Name'] = person.title;
+          entry[linkedPersonCfg.field + 'Qid'] = person.qid;
+          emaxAutoAddLinkedPerson(person.title, person.qid, linkedPersonCfg.targetCategory);
+        }
       }
       category.entries.push(entry);
       added++;
@@ -804,6 +947,36 @@ function init() {
     const btn = e.target.closest('button[data-value]');
     if (btn) { emaxClearDistributionFilterIfActive(); emaxSetStarMode(btn.dataset.value); }
   });
+  document.getElementById('emaxSeverityFilterValue').addEventListener('input', () => {
+    const raw = document.getElementById('emaxSeverityFilterValue').value;
+    severityFilterValue = raw === '' ? null : Number(raw);
+    emaxClearDistributionFilterIfActive();
+    emaxUpdateFilterClearVisibility();
+    emaxCurrentPage = 1;
+    renderEntries();
+  });
+  document.getElementById('emaxSeverityNumericModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (btn) { emaxClearDistributionFilterIfActive(); emaxSetSeverityMode(btn.dataset.value); }
+  });
+  document.getElementById('emaxSeverityScaleModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (btn) { emaxClearDistributionFilterIfActive(); emaxSetSeverityMode(btn.dataset.value); }
+  });
+  document.getElementById('emaxSeverityFilterPicker').addEventListener('click', (e) => {
+    const btn = e.target.closest('.emax-severity-btn');
+    if (!btn) return;
+    emaxClearDistributionFilterIfActive();
+    emaxToggleSeverityFilter(Number(btn.dataset.value));
+    emaxCurrentPage = 1;
+    renderEntries();
+  });
+  document.getElementById('newEntrySeverityScale').addEventListener('click', (e) => {
+    const btn = e.target.closest('.emax-severity-btn');
+    if (!btn) return;
+    const n = Number(btn.dataset.value);
+    emaxRenderFormSeverityPicker(formSeverityScaleValue === n ? null : n);
+  });
   document.getElementById('emaxStarFilterPicker').addEventListener('click', (e) => {
     const btn = e.target.closest('.emax-star');
     if (!btn) return;
@@ -827,6 +1000,7 @@ function init() {
     emaxClearDistributionFilterIfActive();
     document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
+    document.getElementById('emaxSeverityFilterValue').value = '';
     emaxCurrentPage = 1;
     renderEntries();
   });
@@ -873,6 +1047,7 @@ function init() {
     const imageInput = document.getElementById('newEntryImage');
     const noImageInput = document.getElementById('newEntryNoImage');
     const artistInput = document.getElementById('newEntryArtist');
+    const artistDateInput = document.getElementById('newEntryArtistDate');
     const iso = displayToISO(dateInput.value);
     if (!iso) {
       alert('Please enter a valid date (MM/DD/YYYY) - or use Look Up to try filling it in automatically.');
@@ -885,12 +1060,46 @@ function init() {
     // below); a hand-typed name with no QID still saves fine, same as any
     // other manual entry - "+ Add to Database" just falls back to a name
     // search instead of skipping straight to the QID.
+    const linkedCfgForSave = EMAX_LINKED_PERSON_CONFIG[category.name];
     const artistName = artistInput.value.trim() || null;
-    const artistQid = artistName ? pendingArtistQid : null;
+    const isManualDate = !!(linkedCfgForSave && linkedCfgForSave.manualDate);
+    const artistQid = (artistName && !isManualDate) ? pendingArtistQid : null;
+    // The Invention date (Inventors only) has to be a real, valid date -
+    // there's no Wikidata fallback to resolve it from, unlike the item's
+    // own date which Look Up can fill in.
+    let artistDateIso = null;
+    if (artistName && isManualDate) {
+      artistDateIso = displayToISO(artistDateInput.value);
+      if (artistDateInput.value.trim() && !artistDateIso) {
+        alert(`Please enter a valid ${linkedCfgForSave.label.toLowerCase()} date (MM/DD/YYYY), or leave it blank.`);
+        return;
+      }
+    }
+    // Severity (Earthquakes' Magnitude / Hurricanes' Category) - optional,
+    // like the artist field, but whatever IS entered has to fall inside the
+    // real scale (a "Magnitude 47" or "Category 9" is never a real event),
+    // same validate-if-present rule as the invention date above.
+    const severityCfgForSave = EMAX_SEVERITY_CONFIG[category.name];
+    let severityValue = null;
+    if (severityCfgForSave) {
+      if (severityCfgForSave.kind === 'numeric') {
+        const raw = document.getElementById('newEntrySeverityNumeric').value;
+        if (raw.trim()) {
+          const n = Number(raw);
+          if (!Number.isFinite(n) || n < severityCfgForSave.min || n > severityCfgForSave.max) {
+            alert(`Please enter a valid ${severityCfgForSave.label.toLowerCase()} between ${severityCfgForSave.min} and ${severityCfgForSave.max}, or leave it blank.`);
+            return;
+          }
+          severityValue = n;
+        }
+      } else {
+        severityValue = formSeverityScaleValue;
+      }
+    }
     if (editingEntryId) {
-      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid);
+      updateEntry(editingEntryId, nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid, artistDateIso, severityValue);
     } else {
-      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid);
+      addEntry(nameInput.value, iso, imageInput.value.trim(), pendingWikiTitle, noImageInput.checked, pendingDateKind, artistName, artistQid, artistDateIso, severityValue);
     }
     exitEditMode();
   });
@@ -937,7 +1146,7 @@ function init() {
       pendingDateKind = info.kind;
       const kindLabel = EMAX_DATE_KIND_LABEL[info.kind] ? EMAX_DATE_KIND_LABEL[info.kind].toLowerCase() : info.kind;
       setLookupStatus(`✓ Matched "${info.title}" (${kindLabel} ${info.date}) - please double-check before saving.`, false);
-      if (!linkedPersonCfg) return;
+      if (!linkedPersonCfg || !linkedPersonCfg.lookupFn) return; // manualDate (Inventors) has nothing to auto-resolve here
       const artistInput = document.getElementById('newEntryArtist');
       // Only fills in an EMPTY field - a name the user already typed by hand
       // (the lookup doesn't resolve for every item, or they know better
@@ -1045,7 +1254,50 @@ function init() {
   const formLinkedPersonCfg = EMAX_LINKED_PERSON_CONFIG[category.name];
   if (formLinkedPersonCfg) {
     document.getElementById('newEntryArtistRow').style.display = '';
-    document.getElementById('newEntryArtist').placeholder = `${formLinkedPersonCfg.label} (optional) - auto-filled by Look Up, or type your own`;
+    // manualDate (Inventors' Invention) has no live Look Up source, so its
+    // own date has to be typed by hand right alongside the name - the
+    // date input only shows for that kind of config.
+    document.getElementById('newEntryArtist').placeholder = formLinkedPersonCfg.manualDate
+      ? `${formLinkedPersonCfg.label} name`
+      : `${formLinkedPersonCfg.label} (optional) - auto-filled by Look Up, or type your own`;
+    if (formLinkedPersonCfg.manualDate) {
+      const artistDateInput = document.getElementById('newEntryArtistDate');
+      artistDateInput.style.display = '';
+      artistDateInput.placeholder = `${formLinkedPersonCfg.label} date (MM/DD/YYYY)`;
+      attachDateMask(artistDateInput);
+    }
+  }
+
+  // Earthquakes' Magnitude / Hurricanes' Category (EMAX_SEVERITY_CONFIG,
+  // emax-popup.js) - the add/edit form's own row and the filter drawer's
+  // own block both stay hidden entirely for any category without one.
+  const formSeverityCfg = EMAX_SEVERITY_CONFIG[category.name];
+  if (formSeverityCfg) {
+    document.getElementById('newEntrySeverityRow').style.display = '';
+    document.getElementById('newEntrySeverityLabel').textContent = formSeverityCfg.label;
+    document.getElementById('emaxSeverityFilterBlock').style.display = '';
+    document.getElementById('emaxSeverityFilterLabel').textContent = formSeverityCfg.label;
+    if (formSeverityCfg.kind === 'numeric') {
+      const numericInput = document.getElementById('newEntrySeverityNumeric');
+      numericInput.style.display = '';
+      numericInput.min = formSeverityCfg.min;
+      numericInput.max = formSeverityCfg.max;
+      numericInput.step = formSeverityCfg.step;
+      numericInput.placeholder = `e.g. ${((formSeverityCfg.min + formSeverityCfg.max) / 2).toFixed(1)}`;
+      document.getElementById('emaxSeverityNumericModeToggle').style.display = '';
+      const filterValueInput = document.getElementById('emaxSeverityFilterValue');
+      filterValueInput.style.display = '';
+      filterValueInput.min = formSeverityCfg.min;
+      filterValueInput.max = formSeverityCfg.max;
+      filterValueInput.step = formSeverityCfg.step;
+      filterValueInput.placeholder = numericInput.placeholder;
+      severityFilterMode = 'over';
+    } else {
+      document.getElementById('newEntrySeverityScale').style.display = '';
+      document.getElementById('emaxSeverityScaleModeToggle').style.display = '';
+      document.getElementById('emaxSeverityFilterPicker').style.display = '';
+      severityFilterMode = 'atLeast';
+    }
   }
 
   if (EMAX_YEAR_QUERY_CONFIG[category.name]) {
