@@ -4584,16 +4584,24 @@ function cloudPushKey(storageKey) {
     // remember anything saved before it arrives so auth-widget can push
     // it once sign-in state is known.
     (window.__pendingCloudPushKeys = window.__pendingCloudPushKeys || new Set()).add(storageKey);
-    return;
+    return Promise.resolve();
   }
   const user = firebase.auth().currentUser;
-  if (!user) return;
+  if (!user) return Promise.resolve();
   const field = CLOUD_SYNC_FIELDS[storageKey];
-  if (!field) return;
+  if (!field) return Promise.resolve();
 
   const raw = localStorage.getItem(storageKey);
   const value = raw ? JSON.parse(raw) : null;
-  firebase.firestore().collection('users').doc(user.uid).set({ [field]: value }, { merge: true }).catch(() => {});
+  // Tracked so cloudPullAll can wait for this client's own writes to land
+  // before it reads - see the comment on waitForPendingCloudPushes.
+  const inFlight = window.__inFlightCloudPushes || (window.__inFlightCloudPushes = new Set());
+  const write = firebase.firestore().collection('users').doc(user.uid)
+    .set({ [field]: value }, { merge: true })
+    .catch(() => {})
+    .then(() => inFlight.delete(write));
+  inFlight.add(write);
+  return write;
 }
 
 // Pushes every locally-stored key up to Firestore - used right after signup,
@@ -4604,21 +4612,35 @@ function cloudPushAll() {
   Object.keys(CLOUD_SYNC_FIELDS).forEach((storageKey) => cloudPushKey(storageKey));
 }
 
+// A push kicked off moments earlier (e.g. saveEmaxDB() seeding starter
+// categories on page load) is still an in-flight Firestore write when a
+// pull fires right after it - the read races the write with no ordering
+// guarantee, and can win, handing cloudPullAll a snapshot that predates
+// the save it's about to stomp on. Waiting here means a pull always sees
+// at least this client's own most recent writes.
+function waitForPendingCloudPushes() {
+  const inFlight = window.__inFlightCloudPushes;
+  if (!inFlight || !inFlight.size) return Promise.resolve();
+  return Promise.all(Array.from(inFlight));
+}
+
 function cloudPullAll() {
   if (typeof firebase === 'undefined') return Promise.resolve();
   const user = firebase.auth().currentUser;
   if (!user) return Promise.resolve();
 
-  return firebase.firestore().collection('users').doc(user.uid).get().then((doc) => {
-    if (!doc.exists) return;
-    const data = doc.data();
-    Object.keys(CLOUD_SYNC_FIELDS).forEach((storageKey) => {
-      const field = CLOUD_SYNC_FIELDS[storageKey];
-      if (data[field] !== undefined && data[field] !== null) {
-        localStorage.setItem(storageKey, JSON.stringify(data[field]));
-      }
+  return waitForPendingCloudPushes()
+    .then(() => firebase.firestore().collection('users').doc(user.uid).get())
+    .then((doc) => {
+      if (!doc.exists) return;
+      const data = doc.data();
+      Object.keys(CLOUD_SYNC_FIELDS).forEach((storageKey) => {
+        const field = CLOUD_SYNC_FIELDS[storageKey];
+        if (data[field] !== undefined && data[field] !== null) {
+          localStorage.setItem(storageKey, JSON.stringify(data[field]));
+        }
+      });
     });
-  });
 }
 
 /* ===================== NBA Predictions (Stats tracker) ===================== */

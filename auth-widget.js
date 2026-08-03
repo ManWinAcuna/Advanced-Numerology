@@ -161,9 +161,10 @@
     if (user) {
       try { localStorage.setItem(EVER_SIGNED_IN_KEY, '1'); } catch (e) { /* ignore */ }
       // Push anything saved while the lazily-loaded SDK was still on its
-      // way, before any pull can overwrite those local edits. Firestore
-      // reads reflect this client's queued writes, so the pull below
-      // can't resurrect stale cloud data over them.
+      // way. cloudPullAll() (db-core.js) waits for these in-flight writes
+      // before it reads, so the pull below can't win a race against them
+      // and resurrect a stale cloud snapshot over local edits that just
+      // hadn't reached Firestore yet.
       if (window.__pendingCloudPushKeys && window.__pendingCloudPushKeys.size) {
         window.__pendingCloudPushKeys.forEach((k) => cloudPushKey(k));
         window.__pendingCloudPushKeys.clear();
