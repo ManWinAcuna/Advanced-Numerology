@@ -374,6 +374,27 @@ function emaxEntryMatchesSeverity(cfg, value, filterValue, mode) {
     ? (mode === 'under' ? value < filterValue : value > filterValue)
     : (mode === 'exactly' ? value === filterValue : value >= filterValue);
 }
+// The 4 list filters (search/score/star&unrated/picture/severity), as a
+// single predicate - shared by renderEntries' own visible-list filter and
+// renderDistributionChart's bar counts (2026-08-03, reversing an earlier
+// "the chart stays independent" call) so the chart's numbers always match
+// what the list underneath it is actually showing.
+function emaxEntryPassesActiveFilters(entry, score) {
+  if (!emaxEntryMatchesSearch(entry, searchQuery)) return false;
+  if (scoreFilterValue != null) {
+    if (score == null) return false;
+    if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
+  }
+  if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue, unratedOnly)) return false;
+  if (pictureFilterMode !== 'any') {
+    const hasPic = emaxEntryHasPicture(entry);
+    if (pictureFilterMode === 'has' && !hasPic) return false;
+    if (pictureFilterMode === 'none' && hasPic) return false;
+  }
+  const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
+  if (severityCfg && !emaxEntryMatchesSeverity(severityCfg, entry[severityCfg.field], severityFilterValue, severityFilterMode)) return false;
+  return true;
+}
 function emaxUpdateFilterClearVisibility() {
   const active = emaxAnyFilterActive();
   document.getElementById('emaxFilterClearBtn').style.display = active ? '' : 'none';
@@ -448,8 +469,27 @@ function emaxDistributionBarHtml(dimension, row, maxCount) {
 // The collapsed box header itself names the active filter (e.g.
 // "Distribution - Life Path: 5") - so collapsing the box after tapping a
 // bar doesn't hide the fact the list is still filtered.
-function renderDistributionChart() {
-  const rows = emaxDistributionCounts(category.entries, distributionDimension);
+//
+// Counts respect the 4 list filters (search/score/star/picture/severity)
+// when any are active (2026-08-03) - the chart matches the list underneath
+// it rather than always the whole category. `ranked` (scoredEntries'
+// output) can be passed in by a caller that already computed it
+// (renderEntries) to skip recomputing every entry's score a second time;
+// otherwise it's computed here. A distributionFilterKey bar-pick never
+// reaches this branch, since picking one clears the other 4 filters right
+// back to inactive (see emaxToggleDistributionBar) and emaxAnyFilterActive
+// only tracks those 4, not this one.
+function renderDistributionChart(ranked) {
+  let entriesForChart = category.entries;
+  if (emaxAnyFilterActive()) {
+    if (!ranked) {
+      const profile = loadProfile();
+      const meDate = (profile && profile.date) ? parseDateStr(profile.date) : null;
+      ranked = scoredEntries(meDate);
+    }
+    entriesForChart = ranked.filter(({ entry, score }) => emaxEntryPassesActiveFilters(entry, score)).map(({ entry }) => entry);
+  }
+  const rows = emaxDistributionCounts(entriesForChart, distributionDimension);
   const chartEl = document.getElementById('emaxDistributionChart');
   chartEl.innerHTML = rows.length
     ? rows.map((row) => emaxDistributionBarHtml(distributionDimension, row, rows[0].count)).join('')
@@ -568,6 +608,7 @@ function renderEntries() {
   const meDate = (profile && profile.date) ? parseDateStr(profile.date) : null;
   const noteHtml = meDate ? '' : '<div class="emax-note">Set your birthday on <a href="profile.html">My Profile</a> to see compatibility scores.</div>';
   const ranked = scoredEntries(meDate);
+  renderDistributionChart(ranked); // keeps the chart's counts in sync with whatever's about to render below
 
   // A score filter excludes anything that doesn't HAVE a score yet
   // (year-only entries, or no profile birthday set) - "over 80" can't
@@ -584,22 +625,7 @@ function renderEntries() {
   const anyFilterActive = distributionFilterKey != null || emaxAnyFilterActive();
   const visible = distributionFilterKey != null
     ? ranked.filter(({ entry }) => emaxDistributionEntryMatches(entry, distributionDimension, distributionFilterKey))
-    : (!anyFilterActive ? ranked : ranked.filter(({ entry, score }) => {
-      if (!emaxEntryMatchesSearch(entry, searchQuery)) return false;
-      if (scoreFilterValue != null) {
-        if (score == null) return false;
-        if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
-      }
-      if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue, unratedOnly)) return false;
-      if (pictureFilterMode !== 'any') {
-        const hasPic = emaxEntryHasPicture(entry);
-        if (pictureFilterMode === 'has' && !hasPic) return false;
-        if (pictureFilterMode === 'none' && hasPic) return false;
-      }
-      const severityCfg = EMAX_SEVERITY_CONFIG[category.name];
-      if (severityCfg && !emaxEntryMatchesSeverity(severityCfg, entry[severityCfg.field], severityFilterValue, severityFilterMode)) return false;
-      return true;
-    }));
+    : (!anyFilterActive ? ranked : ranked.filter(({ entry, score }) => emaxEntryPassesActiveFilters(entry, score)));
   const emptyFilterHtml = (anyFilterActive && visible.length === 0)
     ? '<div class="empty-state">No items match this filter.</div>'
     : '';
