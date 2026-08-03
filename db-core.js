@@ -1662,6 +1662,61 @@ function emaxReverseLookupEntryMatches(entry, filters) {
   return true;
 }
 
+/* ===================== Distribution charts (2026-08-02) ===================== */
+// "bar chart that shows the lifepath distribution as well as reduced day,
+// non reduced day, Chinese zodiac, Western zodiac" - one of 5 numerology/
+// zodiac traits, tallied across a category's entries. Year-only entries
+// (entry.year, no entry.date) are excluded outright, same as Reverse
+// Lookup's own precedent above ("no date to compute compatibility from") -
+// none of these 5 traits can be derived from a bare year either.
+const EMAX_DISTRIBUTION_DIMENSIONS = {
+  lifePath: 'Life Path',
+  reducedDay: 'Reduced Day',
+  rawDay: 'Day of Month',
+  chineseZodiac: 'Chinese Zodiac',
+  westernZodiac: 'Western Zodiac',
+};
+
+function emaxDistributionKey(dimension, birthDate) {
+  if (dimension === 'lifePath') return String(getLifePathNumeric(birthDate));
+  if (dimension === 'reducedDay') return String(getReducedDay(birthDate));
+  if (dimension === 'rawDay') return String(getRawDay(birthDate));
+  if (dimension === 'chineseZodiac') return getChineseZodiacYear(birthDate);
+  if (dimension === 'westernZodiac') return getSunSign(birthDate);
+  return null;
+}
+
+// Secondary sort for equal-count bars - keeps ties in a stable, predictable
+// order (numeric value for Life Path/Day, the sign's own natural cycle
+// position for Chinese/Western zodiac) rather than jumping around
+// arbitrarily between renders.
+function emaxDistributionTieOrder(dimension, key) {
+  if (dimension === 'chineseZodiac') return CHINESE_ANIMAL_NUMERIC[key] || 0;
+  if (dimension === 'westernZodiac') return WESTERN_SIGN_NUMERIC[key] || 0;
+  return Number(key);
+}
+
+// Sorted tallest-first (the user's own call, 2026-08-02) - ties broken by
+// emaxDistributionTieOrder above.
+function emaxDistributionCounts(entries, dimension) {
+  const counts = new Map();
+  entries.forEach((entry) => {
+    if (!entry.date) return;
+    const key = emaxDistributionKey(dimension, parseDateStr(entry.date));
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  const rows = [...counts.entries()].map(([key, count]) => ({ key, count }));
+  rows.sort((a, b) => b.count - a.count || emaxDistributionTieOrder(dimension, a.key) - emaxDistributionTieOrder(dimension, b.key));
+  return rows;
+}
+
+// Tapping a bar filters the list down to exactly this - "there's 13 Life
+// Path 5s, I click it and it only shows me the 5 Life Paths".
+function emaxDistributionEntryMatches(entry, dimension, key) {
+  if (!entry.date) return false;
+  return emaxDistributionKey(dimension, parseDateStr(entry.date)) === key;
+}
+
 function emaxReverseLookup(db, filters) {
   const results = [];
   db.categories.forEach((cat) => {

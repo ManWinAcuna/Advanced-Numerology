@@ -71,6 +71,24 @@
       </div>
     </div>
 
+    <div class="box" id="emaxDistributionBox">
+      <button class="box-label-row emax-collapsible-toggle" id="emaxDistributionToggle" type="button">
+        <span class="box-label" id="emaxDistributionLabel">Distribution</span>
+        <span class="emax-collapse-chevron" id="emaxDistributionChevron">▸</span>
+      </button>
+      <div class="emax-collapsible-body" id="emaxDistributionBody" hidden>
+        <div class="emax-toggle-group emax-dist-dimension-toggle" id="emaxDistDimensionToggle">
+          <button type="button" data-value="lifePath" class="active">Life Path</button>
+          <button type="button" data-value="reducedDay">Reduced Day</button>
+          <button type="button" data-value="rawDay">Day of Month</button>
+          <button type="button" data-value="chineseZodiac">Chinese Zodiac</button>
+          <button type="button" data-value="westernZodiac">Western Zodiac</button>
+        </div>
+        <div id="emaxDistributionChart"></div>
+        <button class="btn-link" id="emaxDistributionClearBtn" type="button" style="display:none;">Clear bar filter</button>
+      </div>
+    </div>
+
     <div class="inline-form emax-search-row">
       <input type="text" id="emaxSearchInput" placeholder="Search by name or artist...">
       <button class="emax-filters-toggle-btn" id="emaxFiltersToggleBtn" type="button">

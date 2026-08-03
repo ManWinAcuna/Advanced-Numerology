@@ -6404,6 +6404,73 @@ body {
 
 .emax-filter-clear-row { margin-top: -2px; }
 
+/* ---- Distribution chart (2026-08-02) - Life Path/Day/Zodiac bar chart,
+   one dimension at a time via the same segmented-toggle-pill convention as
+   the filter drawer above (native <select> deliberately avoided app-wide -
+   see that block's own comment). ---- */
+.emax-dist-dimension-toggle {
+  flex-wrap: wrap;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.emax-dist-dimension-toggle button {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.emax-dist-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 5px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+@media (hover: hover) and (pointer: fine) {
+  .emax-dist-bar-row:hover { background: var(--panel); }
+}
+.emax-dist-bar-row.active { background: rgba(245, 197, 66, 0.14); }
+.emax-dist-bar-label {
+  flex: 0 0 92px;
+  font-size: 0.78rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emax-dist-bar-track {
+  flex: 1;
+  height: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.emax-dist-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--yellow);
+  border-radius: 2px 0 0 2px;
+  transition: width 0.2s ease;
+}
+.emax-dist-bar-row.active .emax-dist-bar-fill { background: var(--orange); }
+.emax-dist-bar-count {
+  flex: 0 0 30px;
+  text-align: right;
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.emax-dist-active-note {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 /* ---- Poster/avatar grid (replaces the old one-row-per-item list) ---- */
 
 .emax-tile-grid {

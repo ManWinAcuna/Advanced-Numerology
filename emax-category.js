@@ -43,6 +43,14 @@ let unratedOnly = false;
 let pictureFilterMode = 'any'; // 'any' | 'has' | 'none'
 let searchQuery = '';
 
+// Distribution chart (2026-08-02) - which of the 5 dimensions is charted,
+// and which single bar (if any) is the active filter. Exclusive with the 4
+// filters above (the user's own call) - tapping a bar clears them, and
+// touching any of them clears this right back, so only one filtering mode
+// is ever active at once.
+let distributionDimension = 'lifePath';
+let distributionFilterKey = null;
+
 // Pagination (added 2026-08-01) - a category can run into the hundreds of
 // items (Artists/Movies/Songs all do), and rendering + lazy-image-fetching
 // all of them on one endless-scroll page at once was the actual complaint.
@@ -344,6 +352,74 @@ function emaxClearAllFilters() {
   emaxUpdateFilterClearVisibility();
 }
 
+function emaxDistributionBarLabel(dimension, key) {
+  if (dimension === 'chineseZodiac') return `${VIETNAMESE_ZODIAC_EMOJI[key] || ''} ${key}`;
+  if (dimension === 'westernZodiac') return `${ZODIAC_SYMBOLS[key] || ''} ${key}`;
+  return key;
+}
+
+function emaxDistributionBarHtml(dimension, row, maxCount) {
+  const pct = maxCount ? Math.round((row.count / maxCount) * 100) : 0;
+  const active = distributionFilterKey === row.key;
+  return `<button type="button" class="emax-dist-bar-row${active ? ' active' : ''}" data-dist-key="${escapeHtml(row.key)}">
+    <span class="emax-dist-bar-label">${escapeHtml(emaxDistributionBarLabel(dimension, row.key))}</span>
+    <span class="emax-dist-bar-track"><span class="emax-dist-bar-fill" style="width:${pct}%"></span></span>
+    <span class="emax-dist-bar-count">${row.count}</span>
+  </button>`;
+}
+
+// The collapsed box header itself names the active filter (e.g.
+// "Distribution - Life Path: 5") - so collapsing the box after tapping a
+// bar doesn't hide the fact the list is still filtered.
+function renderDistributionChart() {
+  const rows = emaxDistributionCounts(category.entries, distributionDimension);
+  const chartEl = document.getElementById('emaxDistributionChart');
+  chartEl.innerHTML = rows.length
+    ? rows.map((row) => emaxDistributionBarHtml(distributionDimension, row, rows[0].count)).join('')
+    : '<div class="emax-timeline-empty">No dated items yet.</div>';
+  document.getElementById('emaxDistributionClearBtn').style.display = distributionFilterKey != null ? '' : 'none';
+  document.getElementById('emaxDistributionLabel').textContent = distributionFilterKey != null
+    ? `Distribution - ${EMAX_DISTRIBUTION_DIMENSIONS[distributionDimension]}: ${emaxDistributionBarLabel(distributionDimension, distributionFilterKey)}`
+    : 'Distribution';
+}
+
+// Switching dimension clears whatever bar was picked under the OLD one -
+// its key wouldn't even mean anything under the new value set (e.g. a
+// Chinese zodiac animal name isn't a valid Life Path number).
+function emaxSetDistributionDimension(dimension) {
+  distributionDimension = dimension;
+  distributionFilterKey = null;
+  emaxSetToggleGroupActive('emaxDistDimensionToggle', dimension);
+  renderDistributionChart();
+}
+
+// Tapping the already-active bar again clears it - same "click again to
+// reset" convention as the star-rating filter. Exclusive with the other 4
+// filters (the user's own call, 2026-08-02) - picking a bar clears them,
+// in state AND on screen, so the UI never implies two filtering modes are
+// both silently active.
+function emaxToggleDistributionBar(key) {
+  distributionFilterKey = distributionFilterKey === key ? null : key;
+  if (distributionFilterKey != null) {
+    emaxClearAllFilters();
+    document.getElementById('emaxSearchInput').value = '';
+    document.getElementById('emaxFilterValue').value = '';
+  }
+  renderDistributionChart();
+}
+
+function emaxClearDistributionFilter() {
+  distributionFilterKey = null;
+  renderDistributionChart();
+}
+
+// Using ANY of the 4 filters above clears the bar-chart filter right back -
+// exclusive in both directions, so the UI never implies two different
+// filtering modes are both silently active at once.
+function emaxClearDistributionFilterIfActive() {
+  if (distributionFilterKey != null) emaxClearDistributionFilter();
+}
+
 // Shared by all three segmented toggle-pill groups (Score's Over/Under,
 // Stars' At least/Exactly, Picture's Any/Has/None) - replaces the old
 // <select onchange> handling with the same "set state, reflect it visually"
@@ -409,21 +485,30 @@ function renderEntries() {
   // meaningfully include an item with no score to compare. The other
   // filters (search/stars/picture) apply to every entry regardless of
   // whether it has a score.
-  const anyFilterActive = emaxAnyFilterActive();
-  const visible = !anyFilterActive ? ranked : ranked.filter(({ entry, score }) => {
-    if (!emaxEntryMatchesSearch(entry, searchQuery)) return false;
-    if (scoreFilterValue != null) {
-      if (score == null) return false;
-      if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
-    }
-    if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue, unratedOnly)) return false;
-    if (pictureFilterMode !== 'any') {
-      const hasPic = emaxEntryHasPicture(entry);
-      if (pictureFilterMode === 'has' && !hasPic) return false;
-      if (pictureFilterMode === 'none' && hasPic) return false;
-    }
-    return true;
-  });
+  //
+  // A distribution-chart bar filter is exclusive with the 4 filters above
+  // (the user's own call, 2026-08-02) - narrows to exactly its own bucket,
+  // bypassing search/score/star/picture entirely, rather than combining
+  // with whatever they'd otherwise say (their state is already cleared the
+  // moment a bar is tapped - see emaxClearDistributionFilterIfActive/the
+  // chart click handler in init()).
+  const anyFilterActive = distributionFilterKey != null || emaxAnyFilterActive();
+  const visible = distributionFilterKey != null
+    ? ranked.filter(({ entry }) => emaxDistributionEntryMatches(entry, distributionDimension, distributionFilterKey))
+    : (!anyFilterActive ? ranked : ranked.filter(({ entry, score }) => {
+      if (!emaxEntryMatchesSearch(entry, searchQuery)) return false;
+      if (scoreFilterValue != null) {
+        if (score == null) return false;
+        if (!(scoreFilterMode === 'under' ? score < scoreFilterValue : score > scoreFilterValue)) return false;
+      }
+      if (!emaxEntryMatchesStars(entry, starFilterMode, starFilterValue, unratedOnly)) return false;
+      if (pictureFilterMode !== 'any') {
+        const hasPic = emaxEntryHasPicture(entry);
+        if (pictureFilterMode === 'has' && !hasPic) return false;
+        if (pictureFilterMode === 'none' && hasPic) return false;
+      }
+      return true;
+    }));
   const emptyFilterHtml = (anyFilterActive && visible.length === 0)
     ? '<div class="empty-state">No items match this filter.</div>'
     : '';
@@ -698,6 +783,7 @@ function init() {
 
   document.getElementById('emaxSearchInput').addEventListener('input', () => {
     searchQuery = document.getElementById('emaxSearchInput').value.trim();
+    emaxClearDistributionFilterIfActive();
     emaxUpdateFilterClearVisibility();
     emaxCurrentPage = 1;
     renderEntries();
@@ -705,36 +791,40 @@ function init() {
   document.getElementById('emaxFilterValue').addEventListener('input', () => {
     const raw = document.getElementById('emaxFilterValue').value;
     scoreFilterValue = raw === '' ? null : Number(raw);
+    emaxClearDistributionFilterIfActive();
     emaxUpdateFilterClearVisibility();
     emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxScoreModeToggle').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-value]');
-    if (btn) emaxSetScoreMode(btn.dataset.value);
+    if (btn) { emaxClearDistributionFilterIfActive(); emaxSetScoreMode(btn.dataset.value); }
   });
   document.getElementById('emaxStarModeToggle').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-value]');
-    if (btn) emaxSetStarMode(btn.dataset.value);
+    if (btn) { emaxClearDistributionFilterIfActive(); emaxSetStarMode(btn.dataset.value); }
   });
   document.getElementById('emaxStarFilterPicker').addEventListener('click', (e) => {
     const btn = e.target.closest('.emax-star');
     if (!btn) return;
+    emaxClearDistributionFilterIfActive();
     emaxToggleStarFilter(Number(btn.dataset.star));
     emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxUnratedFilterBtn').addEventListener('click', () => {
+    emaxClearDistributionFilterIfActive();
     emaxToggleUnratedFilter();
     emaxCurrentPage = 1;
     renderEntries();
   });
   document.getElementById('emaxPictureToggle').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-value]');
-    if (btn) emaxSetPictureMode(btn.dataset.value);
+    if (btn) { emaxClearDistributionFilterIfActive(); emaxSetPictureMode(btn.dataset.value); }
   });
   document.getElementById('emaxFilterClearBtn').addEventListener('click', () => {
     emaxClearAllFilters();
+    emaxClearDistributionFilterIfActive();
     document.getElementById('emaxSearchInput').value = '';
     document.getElementById('emaxFilterValue').value = '';
     emaxCurrentPage = 1;
@@ -742,6 +832,32 @@ function init() {
   });
   document.getElementById('emaxFiltersToggleBtn').addEventListener('click', () => {
     document.getElementById('emaxFilterDrawer').classList.toggle('open');
+  });
+
+  document.getElementById('emaxDistributionBody').hidden = true;
+  document.getElementById('emaxDistributionToggle').addEventListener('click', () => {
+    const body = document.getElementById('emaxDistributionBody');
+    body.hidden = !body.hidden;
+    document.getElementById('emaxDistributionChevron').classList.toggle('open', !body.hidden);
+  });
+  document.getElementById('emaxDistDimensionToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-value]');
+    if (!btn) return;
+    emaxSetDistributionDimension(btn.dataset.value);
+    emaxCurrentPage = 1;
+    renderEntries();
+  });
+  document.getElementById('emaxDistributionChart').addEventListener('click', (e) => {
+    const bar = e.target.closest('[data-dist-key]');
+    if (!bar) return;
+    emaxToggleDistributionBar(bar.dataset.distKey);
+    emaxCurrentPage = 1;
+    renderEntries();
+  });
+  document.getElementById('emaxDistributionClearBtn').addEventListener('click', () => {
+    emaxClearDistributionFilter();
+    emaxCurrentPage = 1;
+    renderEntries();
   });
   document.getElementById('emaxPagination').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-page]');
@@ -950,6 +1066,7 @@ function init() {
     });
   }
 
+  renderDistributionChart();
   renderEntries();
 }
 
