@@ -1664,13 +1664,24 @@ function emaxReverseLookupEntryMatches(entry, filters) {
 
 /* ===================== Distribution charts (2026-08-02) ===================== */
 // "bar chart that shows the lifepath distribution as well as reduced day,
-// non reduced day, Chinese zodiac, Western zodiac" - one of 5 numerology/
+// non reduced day, Chinese zodiac, Western zodiac" - one of 6 numerology/
 // zodiac traits, tallied across a category's entries. Year-only entries
 // (entry.year, no entry.date) are excluded outright, same as Reverse
 // Lookup's own precedent above ("no date to compute compatibility from") -
-// none of these 5 traits can be derived from a bare year either.
+// none of these 6 traits can be derived from a bare year either.
+//
+// Life Path is split into two dimensions, same "reduced main value / raw
+// compound value" split as Day Born already gets (reducedDay/rawDay) and
+// exactly what the EMAX item popup's own Life Path fact tile already shows
+// (emax-popup.js: emaxFactTile('Life Path', lifePath, lifePathCompound)) -
+// "lifePath" uses getLifePath's real DISPLAY string (e.g. "22/4", "33/6",
+// "11/2" for the double-digit-day master-number exception, not just the
+// bare reduced number 22/33/11), so those variants show as their own real
+// buckets; "lifePathCompound" uses the pre-reduction sum (e.g. 28, 13,
+// 19...), which a bare reduced/display value can never surface at all.
 const EMAX_DISTRIBUTION_DIMENSIONS = {
   lifePath: 'Life Path',
+  lifePathCompound: 'Life Path Compound',
   reducedDay: 'Reduced Day',
   rawDay: 'Day of Month',
   chineseZodiac: 'Chinese Zodiac',
@@ -1678,7 +1689,8 @@ const EMAX_DISTRIBUTION_DIMENSIONS = {
 };
 
 function emaxDistributionKey(dimension, birthDate) {
-  if (dimension === 'lifePath') return String(getLifePathNumeric(birthDate));
+  if (dimension === 'lifePath') return getLifePath(birthDate);
+  if (dimension === 'lifePathCompound') return String(getLifePathCompound(birthDate));
   if (dimension === 'reducedDay') return String(getReducedDay(birthDate));
   if (dimension === 'rawDay') return String(getRawDay(birthDate));
   if (dimension === 'chineseZodiac') return getChineseZodiacYear(birthDate);
@@ -1689,11 +1701,12 @@ function emaxDistributionKey(dimension, birthDate) {
 // Secondary sort for equal-count bars - keeps ties in a stable, predictable
 // order (numeric value for Life Path/Day, the sign's own natural cycle
 // position for Chinese/Western zodiac) rather than jumping around
-// arbitrarily between renders.
+// arbitrarily between renders. parseInt (not Number) so a "22/4"-style
+// Life Path display value still sorts by its real leading number (22).
 function emaxDistributionTieOrder(dimension, key) {
   if (dimension === 'chineseZodiac') return CHINESE_ANIMAL_NUMERIC[key] || 0;
   if (dimension === 'westernZodiac') return WESTERN_SIGN_NUMERIC[key] || 0;
-  return Number(key);
+  return parseInt(key, 10);
 }
 
 // Sorted tallest-first (the user's own call, 2026-08-02) - ties broken by
