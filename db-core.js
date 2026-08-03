@@ -1083,6 +1083,19 @@ function emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isF
     + emaxYearEventMagnitudeBonus(entry, year);
 }
 
+// A scraped/manual note only ever carries year precision - for a split
+// year (emaxYearPersonalYearPeriods) it only counts toward the SPECIFIC
+// period the user has explicitly confirmed it under (ev.confirmedPart,
+// 'early'/'late', set via the Timeline's per-period confirm checkbox in
+// emax-popup.js), not both, not neither by default, not guessed. A
+// non-split ('whole') period never needs confirming - its one note is
+// simply its own.
+function emaxEventConfirmedForPart(entry, year, part) {
+  if (part === 'whole') return true;
+  const ev = entry && entry.timelineEvents && entry.timelineEvents[year];
+  return !!(ev && ev.confirmedPart === part);
+}
+
 // Full lifetime, birth/release year through the current year - however
 // long that list gets, per the user's own call to keep it complete rather
 // than capped to the most recent few. `entry` (added 2026-08-02) feeds the
@@ -1129,17 +1142,17 @@ function emaxBuildTimeline(birthDate, entry) {
     const isTrineYear = trineAnimals.includes(yearAnimal);
     const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
     const periods = emaxYearPersonalYearPeriods(birthDate, year);
-    const isSplit = periods.length > 1;
     periods.forEach(({ personalYear, part }) => {
       const verdict = emaxTimelineYearVerdict(personalYear, isOwnYear, isEnemyYear, isFriendlyYear, isTrineYear);
       // A scraped/manual event is keyed by bare calendar year, with no way
-      // to say which side of the birthday it actually happened on - a
-      // split year's event can't be confirmed for EITHER period, so it
-      // contributes to neither's magnitude (same "if there's nothing found
-      // it should not affect the score" rule, applied to "found but can't
-      // confirm which period" too).
-      const magnitude = isSplit ? emaxYearMagnitude(null, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
-        : emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
+      // to say which side of the birthday it actually happened on by
+      // default - a split year's event only contributes to a period's
+      // magnitude once the user has explicitly confirmed it belongs there
+      // (emaxEventConfirmedForPart), same "if there's nothing found/
+      // confirmed it should not affect the score" rule as everywhere else.
+      const magnitude = emaxEventConfirmedForPart(entry, year, part)
+        ? emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
+        : emaxYearMagnitude(null, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
       const isFlagged = isOwnYear || isTrineYear || isFriendlyYear || isEnemyYear || personalYear === 7 || personalYear === 11;
       const label = emaxYearPeriodLabel(year, part);
       if (isFlagged) periodMagnitudes.set(label, magnitude);
@@ -1253,17 +1266,17 @@ async function emax711Audit(db, onProgress, categoryIds) {
 
     for (const year of years) {
       // A calendar year that straddles two Personal Years (the birthday
-      // falls inside it) can't have its bare-year-only event confirmed to
-      // either side - counted toward BOTH periods' totals (a split year is
-      // genuinely 2 person-years, not 1), but the event itself counts
-      // toward NEITHER's hasEvent/hasNegative, same "can't confirm it, it
-      // doesn't affect the score" rule as emaxYearMagnitude.
+      // falls inside it) counts toward BOTH periods' totals (a split year
+      // is genuinely 2 person-years, not 1) - but its bare-year-only event
+      // only counts toward hasEvent/hasNegative for whichever SPECIFIC
+      // period the user has confirmed it under (emaxEventConfirmedForPart),
+      // not both, not neither by default.
       const periods = emaxYearPersonalYearPeriods(birthDate, year);
-      const isSplit = periods.length > 1;
       const ev = entry.timelineEvents && entry.timelineEvents[year];
-      const hasEvent = !isSplit && !!ev;
-      const hasNegative = !isSplit && !!(ev && ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)));
-      periods.forEach(({ personalYear }) => {
+      periods.forEach(({ personalYear, part }) => {
+        const eventApplies = emaxEventConfirmedForPart(entry, year, part);
+        const hasEvent = eventApplies && !!ev;
+        const hasNegative = eventApplies && !!(ev && ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)));
         const is7or11 = personalYear === 7 || personalYear === 11;
         if (is7or11) {
           py7or11Total++;
@@ -1320,24 +1333,26 @@ function emaxNominationBucketAdd(map, key, isNegative, isAchievement, magnitude)
   b.magnitudeSum += magnitude;
 }
 
-// isSplit: this calendar year straddles two Personal Years, so its
-// bare-year-only event (if any) can't be confirmed to either side of the
-// birthday - contributes no tags/magnitude to EITHER period, same rule as
-// emax711Audit's hasEvent/hasNegative above. The period itself still
-// counts as its own real person-year instance (overall.n still +1).
-function emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall, isSplit) {
+// part: 'whole', 'early', or 'late' (emaxYearPersonalYearPeriods) - for a
+// split year, the note (if any) only contributes tags/magnitude to THIS
+// period once the user has confirmed it belongs here
+// (emaxEventConfirmedForPart), same rule as emax711Audit's hasEvent/
+// hasNegative above. The period itself still counts as its own real
+// person-year instance either way (overall.n still +1).
+function emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall, part) {
   const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
   const isOwnYear = yearAnimal === ownAnimal;
   const isEnemyYear = yearAnimal === enemyAnimal;
   const isTrineYear = trineAnimals.includes(yearAnimal);
   const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
   const relation = isOwnYear ? 'own' : (isEnemyYear ? 'enemy' : (isTrineYear ? 'trine' : (isFriendlyYear ? 'friendly' : 'neutral')));
-  const ev = isSplit ? null : (entry.timelineEvents && entry.timelineEvents[year]);
+  const eventApplies = emaxEventConfirmedForPart(entry, year, part);
+  const ev = eventApplies ? (entry.timelineEvents && entry.timelineEvents[year]) : null;
   const tags = (ev && ev.tags) || [];
   const isNegative = tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t));
   const isAchievement = tags.includes('achievement');
-  const magnitude = isSplit ? emaxYearMagnitude(null, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
-    : emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
+  const magnitude = eventApplies ? emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
+    : emaxYearMagnitude(null, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
   overall.n += 1;
   if (isNegative) overall.negative += 1;
   if (isAchievement) overall.achievement += 1;
@@ -1422,9 +1437,8 @@ async function emaxNumberNomination(db, onProgress, categoryIds) {
 
     for (const year of years) {
       const periods = emaxYearPersonalYearPeriods(birthDate, year);
-      const isSplit = periods.length > 1;
-      periods.forEach(({ personalYear }) => {
-        emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall, isSplit);
+      periods.forEach(({ personalYear, part }) => {
+        emaxNominationRecordYear(dims, entry, year, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals, lifePath, personalYear, overall, part);
       });
     }
     if (onProgress) onProgress(i + 1, entries.length);
@@ -1494,28 +1508,28 @@ function emaxAuditDetailEntries(db, is7or11, tagFilter, categoryIds) {
       const friendlyAnimals = emaxFriendlyZodiacAnimals(ownAnimal).filter((a) => !trineAnimals.includes(a));
       const lifePath = getLifePathNumeric(birthDate);
       for (let year = birthDate.getFullYear(); year <= nowYear; year++) {
-        // A year that straddles two Personal Years never contributes a
-        // confirmed event to either side (emax711Audit's own hasEvent is
-        // always false for it) - nothing to ever show here either way, so
-        // it's skipped outright rather than picking one of the two
-        // candidate PY values to (mis)represent it under.
         const periods = emaxYearPersonalYearPeriods(birthDate, year);
-        if (periods.length > 1) continue;
-        const py = periods[0].personalYear;
-        if ((py === 7 || py === 11) !== is7or11) continue;
         const ev = entry.timelineEvents && entry.timelineEvents[year];
         if (!ev) continue;
-        if (tagFilter === 'negative' && !(ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)))) continue;
-        const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
-        const zodiacRelation = yearAnimal === ownAnimal ? 'own'
-          : (yearAnimal === enemyAnimal ? 'enemy'
-            : (trineAnimals.includes(yearAnimal) ? 'trine'
-              : (friendlyAnimals.includes(yearAnimal) ? 'friendly' : 'neutral')));
-        results.push({
-          entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear: py,
-          lifePath, zodiacAnimal: yearAnimal, zodiacRelation,
-          ownYear: birthDate.getFullYear(), ownAnimal,
-          text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
+        periods.forEach(({ personalYear: py, part }) => {
+          if ((py === 7 || py === 11) !== is7or11) return;
+          // A split year's note only shows here for the SPECIFIC period
+          // the user has confirmed it belongs to (emaxEventConfirmedForPart,
+          // matches emax711Audit's own hasEvent gating) - not both, not
+          // neither by default.
+          if (!emaxEventConfirmedForPart(entry, year, part)) return;
+          if (tagFilter === 'negative' && !(ev.tags && ev.tags.some((t) => EMAX_AUDIT_NEGATIVE_TAGS.includes(t)))) return;
+          const yearAnimal = getChineseZodiacYear(new Date(year, 6, 1));
+          const zodiacRelation = yearAnimal === ownAnimal ? 'own'
+            : (yearAnimal === enemyAnimal ? 'enemy'
+              : (trineAnimals.includes(yearAnimal) ? 'trine'
+                : (friendlyAnimals.includes(yearAnimal) ? 'friendly' : 'neutral')));
+          results.push({
+            entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear: py,
+            lifePath, zodiacAnimal: yearAnimal, zodiacRelation,
+            ownYear: birthDate.getFullYear(), ownAnimal,
+            text: ev.text, tags: ev.tags || [], manual: !!ev.manual,
+          });
         });
       }
     });
@@ -1552,21 +1566,22 @@ function emaxNominationDetailEntries(db, dimension, key, categoryIds) {
         const isFriendlyYear = friendlyAnimals.includes(yearAnimal);
         const relation = isOwnYear ? 'own' : (isEnemyYear ? 'enemy' : (isTrineYear ? 'trine' : (isFriendlyYear ? 'friendly' : 'neutral')));
         const periods = emaxYearPersonalYearPeriods(birthDate, year);
-        const isSplit = periods.length > 1;
-        periods.forEach(({ personalYear }) => {
+        periods.forEach(({ personalYear, part }) => {
           let bucketKey;
-          // A split year has no single Personal Year to bucket under - any
-          // real event is already excluded from scoring either way
-          // (emaxNominationRecordYear), so it can't belong to a SPECIFIC
-          // personalYear bucket at all. The other 3 dimensions don't
-          // depend on the split (zodiac relation/Life Path/own animal are
-          // all entity- or year-animal-fixed), so they're unaffected.
-          if (dimension === 'personalYear') bucketKey = isSplit ? null : String(personalYear);
+          // Every period (split or not) has an exact, well-defined
+          // Personal Year value, so it always belongs to its own
+          // personalYear bucket - what's ambiguous by default is only
+          // whether the note itself (if any) belongs there, which
+          // emaxEventConfirmedForPart resolves below. The other 3
+          // dimensions don't depend on the split at all (zodiac relation/
+          // Life Path/own animal are entity- or year-animal-fixed).
+          if (dimension === 'personalYear') bucketKey = String(personalYear);
           else if (dimension === 'zodiacRelation') bucketKey = relation;
           else if (dimension === 'lifePath') bucketKey = String(lifePath);
           else if (dimension === 'ownAnimal') bucketKey = ownAnimal;
-          if (bucketKey === null || bucketKey !== key) return;
-          const ev = isSplit ? null : (entry.timelineEvents && entry.timelineEvents[year]);
+          if (bucketKey !== key) return;
+          const eventApplies = emaxEventConfirmedForPart(entry, year, part);
+          const ev = eventApplies ? (entry.timelineEvents && entry.timelineEvents[year]) : null;
           results.push({
             entryId: entry.id, entryName: entry.name, categoryId: cat.id, categoryName: cat.name, year, personalYear,
             lifePath, zodiacAnimal: yearAnimal, zodiacRelation: relation,

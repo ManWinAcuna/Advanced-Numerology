@@ -701,8 +701,9 @@ function emaxTimelineSeverityLabel(magnitude) {
 // shown consistently wherever that year/period is flagged. The note itself
 // is still stored per bare calendar year (entry.timelineEvents[year]) -
 // splitting storage per period would need a real data migration, so a
-// split year's early/late periods share the one slot; a caveat below
-// explains why it's excluded from magnitude/scoring either way.
+// split year's early/late periods share the one slot; which period (if
+// any) the note applies to is tracked separately via ev.confirmedPart
+// ('early'/'late'), set by the per-period confirm checkbox below.
 function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
   const ev = entry.timelineEvents && entry.timelineEvents[year];
   const key = `${year}:${part}`;
@@ -710,18 +711,10 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
   const severityHtml = typeof magnitude === 'number'
     ? `<div class="emax-timeline-severity">Severity: ${emaxTimelineSeverityLabel(magnitude)}</div>`
     : '';
-  // part !== 'whole' means this calendar year straddles two different
-  // Personal Years and a scraped/manual event can't be confirmed to
-  // either side of the birthday - "if there's nothing found it should not
-  // affect the score", extended to "found, but can't confirm which period".
-  const splitCaveatHtml = part !== 'whole'
-    ? `<div class="emax-timeline-split-caveat">This calendar year spans two Personal Years (your birthday falls inside it) - only the year is known for any note here, not which side of the birthday it happened on, so it doesn't count toward either period's score.</div>`
-    : '';
   if (editing) {
     const current = emaxTimelineDraftText != null ? emaxTimelineDraftText : (ev ? ev.text : '');
     return `
       <div class="emax-timeline-event-row emax-timeline-event-edit">
-        ${splitCaveatHtml}
         <textarea id="emaxTimelineNoteInput" placeholder="What happened this year?">${escapeHtml(current)}</textarea>
         ${emaxTagPickerHtml()}
         <div class="emax-timeline-event-actions">
@@ -734,11 +727,28 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
     const tagsHtml = (ev.tags && ev.tags.length)
       ? `<div class="emax-timeline-event-tags">${ev.tags.map((k) => `<span class="emax-timeline-tag-pill">${emaxTagEmoji(k)} ${EMAX_TIMELINE_TAGS.find((t) => t.key === k) ? EMAX_TIMELINE_TAGS.find((t) => t.key === k).label : k}</span>`).join('')}</div>`
       : '';
+    // part !== 'whole' means this calendar year straddles two different
+    // Personal Years - a scraped/manual note only ever carries year
+    // precision, so it can't be attributed to a specific period by
+    // default. Checking the box below explicitly confirms which one it
+    // happened in - the only thing that makes it count toward THAT
+    // period's Audit/Number Nomination numbers (emaxEventConfirmedForPart,
+    // db-core.js).
+    const confirmedForThis = part !== 'whole' && ev.confirmedPart === part;
+    const confirmHtml = part !== 'whole'
+      ? `<label class="emax-timeline-confirm-part">
+          <input type="checkbox" data-year-confirm="${key}"${confirmedForThis ? ' checked' : ''}>
+          Confirm this happened during this period
+        </label>
+        <div class="emax-timeline-split-caveat">${confirmedForThis
+          ? 'Confirmed for this period - counts toward the Audit and Number Nomination.'
+          : "Not confirmed for this period - doesn't count toward the Audit or Number Nomination yet."}</div>`
+      : '';
     return `
       <div class="emax-timeline-event-row">
         <div class="emax-timeline-event-text">${escapeHtml(ev.text)}</div>
         ${tagsHtml}
-        ${splitCaveatHtml}
+        ${confirmHtml}
         ${severityHtml}
         <div class="emax-timeline-event-meta">
           <span>${ev.manual ? 'Your note' : 'From Wikipedia'}</span>
@@ -752,7 +762,6 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
   return `
     <div class="emax-timeline-event-row emax-timeline-event-empty">
       <span>Nothing found for this year</span>
-      ${splitCaveatHtml}
       ${severityHtml}
       <button type="button" class="btn-link" data-year-edit="${key}">+ Add note</button>
     </div>`;
@@ -887,6 +896,25 @@ document.getElementById('emaxTimelineBody').addEventListener('click', (e) => {
     emaxTimelineEditingTags = [];
     emaxTimelineDraftText = null;
     renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    return;
+  }
+  const confirmCheckbox = e.target.closest('[data-year-confirm]');
+  if (confirmCheckbox) {
+    // data-year-confirm carries the compound "year:part" key - checking it
+    // marks THIS period as the one the shared note actually happened in
+    // (ev.confirmedPart), unchecking clears it back to unconfirmed.
+    const [confirmYear, confirmPart] = confirmCheckbox.dataset.yearConfirm.split(':');
+    const ev = timelineEntry.timelineEvents && timelineEntry.timelineEvents[confirmYear];
+    if (ev) {
+      ev.confirmedPart = confirmCheckbox.checked ? confirmPart : null;
+      saveEmaxDB(db);
+      // Rebuilds - confirmedPart directly changes whether this period's
+      // event bonus/tags count toward its magnitude (db-core.js
+      // emaxEventConfirmedForPart), which was baked in at the timeline's
+      // last build, before this toggle.
+      emaxTimelineCurrentTimeline = emaxBuildTimeline(parseDateStr(timelineEntry.date), timelineEntry);
+      renderTimelineBody(timelineEntry, emaxTimelineCurrentTimeline);
+    }
     return;
   }
   // Toggling a tag re-renders the whole timeline body (same "rebuild from

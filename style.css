@@ -6992,6 +6992,14 @@ button.emax-fact-tile-tap {
   font-style: italic;
   margin-top: 6px;
 }
+.emax-timeline-confirm-part {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  margin-top: 8px;
+  cursor: pointer;
+}
 
 .emax-timeline-event-row {
   margin-top: 8px;
