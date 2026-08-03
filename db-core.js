@@ -1670,23 +1670,17 @@ function emaxReverseLookupEntryMatches(entry, filters) {
 // Lookup's own precedent above ("no date to compute compatibility from") -
 // none of these 6 traits can be derived from a bare year either.
 //
-// "Life Path" bucketing (2026-08-02 follow-up, the user's own call): a
-// plain 1-9 result carries a lot less real distinguishing information
-// than the actual compound sum that produced it - 28 and 13 both reduce
-// all the way down to a single digit, but they're not remotely the same
-// Life Path, and bucketing everyone down to just "1"-"9" was flattening
-// that away entirely. Only a master-number result (11/22/33) keeps its
-// own real display form (with the /2, /4, /6 suffix when it applies,
-// matching the EMAX item popup's own Life Path fact tile) - THAT number
-// is already the real, final, undiluted value; everyone else is bucketed
-// by their raw compound sum instead. "lifePathCompound" is kept as its
-// own separate dimension too (every entry's compound, unconditionally,
-// master numbers included) for anyone who wants that view specifically.
-function emaxLifePathDistributionKey(birthDate) {
-  const { result, display, compound } = lifePathBreakdown(birthDate);
-  return (result === 11 || result === 22 || result === 33) ? display : String(compound);
-}
-
+// "Life Path" bucketing (2026-08-02 follow-up, the user's own call - exact
+// required set: 1, 3-9, 11, 22, 22/4, 33, 33/6, 28, 13): NOT the main Life
+// Path box's own getLifePath (which only ever freezes at 11/22/33 and
+// never recognizes 28 or 13 at all) - compatLifePathInfo (compat-engine.js)
+// is the app's ALREADY-ESTABLISHED "compatibility Life Path" calculation,
+// the one used everywhere else a 28/13 sub-master number matters
+// (NUMEROLOGY_KEYS in compat-data.js has its own row for 28; 13 borrows
+// 4's row via numerologyLookupKey) - reusing it here instead of inventing
+// new reduction logic. "lifePathCompound" is kept as its own separate
+// dimension too (the main box's own raw compound sum, unconditionally),
+// for anyone who wants that view specifically.
 const EMAX_DISTRIBUTION_DIMENSIONS = {
   lifePath: 'Life Path',
   lifePathCompound: 'Life Path Compound',
@@ -1697,7 +1691,7 @@ const EMAX_DISTRIBUTION_DIMENSIONS = {
 };
 
 function emaxDistributionKey(dimension, birthDate) {
-  if (dimension === 'lifePath') return emaxLifePathDistributionKey(birthDate);
+  if (dimension === 'lifePath') return compatLifePathInfo(birthDate).display;
   if (dimension === 'lifePathCompound') return String(getLifePathCompound(birthDate));
   if (dimension === 'reducedDay') return String(getReducedDay(birthDate));
   if (dimension === 'rawDay') return String(getRawDay(birthDate));
