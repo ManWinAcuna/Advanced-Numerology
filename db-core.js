@@ -1670,15 +1670,23 @@ function emaxReverseLookupEntryMatches(entry, filters) {
 // Lookup's own precedent above ("no date to compute compatibility from") -
 // none of these 6 traits can be derived from a bare year either.
 //
-// Life Path is split into two dimensions, same "reduced main value / raw
-// compound value" split as Day Born already gets (reducedDay/rawDay) and
-// exactly what the EMAX item popup's own Life Path fact tile already shows
-// (emax-popup.js: emaxFactTile('Life Path', lifePath, lifePathCompound)) -
-// "lifePath" uses getLifePath's real DISPLAY string (e.g. "22/4", "33/6",
-// "11/2" for the double-digit-day master-number exception, not just the
-// bare reduced number 22/33/11), so those variants show as their own real
-// buckets; "lifePathCompound" uses the pre-reduction sum (e.g. 28, 13,
-// 19...), which a bare reduced/display value can never surface at all.
+// "Life Path" bucketing (2026-08-02 follow-up, the user's own call): a
+// plain 1-9 result carries a lot less real distinguishing information
+// than the actual compound sum that produced it - 28 and 13 both reduce
+// all the way down to a single digit, but they're not remotely the same
+// Life Path, and bucketing everyone down to just "1"-"9" was flattening
+// that away entirely. Only a master-number result (11/22/33) keeps its
+// own real display form (with the /2, /4, /6 suffix when it applies,
+// matching the EMAX item popup's own Life Path fact tile) - THAT number
+// is already the real, final, undiluted value; everyone else is bucketed
+// by their raw compound sum instead. "lifePathCompound" is kept as its
+// own separate dimension too (every entry's compound, unconditionally,
+// master numbers included) for anyone who wants that view specifically.
+function emaxLifePathDistributionKey(birthDate) {
+  const { result, display, compound } = lifePathBreakdown(birthDate);
+  return (result === 11 || result === 22 || result === 33) ? display : String(compound);
+}
+
 const EMAX_DISTRIBUTION_DIMENSIONS = {
   lifePath: 'Life Path',
   lifePathCompound: 'Life Path Compound',
@@ -1689,7 +1697,7 @@ const EMAX_DISTRIBUTION_DIMENSIONS = {
 };
 
 function emaxDistributionKey(dimension, birthDate) {
-  if (dimension === 'lifePath') return getLifePath(birthDate);
+  if (dimension === 'lifePath') return emaxLifePathDistributionKey(birthDate);
   if (dimension === 'lifePathCompound') return String(getLifePathCompound(birthDate));
   if (dimension === 'reducedDay') return String(getReducedDay(birthDate));
   if (dimension === 'rawDay') return String(getRawDay(birthDate));
