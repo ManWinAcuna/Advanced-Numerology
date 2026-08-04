@@ -1050,12 +1050,22 @@ function emaxEventConfirmedForPart(entry, year, part) {
 // event half of each year's magnitude - every OTHER caller/test that only
 // needs verdicts (not magnitude) can still pass a bare {} since a missing
 // entry.timelineEvents just means every year's event bonus is 0.
-// "1990" for a year with no birthday split; "1990 (early)"/"1990 (late)"
-// for the two real periods of a year that does split - keeps chip/headline
-// labels unambiguous whenever the SAME calendar year contributes two
-// separate entries.
-function emaxYearPeriodLabel(year, part) {
-  return part === 'whole' ? String(year) : `${year} (${part})`;
+// "1990" for a year with no birthday split; for a year that does split,
+// the label names the actual boundary date instead of a vague early/late:
+// "1990 (u. 11/22)" (until the birthday - Jan 1 through the day before)
+// and "1990 (a. 11/22)" (after - the birthday itself through Dec 31),
+// per the user's own format call (2026-08-03). Callers without a
+// birthDate in reach still get the old "(early)"/"(late)" fallback
+// rather than a broken label.
+function emaxYearPeriodLabel(year, part, birthDate) {
+  if (part === 'whole') return String(year);
+  // Duck-typed rather than `instanceof Date` - instanceof breaks across
+  // vm/iframe realms (the node test harness runs this in a vm context).
+  if (birthDate && typeof birthDate.getMonth === 'function' && !isNaN(birthDate.getTime())) {
+    const md = `${String(birthDate.getMonth() + 1).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
+    return `${year} (${part === 'early' ? 'u.' : 'a.'} ${md})`;
+  }
+  return `${year} (${part})`;
 }
 
 function emaxBuildTimeline(birthDate, entry) {
@@ -1102,7 +1112,7 @@ function emaxBuildTimeline(birthDate, entry) {
         ? emaxYearMagnitude(entry, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear)
         : emaxYearMagnitude(null, year, isOwnYear, isEnemyYear, isTrineYear, isFriendlyYear, personalYear);
       const isFlagged = isOwnYear || isTrineYear || isFriendlyYear || isEnemyYear || personalYear === 7 || personalYear === 11;
-      const label = emaxYearPeriodLabel(year, part);
+      const label = emaxYearPeriodLabel(year, part, birthDate);
       if (isFlagged) periodMagnitudes.set(label, magnitude);
       const row = { year, part, personalYear, verdict, magnitude };
       if (isOwnYear) ownYears.push(row);
@@ -1797,7 +1807,10 @@ function computeYearRoadmap(birthDate) {
     });
   }
 
-  return { pinnacleIndex, startYear, endYear, ownAnimal, years };
+  // birthDate rides along so the renderer can label a split year's periods
+  // with the real boundary date ("(u. 11/22)"/"(a. 11/22)") - see
+  // emaxYearPeriodLabel. In-memory only, never persisted.
+  return { pinnacleIndex, startYear, endYear, ownAnimal, years, birthDate };
 }
 
 /* ===================== Place lookup: country fallback ===================== */

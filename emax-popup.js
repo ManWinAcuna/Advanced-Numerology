@@ -780,18 +780,19 @@ let emaxTimelineCurrentTimeline = null;
 // emaxYearPersonalYearPeriods, db-core.js) - keeps expand/edit state
 // independently addressable per period even though they share a calendar
 // year number. emaxYearPeriodLabel (db-core.js) builds the matching
-// human-readable chip text ("1990" vs "1990 (early)"/"1990 (late)").
+// human-readable chip text ("1990" vs "1990 (u. 11/22)"/"1990 (a. 11/22)"
+// - the real birthday boundary, not a vague early/late).
 //
 // |magnitude| >= 2 means at least 2 stacked/reinforcing signals landed on
 // this one period (e.g. Enemy Year + Personal Year 7 + a confirmed
 // negative event) - gets a visibly heavier chip so a severe period doesn't
 // read identically to one that's only barely on the bad/good side.
-function emaxTimelineChipHtml(year, part, verdict, tags, magnitude) {
+function emaxTimelineChipHtml(year, part, verdict, tags, magnitude, birthDate) {
   const key = `${year}:${part}`;
   const expanded = key === String(emaxTimelineExpandedYear);
   const severe = typeof magnitude === 'number' && Math.abs(magnitude) >= 2;
   const tagPrefix = (tags && tags.length) ? tags.map(emaxTagEmoji).join('') + ' ' : '';
-  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}${severe ? ' severe' : ''}" data-year-key="${key}">${tagPrefix}${emaxYearPeriodLabel(year, part)}</button>`;
+  return `<button type="button" class="emax-timeline-chip ${verdict}${expanded ? ' expanded' : ''}${severe ? ' severe' : ''}" data-year-key="${key}">${tagPrefix}${emaxYearPeriodLabel(year, part, birthDate)}</button>`;
 }
 
 function emaxTagPickerHtml() {
@@ -902,10 +903,11 @@ function emaxTimelineEventRowHtml(entry, year, part, magnitude) {
 // Tapping a chip now opens it in a small popup on top instead (see
 // openEmaxYearDetailPopup below) - this section only ever renders chips.
 function emaxTimelineSectionHtml(entry, title, years) {
+  const birthDate = entry.date ? parseDateStr(entry.date) : null;
   const chipsHtml = years.length
     ? `<div class="emax-timeline-chips">${years.map(({ year, part, verdict, magnitude }) => {
         const ev = entry.timelineEvents && entry.timelineEvents[year];
-        return emaxTimelineChipHtml(year, part, verdict, ev && ev.tags, magnitude);
+        return emaxTimelineChipHtml(year, part, verdict, ev && ev.tags, magnitude, birthDate);
       }).join('')}</div>`
     : '<div class="emax-timeline-empty">None yet</div>';
   return `
@@ -1002,7 +1004,7 @@ function openEmaxYearDetailPopup(entry, year, part, magnitude) {
 
 function renderEmaxYearDetailPopup(entry, year, part, magnitude) {
   document.getElementById('emaxYearDetailBody').innerHTML = `
-    <div class="box-label">${escapeHtml(entry.name)} &middot; ${emaxYearPeriodLabel(year, part)}</div>
+    <div class="box-label">${escapeHtml(entry.name)} &middot; ${emaxYearPeriodLabel(year, part, entry.date ? parseDateStr(entry.date) : null)}</div>
     ${emaxTimelineEventRowHtml(entry, year, part, magnitude)}
   `;
 }
