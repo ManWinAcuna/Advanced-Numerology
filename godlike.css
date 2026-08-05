@@ -123,10 +123,23 @@ h1, h2, h3,
    ONLY on elements with no app-driven background of their own (the tier
    pills of compat/energy scores broke under text-clipping — those keep
    their app colors and just get the display face). */
-/* The 4-across Lifepath/Day Born/Day#/Combo row (Profile, Calculator,
-   Famous Lookup) is the tightest of these grids - a small size bump on top
-   of the contrast fix gives it a bit more room to read comfortably. */
-.grid4 .cell.highlight { font-size: 25px; }
+/* Numeral hierarchy (Profile/Calculator/Famous Lookup): Lifepath/Day Born/
+   Day#/Combo are the actual chart anchors - everything else on the page is
+   secondary (Lucky Number, 28 Day) or purely diagnostic (Missing). With
+   identical styling they all read as equally important, and a 3-digit
+   Missing list visually outweighed the real anchors just by being longer.
+   Tier 1 (this rule): visible frame + the brightest glow of any number on
+   the page. Tier 2 (Lucky Number/28 Day): left as plain .box-value,
+   unchanged - sits naturally in the middle once 1 and 3 move. Tier 3: see
+   .box-value-muted below. */
+.grid4 .cell.highlight {
+  font-size: 25px;
+  border: 1.5px solid color-mix(in srgb, var(--acc-text) 55%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04),
+              0 0 16px color-mix(in srgb, var(--acc-text) 30%, transparent);
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.9))
+          drop-shadow(0 0 20px color-mix(in srgb, var(--acc-text) 48%, transparent));
+}
 
 .cell.highlight, .dayleft-value, .pinnacle-card-value, .gk-glyph {
   font-family: var(--gk-display) !important;
@@ -699,6 +712,36 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   border-color: rgba(245, 197, 66, .32);
 }
 .emax-fact-tile.emax-fact-core .emax-fact-label { color: color-mix(in srgb, var(--gold) 65%, var(--muted)); }
+
+/* A second, separate numeral family missed by the --acc-text pass above:
+   these "gold pill" numbers (Lucky Number/28 Day/Missing on Profile, rank
+   badges, the Calendar page's Universal Day chip) don't go through the
+   struck-metal gradient at all - they're plain var(--yellow) text on a
+   hardcoded #241a08 pill background, which is neither near-black (the
+   panel color the earlier contrast pass was calibrated against) nor
+   theme-reactive. Same fix, same --acc-text values, applied here too -
+   they clear the same ~7:1 target against this specific background as
+   well (verified per hue, not assumed). .good/.bad variants keep their
+   own semantic green/red untouched (higher-specificity rules in
+   style.css already win over this). */
+.box-value, .box-value.mid, .rank-score, .calendar-day-universal {
+  color: var(--acc-text);
+}
+
+/* Tier 3: "Missing" is reference/diagnostic, not a number anyone's chart
+   hinges on - but sharing .box-value with Lucky Number/28 Day gave it the
+   exact same size, glow, and accent color, and a 3-digit string ("456")
+   in that treatment reads as louder than either of them. Explicit class
+   (not #missing) so any other purely-diagnostic list can reuse it later.
+   No accent color, no glow, smaller box - it recedes instead of competing. */
+.box-value.box-value-muted {
+  color: var(--muted);
+  background: rgba(255, 255, 255, .035);
+  font-size: 17px;
+  padding: 4px 8px;
+  text-shadow: none;
+  box-shadow: none;
+}
 
 /* ------------------------------------------------------------- reduce ---- */
 @media (prefers-reduced-motion: reduce) {
