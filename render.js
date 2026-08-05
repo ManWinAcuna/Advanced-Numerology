@@ -300,6 +300,14 @@ function renderPersonalHours() {
     finEl.textContent = 'None today';
     finNoteEl.textContent = '';
   }
+
+  // When the personal best/worst hour happens to also be the financial
+  // hour, that overlap used to be invisible unless you read both boxes
+  // and compared the times yourself - flag whichever tile(s) match.
+  [bestEl, worstEl, best2El, worst2El].forEach((el) => {
+    const tile = el.closest('.bw-hour');
+    if (tile) tile.classList.toggle('bw-hour-fin', !!(financial && el.textContent === financial.row.label));
+  });
 }
 
 document.querySelectorAll('.hours-toggle-btn').forEach((btn) => {

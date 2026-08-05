@@ -773,6 +773,26 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   box-shadow: none;
 }
 
+/* Best Financial Hour: Today's dial already shades the financial hour
+   gold instead of marking it with an icon, specifically to make it read
+   as a different KIND of significant from an ordinary good/bad hour.
+   This box is the same concept under a different page and was still
+   plain tier-2 orange - no connection to that established language. */
+.box-value.box-value-fin {
+  color: var(--gold);
+  background: rgba(245, 197, 66, .14);
+  text-shadow: 0 0 12px rgba(245, 197, 66, .5);
+  box-shadow: 0 0 14px rgba(245, 197, 66, .22);
+}
+
+/* When the personal best/worst hour happens to also be the financial
+   hour (render.js's renderPersonalHours), that overlap was only visible
+   by reading both boxes and comparing times by eye. A thin gold ring on
+   the matching tile calls out the coincidence where it happens. */
+.bw-hour.bw-hour-fin {
+  box-shadow: inset 0 0 0 1.5px var(--gold), 0 0 10px rgba(245, 197, 66, .35);
+}
+
 /* ------------------------------------------------------------- reduce ---- */
 @media (prefers-reduced-motion: reduce) {
   .gk-ceremony { animation-duration: .1s; animation-delay: .4s; }
