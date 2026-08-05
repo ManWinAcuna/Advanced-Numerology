@@ -102,7 +102,7 @@ function disciplineStreak() {
 }
 
 /* ---------------- views ---------------- */
-const views = { today: renderToday, log: renderLog, history: renderHistory, stats: renderStats };
+const views = { today: renderToday, log: renderLog, history: renderHistory, stats: renderStats, review: renderReview };
 let activeView = 'today';
 function show(view) {
   activeView = view;
@@ -306,6 +306,10 @@ function renderLog() {
       while (ids.length > 30) delete shots[ids.shift()];
       stSave(ST_SHOTS_KEY, shots);
     }
+    // Revenge detection: this entry came within 10 minutes of a stop-out.
+    // A warning tag, never a block — the point is seeing the pattern later.
+    const prev = todayTrades().slice(-1)[0];
+    const revenge = !!(prev && prev.r < 0 && now.getTime() - prev.ts <= 10 * 60 * 1000);
     trades.push({
       id, ts: now.getTime(), day: k, dir: logState.dir, r: logState.r,
       usd: isNaN(usd) ? null : usd,
@@ -315,6 +319,7 @@ function renderLog() {
       shot: shotId,
       nums: stampFor(now),           // blind stamp — shown only in stats/reveal
       override: !!logState.override, // logged through a LOCKED state
+      revenge,
     });
     stSave(ST_TRADES_KEY, trades);
     logState.dir = null; logState.r = null; logState.shot = null; logState.override = false;
@@ -364,6 +369,7 @@ function renderHistory() {
         '<span class="trade-r ' + (t.r >= 0 ? 'pos' : 'neg') + '">' + fmtR(t.r) + '</span>' +
         (t.usd != null ? '<span class="st-muted">$' + t.usd + '</span>' : '') +
         (t.override ? '<span class="ttag" style="border-color:#FF4D6D;color:#FF4D6D">override</span>' : '') +
+        (t.revenge ? '<span class="ttag" style="border-color:#FF9C00;color:#FF9C00">🔥 revenge?</span>' : '') +
         '<span class="trade-time">' + new Date(t.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</span></div>' +
         (tags.length ? '<div class="trade-tags">' + tags.map((x) => '<span class="ttag">' + esc(x) + '</span>').join('') + '</div>' : '') +
         (t.note ? '<div class="trade-note">' + esc(t.note) + '</div>' : '') +
@@ -431,6 +437,35 @@ function renderStats() {
       '</table><div class="st-muted" style="margin-top:6px">Good process losing is fine. Broken process winning is the trap.</div></div>';
   }
 
+  // Psych correlations — pre-session check-in state vs performance
+  const ciDims = ['sleep', 'mood', 'energy'];
+  let ciRows = '';
+  ciDims.forEach((dim) => {
+    const groups = {};
+    trades.forEach((t) => {
+      const rec = days[t.day];
+      const v = rec && rec.checkin && rec.checkin[dim];
+      if (v && v !== '—') (groups[v] = groups[v] || []).push(t);
+    });
+    Object.keys(groups).sort((a, b) => (mu(groups[b]) || -99) - (mu(groups[a]) || -99)).forEach((v) => {
+      ciRows += '<tr><td>' + esc(v) + '</td><td>' + groups[v].length + '</td><td>' + winRate(groups[v]) + '%</td><td>' + muCell(mu(groups[v])) + '</td></tr>';
+    });
+  });
+  if (ciRows) {
+    html += '<div class="st-card"><h3>μ · Check-in state</h3><table class="stat-table"><tr><th>state</th><th>n</th><th>win%</th><th>μ</th></tr>' + ciRows +
+      '</table><div class="st-muted" style="margin-top:6px">How you arrive predicts how you trade.</div></div>';
+  }
+
+  // Tilt — revenge-flagged and override trades
+  const revs = trades.filter((t) => t.revenge);
+  const ovrs = trades.filter((t) => t.override);
+  if (revs.length || ovrs.length) {
+    html += '<div class="st-card"><h3>🔥 Tilt</h3><table class="stat-table"><tr><th></th><th>n</th><th>win%</th><th>μ</th></tr>' +
+      (revs.length ? '<tr><td>Revenge-window entries</td><td>' + revs.length + '</td><td>' + winRate(revs) + '%</td><td>' + muCell(mu(revs)) + '</td></tr>' : '') +
+      (ovrs.length ? '<tr><td>LOCKED overrides</td><td>' + ovrs.length + '</td><td>' + winRate(ovrs) + '%</td><td>' + muCell(mu(ovrs)) + '</td></tr>' : '') +
+      '</table></div>';
+  }
+
   // Calendar heatmap — current month
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -472,6 +507,114 @@ function renderStats() {
         '</table><div class="st-muted" style="margin-top:6px">You traded these days blind — this is the numbers system tested live.</div></div>';
     });
   }
+  el.innerHTML = html;
+}
+
+/* ---------------- REVIEW (weekly report + monthly deep-dive) ---------------- */
+function inRange(t, a, b) { return t.ts >= a && t.ts < b; }
+function sumR(arr) { return arr.reduce((s, t) => s + t.r, 0); }
+function weekStart(offsetWeeks) {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  const dow = (d.getDay() + 6) % 7;             // Monday = 0
+  d.setDate(d.getDate() - dow - offsetWeeks * 7);
+  return d;
+}
+function bestTag(arr, dim, minN, worst) {
+  const rows = TAGS[dim].map((tag) => ({ tag, a: arr.filter((t) => (t[dim] || []).includes(tag)) }))
+    .filter((r) => r.a.length >= minN);
+  if (!rows.length) return null;
+  rows.sort((x, y) => (mu(y.a) - mu(x.a)) * (worst ? -1 : 1));
+  return { tag: rows[0].tag, m: mu(rows[0].a), n: rows[0].a.length };
+}
+
+function reportFor(label, from, to) {
+  const wk = trades.filter((t) => inRange(t, from, to));
+  if (!wk.length) return '<div class="st-card"><h3>' + label + '</h3><div class="st-muted">No trades in this window.</div></div>';
+  const tot = sumR(wk);
+  let html = '<div class="st-card"><h3>' + label + '</h3><table class="stat-table"><tr>' +
+    '<td>Trades</td><td>' + wk.length + '</td><td>Win%</td><td>' + winRate(wk) + '%</td></tr><tr>' +
+    '<td>Total</td><td class="' + (tot >= 0 ? 'mu-pos' : 'mu-neg') + '">' + fmtR(tot) + '</td><td>μ</td><td>' + muCell(mu(wk)) + '</td></tr></table>';
+
+  // --- blunt coach: rule-based findings, only when the data actually supports them
+  const findings = [];
+  const best = bestTag(wk, 'saw', 2, false);
+  const worst = bestTag(wk, 'saw', 2, true);
+  if (best && best.m > 0) findings.push('Keep hunting “' + best.tag + '” — ' + (best.m >= 0 ? '+' : '') + best.m.toFixed(2) + 'R/trade across ' + best.n + '.');
+  if (worst && worst.m < 0 && (!best || worst.tag !== best.tag)) findings.push('“' + worst.tag + '” cost you ' + worst.m.toFixed(2) + 'R/trade. Stop paying for it.');
+  const bad = wk.filter((t) => t.exec && t.exec !== 'A+ clean');
+  if (bad.length >= 2 && sumR(bad) < 0) findings.push('Broken process gave back ' + fmtR(sumR(bad)) + ' this window.');
+  const late = wk.filter((t) => new Date(t.ts).getHours() >= 11);
+  if (late.length >= 3 && sumR(late) < 0 && sumR(wk.filter((t) => new Date(t.ts).getHours() < 11)) > 0) {
+    findings.push('You gave back ' + fmtR(sumR(late)) + ' after 11am. The morning trader is better.');
+  }
+  const revs = wk.filter((t) => t.revenge);
+  if (revs.length) findings.push(revs.length + ' revenge-window entr' + (revs.length === 1 ? 'y' : 'ies') + ' ran ' + fmtR(sumR(revs)) + '.');
+  const wkDays = new Set(wk.map((t) => t.day));
+  const wrappedN = Array.from(wkDays).filter((k) => days[k] && days[k].wrapped).length;
+  findings.push('Wrapped ' + wrappedN + ' of ' + wkDays.size + ' traded days.');
+  const greenDays = Array.from(wkDays).filter((k) => sumR(wk.filter((t) => t.day === k)) > 0).length;
+  if (greenDays) findings.push(greenDays + ' green day' + (greenDays === 1 ? '' : 's') + ' of ' + wkDays.size + ' — protect what is working.');
+  html += '<label class="st-lbl">Coach</label>' + findings.map((f) => '<div class="trade-note">· ' + esc(f) + '</div>').join('');
+
+  // --- your own words back: the best lesson logged in the window
+  let quote = null, quoteR = -1e9;
+  wkDays.forEach((k) => {
+    const rec = days[k];
+    if (rec && rec.wrapped && rec.lesson) {
+      const dr = sumR(wk.filter((t) => t.day === k));
+      if (dr > quoteR) { quoteR = dr; quote = rec.lesson; }
+    }
+  });
+  if (quote) html += '<label class="st-lbl">You said it yourself</label><div class="trade-note">“' + esc(quote) + '”</div>';
+  html += '</div>';
+  return html;
+}
+
+function renderReview() {
+  const el = document.getElementById('view-review');
+  if (!trades.length) { el.innerHTML = '<div class="st-card st-muted">Reviews build themselves once trades exist.</div>'; return; }
+  const mon0 = weekStart(0).getTime();
+  const mon1 = weekStart(1).getTime();
+  let html = reportFor('This week', mon0, Date.now() + 1) + reportFor('Last week', mon1, mon0);
+
+  // --- monthly deep-dive: this month vs last, tag shifts, rule suggestions
+  const now = new Date();
+  const m0 = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const m1 = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  const cur = trades.filter((t) => t.ts >= m0);
+  const prv = trades.filter((t) => inRange(t, m1, m0));
+  html += '<div class="st-card"><h3>Monthly deep-dive</h3><table class="stat-table">' +
+    '<tr><th></th><th>' + now.toLocaleString([], { month: 'short' }) + '</th><th>' + new Date(m1).toLocaleString([], { month: 'short' }) + '</th></tr>' +
+    '<tr><td>Trades</td><td>' + cur.length + '</td><td>' + prv.length + '</td></tr>' +
+    '<tr><td>Total R</td><td>' + (cur.length ? fmtR(sumR(cur)) : '—') + '</td><td>' + (prv.length ? fmtR(sumR(prv)) : '—') + '</td></tr>' +
+    '<tr><td>Win%</td><td>' + (winRate(cur) ?? '—') + '%</td><td>' + (winRate(prv) ?? '—') + '%</td></tr>' +
+    '<tr><td>μ</td><td>' + muCell(mu(cur)) + '</td><td>' + muCell(mu(prv)) + '</td></tr></table>';
+
+  // tag leaderboard shift: this month's top reads with last month's μ beside them
+  const shiftRows = TAGS.saw.map((tag) => {
+    const a = cur.filter((t) => (t.saw || []).includes(tag));
+    const b = prv.filter((t) => (t.saw || []).includes(tag));
+    return { tag, a, b };
+  }).filter((r) => r.a.length >= 2);
+  if (shiftRows.length) {
+    shiftRows.sort((x, y) => mu(y.a) - mu(x.a));
+    html += '<label class="st-lbl">Read leaderboard (vs last month)</label><table class="stat-table"><tr><th>read</th><th>n</th><th>μ now</th><th>μ prev</th></tr>' +
+      shiftRows.slice(0, 5).map((r) => '<tr><td>' + esc(r.tag) + '</td><td>' + r.a.length + '</td><td>' + muCell(mu(r.a)) + '</td><td>' + muCell(mu(r.b)) + '</td></tr>').join('') + '</table>';
+  }
+
+  // rule suggestions, from the month's own evidence
+  const sugg = [];
+  const byDayIdx = {};
+  cur.forEach((t) => { byDayIdx[t.day] = byDayIdx[t.day] || []; byDayIdx[t.day].push(t); });
+  const lateTrades = [];
+  Object.values(byDayIdx).forEach((arr) => arr.slice(3).forEach((t) => lateTrades.push(t)));
+  if (lateTrades.length >= 3 && mu(lateTrades) < 0) sugg.push('Trade #4+ of the day runs ' + muCell(mu(lateTrades)) + ' — a lower max-trades rule is paying rent.');
+  const ovr = cur.filter((t) => t.override);
+  if (ovr.length >= 2 && mu(ovr) < 0) sugg.push('LOCKED overrides ran ' + muCell(mu(ovr)) + ' — the lock keeps being right.');
+  const rv = cur.filter((t) => t.revenge);
+  if (rv.length >= 2 && mu(rv) < 0) sugg.push('Revenge-window entries ran ' + muCell(mu(rv)) + ' — give stop-outs ten quiet minutes.');
+  if (sugg.length) html += '<label class="st-lbl">Rule suggestions</label>' + sugg.map((s) => '<div class="trade-note">· ' + s + '</div>').join('');
+  html += '</div>';
   el.innerHTML = html;
 }
 
