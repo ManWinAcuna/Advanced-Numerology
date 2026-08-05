@@ -205,30 +205,7 @@ function openEntryModal(entry) {
     <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
     <div class="emax-modal-date">${formatDate(entry.date)}${timeLabel ? ' · 🕐 ' + escapeHtml(timeLabel) : ''}</div>
 
-    <div class="profile-grid" style="margin-top:16px">
-      <div class="box stat-box compat-today-box">
-        <div class="box-label">🤝 Compatibility with Today</div>
-        <div class="box-value ${scoreClass(todayCompat.finalScore)}">${todayCompat.finalScore}%</div>
-      </div>
-      <div class="box stat-box">
-        <div class="box-label underline">📆 Days Left</div>
-        <div class="dayleft-row">
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">🎂</div>
-            <div class="dayleft-value">${r.daysLeft.daysUntilBirthday}</div>
-            <div class="dayleft-caption">until Birthday</div>
-          </div>
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">📅</div>
-            <div class="dayleft-value">${r.daysLeft.daysUntilMonthlyDay}</div>
-            <div class="dayleft-caption">until Monthly Day</div>
-          </div>
-        </div>
-      </div>
-      ${hoursHtml}
-    </div>
-
-    <div class="section-label" style="margin-top:20px">Core Numbers</div>
+    <div class="section-label" style="margin-top:16px">Core Numbers</div>
     <div class="grid4 headerrow">
       <div class="cell head">Lifepath</div><div class="cell head">Day Born</div>
       <div class="cell head">Day#</div><div class="cell head">Combo</div>
@@ -296,6 +273,29 @@ function openEntryModal(entry) {
       <div class="cell small">${r.py.raw}</div>
       <div class="cell small">${r.pm.raw}</div>
       <div class="cell small">${r.pd.raw}</div>
+    </div>
+
+    <div class="profile-grid" style="margin-top:20px">
+      <div class="box stat-box">
+        <div class="box-label underline">📆 Days Left</div>
+        <div class="dayleft-row">
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">🎂</div>
+            <div class="dayleft-value">${r.daysLeft.daysUntilBirthday}</div>
+            <div class="dayleft-caption">until Birthday</div>
+          </div>
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">📅</div>
+            <div class="dayleft-value">${r.daysLeft.daysUntilMonthlyDay}</div>
+            <div class="dayleft-caption">until Monthly Day</div>
+          </div>
+        </div>
+      </div>
+      ${hoursHtml}
+      <div class="box stat-box compat-today-box">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value ${scoreClass(todayCompat.finalScore)}">${todayCompat.finalScore}%</div>
+      </div>
     </div>
 
     <button type="button" class="emax-breakdown-toggle" id="compareToggleBtn" style="margin-top:20px">🤝 Compare with me</button>
