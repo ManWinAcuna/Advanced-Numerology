@@ -14,6 +14,19 @@
   --acc: var(--gold);              /* energy-reactive accent (JS sets data-energy) */
   --acc-dim: rgba(245, 197, 66, .55);
   --acc-ghost: rgba(245, 197, 66, .10);
+  /* Every hue below is calibrated for GLOWS/BORDERS/PARTICLES, where lower
+     contrast reads as mood, not a defect. Read as actual TEXT — especially
+     through the struck-metal gradient below, whose darkest band sits well
+     under the base color's own contrast — several hues (7 and 13 worst,
+     9/5/4/6 to a lesser degree) dropped under a readable bar. --acc-text is
+     the same hue, lightened (and for the hottest ones, slightly desaturated)
+     until that gradient's darkest point clears ~7:1 against the panel —
+     comfortably past WCAG AA's 4.5:1, with headroom for the glow/blur that
+     softens edges further. Never used for glows/borders/particles, only for
+     the actual numerals and labels people have to read (the hue table below
+     overrides this per energy day; hues already ≥7:1 keep their own color
+     unchanged here). */
+  --acc-text: var(--acc);
   --void: #000000;
 
   /* re-aim style.css's whole surface at the new world.
@@ -38,20 +51,20 @@
 /* -------------------------------------------- energy-reactive hue table --
    Accent per Day Energy. Temperature honors the owner's meanings:
    7 & 11 bearish (cold / tense), 8 & 28 bullish (imperial warmth). */
-html[data-energy="1"]  { --acc: #e9edf4; --acc-dim: rgba(233,237,244,.55); --acc-ghost: rgba(233,237,244,.09); }
-html[data-energy="2"]  { --acc: #a9bedd; --acc-dim: rgba(169,190,221,.55); --acc-ghost: rgba(169,190,221,.09); }
-html[data-energy="3"]  { --acc: #ffb36b; --acc-dim: rgba(255,179,107,.55); --acc-ghost: rgba(255,179,107,.09); }
-html[data-energy="4"]  { --acc: #79b0a6; --acc-dim: rgba(121,176,166,.55); --acc-ghost: rgba(121,176,166,.09); }
-html[data-energy="5"]  { --acc: #ff8a3d; --acc-dim: rgba(255,138,61,.55);  --acc-ghost: rgba(255,138,61,.09); }
-html[data-energy="6"]  { --acc: #e0a184; --acc-dim: rgba(224,161,132,.55); --acc-ghost: rgba(224,161,132,.09); }
-html[data-energy="7"]  { --acc: #d24a5c; --acc-dim: rgba(210,74,92,.55);   --acc-ghost: rgba(210,74,92,.09); }
-html[data-energy="8"]  { --acc: #f5c542; --acc-dim: rgba(245,197,66,.55);  --acc-ghost: rgba(245,197,66,.10); }
-html[data-energy="9"]  { --acc: #9d84ff; --acc-dim: rgba(157,132,255,.55); --acc-ghost: rgba(157,132,255,.09); }
-html[data-energy="11"] { --acc: #86e8ff; --acc-dim: rgba(134,232,255,.55); --acc-ghost: rgba(134,232,255,.09); }
-html[data-energy="22"] { --acc: #3fce9f; --acc-dim: rgba(63,206,159,.55);  --acc-ghost: rgba(63,206,159,.09); }
-html[data-energy="28"] { --acc: #ffd75e; --acc-dim: rgba(255,215,94,.6);   --acc-ghost: rgba(255,215,94,.11); }
-html[data-energy="13"] { --acc: #ff6242; --acc-dim: rgba(255,98,66,.55);   --acc-ghost: rgba(255,98,66,.09); }
-html[data-energy="33"] { --acc: #f0a8c8; --acc-dim: rgba(240,168,200,.55); --acc-ghost: rgba(240,168,200,.09); }
+html[data-energy="1"]  { --acc: #e9edf4; --acc-dim: rgba(233,237,244,.55); --acc-ghost: rgba(233,237,244,.09); --acc-text: #e9edf4; }
+html[data-energy="2"]  { --acc: #a9bedd; --acc-dim: rgba(169,190,221,.55); --acc-ghost: rgba(169,190,221,.09); --acc-text: #a9bedd; }
+html[data-energy="3"]  { --acc: #ffb36b; --acc-dim: rgba(255,179,107,.55); --acc-ghost: rgba(255,179,107,.09); --acc-text: #ffb36b; }
+html[data-energy="4"]  { --acc: #79b0a6; --acc-dim: rgba(121,176,166,.55); --acc-ghost: rgba(121,176,166,.09); --acc-text: #89b9b1; }
+html[data-energy="5"]  { --acc: #ff8a3d; --acc-dim: rgba(255,138,61,.55);  --acc-ghost: rgba(255,138,61,.09); --acc-text: #ff954f; }
+html[data-energy="6"]  { --acc: #e0a184; --acc-dim: rgba(224,161,132,.55); --acc-ghost: rgba(224,161,132,.09); --acc-text: #e1a386; }
+html[data-energy="7"]  { --acc: #d24a5c; --acc-dim: rgba(210,74,92,.55);   --acc-ghost: rgba(210,74,92,.09); --acc-text: #e69ca6; }
+html[data-energy="8"]  { --acc: #f5c542; --acc-dim: rgba(245,197,66,.55);  --acc-ghost: rgba(245,197,66,.10); --acc-text: #f5c542; }
+html[data-energy="9"]  { --acc: #9d84ff; --acc-dim: rgba(157,132,255,.55); --acc-ghost: rgba(157,132,255,.09); --acc-text: #b5a3ff; }
+html[data-energy="11"] { --acc: #86e8ff; --acc-dim: rgba(134,232,255,.55); --acc-ghost: rgba(134,232,255,.09); --acc-text: #86e8ff; }
+html[data-energy="22"] { --acc: #3fce9f; --acc-dim: rgba(63,206,159,.55);  --acc-ghost: rgba(63,206,159,.09); --acc-text: #3fce9f; }
+html[data-energy="28"] { --acc: #ffd75e; --acc-dim: rgba(255,215,94,.6);   --acc-ghost: rgba(255,215,94,.11); --acc-text: #ffd75e; }
+html[data-energy="13"] { --acc: #ff6242; --acc-dim: rgba(255,98,66,.55);   --acc-ghost: rgba(255,98,66,.09); --acc-text: #ff937d; }
+html[data-energy="33"] { --acc: #f0a8c8; --acc-dim: rgba(240,168,200,.55); --acc-ghost: rgba(240,168,200,.09); --acc-text: #f0a8c8; }
 
 /* The Stable realm keeps its heritage accent inside the shared DNA */
 html.gk-stable { --acc: #00e5ff; --acc-dim: rgba(0,229,255,.55); --acc-ghost: rgba(0,229,255,.09); }
@@ -92,7 +105,7 @@ h1, h2, h3,
   font-weight: 600;
   color: var(--text);
 }
-.profile-section-title { font-size: 13px; color: var(--acc); }
+.profile-section-title { font-size: 13px; color: var(--acc-text); }
 .section-label { letter-spacing: .28em; }
 
 /* engraved smallcaps for the fine print of the certificate */
@@ -110,13 +123,18 @@ h1, h2, h3,
    ONLY on elements with no app-driven background of their own (the tier
    pills of compat/energy scores broke under text-clipping — those keep
    their app colors and just get the display face). */
+/* The 4-across Lifepath/Day Born/Day#/Combo row (Profile, Calculator,
+   Famous Lookup) is the tightest of these grids - a small size bump on top
+   of the contrast fix gives it a bit more room to read comfortably. */
+.grid4 .cell.highlight { font-size: 25px; }
+
 .cell.highlight, .dayleft-value, .pinnacle-card-value, .gk-glyph {
   font-family: var(--gk-display) !important;
   font-weight: 700;
   background: linear-gradient(168deg,
-    color-mix(in srgb, var(--acc) 92%, #ffffff 8%) 12%,
-    color-mix(in srgb, var(--acc) 70%, #000 12%) 48%,
-    color-mix(in srgb, var(--acc) 96%, #fff 14%) 86%);
+    color-mix(in srgb, var(--acc-text) 92%, #ffffff 8%) 12%,
+    color-mix(in srgb, var(--acc-text) 70%, #000 12%) 48%,
+    color-mix(in srgb, var(--acc-text) 96%, #fff 14%) 86%);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
   text-shadow: none;
@@ -287,7 +305,7 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
   padding: 8px 15px; font-size: 12px; color: var(--text);
   background: rgba(255,255,255,.03);
 }
-.gk-orbit b { color: var(--acc); font-family: var(--gk-display); font-size: 14px; }
+.gk-orbit b { color: var(--acc-text); font-family: var(--gk-display); font-size: 14px; }
 .gk-orbit-tap { cursor: pointer; }
 .gk-brief {
   margin-top: 20px; font-size: 13px; color: var(--muted);
@@ -429,7 +447,7 @@ html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18p
 }
 .gk-kw {
   position: absolute; font-family: var(--gk-ui); text-transform: uppercase;
-  font-size: 9px; letter-spacing: .32em; color: var(--acc); opacity: 0;
+  font-size: 9px; letter-spacing: .32em; color: var(--acc-text); opacity: 0;
   animation: gkKwIn .9s ease 1.3s forwards;
   /* plaques: the alignment arc passes BEHIND the words, never through them */
   background: rgba(0,0,0,.85); padding: 4px 9px 4px 11px; border-radius: 999px;
@@ -473,7 +491,7 @@ button.gk-altar-num {
 
 /* the meaning card, now rendered inside the shared modal */
 .gk-card-title { font-family: var(--gk-display); letter-spacing: .18em; text-transform: uppercase;
-  font-size: 12px; color: var(--acc); margin-bottom: 8px; }
+  font-size: 12px; color: var(--acc-text); margin-bottom: 8px; }
 .gk-card-body { font-size: 13px; line-height: 1.65; color: var(--text); }
 .gk-card-hours { margin-top: 9px; font-size: 12px; color: var(--muted); }
 .gk-card-hours b { color: var(--gold); }
@@ -549,7 +567,7 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 @keyframes gkMsRise { from { opacity: 0; transform: translateY(46px) scale(.9); }
   30% { opacity: 1; } to { opacity: 1; transform: translateY(-14px) scale(1.04); } }
 .gk-ms-days { font-family: var(--gk-display); font-size: 46px; letter-spacing: .3em;
-  color: var(--acc); margin-top: 20px; animation: gkCerNum 1s ease .5s backwards; }
+  color: var(--acc-text); margin-top: 20px; animation: gkCerNum 1s ease .5s backwards; }
 .gk-ms-line { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .32em;
   font-size: 10px; color: var(--muted); margin-top: 10px; animation: gkCerLine .8s ease .9s backwards; }
 
@@ -663,9 +681,9 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .gk-hr-row.t-bad .gk-hr-num { color: #e0524d; }
 .gk-hr-row.fin .gk-hr-num { color: var(--gold); }
 .gk-hr-tag { width: 30px; text-align: right; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--acc); }
+  color: var(--acc-text); }
 .gk-count { font-size: 12.5px; color: var(--muted); letter-spacing: .05em; margin-top: 12px; line-height: 1.6; }
-.gk-count b { color: var(--acc); font-family: var(--gk-display); letter-spacing: .06em; }
+.gk-count b { color: var(--acc-text); font-family: var(--gk-display); letter-spacing: .06em; }
 .gk-count:empty { display: none; }
 
 .gk-today .gk-portals { margin-top: 26px; }
