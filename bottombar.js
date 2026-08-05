@@ -12,15 +12,15 @@
     { id: 'days', icon: '📅', label: 'Days', items: [
       { href: 'calendar.html', icon: '📅', label: 'Calendar' },
       { href: 'astrology.html', icon: '🌙', label: 'Astrology' },
-      { href: 'emax.html', icon: '⚡', label: 'EMAX' },
-    ], match: ['calendar', 'astrology', 'emax'] },
+    ], match: ['calendar', 'astrology'] },
     { id: 'stable', icon: '🐎', label: 'Stable', href: 'stable.html', match: ['stable'] },
     { id: 'tools', icon: '🧮', label: 'Tools', items: [
       { href: 'calculator.html', icon: '🧮', label: 'Calculator' },
       { href: 'compatibility.html', icon: '🤝', label: 'Compatibility' },
       { href: 'famous.html', icon: '⭐', label: 'Famous Lookup' },
       { href: 'database.html', icon: '🗂', label: 'Database' },
-    ], match: ['calculator', 'compatibility', 'famous', 'database', 'category'] },
+      { href: 'emax.html', icon: '⚡', label: 'EMAX' },
+    ], match: ['calculator', 'compatibility', 'famous', 'database', 'category', 'emax'] },
     { id: 'profile', icon: '👤', label: 'Profile', href: 'profile.html', match: ['profile'] },
   ];
 
