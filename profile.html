@@ -55,91 +55,11 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
     </div>
   </div>
 
-  <!-- Grouped by how often the numbers change: Today first (different every
-       morning), then the static core numbers, then zodiac, then the deep-dive
-       collapsibles. Same data and IDs as before - only the arrangement moved. -->
-
-  <div class="profile-section" id="profileTodaySection">
-    <div class="profile-section-title">☀️ Today</div>
-    <div class="profile-grid">
-
-      <div class="box stat-box compat-today-box" id="compatTodayBox">
-        <div class="box-label">🤝 Compatibility with Today</div>
-        <div class="box-value" id="compatTodayScore">-</div>
-      </div>
-
-      <div class="box stat-box compat-today-box" id="energyFlowBox">
-        <div class="box-label">⚡ Energy Flow</div>
-        <div class="box-value" id="energyFlowScore">-</div>
-      </div>
-
-      <div class="box stat-box">
-        <div class="box-label underline">📆 Days Left</div>
-        <div class="dayleft-row">
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">🎂</div>
-            <div class="dayleft-value" id="daysUntilBirthday">-</div>
-            <div class="dayleft-caption">until Birthday</div>
-          </div>
-          <div class="dayleft-tile">
-            <div class="dayleft-icon">📅</div>
-            <div class="dayleft-value" id="daysUntilMonthlyDay">-</div>
-            <div class="dayleft-caption">until Monthly Day</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="box stat-box">
-        <div class="box-label">🔁 Personal Cycles</div>
-        <div class="grid3 headerrow">
-          <div class="cell head">PY</div>
-          <div class="cell head">PM</div>
-          <div class="cell head">PD</div>
-        </div>
-        <div class="grid3">
-          <div class="cell highlight" id="pyReduced">-</div>
-          <div class="cell highlight" id="pmReduced">-</div>
-          <div class="cell highlight" id="pdReduced">-</div>
-        </div>
-        <div class="grid3 subrow">
-          <div class="cell small" id="pyRaw">-</div>
-          <div class="cell small" id="pmRaw">-</div>
-          <div class="cell small" id="pdRaw">-</div>
-        </div>
-      </div>
-
-      <div class="box stat-box" id="bestWorstHourBox">
-        <div class="box-label">⏰ Best / Worst Hour</div>
-        <div class="bw-hour-row">
-          <div class="bw-hour good">
-            <div class="bw-hour-tag">Best</div>
-            <div class="bw-hour-time" id="bestHourTime">-</div>
-          </div>
-          <div class="bw-hour bad">
-            <div class="bw-hour-tag">Worst</div>
-            <div class="bw-hour-time" id="worstHourTime">-</div>
-          </div>
-        </div>
-        <div class="bw-hour-row">
-          <div class="bw-hour good subtle">
-            <div class="bw-hour-tag">2nd Best</div>
-            <div class="bw-hour-time" id="bestHourTime2">-</div>
-          </div>
-          <div class="bw-hour bad subtle">
-            <div class="bw-hour-tag">2nd Worst</div>
-            <div class="bw-hour-time" id="worstHourTime2">-</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="box stat-box" id="finHourBox">
-        <div class="box-label">💰 Best Financial Hour</div>
-        <div class="box-value box-value-fin" id="finHourTime">-</div>
-        <div class="dayleft-caption" id="finHourNote"></div>
-      </div>
-
-    </div>
-  </div>
+  <!-- Identity first (who this chart fundamentally is), then whatever's
+       relative to today, then the deep-dive collapsibles at the very
+       bottom - same order as the Birthday Database's own entry popup,
+       which mirrors this page. Same data and IDs as before - only the
+       arrangement moved. -->
 
   <div class="profile-section" id="profileCoreSection">
     <div class="profile-section-title">🔢 Core Numbers</div>
@@ -204,6 +124,86 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
       <div class="cell sign" id="saturnSign" title="">-</div>
       <div class="cell sign" id="jupiterSign" title="">-</div>
       <div class="cell sign" id="venusSign" title="">-</div>
+    </div>
+
+    <div class="section-label" style="margin-top:14px">Personal Cycles</div>
+    <div class="grid3 headerrow">
+      <div class="cell head">PY</div>
+      <div class="cell head">PM</div>
+      <div class="cell head">PD</div>
+    </div>
+    <div class="grid3">
+      <div class="cell highlight" id="pyReduced">-</div>
+      <div class="cell highlight" id="pmReduced">-</div>
+      <div class="cell highlight" id="pdReduced">-</div>
+    </div>
+    <div class="grid3 subrow">
+      <div class="cell small" id="pyRaw">-</div>
+      <div class="cell small" id="pmRaw">-</div>
+      <div class="cell small" id="pdRaw">-</div>
+    </div>
+  </div>
+
+  <div class="profile-section" id="profileTodaySection">
+    <div class="profile-section-title">☀️ Today</div>
+    <div class="profile-grid">
+
+      <div class="box stat-box">
+        <div class="box-label underline">📆 Days Left</div>
+        <div class="dayleft-row">
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">🎂</div>
+            <div class="dayleft-value" id="daysUntilBirthday">-</div>
+            <div class="dayleft-caption">until Birthday</div>
+          </div>
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">📅</div>
+            <div class="dayleft-value" id="daysUntilMonthlyDay">-</div>
+            <div class="dayleft-caption">until Monthly Day</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="box stat-box" id="bestWorstHourBox">
+        <div class="box-label">⏰ Best / Worst Hour</div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good">
+            <div class="bw-hour-tag">Best</div>
+            <div class="bw-hour-time" id="bestHourTime">-</div>
+          </div>
+          <div class="bw-hour bad">
+            <div class="bw-hour-tag">Worst</div>
+            <div class="bw-hour-time" id="worstHourTime">-</div>
+          </div>
+        </div>
+        <div class="bw-hour-row">
+          <div class="bw-hour good subtle">
+            <div class="bw-hour-tag">2nd Best</div>
+            <div class="bw-hour-time" id="bestHourTime2">-</div>
+          </div>
+          <div class="bw-hour bad subtle">
+            <div class="bw-hour-tag">2nd Worst</div>
+            <div class="bw-hour-time" id="worstHourTime2">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="box stat-box" id="finHourBox">
+        <div class="box-label">💰 Best Financial Hour</div>
+        <div class="box-value box-value-fin" id="finHourTime">-</div>
+        <div class="dayleft-caption" id="finHourNote"></div>
+      </div>
+
+      <div class="box stat-box compat-today-box" id="energyFlowBox">
+        <div class="box-label">⚡ Energy Flow</div>
+        <div class="box-value" id="energyFlowScore">-</div>
+      </div>
+
+      <div class="box stat-box compat-today-box" id="compatTodayBox">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value" id="compatTodayScore">-</div>
+      </div>
+
     </div>
   </div>
 
