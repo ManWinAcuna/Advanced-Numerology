@@ -4756,9 +4756,12 @@ function cloudPullEmaxChunked(user, data) {
     // to the legacy single-field copy so existing accounts migrate
     // seamlessly - their first save after this pull re-pushes chunked.
     if (data.emax !== undefined && data.emax !== null) {
-      localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify(data.emax));
+      const next = JSON.stringify(data.emax);
+      const changed = localStorage.getItem(EMAX_STORAGE_KEY) !== next;
+      if (changed) localStorage.setItem(EMAX_STORAGE_KEY, next);
+      return Promise.resolve(changed);
     }
-    return Promise.resolve();
+    return Promise.resolve(false);
   }
   return firebase.firestore().collection('users').doc(user.uid).collection('emaxCats').get()
     .then((snap) => {
@@ -4770,16 +4773,19 @@ function cloudPullEmaxChunked(user, data) {
         // the ids write survived a rules/permissions failure that blocked
         // the per-category writes). Applying this would BE data loss.
         console.warn('[cloud] EMAX pull skipped - cloud copy is incomplete, keeping local data');
-        return;
+        return false;
       }
-      localStorage.setItem(EMAX_STORAGE_KEY, JSON.stringify({ categories: cats }));
+      const next = JSON.stringify({ categories: cats });
+      const changed = localStorage.getItem(EMAX_STORAGE_KEY) !== next;
+      if (changed) localStorage.setItem(EMAX_STORAGE_KEY, next);
       // Sync the local hash record to what was just pulled, so the next
       // save only pushes what the user actually changes from here on.
       const hashes = { __ids: JSON.stringify(data.emaxCategoryIds.map(String)) };
       cats.forEach((c) => { if (c && c.id) hashes[c.id] = emaxCloudHash(JSON.stringify(c)); });
       saveEmaxCloudHashes(hashes);
+      return changed;
     })
-    .catch((e) => console.warn('[cloud] EMAX pull failed - keeping local data', e));
+    .catch((e) => { console.warn('[cloud] EMAX pull failed - keeping local data', e); return false; });
 }
 
 // A push kicked off moments earlier (e.g. saveEmaxDB() seeding starter
@@ -4794,23 +4800,34 @@ function waitForPendingCloudPushes() {
   return Promise.all(Array.from(inFlight));
 }
 
+// Resolves to whether the pull actually wrote anything different from what
+// was already on this device - callers that only want to disturb the page
+// when there's a real reason to (e.g. the quiet per-session auto-pull in
+// auth-widget.js) use this instead of unconditionally reloading/re-rendering
+// on every single pull, most of which find nothing new because saveX()
+// already pushed this device's own edits moments earlier.
 function cloudPullAll() {
-  if (typeof firebase === 'undefined') return Promise.resolve();
+  if (typeof firebase === 'undefined') return Promise.resolve(false);
   const user = firebase.auth().currentUser;
-  if (!user) return Promise.resolve();
+  if (!user) return Promise.resolve(false);
 
   return waitForPendingCloudPushes()
     .then(() => firebase.firestore().collection('users').doc(user.uid).get())
     .then((doc) => {
-      if (!doc.exists) return;
+      if (!doc.exists) return false;
       const data = doc.data();
+      let changed = false;
       Object.keys(CLOUD_SYNC_FIELDS).forEach((storageKey) => {
         const field = CLOUD_SYNC_FIELDS[storageKey];
         if (data[field] !== undefined && data[field] !== null) {
-          localStorage.setItem(storageKey, JSON.stringify(data[field]));
+          const next = JSON.stringify(data[field]);
+          if (localStorage.getItem(storageKey) !== next) {
+            localStorage.setItem(storageKey, next);
+            changed = true;
+          }
         }
       });
-      return cloudPullEmaxChunked(user, data);
+      return cloudPullEmaxChunked(user, data).then((emaxChanged) => changed || !!emaxChanged);
     });
 }
 

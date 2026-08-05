@@ -214,7 +214,20 @@
         });
       } else if (cloudPullIsDue()) {
         stampCloudPull();
-        cloudPullAll();
+        // Quiet by default (no reload) so a page that's already showing
+        // perfectly good local data doesn't flash on every relaunch - but
+        // if this device's copy had actually drifted from the cloud (a
+        // stale local install, an edit made on another device, storage
+        // that got partially reset), silently updating localStorage isn't
+        // enough: the page already rendered from the old data and nothing
+        // else would ever tell it to look again. So when the pull reports
+        // a real change, refresh - via the page's own hook if it defines
+        // one (see profile.js), else a plain reload.
+        cloudPullAll().then((changed) => {
+          if (!changed) return;
+          if (typeof window.__refreshAfterCloudSync === 'function') window.__refreshAfterCloudSync();
+          else location.reload();
+        });
       }
     }
   }, (err) => {
