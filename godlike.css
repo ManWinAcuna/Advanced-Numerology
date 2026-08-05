@@ -1,0 +1,358 @@
+/* ============================================================================
+   GODLIKE — the design system layer (UI_REDESIGN_SPEC.md, 2026-08-05)
+   Loads AFTER style.css on every page and transfigures the whole app through
+   its variable surface + targeted overrides. Silent, OLED-black, geometry-
+   etched, energy-reactive, choreographed. Nothing here removes functionality:
+   every rule is additive or a re-skin of an existing hook.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+
+/* ---------------------------------------------------------------- tokens -- */
+:root {
+  --gold: #f5c542;                 /* the brand metal — constant, ceremonial */
+  --acc: var(--gold);              /* energy-reactive accent (JS sets data-energy) */
+  --acc-dim: rgba(245, 197, 66, .55);
+  --acc-ghost: rgba(245, 197, 66, .10);
+  --void: #000000;
+
+  /* re-aim style.css's whole surface at the new world */
+  --bg: #000000;
+  --panel: rgba(255, 255, 255, .025);
+  --border: rgba(255, 255, 255, .07);
+  --text: #ece7dc;
+  --muted: #77705f;
+  --yellow: var(--acc);            /* every accent in the app becomes reactive */
+  --glow-cyan: 0 0 8px color-mix(in srgb, var(--acc) 40%, transparent),
+               0 0 20px color-mix(in srgb, var(--acc) 16%, transparent);
+  --glow-magenta: 0 0 8px color-mix(in srgb, var(--acc) 30%, transparent),
+                  0 0 16px color-mix(in srgb, var(--acc) 12%, transparent);
+
+  --gk-display: 'Cinzel', 'Times New Roman', serif;
+  --gk-ui: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* -------------------------------------------- energy-reactive hue table --
+   Accent per Day Energy. Temperature honors the owner's meanings:
+   7 & 11 bearish (cold / tense), 8 & 28 bullish (imperial warmth). */
+html[data-energy="1"]  { --acc: #e9edf4; --acc-dim: rgba(233,237,244,.55); --acc-ghost: rgba(233,237,244,.09); }
+html[data-energy="2"]  { --acc: #a9bedd; --acc-dim: rgba(169,190,221,.55); --acc-ghost: rgba(169,190,221,.09); }
+html[data-energy="3"]  { --acc: #ffb36b; --acc-dim: rgba(255,179,107,.55); --acc-ghost: rgba(255,179,107,.09); }
+html[data-energy="4"]  { --acc: #79b0a6; --acc-dim: rgba(121,176,166,.55); --acc-ghost: rgba(121,176,166,.09); }
+html[data-energy="5"]  { --acc: #ff8a3d; --acc-dim: rgba(255,138,61,.55);  --acc-ghost: rgba(255,138,61,.09); }
+html[data-energy="6"]  { --acc: #e0a184; --acc-dim: rgba(224,161,132,.55); --acc-ghost: rgba(224,161,132,.09); }
+html[data-energy="7"]  { --acc: #d24a5c; --acc-dim: rgba(210,74,92,.55);   --acc-ghost: rgba(210,74,92,.09); }
+html[data-energy="8"]  { --acc: #f5c542; --acc-dim: rgba(245,197,66,.55);  --acc-ghost: rgba(245,197,66,.10); }
+html[data-energy="9"]  { --acc: #9d84ff; --acc-dim: rgba(157,132,255,.55); --acc-ghost: rgba(157,132,255,.09); }
+html[data-energy="11"] { --acc: #86e8ff; --acc-dim: rgba(134,232,255,.55); --acc-ghost: rgba(134,232,255,.09); }
+html[data-energy="22"] { --acc: #3fce9f; --acc-dim: rgba(63,206,159,.55);  --acc-ghost: rgba(63,206,159,.09); }
+html[data-energy="28"] { --acc: #ffd75e; --acc-dim: rgba(255,215,94,.6);   --acc-ghost: rgba(255,215,94,.11); }
+
+/* The Stable realm keeps its heritage accent inside the shared DNA */
+html.gk-stable { --acc: #00e5ff; --acc-dim: rgba(0,229,255,.55); --acc-ghost: rgba(0,229,255,.09); }
+
+/* ------------------------------------------------------------- the void -- */
+html, body { background: var(--void) !important; }
+
+/* The starfield dies; sacred geometry is etched into the dark instead —
+   golden-ratio circles + a faint radial grid, felt more than seen. */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  animation: none !important;
+  background-image:
+    radial-gradient(circle at 50% 12%, transparent 119px, rgba(255,255,255,.028) 120px, transparent 121px),
+    radial-gradient(circle at 50% 12%, transparent 193px, rgba(255,255,255,.024) 194px, transparent 195px),
+    radial-gradient(circle at 50% 12%, transparent 313px, rgba(255,255,255,.02) 314px, transparent 315px),
+    radial-gradient(circle at 85% 78%, transparent 89px, rgba(255,255,255,.02) 90px, transparent 91px),
+    radial-gradient(circle at 85% 78%, transparent 144px, rgba(255,255,255,.016) 145px, transparent 146px),
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, auto, 89px 89px, 89px 89px;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 120% 60% at 50% -10%, var(--acc-ghost), transparent 60%);
+}
+.scroll-viewport { background: var(--void) !important; }
+
+/* ----------------------------------------------------------- typography -- */
+h1, h2, h3,
+.profile-section-title,
+.section-label {
+  font-family: var(--gk-display) !important;
+  text-transform: uppercase;
+  letter-spacing: .32em;
+  font-weight: 600;
+  color: var(--text);
+}
+.profile-section-title { font-size: 13px; color: var(--acc); }
+.section-label { letter-spacing: .28em; }
+
+/* engraved smallcaps for the fine print of the certificate */
+.box-label, label, th, .cell.head,
+.dayleft-caption, .pinnacle-card-label, .bw-hour-tag {
+  font-family: var(--gk-ui);
+  text-transform: uppercase !important;
+  letter-spacing: .18em !important;
+  font-size: 10px !important;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* hero numerals: struck metal — gradient-filled, edge-lit, precise */
+.box-value, .cell.highlight, .dayleft-value, .pinnacle-card-value,
+.bw-hour-time, .gk-glyph {
+  font-family: var(--gk-display) !important;
+  font-weight: 700;
+  background: linear-gradient(168deg,
+    color-mix(in srgb, var(--acc) 92%, #ffffff 8%) 12%,
+    color-mix(in srgb, var(--acc) 70%, #000 12%) 48%,
+    color-mix(in srgb, var(--acc) 96%, #fff 14%) 86%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.9))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--acc) 22%, transparent));
+}
+
+/* ---------------------------------------------------- living glyphs -------
+   Numbers behave by meaning. Applied by godlike.js as gk-n{value}. */
+@media (prefers-reduced-motion: no-preference) {
+  .gk-n11 { animation: gkFlicker 3.1s steps(1) infinite; }          /* volatile static */
+  .gk-n8, .gk-n28 { animation: gkHeavy 5s ease-in-out infinite; }   /* immovable throne */
+  .gk-n5  { animation: gkRestless 1.7s ease-in-out infinite; }      /* can't sit still */
+  .gk-n7  { animation: gkCold 4.2s ease-in-out infinite; }          /* cold pulse */
+  .gk-n22 { animation: gkMonolith 7s ease-in-out infinite; }        /* monumental */
+  .gk-n9  { animation: gkDrift 6s ease-in-out infinite; }           /* completion drift */
+}
+@keyframes gkFlicker {
+  0%, 100% { opacity: 1; } 7% { opacity: .82; } 9% { opacity: 1; }
+  36% { opacity: .9; } 37% { opacity: 1; } 61% { opacity: .78; }
+  62% { opacity: 1; } 84% { opacity: .93; } 85% { opacity: 1; }
+}
+@keyframes gkHeavy    { 0%,100% { filter: drop-shadow(0 1px 0 rgba(0,0,0,.9)) drop-shadow(0 0 10px var(--acc-ghost)); }
+                        50%     { filter: drop-shadow(0 2px 1px rgba(0,0,0,1)) drop-shadow(0 0 26px var(--acc-dim)); } }
+@keyframes gkRestless { 0%,100% { transform: translate(0,0); } 23% { transform: translate(.6px,-.5px); }
+                        48% { transform: translate(-.5px,.4px); } 71% { transform: translate(.4px,.5px); } }
+@keyframes gkCold     { 0%,100% { opacity: 1; } 50% { opacity: .72; } }
+@keyframes gkMonolith { 0%,100% { letter-spacing: 0; } 50% { letter-spacing: .02em; } }
+@keyframes gkDrift    { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+
+/* --------------------------------------------------------- glass depth -- */
+.box, .stat-box, .pinnacle-card, .collapsible, .modal-box,
+.months-box, .hours-box {
+  background: linear-gradient(172deg, rgba(255,255,255,.035), rgba(255,255,255,.012)) !important;
+  border: 1px solid rgba(255,255,255,.07) !important;
+  border-radius: 16px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 18px 44px rgba(0,0,0,.55);
+}
+.profile-section {
+  background: linear-gradient(180deg, rgba(255,255,255,.014), transparent 70%);
+  border: 1px solid rgba(255,255,255,.045);
+  border-radius: 20px;
+  padding: 16px 14px;
+  margin-bottom: 18px;
+}
+.box::before, .stat-box::before { display: none; } /* old gradient strips die */
+.modal-box { backdrop-filter: blur(18px) saturate(1.25); }
+.bb-sheet, .bb-bar { backdrop-filter: blur(18px) saturate(1.2); }
+
+/* tables become instrument panels */
+table { border-color: rgba(255,255,255,.06) !important; }
+td, th { border-color: rgba(255,255,255,.055) !important; }
+tr:nth-child(even) td { background: rgba(255,255,255,.012); }
+
+/* ------------------------------------------------------------ controls -- */
+button, .btn, .chip, .nav-link, .bb-tab, .bb-item {
+  transition: transform .12s cubic-bezier(.2,.9,.3,1.4), background .12s ease,
+              color .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
+  transform: scale(.965);
+}
+.btn, .cr-btn.primary {
+  border-radius: 12px;
+}
+
+/* --------------------------------------------------------- bottom bar --- */
+.bb-bar {
+  background: rgba(2, 2, 4, .82) !important;
+  border-top: 1px solid rgba(255,255,255,.08) !important;
+}
+.bb-tab { font-family: var(--gk-ui); letter-spacing: .14em !important; text-transform: uppercase; font-size: 9px !important; }
+.bb-tab.active { color: var(--acc) !important; }
+.bb-tab.active span { filter: drop-shadow(0 0 8px var(--acc-dim)); }
+.bb-tab { position: relative; }
+.bb-tab.active::after {
+  content: ''; position: absolute; top: 0; left: 30%; right: 30%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--acc), transparent);
+}
+.bb-sheet { background: rgba(4,4,7,.9) !important; border-radius: 18px !important;
+  border: 1px solid rgba(255,255,255,.09) !important; }
+.bb-item { font-family: var(--gk-ui); letter-spacing: .06em; }
+.bb-item.active { background: var(--acc-ghost) !important; color: var(--acc) !important; }
+
+/* auth circle + update pill harmonized */
+.auth-widget { border-color: color-mix(in srgb, var(--acc) 45%, transparent) !important;
+  background: rgba(4,4,7,.85) !important; box-shadow: 0 0 14px var(--acc-ghost); }
+.upd-pill { border-color: var(--acc) !important; color: var(--acc) !important;
+  background: rgba(4,4,7,.92) !important; }
+
+/* ------------------------------------------------- entrance choreography -- */
+@media (prefers-reduced-motion: no-preference) {
+  .gk-in {
+    animation: gkRise .55s cubic-bezier(.18, 1.25, .32, 1) backwards;
+  }
+  @keyframes gkRise {
+    from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(3px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+}
+
+/* ------------------------------------------------------- the daily altar -- */
+.gk-altar {
+  position: relative;
+  min-height: 62vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 34px 16px 10px; margin-bottom: 8px;
+}
+.gk-altar-ring {
+  position: absolute; top: 50%; left: 50%; width: min(74vw, 340px); height: min(74vw, 340px);
+  transform: translate(-50%, -58%);
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
+  box-shadow: inset 0 0 60px var(--acc-ghost);
+  pointer-events: none;
+}
+.gk-altar-ring::before {
+  content: ''; position: absolute; inset: -18px; border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--acc) 13%, transparent);
+}
+.gk-altar-ring::after {
+  content: ''; position: absolute; inset: 16%; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.045);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gk-altar-ring::before { animation: gkOrbit 90s linear infinite; }
+  @keyframes gkOrbit { to { transform: rotate(360deg); } }
+}
+.gk-altar-label {
+  font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .34em;
+  font-size: 10px; color: var(--muted); margin-bottom: 6px;
+}
+.gk-altar-num {
+  font-size: clamp(96px, 34vw, 190px);
+  line-height: 1;
+  position: relative; z-index: 1;
+}
+.gk-altar-sub {
+  font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .3em;
+  font-size: 11px; color: var(--acc-dim); margin-top: 4px;
+}
+.gk-orbits {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+  margin-top: 26px; position: relative; z-index: 1;
+}
+.gk-orbit {
+  border: 1px solid rgba(255,255,255,.09); border-radius: 999px;
+  padding: 8px 15px; font-size: 12px; color: var(--text);
+  background: rgba(255,255,255,.03);
+}
+.gk-orbit b { color: var(--acc); font-family: var(--gk-display); font-size: 14px; }
+.gk-brief {
+  margin-top: 20px; font-size: 13px; color: var(--muted);
+  letter-spacing: .06em; max-width: 340px; line-height: 1.6;
+}
+.gk-brief b { color: var(--text); }
+.gk-crest { margin-top: 22px; opacity: .9; }
+.gk-crest svg { width: 54px; height: 54px; display: block; margin: 0 auto; }
+.gk-crest-streak {
+  font-family: var(--gk-ui); font-size: 9px; letter-spacing: .3em; text-transform: uppercase;
+  color: var(--muted); margin-top: 6px; text-align: center;
+}
+.gk-crest.gk-lit svg { filter: drop-shadow(0 0 10px var(--acc-dim)); }
+.gk-crest.gk-blazing svg { filter: drop-shadow(0 0 16px var(--acc)) drop-shadow(0 0 34px var(--acc-dim)); }
+
+/* ---------------------------------------------------------- the portals -- */
+.gk-portals {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin: 10px 0 30px;
+}
+.gk-portal {
+  position: relative; overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08); border-radius: 18px;
+  background: linear-gradient(165deg, rgba(255,255,255,.04), rgba(255,255,255,.008));
+  padding: 20px 14px 16px; text-align: center; cursor: pointer;
+  color: var(--text); text-decoration: none; display: block;
+}
+.gk-portal:first-child { grid-column: 1 / -1; }
+.gk-portal .gk-p-ico { font-size: 26px; display: block; margin-bottom: 8px;
+  filter: drop-shadow(0 0 10px var(--acc-ghost)); }
+.gk-portal .gk-p-name {
+  font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .3em;
+  font-size: 11px; color: var(--text);
+}
+.gk-portal .gk-p-sub { font-size: 9px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--muted); margin-top: 5px; }
+.gk-portal::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(60% 90% at 50% 120%, var(--acc-ghost), transparent 70%);
+  opacity: 0; transition: opacity .25s ease;
+}
+.gk-portal:active::after { opacity: 1; }
+
+/* ------------------------------------------------ ceremony + portal veil -- */
+.gk-ceremony {
+  position: fixed; inset: 0; z-index: 3000; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  animation: gkCerFade .6s ease 2s forwards;
+}
+.gk-ceremony .gk-cer-num {
+  font-size: clamp(120px, 44vw, 230px); line-height: 1;
+  animation: gkCerNum 1.1s cubic-bezier(.16, 1.2, .3, 1) backwards;
+}
+.gk-ceremony .gk-cer-line {
+  font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .4em;
+  font-size: 11px; color: var(--acc-dim); margin-top: 16px;
+  animation: gkCerLine .8s ease .45s backwards;
+}
+.gk-ceremony .gk-cer-ring {
+  position: absolute; width: 120vmax; height: 120vmax; border-radius: 50%;
+  border: 1px solid var(--acc-dim);
+  animation: gkCerRing 1.6s cubic-bezier(.2,.8,.2,1) forwards;
+  pointer-events: none;
+}
+@keyframes gkCerNum  { from { opacity: 0; transform: scale(.86); filter: blur(14px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes gkCerLine { from { opacity: 0; letter-spacing: .8em; } to { opacity: 1; letter-spacing: .4em; } }
+@keyframes gkCerRing { from { transform: scale(.02); opacity: .9; } to { transform: scale(1); opacity: 0; } }
+@keyframes gkCerFade { to { opacity: 0; visibility: hidden; } }
+
+.gk-veil {
+  position: fixed; inset: 0; z-index: 2900; pointer-events: none; opacity: 0;
+  background: radial-gradient(120% 120% at 50% 100%, #000 55%, transparent),
+              radial-gradient(80% 60% at 50% 100%, var(--acc-ghost), transparent 70%);
+}
+.gk-veil.gk-out { animation: gkVeilIn .24s ease forwards; }
+.gk-veil.gk-arrive { opacity: 1; animation: gkVeilOut .34s ease .05s forwards; }
+@keyframes gkVeilIn  { to { opacity: 1; } }
+@keyframes gkVeilOut { to { opacity: 0; } }
+
+/* --------------------------------------------------- The Stable, elevated -- */
+html.gk-stable body { background: var(--void); }
+html.gk-stable .st-title { font-family: var(--gk-display); letter-spacing: .34em; }
+html.gk-stable .st-card, html.gk-stable .reveal-card, html.gk-stable .st-locked {
+  background: linear-gradient(172deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 16px 40px rgba(0,0,0,.5);
+}
+html.gk-stable .st-card h3 { font-family: var(--gk-ui); letter-spacing: .24em; }
+html.gk-stable .reveal-grid .rg-num { font-family: var(--gk-display); }
+html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18px) saturate(1.2); }
+
+/* ------------------------------------------------------------- reduce ---- */
+@media (prefers-reduced-motion: reduce) {
+  .gk-ceremony { animation-duration: .1s; animation-delay: .4s; }
+  .gk-ceremony .gk-cer-num, .gk-ceremony .gk-cer-line { animation: none; }
+}

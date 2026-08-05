@@ -111,7 +111,9 @@
       btn.className = 'bb-tab' + (activeTab && activeTab.id === tab.id ? ' active' : '');
       btn.innerHTML = '<span>' + tab.icon + '</span>' + tab.label;
       if (tab.href) {
-        btn.addEventListener('click', () => { location.href = tab.href; });
+        btn.addEventListener('click', () => {
+          if (window.gkNavigate) window.gkNavigate(tab.href); else location.href = tab.href;
+        });
       } else {
         const sheet = document.createElement('div');
         sheet.className = 'bb-sheet';
@@ -120,7 +122,9 @@
           const itFile = item.href.replace('.html', '');
           it.className = 'bb-item' + (file === itFile ? ' active' : '');
           it.innerHTML = '<span class="bb-ico">' + item.icon + '</span>' + item.label;
-          it.addEventListener('click', () => { location.href = item.href; });
+          it.addEventListener('click', () => {
+            if (window.gkNavigate) window.gkNavigate(item.href); else location.href = item.href;
+          });
           sheet.appendChild(it);
         });
         frame.appendChild(sheet);
