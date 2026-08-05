@@ -119,6 +119,21 @@ h1, h2, h3,
   color: var(--acc-text);
   background: var(--panel);
   border: 1px solid var(--border);
+  position: relative;
+}
+/* The ℞ retrograde marker (render.js's setSignText) sits right after the
+   sign name as inline text with its own left margin - in the narrowest
+   column (Saturn, a 4-across grid) "Gemini ℞" together didn't fit the
+   cell's width and wrapped, dropping the marker onto its own line under
+   the name. A small fixed corner badge can't ever push a wrap, regardless
+   of how long the sign name is. */
+.cell.sign .retro-marker {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  margin-left: 0;
+  font-size: 9px;
+  line-height: 1;
 }
 
 /* engraved smallcaps for the fine print of the certificate */
