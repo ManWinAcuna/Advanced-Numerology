@@ -299,7 +299,6 @@ function openEntryModal(entry) {
     </div>
 
     <button type="button" class="emax-breakdown-toggle" id="compareToggleBtn" style="margin-top:20px">🤝 Compare with me</button>
-    <div id="compareBody" hidden></div>
   `;
 
   document.getElementById('entryModalEditBtn').addEventListener('click', () => {
@@ -311,23 +310,34 @@ function openEntryModal(entry) {
     closeEntryModal();
     deleteEntry(entry.id);
   });
-  document.getElementById('compareToggleBtn').addEventListener('click', () => {
-    const body = document.getElementById('compareBody');
-    const btn = document.getElementById('compareToggleBtn');
-    if (!body.hidden) { body.hidden = true; btn.textContent = '🤝 Compare with me'; return; }
-    const profile = loadProfile();
-    if (!profile || !profile.date) {
-      alert('Set your birthday on the My Profile page first, then come back to compare.');
-      return;
-    }
-    const meDate = parseDateStr(profile.date);
-    const result = computeCompatibility(meDate, dateObj);
-    renderCompatResults(body, result, 'Me', entry.name);
-    body.hidden = false;
-    btn.textContent = '▴ Hide comparison';
-  });
+  document.getElementById('compareToggleBtn').addEventListener('click', () => openCompareMini(entry, dateObj));
 
   document.getElementById('entryModalOverlay').classList.add('active');
+}
+
+// "Compare with me" - just the percentage, not the full numerology/
+// Vietnamese/western breakdown (that's what renderCompatResults' meters
+// and bonus list are for, and the entry popup is already a lot of
+// content). A small popup of its own, layered above the entry popup.
+function openCompareMini(entry, dateObj) {
+  const profile = loadProfile();
+  if (!profile || !profile.date) {
+    alert('Set your birthday on the My Profile page first, then come back to compare.');
+    return;
+  }
+  const meDate = parseDateStr(profile.date);
+  const result = computeCompatibility(meDate, dateObj);
+  document.getElementById('compareMiniBody').innerHTML = `
+    <div class="score-hero">
+      <div class="score-names">Me <span class="score-vs">&times;</span> ${escapeHtml(entry.name)}</div>
+      <div class="score-big ${scoreClass(result.finalScore)}">${result.finalScore}<span class="score-out-of">/100</span></div>
+    </div>
+  `;
+  document.getElementById('compareMiniOverlay').classList.add('active');
+}
+
+function closeCompareMini() {
+  document.getElementById('compareMiniOverlay').classList.remove('active');
 }
 
 function closeEntryModal() {
@@ -415,6 +425,11 @@ function init() {
   document.getElementById('entryModalClose').addEventListener('click', closeEntryModal);
   document.getElementById('entryModalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'entryModalOverlay') closeEntryModal();
+  });
+
+  document.getElementById('compareMiniClose').addEventListener('click', closeCompareMini);
+  document.getElementById('compareMiniOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'compareMiniOverlay') closeCompareMini();
   });
 
   document.getElementById('bulkUploadBtn').addEventListener('click', () => {

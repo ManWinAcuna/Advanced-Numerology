@@ -1316,7 +1316,14 @@ body::after {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
-  z-index: 100;
+  /* Above the bottom tab bar's frame (z-index 500, bottombar.js) - a modal
+     is the topmost layer on any page it opens on, full stop. At 100 this
+     sat BELOW the bar, so any popup tall enough to reach the bottom third
+     of the screen (the new Birthday Database entry popup, easily) had its
+     lowest content physically covered - and unclickable, since the bar's
+     own hit-area sits on top intercepting the tap - by the persistent nav
+     underneath it. */
+  z-index: 600;
   align-items: center;
   justify-content: center;
   padding: 20px;
