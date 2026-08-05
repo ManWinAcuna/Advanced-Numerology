@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=4">
+<link rel="stylesheet" href="godlike.css?v=5">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -111,6 +111,18 @@
     animal = getChineseDaySign(now);
     animalEmoji = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[animal]) || '';
   } catch (e) {}
+
+  /* Fresh installs (icon re-adds) start with empty localStorage; the cloud
+     restore lands AFTER first paint. Watch for the profile appearing or
+     changing and rebuild the sanctum with real numbers. */
+  var prof0 = (typeof profile !== 'undefined' && profile ? (profile.date || '') + '|' + (profile.time || '') : '|');
+  if (!me || !meTime) setInterval(function () {
+    try {
+      var p = loadProfile();
+      var k = (p && p.date || '') + '|' + (p && p.time || '');
+      if (p && p.date && k !== prof0) location.reload();
+    } catch (e) {}
+  }, 2500);
   /* Verbatim copies of render.js personalHourScore / findBestFinancialHour
      (render.js can't load here — its page wiring expects the calculator DOM).
      Table shape comes from numerology.js getPersonalHoursTable. */
@@ -208,6 +220,7 @@
   function verdict() {
     var m = meanOf(ud);
     var s = [];
+    if (!me) s.push('No birthday here yet — tap the cloud to sign in, or set it in My Profile.');
     if (compat != null) {
       s.push(compat >= 85 ? '<b>' + compat + '% aligned — the day bows to you.</b>'
         : compat >= 70 ? '<b>' + compat + '% aligned</b> — the day favors you.'
@@ -311,9 +324,9 @@
   }
 
   /* ---------------------- THE DAY: hour heat strip + the NOW card ---------
-     Every personal hour is a segment colored by its own quality; the hour
-     you're standing in is outlined with a live minute cursor, and the NOW
-     card says exactly what hour you're on and what's coming next. */
+     Color is the language: green = the hour works for you, red = enemy hour,
+     gray = flat. The NOW card runs a live clock (seconds and all) and pins
+     this hour against the day's number. Words stay out of the way. */
   var dayHtml = '<div class="gk-dr-title">The Day</div>';
   if (rankedHours) {
     function hourFrac(label) {
@@ -322,8 +335,7 @@
       var h = parseInt(mm2[1], 10) % 12 + (mm2[3].toUpperCase() === 'PM' ? 12 : 0);
       return (h + parseInt(mm2[2], 10) / 60) / 24;
     }
-    function tierOf(s) { return s >= 85 ? 'hot' : s >= 70 ? 'warm' : s >= 49 ? 'mid' : 'cold'; }
-    function tierWord(s) { return s >= 85 ? 'golden' : s >= 70 ? 'strong' : s >= 49 ? 'workable' : 'against you'; }
+    function tierOf(s) { return s >= 85 ? 'hot' : s >= 70 ? 'good' : s >= 49 ? 'mid' : 'bad'; }
     var scoreByIndex = {};
     rankedHours.forEach(function (rh) { scoreByIndex[rh.row.index] = rh.score; });
     var chrono = hoursTable.rows.slice().sort(function (a, b) { return hourFrac(a.label) - hourFrac(b.label); });
@@ -336,22 +348,25 @@
     // hour-aware atmosphere keyed to the quality of the hour you're inside
     if (curPos >= 0) {
       var curTier = tierOf(scoreByIndex[chrono[curPos].index]);
-      if (curTier === 'hot' || curTier === 'warm') document.documentElement.classList.add('gk-hour-warm');
-      else if (curTier === 'cold') document.documentElement.classList.add('gk-hour-cold');
+      if (curTier === 'hot' || curTier === 'good') document.documentElement.classList.add('gk-hour-warm');
+      else if (curTier === 'bad') document.documentElement.classList.add('gk-hour-cold');
     }
     if (curPos >= 0) {
       var cur = chrono[curPos], curSc = scoreByIndex[cur.index];
       var nxt = chrono[(curPos + 1) % 24], nxtSc = scoreByIndex[nxt.index];
-      var curEm = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[cur.sign]) || '';
+      // this hour measured against the day's ruling number
+      var vsOk = null;
+      try { vsOk = numerologyCompat(cur.digitalReduced, ud) >= 49; } catch (e) {}
       dayHtml += '<div class="gk-nowcard gt-' + tierOf(curSc) + '">' +
-        '<div class="gk-nc-main">' +
-          '<span class="gk-nc-num gk-glyph gk-n' + cur.digitalReduced + '">' + cur.digitalReduced + '</span>' +
-          '<span class="gk-nc-info"><span class="gk-nc-tag">now · ' + cur.label + '</span>' +
-          '<span class="gk-nc-tier">' + (cur.index === finIdx ? '◆ financial · ' : '') + tierWord(curSc) +
-          (hoursTable.isPM && cur.militaryReduced != null ? ' · mil ' + cur.militaryReduced : '') + '</span></span>' +
+        '<span class="gk-nc-num">' + (cur.index === finIdx ? '◆ ' : '') + cur.digitalReduced + '</span>' +
+        '<div class="gk-nc-mid">' +
+          '<span class="gk-nc-clock" id="gkClock"></span>' +
+          '<span class="gk-nc-sub">hour ' + cur.digitalReduced + ' · until ' + nxt.label + '</span>' +
         '</div>' +
-        '<div class="gk-nc-side">' + curEm + ' ' + cur.sign +
-          '<span>next ' + nxt.label + ' · <b>' + nxt.digitalReduced + '</b> ' + tierWord(nxtSc) + '</span></div>' +
+        '<div class="gk-nc-side">' +
+          (vsOk != null ? '<span class="gk-nc-vs ' + (vsOk ? 'ok' : 'bad') + '">day ' + ud + ' ' + (vsOk ? '✓' : '✗') + '</span>' : '') +
+          '<span class="gk-nc-next">next <b>' + nxt.digitalReduced + '</b><i class="gk-dot gd-' + tierOf(nxtSc) + '"></i></span>' +
+        '</div>' +
       '</div>';
     }
     var segs = '';
@@ -370,32 +385,42 @@
       ticks += '<span style="left:' + (i / 24 * 100) + '%">' + lb + '</span>';
     });
     dayHtml += '<div class="gk-strip">' + segs +
-      '<i class="gk-strip-cursor" style="left:' + cursorLeft + '%"></i></div>' +
+      '<i class="gk-strip-cursor" id="gkStripCursor" style="left:' + cursorLeft + '%"></i></div>' +
       '<div class="gk-strip-ticks">' + ticks + '</div>' +
-      '<div class="gk-strip-legend"><span class="l-hot">golden</span><span class="l-warm">strong</span>' +
-      '<span class="l-mid">workable</span><span class="l-cold">against</span>' +
+      '<div class="gk-strip-legend"><span class="lg-good">● good</span><span class="lg-mid">● flat</span>' +
+      '<span class="lg-bad">● enemy</span>' +
       (finHour ? '<span class="l-fin">◆ financial</span>' : '') + '</div>';
     dayHtml += '<div class="gk-count" id="gkCount"></div>';
+  } else {
+    dayHtml += '<div class="gk-count">' + (me
+      ? 'Add your birth time in My Profile to unlock the hours.'
+      : 'The hours awaken once your birthday is set.') + '</div>';
   }
   dayHtml += '<div class="gk-count" id="gkAlignNext"></div>';
   document.getElementById('gkDayread').innerHTML = dayHtml;
 
-  // live countdown to the best hour
+  // one heartbeat: live clock with seconds, best-hour countdown, minute cursor
   if (rankedHours) {
     var bestLabel = rankedHours[0].row.label;
-    function tick() {
+    function beat() {
+      var t = new Date();
+      var ck = document.getElementById('gkClock');
+      if (ck) ck.textContent = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      var cu = document.getElementById('gkStripCursor');
+      if (cu) cu.style.left = (((t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600) / 24) * 100) + '%';
       var el = document.getElementById('gkCount');
       if (!el) return;
       var mm3 = bestLabel.match(/(\d+):(\d+)\s*(AM|PM)/i);
       if (!mm3) return;
       var bh = parseInt(mm3[1], 10) % 12 + (mm3[3].toUpperCase() === 'PM' ? 12 : 0);
-      var t = new Date(); var target = new Date();
+      var target = new Date();
       target.setHours(bh, parseInt(mm3[2], 10), 0, 0);
-      if (target <= t) { el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — ' + (t - target < 90 * 60000 ? '<b>now</b>' : 'passed for today'); return; }
-      var mins = Math.round((target - t) / 60000);
-      el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — in <b>' + Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm</b>';
+      if (target <= t) { el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — ' + (t - target < 60 * 60000 ? '<b>now</b>' : 'passed for today'); return; }
+      var secs = Math.floor((target - t) / 1000);
+      el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — in <b>' +
+        Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm ' + (secs % 60) + 's</b>';
     }
-    tick(); setInterval(tick, 30000);
+    beat(); setInterval(beat, 1000);
   }
 
   // countdown to your next HIGH-ALIGNMENT day

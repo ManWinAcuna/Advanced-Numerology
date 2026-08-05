@@ -402,8 +402,11 @@ html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18p
 .gk-kws { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .gk-kw {
   position: absolute; font-family: var(--gk-ui); text-transform: uppercase;
-  font-size: 9px; letter-spacing: .32em; color: var(--acc-dim); opacity: 0;
+  font-size: 9px; letter-spacing: .32em; color: var(--acc); opacity: 0;
   animation: gkKwIn .9s ease 1.3s forwards;
+  /* plaques: the alignment arc passes BEHIND the words, never through them */
+  background: rgba(0,0,0,.85); padding: 4px 9px 4px 11px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
 }
 .gk-kw1 { top: 16px; left: 50%; transform: translateX(-50%); }
 .gk-kw2 { top: 44%; left: 6px; }
@@ -535,37 +538,50 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .gk-dayread { padding: 0 18px 6px; max-width: 430px; margin: 0 auto; text-align: center; }
 .gk-dr-title { font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .44em;
   font-size: 11px; color: var(--acc-dim); margin: 16px 0 2px; }
-/* the NOW card: what hour you're standing in, and what's next */
+/* the NOW card: live clock + this hour in color. Green = works for you,
+   red = enemy hour, gray = flat. Color talks; words stay minimal. */
 .gk-nowcard {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  margin: 14px 0; padding: 12px 14px; border-radius: 16px; text-align: left;
+  display: flex; align-items: center; gap: 15px;
+  margin: 14px 0; padding: 13px 16px; border-radius: 16px; text-align: left;
   background: rgba(13,12,10,.94); border: 1px solid var(--border);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 26px rgba(0,0,0,.5);
 }
-.gk-nowcard.gt-hot { border-color: color-mix(in srgb, var(--acc) 55%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 22px var(--acc-ghost); }
-.gk-nowcard.gt-warm { border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
-.gk-nowcard.gt-cold { border-color: rgba(90,115,145,.4); }
-.gk-nc-main { display: flex; align-items: center; gap: 13px; }
-.gk-nc-num { font-size: 46px; line-height: 1; }
-.gk-nc-info { display: flex; flex-direction: column; gap: 4px; }
-.gk-nc-tag { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .22em;
+.gk-nowcard.gt-hot { border-color: rgba(63,224,129,.55);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 24px rgba(63,224,129,.16); }
+.gk-nowcard.gt-good { border-color: rgba(63,224,129,.3); }
+.gk-nowcard.gt-bad { border-color: rgba(224,82,77,.45);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 24px rgba(224,82,77,.13); }
+.gk-nc-num { font-family: var(--gk-display); font-weight: 700; font-size: 46px; line-height: 1; }
+.gt-hot .gk-nc-num { color: #3fe081; text-shadow: 0 0 18px rgba(63,224,129,.5); }
+.gt-good .gk-nc-num { color: #2fbf6b; }
+.gt-mid .gk-nc-num { color: #93a0b1; }
+.gt-bad .gk-nc-num { color: #e0524d; text-shadow: 0 0 16px rgba(224,82,77,.4); }
+.gk-nc-mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.gk-nc-clock { font-family: var(--gk-display); font-size: 21px; letter-spacing: .05em;
+  color: var(--text); font-variant-numeric: tabular-nums; }
+.gk-nc-sub { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .16em;
   font-size: 9px; color: var(--muted); }
-.gk-nc-tier { font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .14em;
-  font-size: 12px; color: var(--text); }
-.gk-nowcard.gt-hot .gk-nc-tier { color: var(--acc); }
-.gk-nowcard.gt-cold .gk-nc-tier { color: #7e93ab; }
-.gk-nc-side { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.75; }
-.gk-nc-side span { display: block; }
-.gk-nc-side b { color: var(--text); }
+.gk-nc-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+  font-size: 11px; color: var(--muted); }
+.gk-nc-vs { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .14em;
+  font-size: 9.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+.gk-nc-vs.ok { color: #3fe081; border-color: rgba(63,224,129,.4); }
+.gk-nc-vs.bad { color: #e0524d; border-color: rgba(224,82,77,.4); }
+.gk-nc-next b { color: var(--text); }
+.gk-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 6px;
+  vertical-align: middle; }
+.gk-dot.gd-hot { background: #3fe081; box-shadow: 0 0 6px rgba(63,224,129,.7); }
+.gk-dot.gd-good { background: #2fbf6b; }
+.gk-dot.gd-mid { background: #5b6a80; }
+.gk-dot.gd-bad { background: #e0524d; }
 
-/* the heat strip: 24 personal hours, each colored by its own quality */
+/* the heat strip: 24 personal hours — green yours, red enemy, gray flat */
 .gk-strip { display: flex; gap: 2px; height: 26px; margin-top: 16px; position: relative; }
 .gk-strip i { flex: 1; border-radius: 3px; position: relative; }
-.gk-strip i.gs-hot  { background: var(--acc); box-shadow: 0 0 10px var(--acc-dim); }
-.gk-strip i.gs-warm { background: color-mix(in srgb, var(--acc) 45%, #14100c); }
-.gk-strip i.gs-mid  { background: rgba(255,255,255,.10); }
-.gk-strip i.gs-cold { background: rgba(66,88,114,.55); }
+.gk-strip i.gs-hot  { background: #3fe081; box-shadow: 0 0 10px rgba(63,224,129,.5); }
+.gk-strip i.gs-good { background: #22a45c; }
+.gk-strip i.gs-mid  { background: rgba(255,255,255,.09); }
+.gk-strip i.gs-bad  { background: #c9423d; }
 .gk-strip i.gs-now  { outline: 1.5px solid #fff; outline-offset: 1.5px; transform: scaleY(1.3);
   z-index: 1; border-radius: 4px; }
 .gk-strip i.gs-fin::after { content: '◆'; position: absolute; top: -16px; left: 50%;
@@ -578,9 +594,9 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   letter-spacing: .08em; color: var(--muted); font-family: var(--gk-ui); }
 .gk-strip-legend { display: flex; gap: 12px; justify-content: center; margin-top: 10px;
   flex-wrap: wrap; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.gk-strip-legend .l-hot { color: var(--acc); }
-.gk-strip-legend .l-warm { color: color-mix(in srgb, var(--acc) 55%, #8a8a8a); }
-.gk-strip-legend .l-cold { color: #6d84a0; }
+.gk-strip-legend .lg-good { color: #3fe081; }
+.gk-strip-legend .lg-mid { color: #7c8a9c; }
+.gk-strip-legend .lg-bad { color: #e0524d; }
 .gk-strip-legend .l-fin { color: var(--gold); }
 .gk-count { font-size: 12.5px; color: var(--muted); letter-spacing: .05em; margin-top: 12px; line-height: 1.6; }
 .gk-count b { color: var(--acc); font-family: var(--gk-display); letter-spacing: .06em; }
