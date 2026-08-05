@@ -40,7 +40,7 @@
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
-<script src="bottombar.js?v=8"></script>
+<!-- No bottom bar here by design: the portals ARE this page's navigation. -->
 <script src="update-check.js?v=2"></script>
 <script>
 /* THE TODAY PAGE — the daily landing (index.html points here). Universal Day
@@ -66,15 +66,19 @@
   } catch (e) { /* ignore */ }
 
   let compat = null, flow = null;
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  let me = null;
   try {
     const profile = loadProfile();
     if (profile && profile.date) {
       const [y, m, d] = profile.date.split('-').map(Number);
-      const me = new Date(); me.setFullYear(y, m - 1, d); me.setHours(0, 0, 0, 0);
-      compat = computeCompatibility(me, now).finalScore;
-      flow = computeEnergyFlow(me, now).finalScore;
+      me = new Date(); me.setFullYear(y, m - 1, d); me.setHours(0, 0, 0, 0);
     }
   } catch (e) { /* ignore */ }
+  if (me) {
+    try { compat = computeCompatibility(me, day0).finalScore; } catch (e) { /* ignore */ }
+    try { flow = computeEnergyFlow(me, day0).finalScore; } catch (e) { /* ignore */ }
+  }
 
   const orbits = [];
   orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
