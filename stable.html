@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>The Stable</title>
+<style>
+/* THE STABLE — its own world. Deliberately does NOT load style.css: MANWIN
+   cyberpunk HUD (black + neon cyan/orange) + gold horse, phone-first. */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { background: #04060c; color: #dfe7f3; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100%; }
+body { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+button, input, textarea, select { font-family: inherit; }
+
+.st-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: rgba(4,6,12,.92);
+  backdrop-filter: blur(8px); border-bottom: 1px solid rgba(0,229,255,.25); }
+.st-back { border: 1px solid rgba(0,229,255,.4); background: none; color: #00E5FF; border-radius: 8px;
+  padding: 7px 12px; font-size: 15px; cursor: pointer; }
+.st-title { font-size: 17px; font-weight: 700; letter-spacing: 3px; color: #FFB300; }
+.st-title small { display: block; letter-spacing: 1px; font-size: 10px; color: #5b6a80; font-weight: 400; }
+.st-horse { font-size: 22px; }
+.st-streak { margin-left: auto; text-align: right; font-size: 11px; color: #5b6a80; }
+.st-streak b { display: block; color: #00FF9C; font-size: 15px; }
+
+.st-view { display: none; padding: 14px 14px 20px; max-width: 560px; margin: 0 auto; }
+.st-view.active { display: block; }
+
+.st-card { background: #0a0f1a; border: 1px solid rgba(0,229,255,.16); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.st-card h3 { font-size: 11px; letter-spacing: 2px; color: #00E5FF; text-transform: uppercase; margin-bottom: 10px; }
+.st-muted { color: #5b6a80; font-size: 12px; }
+
+.st-locked { background: #1a0509; border: 1px solid #FF4D6D; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.st-locked h3 { color: #FF4D6D; letter-spacing: 3px; font-size: 15px; margin-bottom: 6px; }
+.st-locked .st-muted { color: #b06a77; }
+.st-override { color: #FF4D6D; font-size: 11px; text-decoration: underline; background: none; border: none; margin-top: 8px; cursor: pointer; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { border: 1px solid #223048; background: #0d1424; color: #9fb0c8; border-radius: 999px;
+  padding: 8px 13px; font-size: 13px; cursor: pointer; user-select: none; }
+.chip.on { border-color: #00E5FF; color: #04121a; background: #00E5FF; font-weight: 600; }
+.chip.on.felt { background: #FFB300; border-color: #FFB300; }
+.chip.on.exec { background: #c084fc; border-color: #c084fc; }
+
+.dir-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.dir-btn { flex: 1; padding: 15px 0; border-radius: 10px; font-size: 16px; font-weight: 700; letter-spacing: 1px;
+  border: 1px solid #223048; background: #0d1424; color: #9fb0c8; cursor: pointer; }
+.dir-btn.long.on { background: #089981; border-color: #089981; color: #fff; }
+.dir-btn.short.on { background: #f23645; border-color: #f23645; color: #fff; }
+
+.r-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.r-input { width: 90px; background: #0d1424; border: 1px solid #223048; color: #dfe7f3; border-radius: 8px;
+  padding: 10px; font-size: 16px; text-align: center; }
+label.st-lbl { display: block; font-size: 11px; letter-spacing: 1px; color: #5b6a80; margin: 12px 0 6px; text-transform: uppercase; }
+.st-note, .st-ta { width: 100%; background: #0d1424; border: 1px solid #223048; color: #dfe7f3; border-radius: 8px;
+  padding: 10px; font-size: 14px; min-height: 42px; resize: vertical; }
+.st-ta { min-height: 64px; }
+
+.save-btn { width: 100%; margin-top: 14px; padding: 15px 0; border-radius: 10px; border: none; cursor: pointer;
+  background: #00E5FF; color: #04121a; font-size: 16px; font-weight: 800; letter-spacing: 2px; }
+.ghost-btn { width: 100%; margin-top: 10px; padding: 12px 0; border-radius: 10px; cursor: pointer;
+  background: none; border: 1px solid rgba(0,229,255,.4); color: #00E5FF; font-size: 14px; letter-spacing: 1px; }
+.shot-drop { border: 1px dashed #223048; border-radius: 8px; padding: 12px; text-align: center; color: #5b6a80;
+  font-size: 12px; cursor: pointer; }
+.shot-drop img { max-width: 100%; border-radius: 6px; display: block; margin: 6px auto 0; }
+
+.trade-card { background: #0a0f1a; border: 1px solid rgba(255,255,255,.07); border-left: 3px solid #223048;
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.trade-card.win { border-left-color: #089981; }
+.trade-card.loss { border-left-color: #f23645; }
+.trade-top { display: flex; align-items: baseline; gap: 8px; }
+.trade-dir { font-weight: 800; font-size: 13px; }
+.trade-dir.L { color: #089981; } .trade-dir.S { color: #f23645; }
+.trade-r { font-weight: 800; font-size: 15px; }
+.trade-r.pos { color: #00FF9C; } .trade-r.neg { color: #FF4D6D; }
+.trade-time { margin-left: auto; color: #5b6a80; font-size: 11px; }
+.trade-tags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
+.ttag { font-size: 10px; padding: 3px 8px; border-radius: 999px; background: #0d1424; border: 1px solid #223048; color: #9fb0c8; }
+.trade-note { margin-top: 6px; font-size: 12px; color: #9fb0c8; }
+.trade-del { background: none; border: none; color: #5b6a80; font-size: 11px; text-decoration: underline; margin-top: 6px; cursor: pointer; }
+.day-head { font-size: 11px; letter-spacing: 2px; color: #5b6a80; margin: 16px 0 8px; text-transform: uppercase; }
+.day-head b { color: #dfe7f3; }
+
+.stat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.stat-table td, .stat-table th { padding: 6px 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,.05); }
+.stat-table td:first-child, .stat-table th:first-child { text-align: left; }
+.stat-table th { color: #5b6a80; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.mu-pos { color: #00FF9C; font-weight: 700; } .mu-neg { color: #FF4D6D; font-weight: 700; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-cell { aspect-ratio: 1; border-radius: 6px; background: #0d1424; display: flex; align-items: center;
+  justify-content: center; font-size: 11px; color: #5b6a80; }
+.checkin-row { display: flex; gap: 7px; flex-wrap: wrap; }
+
+.reveal-card { background: linear-gradient(160deg, #14100a, #0a0f1a); border: 1px solid #FFB300; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.reveal-card h3 { color: #FFB300; letter-spacing: 2px; font-size: 12px; margin-bottom: 10px; }
+.reveal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.reveal-grid .rg-num { font-size: 20px; font-weight: 800; color: #FFB300; }
+.reveal-grid .rg-lbl { font-size: 9px; letter-spacing: 1px; color: #5b6a80; text-transform: uppercase; margin-top: 2px; }
+
+.st-tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; display: flex;
+  background: rgba(6,9,16,.97); border-top: 1px solid rgba(0,229,255,.25);
+  padding-bottom: env(safe-area-inset-bottom); }
+.st-tab { flex: 1; padding: 11px 0 9px; background: none; border: none; color: #5b6a80; font-size: 11px;
+  letter-spacing: 1px; cursor: pointer; }
+.st-tab span { display: block; font-size: 19px; margin-bottom: 2px; }
+.st-tab.active { color: #00E5FF; }
+.mic-btn { background: none; border: 1px solid #223048; color: #9fb0c8; border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; margin-top: 8px; }
+.mic-btn.rec { border-color: #FF4D6D; color: #FF4D6D; }
+</style>
+</head>
+<body>
+
+<header class="st-header">
+  <button class="st-back" id="stBack">←</button>
+  <span class="st-horse">🐎</span>
+  <div class="st-title">THE STABLE<small>flow · discipline · review</small></div>
+  <div class="st-streak"><b id="stStreak">0</b>day streak</div>
+</header>
+
+<main>
+  <section class="st-view active" id="view-today"></section>
+  <section class="st-view" id="view-log"></section>
+  <section class="st-view" id="view-history"></section>
+  <section class="st-view" id="view-stats"></section>
+</main>
+
+<nav class="st-tabs">
+  <button class="st-tab active" data-view="today"><span>📅</span>Today</button>
+  <button class="st-tab" data-view="log"><span>⚡</span>Log</button>
+  <button class="st-tab" data-view="history"><span>📜</span>History</button>
+  <button class="st-tab" data-view="stats"><span>📊</span>Stats</button>
+</nav>
+
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="big-store.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="stable.js"></script>
+</body>
+</html>

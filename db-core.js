@@ -4578,6 +4578,13 @@ const CLOUD_SYNC_FIELDS = {
   [TENNIS_PLAYER_OVERRIDES_KEY]: 'tennisPlayerOverrides',
   [TENNIS_PREDICTIONS_KEY]: 'tennisPredictions',
   [MLB_VENUES_KEY]: 'mlbVenues',
+  // The Stable (trading journal, stable.html). Screenshots deliberately live in
+  // a separate LOCAL-ONLY key ('stable_shots', capped at 30 thumbnails) so the
+  // synced doc stays small — trade records are a few hundred bytes each, years
+  // of use stays far under Firestore's ~1MB doc cap.
+  stable_trades: 'stableTrades',
+  stable_days: 'stableDays',
+  stable_rules: 'stableRules',
   // MLB_PREDICTIONS_KEY, MLB_PITCHER_K_SIGNALS_KEY, and MLB_BACKFILL_STATE_KEY
   // are deliberately NOT synced. Each MLB pick stores a 13-person team's full
   // per-component + per-dimension breakdown, and after months of live
