@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Cloud Restore</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.cr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+.cr-table th, .cr-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; }
+.cr-table th:first-child, .cr-table td:first-child { text-align: left; }
+.cr-table th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.cr-good { color: #7ddf8f; } .cr-bad { color: #ff7a8a; } .cr-mut { color: var(--muted); }
+.cr-note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+.cr-btn { display: inline-block; margin: 14px 10px 0 0; padding: 12px 18px; border-radius: 8px;
+  border: 1px solid var(--yellow); background: none; color: var(--yellow); font-size: 14px; cursor: pointer; }
+.cr-btn.primary { background: var(--yellow); color: #050403; font-weight: 700; }
+#crStatus { margin-top: 12px; font-size: 13px; color: var(--muted); min-height: 18px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h2 style="margin-top:6px">☁ Cloud Restore</h2>
+  <div class="cr-note">Read-only check of what your cloud backup holds vs. what this device has,
+  and a one-tap restore. This page never pushes local data up, so an empty device can never
+  overwrite a good backup from here.</div>
+  <button class="cr-btn primary" id="crCheck">Check cloud</button>
+  <button class="cr-btn" id="crRestore">Restore everything from cloud</button>
+  <div id="crStatus"></div>
+  <div id="crOut"></div>
+</div>
+<script src="scroll-viewport.js"></script>
+<script src="big-store.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="bottombar.js?v=5"></script>
+<script src="update-check.js?v=2"></script>
+<script>
+(function () {
+  const status = (m) => { document.getElementById('crStatus').textContent = m; };
+
+  function summarize(v) {
+    if (v === null || v === undefined) return { n: '—', kb: 0 };
+    const kb = Math.round(JSON.stringify(v).length / 1024);
+    if (Array.isArray(v)) return { n: v.length + ' items', kb };
+    if (typeof v === 'object') return { n: Object.keys(v).length + ' keys', kb };
+    return { n: String(v).slice(0, 20), kb };
+  }
+  function localVal(key) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+  function authReady() {
+    return (typeof firebase !== 'undefined' ? Promise.resolve() : window.loadFirebaseSdk())
+      .then(() => new Promise((resolve) => {
+        const off = firebase.auth().onAuthStateChanged((u) => { off(); resolve(u); });
+      }));
+  }
+
+  document.getElementById('crCheck').addEventListener('click', () => {
+    status('Checking…');
+    authReady().then((user) => {
+      if (!user) { status('Not signed in — tap the Sign In pill (top right) first, then Check again.'); return null; }
+      const db = firebase.firestore();
+      return Promise.all([
+        db.collection('users').doc(user.uid).get(),
+        db.collection('users').doc(user.uid).collection('emaxCats').get(),
+        db.collection('users').doc(user.uid).collection('stableShots').get(),
+      ]).then(([doc, emaxSnap, shotsSnap]) => {
+        const data = doc.exists ? doc.data() : {};
+        let rows = '<table class="cr-table"><tr><th>What</th><th>Cloud</th><th>This device</th></tr>';
+        Object.keys(CLOUD_SYNC_FIELDS).forEach((key) => {
+          const field = CLOUD_SYNC_FIELDS[key];
+          const c = summarize(data[field] === undefined ? null : data[field]);
+          const l = summarize(localVal(key));
+          const cCls = c.n === '—' ? 'cr-bad' : 'cr-good';
+          rows += '<tr><td>' + field + '</td><td class="' + cCls + '">' + c.n + (c.kb ? ' · ' + c.kb + 'KB' : '') +
+            '</td><td class="cr-mut">' + l.n + (l.kb ? ' · ' + l.kb + 'KB' : '') + '</td></tr>';
+        });
+        let emaxEntries = 0;
+        emaxSnap.forEach((d) => {
+          const v = d.data();
+          if (v && Array.isArray(v.entries)) emaxEntries += v.entries.length;
+        });
+        const localEmax = localVal(typeof EMAX_STORAGE_KEY !== 'undefined' ? EMAX_STORAGE_KEY : 'emax_categories');
+        const le = summarize(localEmax);
+        rows += '<tr><td>EMAX (chunked)</td><td class="' + (emaxSnap.size ? 'cr-good' : 'cr-bad') + '">' +
+          emaxSnap.size + ' categories' + (emaxEntries ? ' · ' + emaxEntries + ' entries' : '') +
+          '</td><td class="cr-mut">' + le.n + '</td></tr>';
+        rows += '<tr><td>Stable screenshots</td><td class="' + (shotsSnap.size ? 'cr-good' : 'cr-mut') + '">' +
+          shotsSnap.size + ' images</td><td class="cr-mut">' + summarize(localVal('stable_shots')).n + '</td></tr>';
+        rows += '</table>';
+        document.getElementById('crOut').innerHTML = rows;
+        status('Cloud checked for ' + user.email + ' — green = backup exists.');
+      });
+    }).catch((e) => status('Check failed: ' + (e && e.message ? e.message : e)));
+  });
+
+  document.getElementById('crRestore').addEventListener('click', () => {
+    status('Restoring…');
+    authReady().then((user) => {
+      if (!user) { status('Not signed in — tap the Sign In pill (top right) first.'); return null; }
+      return cloudPullAll().then(() => {
+        status('Restored. Reloading…');
+        setTimeout(() => location.reload(), 800);
+      });
+    }).catch((e) => status('Restore failed: ' + (e && e.message ? e.message : e)));
+  });
+})();
+</script>
+</body>
+</html>
