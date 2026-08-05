@@ -288,6 +288,7 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
   background: rgba(255,255,255,.03);
 }
 .gk-orbit b { color: var(--acc); font-family: var(--gk-display); font-size: 14px; }
+.gk-orbit-tap { cursor: pointer; }
 .gk-brief {
   margin-top: 20px; font-size: 13px; color: var(--muted);
   letter-spacing: .06em; max-width: 340px; line-height: 1.6;

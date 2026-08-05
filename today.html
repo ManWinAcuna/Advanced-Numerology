@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=8">
+<link rel="stylesheet" href="godlike.css?v=9">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -60,6 +60,7 @@
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
+<script src="compat-render.js"></script>
 <script src="bottombar.js?v=8"></script>
 <script src="update-check.js?v=2"></script>
 <script>
@@ -108,9 +109,9 @@
       if (profile.time) meTime = profile.time;
     }
   } catch (e) {}
-  var compat = null, pd = null, lifePath = null;
+  var compat = null, compatFull = null, pd = null, lifePath = null;
   if (me) {
-    try { compat = computeCompatibility(me, day0).finalScore; } catch (e) {}
+    try { compatFull = computeCompatibility(me, day0); compat = compatFull.finalScore; } catch (e) {}
     try { r = computeAll(me, day0); pd = r.pd && r.pd.reduced; lifePath = r.lifePath; } catch (e) {}
   }
   var animal = null, animalEmoji = '';
@@ -220,8 +221,15 @@
   if (animal) orbits.push('<span class="gk-orbit">' + animalEmoji + ' <b>' + animal + '</b> day</span>');
   orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
   if (pd != null) orbits.push('<span class="gk-orbit">Personal <b>' + pd + '</b></span>');
-  if (compat != null) orbits.push('<span class="gk-orbit">Aligned <b>' + compat + '%</b></span>');
+  if (compat != null) orbits.push('<span class="gk-orbit gk-orbit-tap" id="gkOrbitAligned">Aligned <b>' + compat + '%</b></span>');
   document.getElementById('gkOrbits').innerHTML = orbits.join('');
+  // the Aligned pill opens the same compatibility breakdown popup used
+  // everywhere else in the app (numerology / Vietnamese / western meters)
+  document.getElementById('gkOrbits').addEventListener('click', function (e) {
+    if (!e.target.closest('#gkOrbitAligned') || !compatFull) return;
+    renderCompatResults(modalBody, compatFull, 'You', 'Today');
+    modalBackdrop.classList.add('open');
+  });
 
   /* ------------------------------------------------ the realist verdict -- */
   function verdict() {
