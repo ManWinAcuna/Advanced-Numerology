@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=3">
+<link rel="stylesheet" href="godlike.css?v=4">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -42,18 +42,18 @@
 
   <section class="gk-dayread" id="gkDayread"></section>
 
-  <nav class="gk-portals" id="gkPortals"></nav>
-
 </div>
 <div class="gk-ghost" id="gkGhost"></div>
 <script src="scroll-viewport.js"></script>
+<script src="astronomy.browser.min.js"></script>
+<script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
 <script src="compat-engine.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
-<!-- No bottom bar here by design: the portals ARE this page's navigation. -->
+<script src="bottombar.js?v=8"></script>
 <script src="update-check.js?v=2"></script>
 <script>
 /* THE TODAY PAGE v3 — the daily sanctum (Boost13 2026-08-05, 16 answers).
@@ -62,6 +62,9 @@
    ghost of tomorrow. The horse earns regalia and celebrates milestones. */
 (function () {
   'use strict';
+  // mark the app session so profile.html's stale-icon launch handoff
+  // knows in-app visits from navigation and leaves them alone
+  try { sessionStorage.setItem('gk_sess', '1'); } catch (e) {}
   var now = new Date();
   var day0 = new Date(); day0.setHours(0, 0, 0, 0);
   var ud = universalDayNumber(now);
@@ -98,10 +101,9 @@
       if (profile.time) meTime = profile.time;
     }
   } catch (e) {}
-  var compat = null, flow = null, pd = null, lifePath = null;
+  var compat = null, pd = null, lifePath = null;
   if (me) {
     try { compat = computeCompatibility(me, day0).finalScore; } catch (e) {}
-    try { flow = computeEnergyFlow(me, day0).finalScore; } catch (e) {}
     try { r = computeAll(me, day0); pd = r.pd && r.pd.reduced; lifePath = r.lifePath; } catch (e) {}
   }
   var animal = null, animalEmoji = '';
@@ -199,7 +201,7 @@
   if (animal) orbits.push('<span class="gk-orbit">' + animalEmoji + ' <b>' + animal + '</b> day</span>');
   orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
   if (pd != null) orbits.push('<span class="gk-orbit">Personal <b>' + pd + '</b></span>');
-  if (flow != null) orbits.push('<span class="gk-orbit">Flow <b>' + flow + '%</b></span>');
+  if (compat != null) orbits.push('<span class="gk-orbit">Aligned <b>' + compat + '%</b></span>');
   document.getElementById('gkOrbits').innerHTML = orbits.join('');
 
   /* ------------------------------------------------ the realist verdict -- */
@@ -308,33 +310,71 @@
     setTimeout(function () { mo.remove(); }, 3400);
   }
 
-  /* ----------------------------------------------- THE DAY (deep read) ---- */
+  /* ---------------------- THE DAY: hour heat strip + the NOW card ---------
+     Every personal hour is a segment colored by its own quality; the hour
+     you're standing in is outlined with a live minute cursor, and the NOW
+     card says exactly what hour you're on and what's coming next. */
   var dayHtml = '<div class="gk-dr-title">The Day</div>';
   if (rankedHours) {
-    // 24h dial: best hours warm, worst cold, financial gold, now-cursor
     function hourFrac(label) {
       var mm2 = label.match(/(\d+):(\d+)\s*(AM|PM)/i);
       if (!mm2) return 0;
       var h = parseInt(mm2[1], 10) % 12 + (mm2[3].toUpperCase() === 'PM' ? 12 : 0);
       return (h + parseInt(mm2[2], 10) / 60) / 24;
     }
-    var marks = '';
-    marks += '<i class="gk-dm best" style="left:' + (hourFrac(rankedHours[0].row.label) * 100) + '%"></i>';
-    marks += '<i class="gk-dm best2" style="left:' + (hourFrac(rankedHours[1].row.label) * 100) + '%"></i>';
-    marks += '<i class="gk-dm worst" style="left:' + (hourFrac(rankedHours[rankedHours.length - 1].row.label) * 100) + '%"></i>';
-    marks += '<i class="gk-dm worst2" style="left:' + (hourFrac(rankedHours[rankedHours.length - 2].row.label) * 100) + '%"></i>';
-    if (finHour) marks += '<i class="gk-dm fin" style="left:' + (hourFrac(finHour.row.label) * 100) + '%"></i>';
-    var nowFrac = (now.getHours() + now.getMinutes() / 60) / 24;
-    marks += '<i class="gk-dm now" style="left:' + (nowFrac * 100) + '%"></i>';
-    // hour-aware atmosphere: the air warms inside your best hours, cools in the worst
-    function nearNow(label) { var d = Math.abs(nowFrac - hourFrac(label)) * 24; return Math.min(d, 24 - d) < 1; }
-    if (nearNow(rankedHours[0].row.label) || nearNow(rankedHours[1].row.label))
-      document.documentElement.classList.add('gk-hour-warm');
-    else if (nearNow(rankedHours[rankedHours.length - 1].row.label) || nearNow(rankedHours[rankedHours.length - 2].row.label))
-      document.documentElement.classList.add('gk-hour-cold');
-    dayHtml += '<div class="gk-dial"><div class="gk-dial-track"></div>' + marks + '</div>' +
-      '<div class="gk-dial-legend"><span class="l-best">● best</span><span class="l-worst">● worst</span>' +
-      (finHour ? '<span class="l-fin">◆ financial</span>' : '') + '<span class="l-now">| now</span></div>';
+    function tierOf(s) { return s >= 85 ? 'hot' : s >= 70 ? 'warm' : s >= 49 ? 'mid' : 'cold'; }
+    function tierWord(s) { return s >= 85 ? 'golden' : s >= 70 ? 'strong' : s >= 49 ? 'workable' : 'against you'; }
+    var scoreByIndex = {};
+    rankedHours.forEach(function (rh) { scoreByIndex[rh.row.index] = rh.score; });
+    var chrono = hoursTable.rows.slice().sort(function (a, b) { return hourFrac(a.label) - hourFrac(b.label); });
+    var nowH = now.getHours() + now.getMinutes() / 60;
+    var finIdx = finHour ? finHour.row.index : -1;
+    var curPos = -1;
+    chrono.forEach(function (row, i) {
+      if (((nowH - hourFrac(row.label) * 24 + 24) % 24) < 1) curPos = i;
+    });
+    // hour-aware atmosphere keyed to the quality of the hour you're inside
+    if (curPos >= 0) {
+      var curTier = tierOf(scoreByIndex[chrono[curPos].index]);
+      if (curTier === 'hot' || curTier === 'warm') document.documentElement.classList.add('gk-hour-warm');
+      else if (curTier === 'cold') document.documentElement.classList.add('gk-hour-cold');
+    }
+    if (curPos >= 0) {
+      var cur = chrono[curPos], curSc = scoreByIndex[cur.index];
+      var nxt = chrono[(curPos + 1) % 24], nxtSc = scoreByIndex[nxt.index];
+      var curEm = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[cur.sign]) || '';
+      dayHtml += '<div class="gk-nowcard gt-' + tierOf(curSc) + '">' +
+        '<div class="gk-nc-main">' +
+          '<span class="gk-nc-num gk-glyph gk-n' + cur.digitalReduced + '">' + cur.digitalReduced + '</span>' +
+          '<span class="gk-nc-info"><span class="gk-nc-tag">now · ' + cur.label + '</span>' +
+          '<span class="gk-nc-tier">' + (cur.index === finIdx ? '◆ financial · ' : '') + tierWord(curSc) +
+          (hoursTable.isPM && cur.militaryReduced != null ? ' · mil ' + cur.militaryReduced : '') + '</span></span>' +
+        '</div>' +
+        '<div class="gk-nc-side">' + curEm + ' ' + cur.sign +
+          '<span>next ' + nxt.label + ' · <b>' + nxt.digitalReduced + '</b> ' + tierWord(nxtSc) + '</span></div>' +
+      '</div>';
+    }
+    var segs = '';
+    chrono.forEach(function (row, i) {
+      segs += '<i class="gs-' + tierOf(scoreByIndex[row.index]) +
+        (i === curPos ? ' gs-now' : '') + (row.index === finIdx ? ' gs-fin' : '') + '"></i>';
+    });
+    var cursorLeft = 50;
+    if (curPos >= 0) {
+      var s0 = hourFrac(chrono[curPos].label) * 24;
+      cursorLeft = ((curPos + ((nowH - s0 + 24) % 24)) / 24) * 100;
+    }
+    var ticks = '';
+    [0, 6, 12, 18].forEach(function (i) {
+      var lb = chrono[i].label.replace(/:00/, '').replace(/\s*AM/i, 'a').replace(/\s*PM/i, 'p');
+      ticks += '<span style="left:' + (i / 24 * 100) + '%">' + lb + '</span>';
+    });
+    dayHtml += '<div class="gk-strip">' + segs +
+      '<i class="gk-strip-cursor" style="left:' + cursorLeft + '%"></i></div>' +
+      '<div class="gk-strip-ticks">' + ticks + '</div>' +
+      '<div class="gk-strip-legend"><span class="l-hot">golden</span><span class="l-warm">strong</span>' +
+      '<span class="l-mid">workable</span><span class="l-cold">against</span>' +
+      (finHour ? '<span class="l-fin">◆ financial</span>' : '') + '</div>';
     dayHtml += '<div class="gk-count" id="gkCount"></div>';
   }
   dayHtml += '<div class="gk-count" id="gkAlignNext"></div>';
@@ -377,26 +417,8 @@
     }
   }
 
-  /* ------------------------------------------------------------ portals -- */
-  var DOORS = [
-    { href: 'stable.html', ico: '🐎', name: 'The Stable', sub: 'flow · discipline · review' },
-    { href: 'sports-betting.html', ico: '📈', name: 'Markets', sub: 'betting · stocks' },
-    { href: 'calendar.html', ico: '📅', name: 'Days', sub: 'calendar · astrology' },
-    { href: 'calculator.html', ico: '🧮', name: 'Tools', sub: 'numbers · lookups' },
-    { href: 'profile.html', ico: '👤', name: 'My Profile', sub: 'your numbers · your cycles' }
-  ];
-  var nav = document.getElementById('gkPortals');
-  nav.innerHTML = DOORS.map(function (d) {
-    return '<a class="gk-portal" href="' + d.href + '"><span class="gk-p-ico">' + d.ico + '</span>' +
-      '<span class="gk-p-name">' + d.name + '</span><div class="gk-p-sub">' + d.sub + '</div></a>';
-  }).join('');
-  nav.addEventListener('click', function (e) {
-    var a = e.target.closest('a.gk-portal');
-    if (!a) return;
-    e.preventDefault();
-    if (window.gkNavigate) window.gkNavigate(a.getAttribute('href'));
-    else location.href = a.getAttribute('href');
-  });
+  // long-press must summon tomorrow's ghost, never the iOS selection callout
+  numEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 })();
 </script>
 <script src="godlike.js?v=2"></script>

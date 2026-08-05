@@ -7,12 +7,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
+<script>
+/* Installed icons added before the start_url change have profile.html baked
+   in as the launch page (iOS captures the manifest at add time and never
+   re-reads it). On a fresh standalone LAUNCH, hand off to the Today sanctum;
+   tapping My Profile inside the app finds gk_sess already set and stays. */
+if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
+  sessionStorage.setItem('gk_sess', '1');
+  location.replace('today.html');
+}
+</script>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>My Profile</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=3">
+<link rel="stylesheet" href="godlike.css?v=4">
 </head>
 <body>
 <div class="page">
