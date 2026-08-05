@@ -60,20 +60,30 @@
 
   </div>
 
-  <div class="modal-overlay" id="entryModalOverlay">
-    <div class="modal-box">
-      <button class="modal-close" id="entryModalClose" title="Close">&times;</button>
-      <div id="entryModalBody"></div>
-    </div>
-  </div>
+</div>
 
-  <div class="modal-overlay" id="compareMiniOverlay" style="z-index:700">
-    <div class="modal-box modal-box-narrow">
-      <button class="modal-close" id="compareMiniClose" title="Close">&times;</button>
-      <div id="compareMiniBody"></div>
-    </div>
+<!-- Deliberately OUTSIDE .page: scroll-viewport.js wraps only body > .page
+     into the app's real (position:fixed + overflow:auto) scrolling
+     container, exactly so fixed-position overlays never end up nested
+     inside a scrolling ancestor - iOS Safari's compositor doesn't keep a
+     position:fixed descendant properly detached from an overflow:auto
+     parent's own scroll/momentum, so a tall enough popup nested in there
+     (this one, easily) could visually lag behind or half-follow the
+     background scrolling underneath it. bottombar.js's fixed frame and
+     the auth widget already live out here for the same reason - see its
+     header comment. -->
+<div class="modal-overlay" id="entryModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" id="entryModalClose" title="Close">&times;</button>
+    <div id="entryModalBody"></div>
   </div>
+</div>
 
+<div class="modal-overlay" id="compareMiniOverlay" style="z-index:700">
+  <div class="modal-box modal-box-narrow">
+    <button class="modal-close" id="compareMiniClose" title="Close">&times;</button>
+    <div id="compareMiniBody"></div>
+  </div>
 </div>
 
 <script src="scroll-viewport.js"></script>

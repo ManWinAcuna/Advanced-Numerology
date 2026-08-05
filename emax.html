@@ -121,44 +121,51 @@
 
   </div>
 
-  <div class="modal-overlay" id="emaxDetailOverlay">
-    <div class="modal-box">
-      <button class="modal-close" id="emaxDetailClose" title="Close">&times;</button>
-      <div id="emaxDetailBody"></div>
-    </div>
-  </div>
 
-  <!-- Shared item popup (emax-popup.js) - tapping an entry in the
-       Audit/Nomination detail list above opens the real EMAX popup right
-       here, no navigation to that item's category page needed. -->
-  <div class="modal-overlay" id="itemModalOverlay">
-    <div class="modal-box">
-      <button class="modal-close" id="itemModalClose" title="Close">&times;</button>
-      <div id="itemModalBody"></div>
-    </div>
-  </div>
+</div>
 
-  <!-- Shared Timeline mini-popup (emax-popup.js) - tapping the item
-       popup's own picture opens this, same as on the category page. -->
-  <div class="modal-overlay" id="emaxTimelineOverlay">
-    <div class="modal-box modal-box-narrow">
-      <button class="modal-close" id="emaxTimelineClose" title="Close">&times;</button>
-      <div id="emaxTimelineBody"></div>
-    </div>
+<!-- Deliberately OUTSIDE .page - scroll-viewport.js wraps only body > .page
+     into the app's real scrolling container; a position:fixed popup left
+     nested inside it can visually lag behind or half-follow the
+     background's own scroll on iOS Safari (see category.html). Relative
+     DOM order among these four is load-bearing - see each one's own
+     comment below for why. -->
+<div class="modal-overlay" id="emaxDetailOverlay">
+  <div class="modal-box">
+    <button class="modal-close" id="emaxDetailClose" title="Close">&times;</button>
+    <div id="emaxDetailBody"></div>
   </div>
+</div>
 
-  <!-- Single-year detail mini-popup (emax-popup.js) - tapping a Timeline
-       chip opens its note here, stacked on top of the Timeline modal
-       (later in the DOM = higher z-index, same convention as the Audit
-       detail popup opening the item popup on top of itself), instead of
-       expanding inline and needing a scroll to reach it. -->
-  <div class="modal-overlay" id="emaxYearDetailOverlay">
-    <div class="modal-box modal-box-narrow">
-      <button class="modal-close" id="emaxYearDetailClose" title="Close">&times;</button>
-      <div id="emaxYearDetailBody"></div>
-    </div>
+<!-- Shared item popup (emax-popup.js) - tapping an entry in the
+     Audit/Nomination detail list above opens the real EMAX popup right
+     here, no navigation to that item's category page needed. -->
+<div class="modal-overlay" id="itemModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" id="itemModalClose" title="Close">&times;</button>
+    <div id="itemModalBody"></div>
   </div>
+</div>
 
+<!-- Shared Timeline mini-popup (emax-popup.js) - tapping the item
+     popup's own picture opens this, same as on the category page. -->
+<div class="modal-overlay" id="emaxTimelineOverlay">
+  <div class="modal-box modal-box-narrow">
+    <button class="modal-close" id="emaxTimelineClose" title="Close">&times;</button>
+    <div id="emaxTimelineBody"></div>
+  </div>
+</div>
+
+<!-- Single-year detail mini-popup (emax-popup.js) - tapping a Timeline
+     chip opens its note here, stacked on top of the Timeline modal
+     (later in the DOM = higher z-index, same convention as the Audit
+     detail popup opening the item popup on top of itself), instead of
+     expanding inline and needing a scroll to reach it. -->
+<div class="modal-overlay" id="emaxYearDetailOverlay">
+  <div class="modal-box modal-box-narrow">
+    <button class="modal-close" id="emaxYearDetailClose" title="Close">&times;</button>
+    <div id="emaxYearDetailBody"></div>
+  </div>
 </div>
 
 <script src="scroll-viewport.js"></script>

@@ -219,13 +219,18 @@
 
   </div>
 
-  <div class="modal-overlay" id="compatModalOverlay">
-    <div class="modal-box">
-      <button class="modal-close" id="compatModalClose" title="Close">&times;</button>
-      <div id="compatModalBody"></div>
-    </div>
-  </div>
 
+</div>
+
+<!-- Deliberately OUTSIDE .page - see category.html for why (scroll-viewport.js
+     wraps only body > .page into the app's real scrolling container; a
+     position:fixed popup left nested inside it can visually lag behind or
+     half-follow the background's own scroll on iOS Safari). -->
+<div class="modal-overlay" id="compatModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" id="compatModalClose" title="Close">&times;</button>
+    <div id="compatModalBody"></div>
+  </div>
 </div>
 
 <script src="scroll-viewport.js"></script>
