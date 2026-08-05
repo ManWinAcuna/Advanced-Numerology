@@ -108,6 +108,19 @@ h1, h2, h3,
 .profile-section-title { font-size: 13px; color: var(--acc-text); }
 .section-label { letter-spacing: .28em; }
 
+/* Zodiac signs (Vietnamese Year/Month/Day, Western Sun/Saturn/Jupiter/Venus)
+   were still running on a hardcoded flat gray (#1c1c1c) and a static
+   purple that never responds to the day's energy - a completely different
+   palette from every number tile around it, like a leftover from an older
+   version of the page. Words, not numbers, so no metallic clip-text
+   treatment (that's for numerals), but same panel/border/accent language
+   as everything else, so it reads as one page instead of two. */
+.cell.sign {
+  color: var(--acc-text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
 /* engraved smallcaps for the fine print of the certificate */
 .box-label, label, th, .cell.head,
 .dayleft-caption, .pinnacle-card-label, .bw-hour-tag {
