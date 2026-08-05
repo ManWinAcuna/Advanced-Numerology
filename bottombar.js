@@ -29,21 +29,21 @@
 
   const css = `
     .topnav { display: none !important; }
-    /* iOS standalone + locked document scroll leaves EVERY fixed-position
-       bottom anchor ~78pt short (tried bottom-only and both-edges frames —
-       same float). So: no fixed positioning at all. The bar lives INSIDE
-       .scroll-viewport as its last flex child — margin-top:auto rests it at
-       the container's true bottom edge when content is short, and
-       position:sticky pins it to the visible bottom while scrolling. Sticky
-       tracks the scroller's real edge; there is no viewport math to get
-       wrong. (Fixed-frame fallback kept for any page without the scroller.) */
-    .scroll-viewport { display: flex; flex-direction: column; }
-    .scroll-viewport > .page, .scroll-viewport > .ufc-page, .scroll-viewport > .astro-page { flex: 0 0 auto; width: 100%; }
-    .bb-frame { position: sticky; bottom: 0; margin-top: auto; width: 100%;
-      z-index: 500; pointer-events: none; }
-    body > .bb-frame { position: fixed; inset: 0; display: flex; flex-direction: column;
-      justify-content: flex-end; }
+    /* iOS standalone (home-screen app) reports a layout viewport ~78pt short
+       on these scroll-locked pages — Safari proper is fine, The Stable
+       (document scrolls) is fine. Every anchoring strategy inherits the lie,
+       so the frame measures the shortfall (screen.height - innerHeight) and
+       translates itself down by exactly that much. Fixed on body: fixed
+       descendants escape ancestor overflow clipping, so the translated bar
+       still paints in the zone below the misreported viewport bottom. */
+    .bb-frame { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column;
+      justify-content: flex-end; pointer-events: none; }
     body:has(> .bb-frame) .page { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+    .bb-diag { text-align: right; font-size: 9px; color: rgba(150,160,180,.55);
+      padding: 0 8px 2px; pointer-events: none; }
+    /* style.css parks the sign-in pill bottom-right on phones — that spot
+       belongs to the bar now, so the pill goes back up top on bar pages. */
+    .auth-widget { top: calc(env(safe-area-inset-top) + 6px) !important; bottom: auto !important; }
     .bb-bar { pointer-events: auto; display: flex;
       background: var(--panel, #0a0f1a); border-top: 1px solid var(--border, #223048);
       padding-bottom: env(safe-area-inset-bottom); }
@@ -118,11 +118,31 @@
     }
     backdrop.addEventListener('click', closeAll);
 
+    const diag = document.createElement('div');
+    diag.className = 'bb-diag';
+    frame.appendChild(diag);
     frame.appendChild(bar);
-    // Preferred home: last child of the real scroller (sticky bottom).
-    // Fallback: fixed frame on body for any page without .scroll-viewport.
-    const scroller = document.querySelector('.scroll-viewport');
-    (scroller || document.body).appendChild(frame);
+    document.body.appendChild(frame);
+
+    // Standalone viewport compensation. iPhone 15 Pro Max = 430x932pt; the
+    // home-screen app under-reports the layout viewport by ~78pt on these
+    // pages, so shift the frame down by exactly the measured shortfall.
+    // The diag line is temporary telemetry: "app 854/932 vv854 Δ78↓" tells
+    // us layout/screen/visual heights and whether the shift applied.
+    function fit() {
+      const sh = Math.round(screen.height);
+      const ih = Math.round(window.innerHeight);
+      const vv = window.visualViewport ? Math.round(window.visualViewport.height) : 0;
+      const missing = sh - ih;
+      const standalone = navigator.standalone === true;
+      const ok = standalone && missing > 4 && missing < 200;
+      frame.style.transform = ok ? 'translateY(' + missing + 'px)' : '';
+      diag.textContent = (standalone ? 'app ' : 'safari ') + ih + '/' + sh + (vv ? ' vv' + vv : '') + ' Δ' + missing + (ok ? '↓' : '');
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', () => setTimeout(fit, 250));
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
