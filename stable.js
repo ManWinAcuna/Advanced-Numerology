@@ -24,6 +24,66 @@ let days   = stLoad(ST_DAYS_KEY, {});
 let rules  = Object.assign({ lossStreak: 2, maxTrades: 5 }, stLoad(ST_RULES_KEY, {}));
 let shots  = stLoad(ST_SHOTS_KEY, {});
 
+/* ---- screenshot cloud sync: users/{uid}/stableShots/{id} -------------------
+   Screenshots stay OUT of the main synced doc (1MB cap) but each thumbnail
+   gets its own subcollection doc — same pattern as EMAX categories, already
+   covered by the {document=**} security rule. Local stays the fast path; the
+   cloud copy exists so an icon reinstall (which wipes localStorage) no longer
+   destroys the images your synced trades still reference. Cap 30 both sides. */
+const ST_SHOTS_PENDING = 'stable_shots_pending'; // local-only push queue
+let shotsPending = stLoad(ST_SHOTS_PENDING, []);
+function shotsCol() {
+  if (typeof firebase === 'undefined' || !firebase.auth) return null;
+  const user = firebase.auth().currentUser;
+  if (!user) return null;
+  return firebase.firestore().collection('users').doc(user.uid).collection('stableShots');
+}
+function pushShot(id) {
+  const col = shotsCol();
+  if (!col) {
+    if (!shotsPending.includes(id)) { shotsPending.push(id); localStorage.setItem(ST_SHOTS_PENDING, JSON.stringify(shotsPending)); }
+    startShotSyncTimer();
+    return;
+  }
+  if (shots[id]) col.doc(id).set({ img: shots[id], ts: Date.now() }).catch(() => {});
+}
+function deleteShotEverywhere(id) {
+  if (!id) return;
+  delete shots[id];
+  stSave(ST_SHOTS_KEY, shots);
+  const col = shotsCol();
+  if (col) col.doc(id).delete().catch(() => {});
+}
+function syncShots() {
+  const col = shotsCol();
+  if (!col) return false;
+  shotsPending.filter((id) => shots[id]).forEach((id) => col.doc(id).set({ img: shots[id], ts: Date.now() }).catch(() => {}));
+  shotsPending = [];
+  localStorage.setItem(ST_SHOTS_PENDING, JSON.stringify(shotsPending));
+  // Restore referenced-but-missing thumbnails (e.g. after an icon reinstall).
+  const missing = Array.from(new Set(trades.filter((t) => t.shot && !shots[t.shot]).map((t) => t.shot)));
+  missing.forEach((id) => {
+    col.doc(id).get().then((doc) => {
+      const d = doc.exists ? doc.data() : null;
+      if (d && d.img) {
+        shots[id] = d.img;
+        stSave(ST_SHOTS_KEY, shots);
+        if (activeView === 'history') renderHistory();
+      }
+    }).catch(() => {});
+  });
+  return true;
+}
+// Firebase loads lazily — poll gently until auth is known, sync once, stop.
+let shotTimer = null;
+function startShotSyncTimer() {
+  if (shotTimer) return;
+  shotTimer = setInterval(() => {
+    if (syncShots()) { clearInterval(shotTimer); shotTimer = null; }
+  }, 3000);
+}
+startShotSyncTimer();
+
 /* ---------------- helpers ---------------- */
 function dayKey(d) {
   const dt = d || new Date();
@@ -301,10 +361,16 @@ function renderLog() {
     if (logState.shot) {
       shotId = id;
       shots[shotId] = logState.shot;
-      // local-only cap: keep the newest 30 thumbnails
+      // cap: keep the newest 30 thumbnails, locally and in the cloud
       const ids = Object.keys(shots).sort();
-      while (ids.length > 30) delete shots[ids.shift()];
+      while (ids.length > 30) {
+        const old = ids.shift();
+        delete shots[old];
+        const col = shotsCol();
+        if (col) col.doc(old).delete().catch(() => {});
+      }
       stSave(ST_SHOTS_KEY, shots);
+      pushShot(shotId);
     }
     // Revenge detection: this entry came within 10 minutes of a stop-out.
     // A warning tag, never a block — the point is seeing the pattern later.
@@ -380,6 +446,8 @@ function renderHistory() {
   el.innerHTML = html;
   el.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Delete this trade?')) return;
+    const gone = trades.find((t) => t.id === b.dataset.del);
+    if (gone && gone.shot) deleteShotEverywhere(gone.shot);
     trades = trades.filter((t) => t.id !== b.dataset.del);
     stSave(ST_TRADES_KEY, trades); renderHistory();
   }));

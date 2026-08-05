@@ -54,8 +54,6 @@
     html.bb-standalone, html.bb-standalone body { height: auto !important; overflow-y: auto !important; }
     html.bb-standalone .scroll-viewport { position: static !important; inset: auto !important;
       overflow: visible !important; }
-    .bb-diag { text-align: right; font-size: 9px; color: rgba(150,160,180,.55);
-      padding: 0 8px 2px; pointer-events: none; }
     /* style.css parks the sign-in pill bottom-right on phones — that spot
        belongs to the bar now, so the pill goes back up top on bar pages. */
     .auth-widget { top: calc(env(safe-area-inset-top) + 6px) !important; bottom: auto !important; }
@@ -133,26 +131,8 @@
     }
     backdrop.addEventListener('click', closeAll);
 
-    const diag = document.createElement('div');
-    diag.className = 'bb-diag';
-    frame.appendChild(diag);
     frame.appendChild(bar);
     document.body.appendChild(frame);
-
-    // Temporary telemetry (no compensation — translating into the missing
-    // strip proved unpaintable): "app 932/932 Δ0" after the standalone
-    // unlock means the canvas is finally full-height and the fix is done.
-    function fit() {
-      const sh = Math.round(screen.height);
-      const ih = Math.round(window.innerHeight);
-      const vv = window.visualViewport ? Math.round(window.visualViewport.height) : 0;
-      const standalone = navigator.standalone === true;
-      diag.textContent = (standalone ? 'app ' : 'safari ') + ih + '/' + sh + (vv ? ' vv' + vv : '') + ' Δ' + (sh - ih);
-    }
-    fit();
-    window.addEventListener('resize', fit);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
-    window.addEventListener('orientationchange', () => setTimeout(fit, 250));
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
