@@ -273,7 +273,14 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
 }
 .gk-orbits {
   display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
-  margin-top: 26px; position: relative; z-index: 1;
+  /* .gk-ringzone is sized to its own (short) content, but the ring drawn
+     over it is a full min(78vw,350px) circle centered on that shorter box —
+     so it overflows evenly above AND below the content by roughly
+     (ring radius - half the content's height). Above is harmless empty
+     canvas; below is exactly where these pills start, so they need enough
+     clearance to sit outside the ring instead of under its lower arc.
+     Scales with the same viewport term the ring itself uses. */
+  margin-top: calc(min(78vw, 350px) * .22); position: relative; z-index: 1;
 }
 .gk-orbit {
   border: 1px solid rgba(255,255,255,.09); border-radius: 999px;
