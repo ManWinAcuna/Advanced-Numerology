@@ -12,27 +12,28 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=5">
+<link rel="stylesheet" href="godlike.css?v=6">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
 <div class="page gk-today">
 
   <section class="gk-altar" id="gkAltar">
-    <svg class="gk-arcs" viewBox="0 0 220 220" aria-hidden="true">
-      <circle class="gk-arc-base" cx="110" cy="110" r="102"></circle>
-      <circle class="gk-arc-dash" cx="110" cy="110" r="88"></circle>
-      <circle class="gk-arc-fill" id="gkArcFill" cx="110" cy="110" r="102"></circle>
-    </svg>
     <div class="gk-embers" id="gkEmbers"></div>
-    <div class="gk-kws" id="gkKws"></div>
-    <div class="gk-altar-label" id="gkDate"></div>
-    <button class="gk-altar-num gk-amped" id="gkNum" type="button">·</button>
-    <div class="gk-altar-sub" id="gkSub">Universal Day</div>
-    <div class="gk-faces" id="gkFaces"></div>
+    <div class="gk-ringzone">
+      <svg class="gk-arcs" viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="gk-arc-base" cx="110" cy="110" r="102"></circle>
+        <circle class="gk-arc-dash" cx="110" cy="110" r="88"></circle>
+        <circle class="gk-arc-fill" id="gkArcFill" cx="110" cy="110" r="102"></circle>
+      </svg>
+      <div class="gk-kws" id="gkKws"></div>
+      <div class="gk-altar-label" id="gkDate"></div>
+      <button class="gk-altar-num gk-amped" id="gkNum" type="button">·</button>
+      <div class="gk-altar-sub" id="gkSub">Universal Day</div>
+      <div class="gk-faces" id="gkFaces"></div>
+    </div>
     <div class="gk-orbits" id="gkOrbits"></div>
     <div class="gk-verdict" id="gkVerdict"></div>
-    <div class="gk-card" id="gkCard"></div>
     <div class="gk-crest" id="gkCrest">
       <div class="gk-notches" id="gkNotches"></div>
       <img src="logo.svg" alt="" class="gk-crest-img">
@@ -44,6 +45,12 @@
 
 </div>
 <div class="gk-ghost" id="gkGhost"></div>
+<div class="gk-modal-backdrop" id="gkModalBackdrop">
+  <div class="gk-modal" id="gkModal">
+    <button class="gk-modal-close" id="gkModalClose" type="button" aria-label="Close">×</button>
+    <div class="gk-modal-body" id="gkModalBody"></div>
+  </div>
+</div>
 <script src="scroll-viewport.js"></script>
 <script src="astronomy.browser.min.js"></script>
 <script src="astro-engine.js"></script>
@@ -247,9 +254,23 @@
   }
   em.innerHTML = emHtml;
 
+  /* ------------------------------------------------------- the one modal -- */
+  var modalBackdrop = document.getElementById('gkModalBackdrop');
+  var modalBody = document.getElementById('gkModalBody');
+  var modalInterval = null;
+  function openModal(html, onTick) {
+    modalBody.innerHTML = html;
+    modalBackdrop.classList.add('open');
+    if (onTick) { onTick(); modalInterval = setInterval(onTick, 1000); }
+  }
+  function closeModal() {
+    modalBackdrop.classList.remove('open');
+    if (modalInterval) { clearInterval(modalInterval); modalInterval = null; }
+  }
+  document.getElementById('gkModalClose').addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', function (e) { if (e.target === modalBackdrop) closeModal(); });
+
   /* --------------------------------------- the strike & the meaning card -- */
-  var card = document.getElementById('gkCard');
-  var cardOpen = false;
   function cardHtml() {
     var m = meanOf(ud);
     var h = '<div class="gk-card-title">' + ud + (lifePath ? ' × lifepath ' + lifePath : '') + '</div>';
@@ -270,9 +291,7 @@
   numEl.addEventListener('click', function () {
     if (pressed) { pressed = false; return; }
     numEl.classList.remove('gk-strike'); void numEl.offsetWidth; numEl.classList.add('gk-strike');
-    cardOpen = !cardOpen;
-    card.innerHTML = cardOpen ? cardHtml() : '';
-    card.classList.toggle('open', cardOpen);
+    openModal(cardHtml());
   });
 
   /* ------------------------------------------- long-press: tomorrow ghost - */
@@ -354,11 +373,12 @@
     if (curPos >= 0) {
       var cur = chrono[curPos], curSc = scoreByIndex[cur.index];
       var nxt = chrono[(curPos + 1) % 24], nxtSc = scoreByIndex[nxt.index];
+      var curFin = cur.index === finIdx;
       // this hour measured against the day's ruling number
       var vsOk = null;
       try { vsOk = numerologyCompat(cur.digitalReduced, ud) >= 49; } catch (e) {}
-      dayHtml += '<div class="gk-nowcard gt-' + tierOf(curSc) + '">' +
-        '<span class="gk-nc-num">' + (cur.index === finIdx ? '◆ ' : '') + cur.digitalReduced + '</span>' +
+      dayHtml += '<div class="gk-nowcard gt-' + tierOf(curSc) + (curFin ? ' fin' : '') + '">' +
+        '<span class="gk-nc-num">' + cur.digitalReduced + '</span>' +
         '<div class="gk-nc-mid">' +
           '<span class="gk-nc-clock" id="gkClock"></span>' +
           '<span class="gk-nc-sub">hour ' + cur.digitalReduced + ' · until ' + nxt.label + '</span>' +
@@ -389,8 +409,8 @@
       '<div class="gk-strip-ticks">' + ticks + '</div>' +
       '<div class="gk-strip-legend"><span class="lg-good">● good</span><span class="lg-mid">● flat</span>' +
       '<span class="lg-bad">● enemy</span>' +
-      (finHour ? '<span class="l-fin">◆ financial</span>' : '') + '</div>';
-    dayHtml += '<div class="gk-count" id="gkCount"></div>';
+      (finHour ? '<span class="l-fin">● financial</span>' : '') + '</div>' +
+      '<div class="gk-hr-hint">tap for the full day →</div>';
   } else {
     dayHtml += '<div class="gk-count">' + (me
       ? 'Add your birth time in My Profile to unlock the hours.'
@@ -399,28 +419,53 @@
   dayHtml += '<div class="gk-count" id="gkAlignNext"></div>';
   document.getElementById('gkDayread').innerHTML = dayHtml;
 
-  // one heartbeat: live clock with seconds, best-hour countdown, minute cursor
+  // one heartbeat: live clock with seconds + the minute cursor
   if (rankedHours) {
-    var bestLabel = rankedHours[0].row.label;
     function beat() {
       var t = new Date();
       var ck = document.getElementById('gkClock');
       if (ck) ck.textContent = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
       var cu = document.getElementById('gkStripCursor');
       if (cu) cu.style.left = (((t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600) / 24) * 100) + '%';
-      var el = document.getElementById('gkCount');
-      if (!el) return;
+    }
+    beat(); setInterval(beat, 1000);
+
+    // the full day, in hours — best-hour countdown lives inside this popup now
+    var bestLabel = rankedHours[0].row.label;
+    function bestHourLine() {
+      var t = new Date();
       var mm3 = bestLabel.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!mm3) return;
+      if (!mm3) return '';
       var bh = parseInt(mm3[1], 10) % 12 + (mm3[3].toUpperCase() === 'PM' ? 12 : 0);
       var target = new Date();
       target.setHours(bh, parseInt(mm3[2], 10), 0, 0);
-      if (target <= t) { el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — ' + (t - target < 60 * 60000 ? '<b>now</b>' : 'passed for today'); return; }
+      if (target <= t) return 'Best hour <b>' + bestLabel + '</b> — ' + (t - target < 60 * 60000 ? '<b>now</b>' : 'passed for today');
       var secs = Math.floor((target - t) / 1000);
-      el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — in <b>' +
+      return 'Best hour <b>' + bestLabel + '</b> — in <b>' +
         Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm ' + (secs % 60) + 's</b>';
     }
-    beat(); setInterval(beat, 1000);
+    function hoursModalHtml() {
+      var rows = chrono.map(function (row, i) {
+        var sc = scoreByIndex[row.index];
+        var isFin = row.index === finIdx;
+        return '<div class="gk-hr-row t-' + tierOf(sc) + (isFin ? ' fin' : '') + (i === curPos ? ' now' : '') + '">' +
+          '<span class="gk-hr-time">' + row.label + '</span>' +
+          '<span class="gk-hr-num">' + row.digitalReduced + '</span>' +
+          '<span class="gk-hr-tag">' + (i === curPos ? 'now' : isFin ? '$' : '') + '</span>' +
+        '</div>';
+      }).join('');
+      return '<div class="gk-modal-title">The Hours</div>' +
+        '<div class="gk-count" id="gkModalCount"></div>' +
+        '<div class="gk-hr-list">' + rows + '</div>';
+    }
+    document.getElementById('gkDayread').addEventListener('click', function (e) {
+      if (e.target.closest('.gk-strip') || e.target.closest('.gk-nowcard') || e.target.closest('.gk-hr-hint')) {
+        openModal(hoursModalHtml(), function () {
+          var elc = document.getElementById('gkModalCount');
+          if (elc) elc.innerHTML = bestHourLine();
+        });
+      }
+    });
   }
 
   // countdown to your next HIGH-ALIGNMENT day
