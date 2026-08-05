@@ -66,10 +66,9 @@ function renderEntries() {
   }
 
   category.entries.forEach((entry) => {
-    // Year-only entry: a year determines only the Chinese zodiac animal (not a
-    // life path, day number or sun sign, which all need a real month/day), so
-    // that's the one badge shown. July 1 anchors the year safely past any Lunar
-    // New Year boundary (always Jan 21-Feb 20) so the right animal resolves.
+    // Year-only entry: not enough data for the full popup (no life path, day
+    // number, or sun sign without a real month/day) - keeps its own simple
+    // inline row with a prompt to add the full date.
     if (!entry.date && entry.year) {
       const yearSign = getChineseZodiacYear(new Date(entry.year, 6, 1));
       const div = document.createElement('div');
@@ -91,56 +90,248 @@ function renderEntries() {
       return;
     }
 
-    const dateObj = parseDateStr(entry.date);
-    const lifePath = getLifePath(dateObj);
-    const dayReduced = getReducedDay(dateObj);
-    const yearSign = getChineseZodiacYear(dateObj);
-    const zodiacSign = getSunSign(dateObj);
-
+    // Full-date entry: the row is just an entry point now - tap it to open
+    // the full numerology popup (Calculate/Compare/Edit all live there).
     const timeLabel = entry.time ? ` · 🕐 ${formatHourLabel(...entry.time.split(':').map(Number))}` : '';
-    const calcHref = `calculator.html?bday=${entry.date}${entry.time ? `&btime=${entry.time}` : ''}`;
 
     const div = document.createElement('div');
-    div.className = 'entry-item';
+    div.className = 'entry-item entry-item-tap';
+    div.dataset.entryId = entry.id;
+    div.setAttribute('role', 'button');
+    div.setAttribute('tabindex', '0');
     div.innerHTML = `
       <div class="entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
         <div class="entry-date">${formatDate(entry.date)}${timeLabel}</div>
-        <div class="entry-actions">
-          <a class="btn-link" href="${calcHref}">Calculate</a>
-          <button class="btn-link" data-compare="${entry.id}">Compare with me</button>
-          <button class="btn-link" data-edit="${entry.id}">Edit</button>
-          <button class="icon-btn" data-entry="${entry.id}" title="Delete">&times;</button>
-        </div>
-      </div>
-      <div class="entry-badges">
-        <span class="badge">✨ LP ${lifePath}</span>
-        <span class="badge">📅 Day ${dayReduced}</span>
-        <span class="badge">${VIETNAMESE_ZODIAC_EMOJI[yearSign] || ''} ${yearSign}</span>
-        <span class="badge">${ZODIAC_SYMBOLS[zodiacSign] || ''} ${zodiacSign}</span>
       </div>
     `;
     container.appendChild(div);
   });
 }
 
-function openCompatModal(entry) {
-  const profile = loadProfile();
-  if (!profile || !profile.date) {
-    alert('Set your birthday on the My Profile page first, then come back to compare.');
-    return;
-  }
-
-  const meDate = parseDateStr(profile.date);
-  const themDate = parseDateStr(entry.date);
-  const result = computeCompatibility(meDate, themDate);
-
-  renderCompatResults(document.getElementById('compatModalBody'), result, 'Me', entry.name);
-  document.getElementById('compatModalOverlay').classList.add('active');
+/* ---- Personal Hours: verbatim copies of render.js's helpers. render.js
+   itself can't load on this page - its top-level wiring expects the
+   calculator's own #bday/#btime inputs, not this page's add/edit form
+   (#newEntryName/#newEntryDate/#newEntryTime). Same functions, same reason
+   they were copied instead of loaded on today.html earlier. ---- */
+function personalHourScore(table, row) {
+  const signScore = row.sign === table.ownSign ? 100 : vietnameseCompat(table.ownSign, row.sign);
+  const scores = [numerologyCompat(table.digitalRoot, row.digitalReduced), signScore];
+  if (table.isPM) scores.push(numerologyCompat(table.militaryRoot, row.militaryReduced));
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+function findBestFinancialHour(table) {
+  const eightScore = numerologyCompat(table.digitalRoot, 8);
+  const financialNumber = eightScore < 49 ? 28 : 8;
+  const candidates = table.rows.filter((row) => row.digitalReduced === financialNumber
+    || (table.isPM && row.militaryReduced === financialNumber));
+  if (candidates.length === 0) return null;
+  let best = candidates[0];
+  let bestScore = -Infinity;
+  candidates.forEach((row) => {
+    const score = personalHourScore(table, row);
+    if (score > bestScore) { bestScore = score; best = row; }
+  });
+  return { row: best, financialNumber };
 }
 
-function closeCompatModal() {
-  document.getElementById('compatModalOverlay').classList.remove('active');
+function retroSpan(retro) {
+  return retro ? ' <span class="retro-marker" title="Retrograde at birth">℞</span>' : '';
+}
+
+// The full numerology popup for one entry - same visual language as My
+// Profile (Core Numbers/Zodiac/Personal Cycles/hours all reuse its exact
+// CSS classes, so every readability/hierarchy fix made there applies here
+// automatically), reached by tapping the row instead of a wall of inline
+// badges and links.
+function openEntryModal(entry) {
+  const dateObj = parseDateStr(entry.date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const r = computeAll(dateObj, today);
+  const todayCompat = computeCompatibility(dateObj, today);
+  const timeLabel = entry.time ? formatHourLabel(...entry.time.split(':').map(Number)) : '';
+
+  // Best/Worst Hour and Best Financial Hour need a birth TIME, unlike
+  // everything else here (which only needs the date) - quietly omitted
+  // rather than shown empty when there isn't one on file.
+  let hoursHtml = '';
+  if (entry.time) {
+    try {
+      const [hh, mm] = entry.time.split(':').map(Number);
+      const table = getPersonalHoursTable(hh, mm);
+      const ranked = table.rows
+        .map((row) => ({ row, score: personalHourScore(table, row) }))
+        .sort((a, b) => b.score - a.score);
+      const financial = findBestFinancialHour(table);
+      hoursHtml = `
+        <div class="box stat-box" id="entryBwHourBox">
+          <div class="box-label">⏰ Best / Worst Hour</div>
+          <div class="bw-hour-row">
+            <div class="bw-hour good"><div class="bw-hour-tag">Best</div><div class="bw-hour-time" id="entryBestHour">${escapeHtml(ranked[0].row.label)}</div></div>
+            <div class="bw-hour bad"><div class="bw-hour-tag">Worst</div><div class="bw-hour-time" id="entryWorstHour">${escapeHtml(ranked[ranked.length - 1].row.label)}</div></div>
+          </div>
+          <div class="bw-hour-row">
+            <div class="bw-hour good subtle"><div class="bw-hour-tag">2nd Best</div><div class="bw-hour-time" id="entryBestHour2">${escapeHtml(ranked[1].row.label)}</div></div>
+            <div class="bw-hour bad subtle"><div class="bw-hour-tag">2nd Worst</div><div class="bw-hour-time" id="entryWorstHour2">${escapeHtml(ranked[ranked.length - 2].row.label)}</div></div>
+          </div>
+        </div>
+        <div class="box stat-box">
+          <div class="box-label">💰 Best Financial Hour</div>
+          <div class="box-value box-value-fin">${financial ? escapeHtml(financial.row.label) : 'None today'}</div>
+          <div class="dayleft-caption">${financial ? `via ${financial.financialNumber}` : ''}</div>
+        </div>
+      `;
+      // Same gold-overlap flag as Profile: mark whichever Best/Worst Hour
+      // tile happens to also be the financial hour.
+      if (financial) {
+        setTimeout(() => {
+          [['entryBestHour', ranked[0]], ['entryWorstHour', ranked[ranked.length - 1]],
+            ['entryBestHour2', ranked[1]], ['entryWorstHour2', ranked[ranked.length - 2]]].forEach(([id, rh]) => {
+            const el = document.getElementById(id);
+            const tile = el && el.closest('.bw-hour');
+            if (tile) tile.classList.toggle('bw-hour-fin', rh.row.label === financial.row.label);
+          });
+        }, 0);
+      }
+    } catch (e) { /* malformed time on an old entry - just skip the hours section */ }
+  }
+
+  document.getElementById('entryModalBody').innerHTML = `
+    <div class="emax-modal-actions" style="width:100%; justify-content:flex-end">
+      <button type="button" id="entryModalEditBtn">✎ Edit</button>
+      <button type="button" class="emax-modal-delete" id="entryModalDeleteBtn">🗑 Delete</button>
+    </div>
+    <div class="emax-modal-name">${escapeHtml(entry.name)}</div>
+    <div class="emax-modal-date">${formatDate(entry.date)}${timeLabel ? ' · 🕐 ' + escapeHtml(timeLabel) : ''}</div>
+
+    <div class="profile-grid" style="margin-top:16px">
+      <div class="box stat-box compat-today-box">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value ${scoreClass(todayCompat.finalScore)}">${todayCompat.finalScore}%</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label underline">📆 Days Left</div>
+        <div class="dayleft-row">
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">🎂</div>
+            <div class="dayleft-value">${r.daysLeft.daysUntilBirthday}</div>
+            <div class="dayleft-caption">until Birthday</div>
+          </div>
+          <div class="dayleft-tile">
+            <div class="dayleft-icon">📅</div>
+            <div class="dayleft-value">${r.daysLeft.daysUntilMonthlyDay}</div>
+            <div class="dayleft-caption">until Monthly Day</div>
+          </div>
+        </div>
+      </div>
+      ${hoursHtml}
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Core Numbers</div>
+    <div class="grid4 headerrow">
+      <div class="cell head">Lifepath</div><div class="cell head">Day Born</div>
+      <div class="cell head">Day#</div><div class="cell head">Combo</div>
+    </div>
+    <div class="grid4">
+      <div class="cell highlight">${r.lifePath}</div>
+      <div class="cell highlight">${r.dayBornReduced}</div>
+      <div class="cell highlight">${r.dayNumReduced}</div>
+      <div class="cell highlight">${r.combo}</div>
+    </div>
+    <div class="grid4 subrow">
+      <div class="cell small">${r.lifePathCompound}</div>
+      <div class="cell small">${r.dayBornRaw}</div>
+      <div class="cell small">${r.dayNumRaw}</div>
+      <div class="cell small"></div>
+    </div>
+
+    <div class="profile-grid profile-core-grid" style="margin-top:10px">
+      <div class="box stat-box">
+        <div class="box-label">🍀 Lucky Number</div>
+        <div class="box-value">${r.luckyNumber}</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">✨ 28 Day</div>
+        <div class="box-value">${r.twentyEightDay}</div>
+      </div>
+      <div class="box stat-box">
+        <div class="box-label">🔢 Missing</div>
+        <div class="box-value box-value-muted">${r.missing}</div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Vietnamese Zodiac</div>
+    <div class="grid3 headerrow">
+      <div class="cell head">Year</div><div class="cell head">Month</div><div class="cell head">Day</div>
+    </div>
+    <div class="grid3">
+      <div class="cell sign">${r.chineseYear}</div>
+      <div class="cell sign">${r.chineseMonth}</div>
+      <div class="cell sign">${r.chineseDay}</div>
+    </div>
+
+    <div class="section-label">Western Signs</div>
+    <div class="grid4 headerrow">
+      <div class="cell head">Sun Sign</div><div class="cell head">Saturn</div>
+      <div class="cell head">Jupiter</div><div class="cell head">Venus</div>
+    </div>
+    <div class="grid4">
+      <div class="cell sign">${r.sunSign}</div>
+      <div class="cell sign">${r.saturnSign}${retroSpan(r.saturnRetro)}</div>
+      <div class="cell sign">${r.jupiterSign}${retroSpan(r.jupiterRetro)}</div>
+      <div class="cell sign">${r.venusSign}${retroSpan(r.venusRetro)}</div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Personal Cycles</div>
+    <div class="grid3 headerrow">
+      <div class="cell head">PY</div><div class="cell head">PM</div><div class="cell head">PD</div>
+    </div>
+    <div class="grid3">
+      <div class="cell highlight">${r.py.reduced}</div>
+      <div class="cell highlight">${r.pm.reduced}</div>
+      <div class="cell highlight">${r.pd.reduced}</div>
+    </div>
+    <div class="grid3 subrow">
+      <div class="cell small">${r.py.raw}</div>
+      <div class="cell small">${r.pm.raw}</div>
+      <div class="cell small">${r.pd.raw}</div>
+    </div>
+
+    <button type="button" class="emax-breakdown-toggle" id="compareToggleBtn" style="margin-top:20px">🤝 Compare with me</button>
+    <div id="compareBody" hidden></div>
+  `;
+
+  document.getElementById('entryModalEditBtn').addEventListener('click', () => {
+    closeEntryModal();
+    startEdit(entry);
+  });
+  document.getElementById('entryModalDeleteBtn').addEventListener('click', () => {
+    if (!confirm(`Delete ${entry.name}?`)) return;
+    closeEntryModal();
+    deleteEntry(entry.id);
+  });
+  document.getElementById('compareToggleBtn').addEventListener('click', () => {
+    const body = document.getElementById('compareBody');
+    const btn = document.getElementById('compareToggleBtn');
+    if (!body.hidden) { body.hidden = true; btn.textContent = '🤝 Compare with me'; return; }
+    const profile = loadProfile();
+    if (!profile || !profile.date) {
+      alert('Set your birthday on the My Profile page first, then come back to compare.');
+      return;
+    }
+    const meDate = parseDateStr(profile.date);
+    const result = computeCompatibility(meDate, dateObj);
+    renderCompatResults(body, result, 'Me', entry.name);
+    body.hidden = false;
+    btn.textContent = '▴ Hide comparison';
+  });
+
+  document.getElementById('entryModalOverlay').classList.add('active');
+}
+
+function closeEntryModal() {
+  document.getElementById('entryModalOverlay').classList.remove('active');
 }
 
 function startEdit(entry) {
@@ -192,6 +383,7 @@ function init() {
   });
 
   document.getElementById('entriesContainer').addEventListener('click', (e) => {
+    // Year-only rows keep their own inline delete/"Add full date" actions.
     const deleteBtn = e.target.closest('button[data-entry]');
     if (deleteBtn) {
       deleteEntry(deleteBtn.dataset.entry);
@@ -204,16 +396,25 @@ function init() {
       if (entry) startEdit(entry);
       return;
     }
-    const compareBtn = e.target.closest('button[data-compare]');
-    if (compareBtn) {
-      const entry = category.entries.find((en) => en.id === compareBtn.dataset.compare);
-      if (entry) openCompatModal(entry);
+    // Full-date rows: tap anywhere to open the popup.
+    const row = e.target.closest('.entry-item-tap');
+    if (row) {
+      const entry = category.entries.find((en) => en.id === row.dataset.entryId);
+      if (entry) openEntryModal(entry);
     }
   });
+  document.getElementById('entriesContainer').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest('.entry-item-tap');
+    if (!row) return;
+    e.preventDefault();
+    const entry = category.entries.find((en) => en.id === row.dataset.entryId);
+    if (entry) openEntryModal(entry);
+  });
 
-  document.getElementById('compatModalClose').addEventListener('click', closeCompatModal);
-  document.getElementById('compatModalOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'compatModalOverlay') closeCompatModal();
+  document.getElementById('entryModalClose').addEventListener('click', closeEntryModal);
+  document.getElementById('entryModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'entryModalOverlay') closeEntryModal();
   });
 
   document.getElementById('bulkUploadBtn').addEventListener('click', () => {
