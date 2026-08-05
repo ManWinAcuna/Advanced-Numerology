@@ -688,6 +688,18 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 
 .gk-today .gk-portals { margin-top: 26px; }
 
+/* EMAX item popup: the top row of the fact grid (Life Path/Day Born/Day of
+   Year - fixed at birth) looked identical to the two rows under it
+   (Personal Yr/Mo/Day; Chinese Year/Month/Day - both calendar-relative) —
+   same tile shape, same rhythm, only the small label told them apart. A
+   constant warm tint (not energy-reactive, so the cue doesn't shift color
+   day to day) marks it as its own group at a glance. */
+.emax-fact-tile.emax-fact-core {
+  background: rgba(245, 197, 66, .10);
+  border-color: rgba(245, 197, 66, .32);
+}
+.emax-fact-tile.emax-fact-core .emax-fact-label { color: color-mix(in srgb, var(--gold) 65%, var(--muted)); }
+
 /* ------------------------------------------------------------- reduce ---- */
 @media (prefers-reduced-motion: reduce) {
   .gk-ceremony { animation-duration: .1s; animation-delay: .4s; }

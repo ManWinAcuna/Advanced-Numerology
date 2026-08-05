@@ -107,15 +107,22 @@ const EMAX_DATE_KIND_LABEL = { founded: 'Founded', born: 'Born', released: 'Rele
 // value between the reduced form and "compound/reduced" (e.g. "23/5"). Used
 // for Life Path, Day Born, Day of Year, and Personal Year/Month/Day. The
 // Chinese sign tiles have no numeric compound, so they stay plain.
-function emaxFactTile(icon, label, reduced, compound) {
+// core: true marks the fixed-at-birth trio (Life Path / Day Born / Day of
+// Year) with a distinct tile background - they read as identical shapes to
+// the Personal Yr/Mo/Day and Chinese Year/Month/Day tiles below them (same
+// grid, same 3-per-row rhythm), and are easy to mix up at a glance since
+// nothing besides the tiny label otherwise distinguishes "who this person
+// fundamentally is" from "where the calendar happens to sit right now".
+function emaxFactTile(icon, label, reduced, compound, core) {
   const iconHtml = `<span class="emax-fact-icon">${icon}</span>`;
   const labelHtml = `<span class="emax-fact-label">${escapeHtml(label)}</span>`;
   const valueHtml = `<span class="emax-fact-value">${escapeHtml(String(reduced))}</span>`;
+  const coreClass = core ? ' emax-fact-core' : '';
   if (compound != null && String(compound) !== String(reduced)) {
     const compoundLabel = `${compound}/${reduced}`;
-    return `<button type="button" class="emax-fact-tile emax-fact-tile-tap" data-reduced="${escapeHtml(String(reduced))}" data-compound="${escapeHtml(compoundLabel)}">${iconHtml}${labelHtml}${valueHtml}</button>`;
+    return `<button type="button" class="emax-fact-tile emax-fact-tile-tap${coreClass}" data-reduced="${escapeHtml(String(reduced))}" data-compound="${escapeHtml(compoundLabel)}">${iconHtml}${labelHtml}${valueHtml}</button>`;
   }
-  return `<div class="emax-fact-tile">${iconHtml}${labelHtml}${valueHtml}</div>`;
+  return `<div class="emax-fact-tile${coreClass}">${iconHtml}${labelHtml}${valueHtml}</div>`;
 }
 
 // Categories with a linked-person config (EMAX_LINKED_PERSON_CONFIG - Songs'
@@ -597,9 +604,9 @@ function openItemModal(entry, categoryNameOverride, backTo) {
       ${flagHtml}
       ${emaxLinkedPersonBannerHtml(entry, meDate, linkedPersonCfg)}
       <div class="emax-fact-grid">
-        ${emaxFactTile('✨', 'Life Path', lifePath, lifePathCompound)}
-        ${emaxFactTile('📅', 'Day Born', dayBorn, dayBornCompound)}
-        ${emaxFactTile('🔢', 'Day of Year', dayOfYear, dayOfYearCompound)}
+        ${emaxFactTile('✨', 'Life Path', lifePath, lifePathCompound, true)}
+        ${emaxFactTile('📅', 'Day Born', dayBorn, dayBornCompound, true)}
+        ${emaxFactTile('🔢', 'Day of Year', dayOfYear, dayOfYearCompound, true)}
         ${emaxFactTile('', 'Personal Yr', personalYear, personalYearCompound)}
         ${emaxFactTile('', 'Personal Mo', personalMonth, personalMonthCompound)}
         ${emaxFactTile('', 'Personal Day', personalDay, personalDayCompound)}
