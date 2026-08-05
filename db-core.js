@@ -4746,41 +4746,47 @@ function cloudPushEmax() {
 }
 
 // The EMAX half of cloudPullAll. Never leaves local EMAX in a worse state
-// than it found it: any failure or incomplete cloud copy keeps the local
-// data untouched rather than overwriting it with a partial snapshot -
-// overwriting local with less-than-everything is the exact bug class this
-// chunked sync exists to end.
+// than it found it: any failure keeps the local data untouched rather than
+// overwriting it with a partial snapshot.
+//
+// emaxCategoryIds (on the main users/{uid} doc) is ONLY an ordering hint,
+// not a gate - it used to be treated as the mandatory source of truth, and
+// any mismatch (missing, empty, listing an id that no longer resolves) made
+// the whole pull silently bail out and keep local untouched, INCLUDING when
+// the emaxCats subcollection itself held complete, real data the whole
+// time (that field can drift out of sync with the subcollection - e.g. a
+// merge write that failed independently of the per-category writes, or an
+// account whose chunked migration never got around to writing it). A
+// restore must never be blockable by a side pointer when the real data is
+// sitting right there - so the actual document set in emaxCats is always
+// the source of truth; the recorded order is used only when it's a perfect
+// match for what's actually there, and Firestore's own order otherwise.
 function cloudPullEmaxChunked(user, data) {
-  if (!Array.isArray(data.emaxCategoryIds)) {
-    // Pre-chunking cloud shape (or chunked push never ran yet): fall back
-    // to the legacy single-field copy so existing accounts migrate
-    // seamlessly - their first save after this pull re-pushes chunked.
-    if (data.emax !== undefined && data.emax !== null) {
-      const next = JSON.stringify(data.emax);
-      const changed = localStorage.getItem(EMAX_STORAGE_KEY) !== next;
-      if (changed) localStorage.setItem(EMAX_STORAGE_KEY, next);
-      return Promise.resolve(changed);
-    }
-    return Promise.resolve(false);
-  }
   return firebase.firestore().collection('users').doc(user.uid).collection('emaxCats').get()
     .then((snap) => {
+      if (snap.empty) {
+        // Nothing chunked in the cloud yet - only the legacy pre-chunking
+        // single-field copy (if any) is left to fall back to.
+        if (data.emax === undefined || data.emax === null) return false;
+        const next = JSON.stringify(data.emax);
+        const changed = localStorage.getItem(EMAX_STORAGE_KEY) !== next;
+        if (changed) localStorage.setItem(EMAX_STORAGE_KEY, next);
+        return changed;
+      }
       const byId = {};
       snap.forEach((d) => { byId[d.id] = d.data(); });
-      const cats = data.emaxCategoryIds.map((id) => byId[String(id)]);
-      if (cats.some((c) => !c)) {
-        // A listed category's doc is missing - a half-landed push (e.g.
-        // the ids write survived a rules/permissions failure that blocked
-        // the per-category writes). Applying this would BE data loss.
-        console.warn('[cloud] EMAX pull skipped - cloud copy is incomplete, keeping local data');
-        return false;
-      }
+      const actualIds = Object.keys(byId);
+      const recordedIds = Array.isArray(data.emaxCategoryIds) ? data.emaxCategoryIds.map(String) : [];
+      const recordedOrderIsComplete = recordedIds.length === actualIds.length && recordedIds.every((id) => byId[id]);
+      const cats = (recordedOrderIsComplete ? recordedIds : actualIds).map((id) => byId[id]);
+
       const next = JSON.stringify({ categories: cats });
       const changed = localStorage.getItem(EMAX_STORAGE_KEY) !== next;
       if (changed) localStorage.setItem(EMAX_STORAGE_KEY, next);
-      // Sync the local hash record to what was just pulled, so the next
-      // save only pushes what the user actually changes from here on.
-      const hashes = { __ids: JSON.stringify(data.emaxCategoryIds.map(String)) };
+      // Sync the local hash record (and the ids order) to what was just
+      // pulled, so the next save only pushes what actually changed from
+      // here on, and re-records the correct order if it had drifted.
+      const hashes = { __ids: JSON.stringify(cats.map((c) => String(c.id))) };
       cats.forEach((c) => { if (c && c.id) hashes[c.id] = emaxCloudHash(JSON.stringify(c)); });
       saveEmaxCloudHashes(hashes);
       return changed;

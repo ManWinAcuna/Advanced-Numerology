@@ -205,6 +205,7 @@
         document.getElementById('authSyncOverlay').classList.add('active');
         withTimeout(cloudPullAll(), 8000).then(() => {
           stampCloudPull();
+          if (window.__resolveFirstCloudPullDone) window.__resolveFirstCloudPullDone();
           document.getElementById('authSyncOverlay').classList.remove('active');
           if (typeof window.__refreshAfterCloudSync === 'function') {
             window.__refreshAfterCloudSync();
@@ -224,16 +225,28 @@
         // a real change, refresh - via the page's own hook if it defines
         // one (see profile.js), else a plain reload.
         cloudPullAll().then((changed) => {
+          if (window.__resolveFirstCloudPullDone) window.__resolveFirstCloudPullDone();
           if (!changed) return;
           if (typeof window.__refreshAfterCloudSync === 'function') window.__refreshAfterCloudSync();
           else location.reload();
         });
+      } else if (window.__resolveFirstCloudPullDone) {
+        // Throttle window hasn't elapsed (another page pulled recently this
+        // session) - no pull is coming from this page load, so anything
+        // waiting on __firstCloudPullDone (emax.js's seed guard) should stop
+        // waiting rather than sit until the 10s safety timeout.
+        window.__resolveFirstCloudPullDone();
       }
+    } else if (window.__resolveFirstCloudPullDone) {
+      // Resolved auth state with no signed-in user - there is no cloud
+      // data to pull, so nothing should keep waiting on this.
+      window.__resolveFirstCloudPullDone();
     }
   }, (err) => {
     // Firebase's listener contract supports this second callback for
     // errors reading persisted auth state (e.g. a broken/evicted iOS
     // IndexedDB session) - without it those failures were invisible.
+    if (window.__resolveFirstCloudPullDone) window.__resolveFirstCloudPullDone();
     console.warn('Auth state listener error:', err);
   });
 

@@ -63,6 +63,18 @@
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
     catch (e) { return null; }
   }
+  // EMAX's local shape is a single {categories:[...]} wrapper object, so the
+  // generic summarize() above always reported it as "1 keys" no matter how
+  // much data was inside - reading as if local were empty even when it
+  // wasn't. Count categories/entries the same way the cloud column does.
+  function summarizeEmaxLocal(v) {
+    if (!v || !Array.isArray(v.categories)) return { n: '—', kb: 0 };
+    const cats = v.categories;
+    let entries = 0;
+    cats.forEach((c) => { if (c && Array.isArray(c.entries)) entries += c.entries.length; });
+    const kb = Math.round(JSON.stringify(v).length / 1024);
+    return { n: cats.length + ' categories' + (entries ? ' · ' + entries + ' entries' : ''), kb };
+  }
   function authReady() {
     return (typeof firebase !== 'undefined' ? Promise.resolve() : window.loadFirebaseSdk())
       .then(() => new Promise((resolve) => {
@@ -96,10 +108,10 @@
           if (v && Array.isArray(v.entries)) emaxEntries += v.entries.length;
         });
         const localEmax = localVal(typeof EMAX_STORAGE_KEY !== 'undefined' ? EMAX_STORAGE_KEY : 'emax_categories');
-        const le = summarize(localEmax);
+        const le = summarizeEmaxLocal(localEmax);
         rows += '<tr><td>EMAX (chunked)</td><td class="' + (emaxSnap.size ? 'cr-good' : 'cr-bad') + '">' +
           emaxSnap.size + ' categories' + (emaxEntries ? ' · ' + emaxEntries + ' entries' : '') +
-          '</td><td class="cr-mut">' + le.n + '</td></tr>';
+          '</td><td class="cr-mut">' + le.n + (le.kb ? ' · ' + le.kb + 'KB' : '') + '</td></tr>';
         rows += '<tr><td>Stable screenshots</td><td class="' + (shotsSnap.size ? 'cr-good' : 'cr-mut') + '">' +
           shotsSnap.size + ' images</td><td class="cr-mut">' + summarize(localVal('stable_shots')).n + '</td></tr>';
         rows += '</table>';
@@ -123,8 +135,8 @@
   document.getElementById('crBackup').addEventListener('click', () => {
     authReady().then((user) => {
       if (!user) { status('Not signed in — tap the cloud circle (top right) first.'); return null; }
-      const emaxLocal = localVal(typeof EMAX_STORAGE_KEY !== 'undefined' ? EMAX_STORAGE_KEY : 'emax_categories') || {};
-      const nCats = Object.keys(emaxLocal).length;
+      const emaxLocal = localVal(typeof EMAX_STORAGE_KEY !== 'undefined' ? EMAX_STORAGE_KEY : 'emax_categories');
+      const nCats = (emaxLocal && Array.isArray(emaxLocal.categories)) ? emaxLocal.categories.length : 0;
       const nTrades = (localVal('stable_trades') || []).length;
       const nDb = Object.keys(localVal(typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'numerology_db') || {}).length;
       const ok = confirm('Push THIS device to the cloud?\n\nThis device holds:\n· ' + nCats + ' EMAX categories\n· ' + nTrades + ' Stable trades\n· Database: ' + nDb + ' keys\n\nThe cloud backup will be overwritten with these numbers. Continue ONLY if they look like your good data.');

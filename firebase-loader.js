@@ -23,6 +23,20 @@
 
   const EVER_SIGNED_IN_KEY = 'numerology_ever_signed_in';
 
+  // Resolves once this page's first (and only) cloud-pull attempt of the
+  // session has settled - a signed-in user's real pull completing, an
+  // unsigned-in state discovering there's no cloud to pull from, or a
+  // network/SDK failure that means it's never coming. Anything on the page
+  // that seeds local defaults and would PUSH them (EMAX's starter
+  // categories - see emax.js) needs to know this has already happened
+  // before touching the cloud, or it can push empty defaults over real
+  // data before the real pull ever gets a chance to land. Capped so a
+  // dead network can never wedge a caller waiting on this forever.
+  let resolveFirstCloudPullDone;
+  window.__firstCloudPullDone = new Promise((resolve) => { resolveFirstCloudPullDone = resolve; });
+  window.__resolveFirstCloudPullDone = function () { resolveFirstCloudPullDone(); };
+  setTimeout(() => resolveFirstCloudPullDone(), 10000);
+
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
@@ -70,9 +84,10 @@
     try { everSignedIn = !!localStorage.getItem(EVER_SIGNED_IN_KEY); } catch (e) { /* ignore */ }
 
     if (everSignedIn) {
-      setTimeout(() => window.loadFirebaseSdk(), 300);
+      setTimeout(() => window.loadFirebaseSdk().catch(() => resolveFirstCloudPullDone()), 300);
     } else {
       renderSignInPlaceholder();
+      resolveFirstCloudPullDone();
     }
   }
 

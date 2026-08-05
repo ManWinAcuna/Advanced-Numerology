@@ -6,35 +6,66 @@ let db = loadEmaxDB();
 // app AFTER you'd already been using EMAX (Anime/Shows/Songs, added well
 // after the original 6) still reaches your existing database instead of
 // only ever showing up for a brand-new install.
-let emaxSeenStarters = null;
-try {
-  const raw = localStorage.getItem(EMAX_SEEN_STARTERS_KEY);
-  emaxSeenStarters = raw ? JSON.parse(raw) : null;
-} catch (e) { emaxSeenStarters = null; }
+//
+// A signed-in browser whose cloud pull for THIS session hasn't landed yet
+// looks, to this function, exactly like a brand-new account: local
+// db.categories is empty, so it seeds all ~20 starters as empty shells and
+// (via saveEmaxDB -> cloudPushKey -> cloudPushEmax) immediately PUSHES
+// them - creating brand-new emaxCats docs under fresh random ids and
+// overwriting the shared emaxCategoryIds pointer to reference them,
+// orphaning whatever real categories/entries the cloud actually had. The
+// pull runs async (network-bound); this runs synchronously at page load,
+// so it always wins that race unless explicitly held back. A device that
+// has never signed in has no cloud data to race against, so it seeds
+// immediately as before - only a signed-in device waits, and only until
+// this session's first pull settles (capped at 10s so a slow/broken
+// network can never wedge the page).
+function applyStarterSeeding() {
+  let emaxSeenStarters = null;
+  try {
+    const raw = localStorage.getItem(EMAX_SEEN_STARTERS_KEY);
+    emaxSeenStarters = raw ? JSON.parse(raw) : null;
+  } catch (e) { emaxSeenStarters = null; }
 
-if (emaxSeenStarters === null) {
-  // No migration record yet. A device that already has categories was
-  // seeded under the ORIGINAL one-time-only logic (the first 6) before this
-  // tracking existed - treat those as already-seen so they're never
-  // re-offered (that would resurrect one you'd deliberately deleted). A
-  // truly first-ever visit (zero categories) has seen nothing yet.
-  emaxSeenStarters = db.categories.length > 0
-    ? ['Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands']
-    : [];
+  if (emaxSeenStarters === null) {
+    // No migration record yet. A device that already has categories was
+    // seeded under the ORIGINAL one-time-only logic (the first 6) before this
+    // tracking existed - treat those as already-seen so they're never
+    // re-offered (that would resurrect one you'd deliberately deleted). A
+    // truly first-ever visit (zero categories) has seen nothing yet.
+    emaxSeenStarters = db.categories.length > 0
+      ? ['Clothing Brands', 'Movies', 'Artists', 'Shoe Brands', 'Technology Brands', 'Hygiene Brands']
+      : [];
+  }
+
+  // Also guards against a name that's somehow already present in db.categories
+  // (a stale/out-of-sync emaxSeenStarters shouldn't be able to duplicate a
+  // category that's already there, deleted-and-seen or not) - belt and
+  // suspenders over the seen-list check alone.
+  const existingNames = new Set(db.categories.map((c) => c.name));
+  const newStarters = EMAX_STARTER_CATEGORIES.filter((name) => !emaxSeenStarters.includes(name) && !existingNames.has(name));
+  if (newStarters.length) {
+    newStarters.forEach((name) => db.categories.push({ id: uid(), name, entries: [] }));
+    emaxSeenStarters = emaxSeenStarters.concat(newStarters);
+    saveEmaxDB(db);
+  }
+  try { localStorage.setItem(EMAX_SEEN_STARTERS_KEY, JSON.stringify(emaxSeenStarters)); cloudPushKey(EMAX_SEEN_STARTERS_KEY); } catch (e) { /* storage full - retried next load */ }
 }
 
-// Also guards against a name that's somehow already present in db.categories
-// (a stale/out-of-sync emaxSeenStarters shouldn't be able to duplicate a
-// category that's already there, deleted-and-seen or not) - belt and
-// suspenders over the seen-list check alone.
-const existingNames = new Set(db.categories.map((c) => c.name));
-const newStarters = EMAX_STARTER_CATEGORIES.filter((name) => !emaxSeenStarters.includes(name) && !existingNames.has(name));
-if (newStarters.length) {
-  newStarters.forEach((name) => db.categories.push({ id: uid(), name, entries: [] }));
-  emaxSeenStarters = emaxSeenStarters.concat(newStarters);
-  saveEmaxDB(db);
+let everSignedInForEmaxSeed = false;
+try { everSignedInForEmaxSeed = !!localStorage.getItem('numerology_ever_signed_in'); } catch (e) { /* ignore */ }
+
+if (everSignedInForEmaxSeed && window.__firstCloudPullDone) {
+  window.__firstCloudPullDone.then(() => {
+    // Re-read: the pull this was waiting on may have just replaced local
+    // EMAX data with the real cloud copy, entries and all.
+    db = loadEmaxDB();
+    applyStarterSeeding();
+    render();
+  });
+} else {
+  applyStarterSeeding();
 }
-try { localStorage.setItem(EMAX_SEEN_STARTERS_KEY, JSON.stringify(emaxSeenStarters)); cloudPushKey(EMAX_SEEN_STARTERS_KEY); } catch (e) { /* storage full - retried next load */ }
 
 function addCategory(name) {
   name = name.trim();
