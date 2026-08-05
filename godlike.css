@@ -375,8 +375,194 @@ html.gk-stable .st-card h3 { font-family: var(--gk-ui); letter-spacing: .24em; }
 html.gk-stable .reveal-grid .rg-num { font-family: var(--gk-display); }
 html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18px) saturate(1.2); }
 
+/* ----------------------------------------------- TODAY v3: the sanctum ---- */
+/* The alignment arc: the great ring literally draws itself to your compat %.
+   Ring inscribes first (1.5s trace), then the number blooms inside it. */
+.gk-today .gk-altar { padding-top: 58px; min-height: 62vh; justify-content: flex-start; }
+.gk-arcs {
+  position: absolute; top: 44%; left: 50%; width: min(78vw, 350px); height: min(78vw, 350px);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.gk-arc-base { fill: none; stroke: rgba(255,255,255,.07); stroke-width: 1.5; }
+.gk-arc-dash { fill: none; stroke: color-mix(in srgb, var(--acc) 14%, transparent);
+  stroke-width: 1; stroke-dasharray: 2 7; }
+.gk-arc-fill {
+  fill: none; stroke: var(--acc); stroke-width: 2.5; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: center;
+  filter: drop-shadow(0 0 6px var(--acc-dim));
+  transition: stroke-dashoffset 1.5s cubic-bezier(.3,.75,.25,1);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gk-arc-dash { animation: gkOrbit 120s linear infinite; transform-origin: center; }
+  .gk-today .gk-altar-num { animation: gkBloom .8s cubic-bezier(.2,.9,.25,1.1) .55s backwards; }
+}
+@keyframes gkBloom { from { opacity: 0; transform: scale(.82); filter: blur(12px); } }
+
+/* keyword constellation: three words etched at the ring's stations */
+.gk-kws { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.gk-kw {
+  position: absolute; font-family: var(--gk-ui); text-transform: uppercase;
+  font-size: 9px; letter-spacing: .32em; color: var(--acc-dim); opacity: 0;
+  animation: gkKwIn .9s ease 1.3s forwards;
+}
+.gk-kw1 { top: 16px; left: 50%; transform: translateX(-50%); }
+.gk-kw2 { top: 44%; left: 6px; }
+.gk-kw3 { top: 44%; right: 6px; }
+@keyframes gkKwIn { to { opacity: .85; } }
+
+/* the hero is a button now (the strike) — strip chrome, keep the glyph soul */
+button.gk-altar-num {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
+.gk-amped { text-shadow: 0 0 44px var(--acc-ghost); }
+.gk-face-emoji { font-size: clamp(72px, 24vw, 130px); }
+.gk-strike { animation: gkStrike .38s cubic-bezier(.3,1.5,.4,1); }
+@keyframes gkStrike { 0% { transform: scale(1); } 30% { transform: scale(.93); }
+  62% { transform: scale(1.04); } 100% { transform: scale(1); } }
+
+/* faces of the day: dot rail under the hero (number swaps, world holds) */
+.gk-faces { display: flex; gap: 9px; justify-content: center; margin-top: 12px; position: relative; z-index: 1; }
+.gk-face-dot {
+  width: 7px; height: 7px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.22); background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.gk-face-dot.on { background: var(--acc); border-color: var(--acc); box-shadow: 0 0 8px var(--acc-dim); }
+
+/* the realist's verdict */
+.gk-verdict {
+  margin-top: 18px; max-width: 350px; font-size: 13.5px; line-height: 1.7;
+  color: var(--muted); letter-spacing: .04em; position: relative; z-index: 1;
+}
+.gk-verdict b { color: var(--text); font-family: var(--gk-display); letter-spacing: .05em; }
+
+/* the meaning card (opened by the strike) */
+.gk-card { display: none; position: relative; z-index: 1; }
+.gk-card.open {
+  display: block; margin-top: 16px; max-width: 350px; width: 100%;
+  background: rgba(13,12,10,.94); border: 1px solid var(--border); border-radius: 16px;
+  padding: 15px 16px; text-align: left;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 14px 34px rgba(0,0,0,.55);
+  animation: gkRise .45s cubic-bezier(.2,.9,.25,1) backwards;
+}
+.gk-card-title { font-family: var(--gk-display); letter-spacing: .18em; text-transform: uppercase;
+  font-size: 12px; color: var(--acc); margin-bottom: 8px; }
+.gk-card-body { font-size: 13px; line-height: 1.65; color: var(--text); }
+.gk-card-hours { margin-top: 9px; font-size: 12px; color: var(--muted); }
+.gk-card-hours b { color: var(--gold); }
+
+/* whole-page aura: warmth scales with alignment only — never a warning */
+.gk-aura {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0;
+  background: radial-gradient(120% 85% at 50% -5%, var(--acc-ghost), transparent 62%),
+              radial-gradient(90% 50% at 50% 108%, var(--acc-ghost), transparent 70%);
+  transition: opacity 2s ease;
+}
+.gk-today { position: relative; z-index: 1; }
+
+/* embers: slow drift of the day's color rising through the altar */
+.gk-embers { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.gk-embers i {
+  position: absolute; bottom: -8px; width: var(--sz, 3px); height: var(--sz, 3px);
+  border-radius: 50%; background: var(--acc); opacity: 0; filter: blur(.4px);
+  animation: gkEmber linear infinite;
+}
+@keyframes gkEmber {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: .55; }
+  70% { opacity: .22; transform: translateY(-46vh) translateX(10px); }
+  100% { transform: translateY(-64vh) translateX(-6px); opacity: 0; }
+}
+/* hour-aware atmosphere: the air warms near your best hour, cools near the worst */
+html.gk-hour-warm .gk-embers i { opacity: .8; animation-duration: 5.5s !important; }
+html.gk-hour-cold .gk-embers i { filter: blur(1.2px) saturate(.4); }
+html.gk-hour-cold .gk-aura { opacity: .05 !important; }
+
+/* long-press: tomorrow's ghost */
+.gk-ghost {
+  position: fixed; inset: 0; z-index: 2800; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.82); opacity: 0; transition: opacity .3s ease;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.gk-ghost.on { opacity: 1; }
+.gk-ghost-num {
+  font-family: var(--gk-display); font-size: clamp(90px, 30vw, 170px); line-height: 1;
+  color: rgba(255,255,255,.34); filter: blur(1.6px);
+  text-shadow: 0 0 60px var(--acc-ghost);
+}
+.gk-ghost-line { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .34em;
+  font-size: 10px; color: var(--muted); margin-top: 14px; }
+
+/* the horse: notches are permanent milestone etchings; crowned outranks blazing */
+.gk-notches { display: flex; gap: 6px; justify-content: center; margin-bottom: 7px; min-height: 7px; }
+.gk-notches i { width: 5px; height: 5px; transform: rotate(45deg);
+  border: 1px solid var(--gold); box-shadow: 0 0 5px rgba(245,197,66,.5); }
+.gk-crest.gk-crowned .gk-crest-img {
+  filter: drop-shadow(0 0 10px var(--gold)) drop-shadow(0 0 26px var(--acc-dim));
+  transform: scale(1.12);
+}
+.gk-crest.gk-crowned .gk-crest-streak { color: var(--gold); }
+
+/* milestone day: the full-screen moment — streak of light, the horse ascends */
+.gk-milestone {
+  position: fixed; inset: 0; z-index: 3000; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  animation: gkCerFade .5s ease 2.9s forwards;
+}
+.gk-ms-sweep {
+  position: absolute; top: 0; bottom: 0; width: 70px;
+  background: linear-gradient(90deg, transparent, var(--acc-ghost), color-mix(in srgb, var(--acc) 34%, transparent), var(--acc-ghost), transparent);
+  filter: blur(4px); animation: gkMsSweep 1.4s cubic-bezier(.3,.7,.2,1) forwards;
+}
+@keyframes gkMsSweep { from { left: -20%; } to { left: 115%; } }
+.gk-ms-horse { width: 120px; height: 120px;
+  filter: drop-shadow(0 0 22px var(--acc)) drop-shadow(0 0 60px var(--acc-dim));
+  animation: gkMsRise 2.6s cubic-bezier(.2,.8,.2,1) forwards; }
+@keyframes gkMsRise { from { opacity: 0; transform: translateY(46px) scale(.9); }
+  30% { opacity: 1; } to { opacity: 1; transform: translateY(-14px) scale(1.04); } }
+.gk-ms-days { font-family: var(--gk-display); font-size: 46px; letter-spacing: .3em;
+  color: var(--acc); margin-top: 20px; animation: gkCerNum 1s ease .5s backwards; }
+.gk-ms-line { font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .32em;
+  font-size: 10px; color: var(--muted); margin-top: 10px; animation: gkCerLine .8s ease .9s backwards; }
+
+/* THE DAY: deep read — hour dial + countdowns */
+.gk-dayread { padding: 0 18px 6px; max-width: 430px; margin: 0 auto; text-align: center; }
+.gk-dr-title { font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .44em;
+  font-size: 11px; color: var(--acc-dim); margin: 16px 0 2px; }
+.gk-dial { position: relative; height: 36px; margin: 16px 4px 2px; }
+.gk-dial-track { position: absolute; left: 0; right: 0; top: 50%; height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.13), rgba(255,255,255,.05)); }
+.gk-dm { position: absolute; top: 50%; }
+.gk-dm.best { width: 11px; height: 11px; border-radius: 50%; background: var(--acc);
+  transform: translate(-50%, -50%); box-shadow: 0 0 10px var(--acc), 0 0 26px var(--acc-dim); }
+.gk-dm.best2 { width: 7px; height: 7px; border-radius: 50%; background: var(--acc-dim);
+  transform: translate(-50%, -50%); box-shadow: 0 0 7px var(--acc-dim); }
+.gk-dm.worst { width: 9px; height: 9px; border-radius: 50%; background: #45586e;
+  transform: translate(-50%, -50%); box-shadow: 0 0 8px rgba(90,120,150,.5); }
+.gk-dm.worst2 { width: 6px; height: 6px; border-radius: 50%; background: #37465a;
+  transform: translate(-50%, -50%); }
+.gk-dm.fin { width: 9px; height: 9px; background: transparent; border: 1.5px solid var(--gold);
+  transform: translate(-50%, -50%) rotate(45deg); box-shadow: 0 0 9px rgba(245,197,66,.55); }
+.gk-dm.now { width: 2px; height: 20px; background: #fff; transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(255,255,255,.7); }
+.gk-dial-legend { display: flex; gap: 14px; justify-content: center; margin-top: 4px;
+  font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.gk-dial-legend .l-best { color: var(--acc); }
+.gk-dial-legend .l-worst { color: #5c7086; }
+.gk-dial-legend .l-fin { color: var(--gold); }
+.gk-count { font-size: 12.5px; color: var(--muted); letter-spacing: .05em; margin-top: 12px; line-height: 1.6; }
+.gk-count b { color: var(--acc); font-family: var(--gk-display); letter-spacing: .06em; }
+.gk-count:empty { display: none; }
+
+.gk-today .gk-portals { margin-top: 26px; }
+
 /* ------------------------------------------------------------- reduce ---- */
 @media (prefers-reduced-motion: reduce) {
   .gk-ceremony { animation-duration: .1s; animation-delay: .4s; }
   .gk-ceremony .gk-cer-num, .gk-ceremony .gk-cer-line { animation: none; }
+  .gk-embers i, .gk-arc-dash, .gk-strike { animation: none !important; }
+  .gk-arc-fill { transition: none; }
+  .gk-ms-sweep { animation-duration: .1s; }
 }

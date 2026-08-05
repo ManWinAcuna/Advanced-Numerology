@@ -12,27 +12,40 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=2">
+<link rel="stylesheet" href="godlike.css?v=3">
 </head>
 <body>
-<div class="page">
+<div class="gk-aura" id="gkAura"></div>
+<div class="page gk-today">
 
   <section class="gk-altar" id="gkAltar">
-    <div class="gk-altar-ring"></div>
+    <svg class="gk-arcs" viewBox="0 0 220 220" aria-hidden="true">
+      <circle class="gk-arc-base" cx="110" cy="110" r="102"></circle>
+      <circle class="gk-arc-dash" cx="110" cy="110" r="88"></circle>
+      <circle class="gk-arc-fill" id="gkArcFill" cx="110" cy="110" r="102"></circle>
+    </svg>
+    <div class="gk-embers" id="gkEmbers"></div>
+    <div class="gk-kws" id="gkKws"></div>
     <div class="gk-altar-label" id="gkDate"></div>
-    <div class="gk-altar-num" id="gkNum">·</div>
-    <div class="gk-altar-sub">Universal Day</div>
+    <button class="gk-altar-num gk-amped" id="gkNum" type="button">·</button>
+    <div class="gk-altar-sub" id="gkSub">Universal Day</div>
+    <div class="gk-faces" id="gkFaces"></div>
     <div class="gk-orbits" id="gkOrbits"></div>
-    <div class="gk-brief" id="gkBrief"></div>
+    <div class="gk-verdict" id="gkVerdict"></div>
+    <div class="gk-card" id="gkCard"></div>
     <div class="gk-crest" id="gkCrest">
+      <div class="gk-notches" id="gkNotches"></div>
       <img src="logo.svg" alt="" class="gk-crest-img">
       <div class="gk-crest-streak" id="gkCrestStreak"></div>
     </div>
   </section>
 
+  <section class="gk-dayread" id="gkDayread"></section>
+
   <nav class="gk-portals" id="gkPortals"></nav>
 
 </div>
+<div class="gk-ghost" id="gkGhost"></div>
 <script src="scroll-viewport.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
@@ -43,76 +56,342 @@
 <!-- No bottom bar here by design: the portals ARE this page's navigation. -->
 <script src="update-check.js?v=2"></script>
 <script>
-/* THE TODAY PAGE — the daily landing (index.html points here). Universal Day
-   is the crown; Day Energy, the day's animal, alignment and flow orbit it.
-   Profile is its own untouched realm again. */
+/* THE TODAY PAGE v3 — the daily sanctum (Boost13 2026-08-05, 16 answers).
+   Ring draws first, the number blooms inside its alignment arc. The day
+   speaks in the realist's voice. Tap = strike open the meaning. Hold = a
+   ghost of tomorrow. The horse earns regalia and celebrates milestones. */
 (function () {
-  const now = new Date();
-  const ud = universalDayNumber(now);
-  const de = reduceNumber(now.getDate());
+  'use strict';
+  var now = new Date();
+  var day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  var ud = universalDayNumber(now);
+  var de = reduceNumber(now.getDate());
   document.documentElement.setAttribute('data-energy', String(ud));
-  try { localStorage.setItem('gk_ud_' + now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()), String(ud)); } catch (e) { /* ignore */ }
+  try { localStorage.setItem('gk_ud_' + now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()), String(ud)); } catch (e) {}
 
-  document.getElementById('gkDate').textContent =
-    now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-  const numEl = document.getElementById('gkNum');
-  numEl.textContent = ud;
-  numEl.classList.add('gk-glyph', 'gk-n' + ud);
+  /* ------------------------------ the owner's number character table ----- */
+  var MEAN = {
+    1:  { kw: ['initiate', 'will', 'alone'],      move: 'Start things. Lead, don’t follow.' },
+    2:  { kw: ['feeling', 'pairs', 'patience'],   move: 'Cooperate, don’t push.' },
+    3:  { kw: ['voice', 'play', 'scatter'],       move: 'Express — but finish what you open.' },
+    4:  { kw: ['structure', 'work', 'slow'],      move: 'Build. No shortcuts today.' },
+    5:  { kw: ['restless', 'motion', 'risk'],     move: 'Move fast, commit to nothing long.' },
+    6:  { kw: ['duty', 'home', 'balance'],        move: 'Handle the obligations first.' },
+    7:  { kw: ['depth', 'caution', 'knives'],     move: 'Bearish tape. Observe more than you act.' },
+    8:  { kw: ['power', 'execution', 'yield'],    move: 'Bullish. Execute — this is your kind of tape.' },
+    9:  { kw: ['closure', 'release', 'flow'],     move: 'Finish cycles. Let things end.' },
+    11: { kw: ['intuition', 'static', 'waves'],   move: 'Emotional and sporadic — leans down. Trade small.' },
+    13: { kw: ['work', 'karma', 'forge'],         move: 'Heavy lifting pays double today.' },
+    22: { kw: ['monument', 'master', 'stone'],    move: 'Think in years, act with weight.' },
+    28: { kw: ['radiant', 'command', 'gold'],     move: 'Bullish sun. Press your advantage.' },
+    33: { kw: ['teacher', 'heart', 'lift'],       move: 'Give — what you teach returns.' }
+  };
+  function meanOf(n) { return MEAN[n] || { kw: ['—', '—', '—'], move: '' }; }
 
-  let animal = null, animalEmoji = '';
+  /* ------------------------------------------------- profile + engines --- */
+  var me = null, meTime = null, r = null;
+  try {
+    var profile = loadProfile();
+    if (profile && profile.date) {
+      var parts = profile.date.split('-').map(Number);
+      me = new Date(); me.setFullYear(parts[0], parts[1] - 1, parts[2]); me.setHours(0, 0, 0, 0);
+      if (profile.time) meTime = profile.time;
+    }
+  } catch (e) {}
+  var compat = null, flow = null, pd = null, lifePath = null;
+  if (me) {
+    try { compat = computeCompatibility(me, day0).finalScore; } catch (e) {}
+    try { flow = computeEnergyFlow(me, day0).finalScore; } catch (e) {}
+    try { r = computeAll(me, day0); pd = r.pd && r.pd.reduced; lifePath = r.lifePath; } catch (e) {}
+  }
+  var animal = null, animalEmoji = '';
   try {
     animal = getChineseDaySign(now);
     animalEmoji = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[animal]) || '';
-  } catch (e) { /* ignore */ }
-
-  let compat = null, flow = null;
-  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
-  let me = null;
-  try {
-    const profile = loadProfile();
-    if (profile && profile.date) {
-      const [y, m, d] = profile.date.split('-').map(Number);
-      me = new Date(); me.setFullYear(y, m - 1, d); me.setHours(0, 0, 0, 0);
-    }
-  } catch (e) { /* ignore */ }
-  if (me) {
-    try { compat = computeCompatibility(me, day0).finalScore; } catch (e) { /* ignore */ }
-    try { flow = computeEnergyFlow(me, day0).finalScore; } catch (e) { /* ignore */ }
+  } catch (e) {}
+  /* Verbatim copies of render.js personalHourScore / findBestFinancialHour
+     (render.js can't load here — its page wiring expects the calculator DOM).
+     Table shape comes from numerology.js getPersonalHoursTable. */
+  function personalHourScore(table, row) {
+    var signScore = row.sign === table.ownSign ? 100 : vietnameseCompat(table.ownSign, row.sign);
+    var scores = [numerologyCompat(table.digitalRoot, row.digitalReduced), signScore];
+    if (table.isPM) scores.push(numerologyCompat(table.militaryRoot, row.militaryReduced));
+    return scores.reduce(function (a, b) { return a + b; }, 0) / scores.length;
+  }
+  function findBestFinancialHour(table) {
+    var eightScore = numerologyCompat(table.digitalRoot, 8);
+    var financialNumber = eightScore < 49 ? 28 : 8;
+    var candidates = table.rows.filter(function (row) {
+      return row.digitalReduced === financialNumber || (table.isPM && row.militaryReduced === financialNumber);
+    });
+    if (candidates.length === 0) return null;
+    var best = candidates[0], bestScore = -Infinity;
+    candidates.forEach(function (row) {
+      var score = personalHourScore(table, row);
+      if (score > bestScore) { bestScore = score; best = row; }
+    });
+    return { row: best, financialNumber: financialNumber };
   }
 
-  const orbits = [];
-  orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
+  var hoursTable = null, rankedHours = null, finHour = null;
+  if (meTime) {
+    try {
+      var hm = meTime.split(':').map(Number);
+      hoursTable = getPersonalHoursTable(hm[0], hm[1]);
+      rankedHours = hoursTable.rows
+        .map(function (row) { return { row: row, score: personalHourScore(hoursTable, row) }; })
+        .sort(function (a, b) { return b.score - a.score; });
+      finHour = findBestFinancialHour(hoursTable);
+    } catch (e) {}
+  }
+
+  /* --------------------------------------------------------- the altar --- */
+  document.getElementById('gkDate').textContent =
+    now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // alignment arc: the great ring traces itself to your compat %
+  var C = 2 * Math.PI * 102;
+  var arc = document.getElementById('gkArcFill');
+  arc.style.strokeDasharray = C;
+  arc.style.strokeDashoffset = C;
+  requestAnimationFrame(function () {
+    arc.style.strokeDashoffset = compat != null ? C * (1 - compat / 100) : C * 0.999;
+  });
+
+  // keywords etched at three stations of the ring
+  var kws = meanOf(ud).kw;
+  document.getElementById('gkKws').innerHTML =
+    '<span class="gk-kw gk-kw1">' + kws[0] + '</span>' +
+    '<span class="gk-kw gk-kw2">' + kws[1] + '</span>' +
+    '<span class="gk-kw gk-kw3">' + kws[2] + '</span>';
+
+  // hero faces: Universal rules the color always; cycling is inspection
+  var FACES = [
+    { key: 'ud', label: 'Universal Day', val: function () { return ud; }, glyph: true },
+    { key: 'de', label: 'Day Energy', val: function () { return de; }, glyph: true },
+    { key: 'an', label: (animal || '') + ' Day', val: function () { return animalEmoji || '·'; }, glyph: false },
+    { key: 'pd', label: 'Personal Day', val: function () { return pd != null ? pd : '·'; }, glyph: true }
+  ].filter(function (f) { return f.key !== 'an' || animal; });
+  var faceIdx = 0;
+  var numEl = document.getElementById('gkNum');
+  var subEl = document.getElementById('gkSub');
+  function showFace(i) {
+    faceIdx = i;
+    var f = FACES[i];
+    var v = f.val();
+    numEl.textContent = v;
+    numEl.className = 'gk-altar-num gk-amped' + (f.glyph && MEAN[v] ? ' gk-glyph gk-n' + v : '') + (f.glyph ? '' : ' gk-face-emoji');
+    subEl.textContent = f.label;
+    var dots = document.querySelectorAll('.gk-face-dot');
+    for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('on', d === i);
+  }
+  document.getElementById('gkFaces').innerHTML = FACES.map(function (f, i) {
+    return '<button class="gk-face-dot' + (i === 0 ? ' on' : '') + '" data-i="' + i + '" type="button" aria-label="' + f.label + '"></button>';
+  }).join('');
+  document.getElementById('gkFaces').addEventListener('click', function (e) {
+    var b = e.target.closest('.gk-face-dot');
+    if (b) showFace(parseInt(b.dataset.i, 10));
+  });
+  showFace(0);
+
+  // orbits
+  var orbits = [];
   if (animal) orbits.push('<span class="gk-orbit">' + animalEmoji + ' <b>' + animal + '</b> day</span>');
-  if (compat != null) orbits.push('<span class="gk-orbit">Aligned <b>' + compat + '%</b></span>');
+  orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
+  if (pd != null) orbits.push('<span class="gk-orbit">Personal <b>' + pd + '</b></span>');
   if (flow != null) orbits.push('<span class="gk-orbit">Flow <b>' + flow + '%</b></span>');
   document.getElementById('gkOrbits').innerHTML = orbits.join('');
 
-  const bits = ['A <b>universal ' + ud + '</b> day'];
-  if (de !== ud) bits.push('energy <b>' + de + '</b>');
-  if (animal) bits.push('the day of the <b>' + animal + '</b>');
-  if (compat != null) bits.push('you are <b>' + compat + '% aligned</b>');
-  document.getElementById('gkBrief').innerHTML = bits.join(' · ') + '.';
+  /* ------------------------------------------------ the realist verdict -- */
+  function verdict() {
+    var m = meanOf(ud);
+    var s = [];
+    if (compat != null) {
+      s.push(compat >= 85 ? '<b>' + compat + '% aligned — the day bows to you.</b>'
+        : compat >= 70 ? '<b>' + compat + '% aligned</b> — the day favors you.'
+        : compat >= 50 ? '<b>' + compat + '% aligned</b> — workable. Pick your spots.'
+        : compat >= 40 ? '<b>' + compat + '% aligned</b> — neutral tape. Don’t force it.'
+        : '<b>' + compat + '% aligned</b> — not your day. Size down, observe.');
+    }
+    s.push(m.move);
+    if (rankedHours) s.push('Best window <b>' + rankedHours[0].row.label + '</b>.');
+    return s.join(' ');
+  }
+  document.getElementById('gkVerdict').innerHTML = verdict();
 
-  const streak = (window.gkStableStreak ? window.gkStableStreak() : 0);
-  const crest = document.getElementById('gkCrest');
-  const lab = document.getElementById('gkCrestStreak');
+  // whole-page aura: warmth scales with alignment
+  var aura = document.getElementById('gkAura');
+  if (compat != null) aura.style.opacity = Math.max(0.06, (compat / 100) * 0.34).toFixed(2);
+
+  // embers
+  var em = document.getElementById('gkEmbers');
+  var emHtml = '';
+  for (var i = 0; i < 12; i++) {
+    emHtml += '<i style="left:' + (18 + Math.random() * 64) + '%;animation-delay:' + (Math.random() * 9).toFixed(1) +
+      's;animation-duration:' + (7 + Math.random() * 6).toFixed(1) + 's;--sz:' + (2 + Math.random() * 2.4).toFixed(1) + 'px"></i>';
+  }
+  em.innerHTML = emHtml;
+
+  /* --------------------------------------- the strike & the meaning card -- */
+  var card = document.getElementById('gkCard');
+  var cardOpen = false;
+  function cardHtml() {
+    var m = meanOf(ud);
+    var h = '<div class="gk-card-title">' + ud + (lifePath ? ' × lifepath ' + lifePath : '') + '</div>';
+    h += '<div class="gk-card-body">' + m.kw.join(' · ') + '. ' + m.move;
+    if (lifePath === 9) h += ' For a 9, a ' + ud + ' day ' + (ud === 5 || ud === 9 ? 'moves WITH you — adapt freely.' : ud === 7 || ud === 11 ? 'pulls against your flow — don’t chase clarity, wait for it.' : ud === 8 || ud === 28 ? 'pays your completion energy in full — close things and collect.' : 'asks you to bend your flow to its shape.');
+    h += '</div>';
+    if (hoursTable) {
+      var carriers = [];
+      for (var q = 0; q < hoursTable.rows.length && carriers.length < 3; q++) {
+        var row = hoursTable.rows[q];
+        if (row.digitalReduced === ud || (hoursTable.isPM && row.militaryReduced === ud)) carriers.push(row.label);
+      }
+      if (carriers.length) h += '<div class="gk-card-hours">Hours carrying the ' + ud + ': <b>' + carriers.join(' · ') + '</b></div>';
+    }
+    return h;
+  }
+  var pressTimer = null, pressed = false;
+  numEl.addEventListener('click', function () {
+    if (pressed) { pressed = false; return; }
+    numEl.classList.remove('gk-strike'); void numEl.offsetWidth; numEl.classList.add('gk-strike');
+    cardOpen = !cardOpen;
+    card.innerHTML = cardOpen ? cardHtml() : '';
+    card.classList.toggle('open', cardOpen);
+  });
+
+  /* ------------------------------------------- long-press: tomorrow ghost - */
+  var ghost = document.getElementById('gkGhost');
+  function showGhost() {
+    pressed = true;
+    var tm = new Date(day0); tm.setDate(tm.getDate() + 1);
+    var udT = universalDayNumber(tm);
+    var compatT = null;
+    if (me) { try { compatT = computeCompatibility(me, tm).finalScore; } catch (e) {} }
+    ghost.innerHTML = '<div class="gk-ghost-num">' + udT + '</div>' +
+      '<div class="gk-ghost-line">tomorrow' + (compatT != null ? ' · ' + compatT + '% aligned' : '') + '</div>';
+    ghost.classList.add('on');
+  }
+  function hideGhost() { clearTimeout(pressTimer); ghost.classList.remove('on'); }
+  numEl.addEventListener('pointerdown', function () { pressTimer = setTimeout(showGhost, 550); });
+  numEl.addEventListener('pointerup', hideGhost);
+  numEl.addEventListener('pointerleave', hideGhost);
+  numEl.addEventListener('pointercancel', hideGhost);
+
+  /* ------------------------------------------ the horse: regalia + myth --- */
+  var MILESTONES = [3, 7, 13, 21, 33, 55];
+  var streak = (window.gkStableStreak ? window.gkStableStreak() : 0);
+  var crest = document.getElementById('gkCrest');
+  var lab = document.getElementById('gkCrestStreak');
   lab.textContent = streak > 0 ? 'Streak ' + streak : 'The horse rests';
-  if (streak >= 4) crest.classList.add('gk-blazing');
+  if (streak >= 7) crest.classList.add('gk-crowned');
+  else if (streak >= 4) crest.classList.add('gk-blazing');
   else if (streak >= 1) crest.classList.add('gk-lit');
+  // permanent notches: milestones ever reached etch into the altar
+  var reached = [];
+  try { reached = JSON.parse(localStorage.getItem('gk_milestones') || '[]'); } catch (e) {}
+  MILESTONES.forEach(function (ms) { if (streak >= ms && reached.indexOf(ms) < 0) reached.push(ms); });
+  try { localStorage.setItem('gk_milestones', JSON.stringify(reached)); } catch (e) {}
+  document.getElementById('gkNotches').innerHTML = reached.map(function () { return '<i></i>'; }).join('');
+  // milestone day: full-screen moment, once
+  var todayMs = MILESTONES.indexOf(streak) >= 0;
+  var msKey = 'gk_ms_seen_' + streak;
+  var msSeen = false;
+  try { msSeen = !!localStorage.getItem(msKey); } catch (e) {}
+  if (todayMs && !msSeen) {
+    try { localStorage.setItem(msKey, '1'); } catch (e) {}
+    var mo = document.createElement('div');
+    mo.className = 'gk-milestone';
+    mo.innerHTML = '<div class="gk-ms-sweep"></div><img src="logo.svg" alt="" class="gk-ms-horse">' +
+      '<div class="gk-ms-days">DAY ' + streak + '</div><div class="gk-ms-line">the horse remembers your discipline</div>';
+    document.body.appendChild(mo);
+    setTimeout(function () { mo.remove(); }, 3400);
+  }
 
-  const DOORS = [
+  /* ----------------------------------------------- THE DAY (deep read) ---- */
+  var dayHtml = '<div class="gk-dr-title">The Day</div>';
+  if (rankedHours) {
+    // 24h dial: best hours warm, worst cold, financial gold, now-cursor
+    function hourFrac(label) {
+      var mm2 = label.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!mm2) return 0;
+      var h = parseInt(mm2[1], 10) % 12 + (mm2[3].toUpperCase() === 'PM' ? 12 : 0);
+      return (h + parseInt(mm2[2], 10) / 60) / 24;
+    }
+    var marks = '';
+    marks += '<i class="gk-dm best" style="left:' + (hourFrac(rankedHours[0].row.label) * 100) + '%"></i>';
+    marks += '<i class="gk-dm best2" style="left:' + (hourFrac(rankedHours[1].row.label) * 100) + '%"></i>';
+    marks += '<i class="gk-dm worst" style="left:' + (hourFrac(rankedHours[rankedHours.length - 1].row.label) * 100) + '%"></i>';
+    marks += '<i class="gk-dm worst2" style="left:' + (hourFrac(rankedHours[rankedHours.length - 2].row.label) * 100) + '%"></i>';
+    if (finHour) marks += '<i class="gk-dm fin" style="left:' + (hourFrac(finHour.row.label) * 100) + '%"></i>';
+    var nowFrac = (now.getHours() + now.getMinutes() / 60) / 24;
+    marks += '<i class="gk-dm now" style="left:' + (nowFrac * 100) + '%"></i>';
+    // hour-aware atmosphere: the air warms inside your best hours, cools in the worst
+    function nearNow(label) { var d = Math.abs(nowFrac - hourFrac(label)) * 24; return Math.min(d, 24 - d) < 1; }
+    if (nearNow(rankedHours[0].row.label) || nearNow(rankedHours[1].row.label))
+      document.documentElement.classList.add('gk-hour-warm');
+    else if (nearNow(rankedHours[rankedHours.length - 1].row.label) || nearNow(rankedHours[rankedHours.length - 2].row.label))
+      document.documentElement.classList.add('gk-hour-cold');
+    dayHtml += '<div class="gk-dial"><div class="gk-dial-track"></div>' + marks + '</div>' +
+      '<div class="gk-dial-legend"><span class="l-best">● best</span><span class="l-worst">● worst</span>' +
+      (finHour ? '<span class="l-fin">◆ financial</span>' : '') + '<span class="l-now">| now</span></div>';
+    dayHtml += '<div class="gk-count" id="gkCount"></div>';
+  }
+  dayHtml += '<div class="gk-count" id="gkAlignNext"></div>';
+  document.getElementById('gkDayread').innerHTML = dayHtml;
+
+  // live countdown to the best hour
+  if (rankedHours) {
+    var bestLabel = rankedHours[0].row.label;
+    function tick() {
+      var el = document.getElementById('gkCount');
+      if (!el) return;
+      var mm3 = bestLabel.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!mm3) return;
+      var bh = parseInt(mm3[1], 10) % 12 + (mm3[3].toUpperCase() === 'PM' ? 12 : 0);
+      var t = new Date(); var target = new Date();
+      target.setHours(bh, parseInt(mm3[2], 10), 0, 0);
+      if (target <= t) { el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — ' + (t - target < 90 * 60000 ? '<b>now</b>' : 'passed for today'); return; }
+      var mins = Math.round((target - t) / 60000);
+      el.innerHTML = 'Best hour <b>' + bestLabel + '</b> — in <b>' + Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm</b>';
+    }
+    tick(); setInterval(tick, 30000);
+  }
+
+  // countdown to your next HIGH-ALIGNMENT day
+  if (me) {
+    var bestDay = null, bestScore = -1, firstHigh = null;
+    for (var dd = 1; dd <= 45; dd++) {
+      var probe = new Date(day0); probe.setDate(probe.getDate() + dd);
+      var sc = null;
+      try { sc = computeCompatibility(me, probe).finalScore; } catch (e) { break; }
+      if (sc != null && sc > bestScore) { bestScore = sc; bestDay = { d: probe, s: sc, in: dd }; }
+      if (sc != null && sc >= 85 && !firstHigh) firstHigh = { d: probe, s: sc, in: dd };
+      if (firstHigh) break;
+    }
+    var pick = firstHigh || bestDay;
+    if (pick) {
+      document.getElementById('gkAlignNext').innerHTML =
+        'Next high-alignment day: <b>' + pick.d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) +
+        ' · ' + pick.s + '%</b> — in <b>' + pick.in + ' day' + (pick.in === 1 ? '' : 's') + '</b>';
+    }
+  }
+
+  /* ------------------------------------------------------------ portals -- */
+  var DOORS = [
     { href: 'stable.html', ico: '🐎', name: 'The Stable', sub: 'flow · discipline · review' },
     { href: 'sports-betting.html', ico: '📈', name: 'Markets', sub: 'betting · stocks' },
     { href: 'calendar.html', ico: '📅', name: 'Days', sub: 'calendar · astrology' },
     { href: 'calculator.html', ico: '🧮', name: 'Tools', sub: 'numbers · lookups' },
-    { href: 'profile.html', ico: '👤', name: 'My Profile', sub: 'your numbers · your cycles' },
+    { href: 'profile.html', ico: '👤', name: 'My Profile', sub: 'your numbers · your cycles' }
   ];
-  const nav = document.getElementById('gkPortals');
-  nav.innerHTML = DOORS.map((d) =>
-    '<a class="gk-portal" href="' + d.href + '"><span class="gk-p-ico">' + d.ico + '</span>' +
-    '<span class="gk-p-name">' + d.name + '</span><div class="gk-p-sub">' + d.sub + '</div></a>').join('');
-  nav.addEventListener('click', (e) => {
-    const a = e.target.closest('a.gk-portal');
+  var nav = document.getElementById('gkPortals');
+  nav.innerHTML = DOORS.map(function (d) {
+    return '<a class="gk-portal" href="' + d.href + '"><span class="gk-p-ico">' + d.ico + '</span>' +
+      '<span class="gk-p-name">' + d.name + '</span><div class="gk-p-sub">' + d.sub + '</div></a>';
+  }).join('');
+  nav.addEventListener('click', function (e) {
+    var a = e.target.closest('a.gk-portal');
     if (!a) return;
     e.preventDefault();
     if (window.gkNavigate) window.gkNavigate(a.getAttribute('href'));
