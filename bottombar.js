@@ -57,9 +57,15 @@
       overflow: visible !important; }
     /* style.css parks the sign-in pill bottom-right on phones — that spot
        belongs to the bar now, so the pill goes back up top on bar pages.
-       Top-RIGHT is its exclusive territory (update pill keeps top-left). */
+       Top-RIGHT is its exclusive territory (update pill keeps top-left).
+       Collapsed to a small cloud-only circle — the email was eating a whole
+       strip of screen; tap behavior (sign-in / account) is unchanged. */
     .auth-widget { top: calc(env(safe-area-inset-top) + 12px) !important; bottom: auto !important;
-      right: 10px !important; left: auto !important; z-index: 95; }
+      right: 10px !important; left: auto !important; z-index: 95;
+      width: 38px; height: 38px; border-radius: 50% !important; padding: 0 !important;
+      overflow: hidden; font-size: 0 !important; display: flex; align-items: center; justify-content: center; }
+    .auth-widget::before { content: '☁️'; font-size: 17px; }
+    .auth-widget * { font-size: 0 !important; }
     .bb-bar { pointer-events: auto; display: flex;
       background: var(--panel, #0a0f1a); border-top: 1px solid var(--border, #223048);
       padding-bottom: env(safe-area-inset-bottom); }

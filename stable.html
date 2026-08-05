@@ -120,8 +120,11 @@ label.st-lbl { display: block; font-size: 11px; letter-spacing: 1px; color: #5b6
    markup arrives naked — restyle it in HUD colors and, crucially, restore
    the hidden-until-.active states its overlays rely on. */
 .auth-widget { position: fixed; right: 12px; top: calc(env(safe-area-inset-top) + 68px); z-index: 90;
-  background: rgba(10,15,26,.92); border: 1px solid rgba(0,229,255,.3); border-radius: 999px;
-  padding: 5px 12px; font-size: 10px; color: #5b6a80; cursor: pointer; }
+  background: rgba(10,15,26,.92); border: 1px solid rgba(0,229,255,.3); cursor: pointer;
+  width: 36px; height: 36px; border-radius: 50%; padding: 0; overflow: hidden; font-size: 0;
+  display: flex; align-items: center; justify-content: center; }
+.auth-widget::before { content: '☁️'; font-size: 16px; }
+.auth-widget * { font-size: 0; }
 .modal-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7);
   align-items: center; justify-content: center; padding: 20px; }
 .modal-overlay.active { display: flex; }
