@@ -27,6 +27,15 @@
   const file = (location.pathname.split('/').pop() || 'profile.html').replace('.html', '') || 'profile';
   const activeTab = TABS.find((t) => t.match.some((m) => file === m || file.startsWith(m)));
 
+  // Ground truth from device telemetry (iPhone 15 Pro Max): in the installed
+  // app, scroll-locked pages get an 873pt canvas on a 932pt screen — the
+  // bottom 59pt (status-bar height) is UNPAINTABLE, so no fixed/sticky/
+  // translate trick can ever reach it. The Stable (normal document scroll)
+  // gets the full canvas under identical meta tags. So in standalone mode we
+  // unlock document scrolling (neutralize the .scroll-viewport lock) and let
+  // plain fixed positioning work exactly like it does on The Stable.
+  if (navigator.standalone === true) document.documentElement.classList.add('bb-standalone');
+
   const css = `
     .topnav { display: none !important; }
     /* iOS standalone (home-screen app) reports a layout viewport ~78pt short
@@ -39,6 +48,12 @@
     .bb-frame { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column;
       justify-content: flex-end; pointer-events: none; }
     body:has(> .bb-frame) .page { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+    /* Standalone unlock: give these pages The Stable's proven conditions —
+       the document scrolls, the canvas runs full-screen, fixed lands true.
+       (Safari keeps the scroll-lock and its anti-drift benefits.) */
+    html.bb-standalone, html.bb-standalone body { height: auto !important; overflow-y: auto !important; }
+    html.bb-standalone .scroll-viewport { position: static !important; inset: auto !important;
+      overflow: visible !important; }
     .bb-diag { text-align: right; font-size: 9px; color: rgba(150,160,180,.55);
       padding: 0 8px 2px; pointer-events: none; }
     /* style.css parks the sign-in pill bottom-right on phones — that spot
@@ -124,20 +139,15 @@
     frame.appendChild(bar);
     document.body.appendChild(frame);
 
-    // Standalone viewport compensation. iPhone 15 Pro Max = 430x932pt; the
-    // home-screen app under-reports the layout viewport by ~78pt on these
-    // pages, so shift the frame down by exactly the measured shortfall.
-    // The diag line is temporary telemetry: "app 854/932 vv854 Δ78↓" tells
-    // us layout/screen/visual heights and whether the shift applied.
+    // Temporary telemetry (no compensation — translating into the missing
+    // strip proved unpaintable): "app 932/932 Δ0" after the standalone
+    // unlock means the canvas is finally full-height and the fix is done.
     function fit() {
       const sh = Math.round(screen.height);
       const ih = Math.round(window.innerHeight);
       const vv = window.visualViewport ? Math.round(window.visualViewport.height) : 0;
-      const missing = sh - ih;
       const standalone = navigator.standalone === true;
-      const ok = standalone && missing > 4 && missing < 200;
-      frame.style.transform = ok ? 'translateY(' + missing + 'px)' : '';
-      diag.textContent = (standalone ? 'app ' : 'safari ') + ih + '/' + sh + (vv ? ' vv' + vv : '') + ' Δ' + missing + (ok ? '↓' : '');
+      diag.textContent = (standalone ? 'app ' : 'safari ') + ih + '/' + sh + (vv ? ' vv' + vv : '') + ' Δ' + (sh - ih);
     }
     fit();
     window.addEventListener('resize', fit);
