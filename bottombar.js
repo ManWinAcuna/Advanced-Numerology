@@ -29,15 +29,21 @@
 
   const css = `
     .topnav { display: none !important; }
-    /* Content clearance: these pages scroll INSIDE .scroll-viewport, so the
-       room for the bar has to live on the page container, not on body. */
-    body, .page, .ufc-page, .astro-page { padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
-    /* iOS standalone + locked document scroll = WebKit offsets fixed elements
-       anchored ONLY by bottom with a phantom toolbar inset (~78pt). Fixed
-       boxes anchored by BOTH edges land true (see .scroll-viewport), so the
-       bar bottom-aligns inside a full-screen click-through frame instead. */
-    .bb-frame { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column;
-      justify-content: flex-end; pointer-events: none; }
+    /* iOS standalone + locked document scroll leaves EVERY fixed-position
+       bottom anchor ~78pt short (tried bottom-only and both-edges frames —
+       same float). So: no fixed positioning at all. The bar lives INSIDE
+       .scroll-viewport as its last flex child — margin-top:auto rests it at
+       the container's true bottom edge when content is short, and
+       position:sticky pins it to the visible bottom while scrolling. Sticky
+       tracks the scroller's real edge; there is no viewport math to get
+       wrong. (Fixed-frame fallback kept for any page without the scroller.) */
+    .scroll-viewport { display: flex; flex-direction: column; }
+    .scroll-viewport > .page, .scroll-viewport > .ufc-page, .scroll-viewport > .astro-page { flex: 0 0 auto; width: 100%; }
+    .bb-frame { position: sticky; bottom: 0; margin-top: auto; width: 100%;
+      z-index: 500; pointer-events: none; }
+    body > .bb-frame { position: fixed; inset: 0; display: flex; flex-direction: column;
+      justify-content: flex-end; }
+    body:has(> .bb-frame) .page { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
     .bb-bar { pointer-events: auto; display: flex;
       background: var(--panel, #0a0f1a); border-top: 1px solid var(--border, #223048);
       padding-bottom: env(safe-area-inset-bottom); }
@@ -113,7 +119,10 @@
     backdrop.addEventListener('click', closeAll);
 
     frame.appendChild(bar);
-    document.body.appendChild(frame);
+    // Preferred home: last child of the real scroller (sticky bottom).
+    // Fallback: fixed frame on body for any page without .scroll-viewport.
+    const scroller = document.querySelector('.scroll-viewport');
+    (scroller || document.body).appendChild(frame);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
