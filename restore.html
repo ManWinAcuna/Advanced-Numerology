@@ -34,6 +34,12 @@
   <button class="cr-btn" id="crRestore">Restore everything from cloud</button>
   <div id="crStatus"></div>
   <div id="crOut"></div>
+  <div class="cr-note" style="margin-top:28px; border-top: 1px solid var(--border); padding-top: 14px;">
+    <b style="color:#ff7a8a">Danger zone.</b> The button below pushes THIS device's data UP to the
+    cloud, overwriting the backup. Only use it from the device that holds your good data
+    (the confirmation shows this device's counts so you can tell).
+  </div>
+  <button class="cr-btn" id="crBackup" style="border-color:#ff7a8a;color:#ff7a8a">Back up THIS device → cloud</button>
 </div>
 <script src="scroll-viewport.js"></script>
 <script src="big-store.js"></script>
@@ -111,6 +117,22 @@
         setTimeout(() => location.reload(), 800);
       });
     }).catch((e) => status('Restore failed: ' + (e && e.message ? e.message : e)));
+  });
+
+  document.getElementById('crBackup').addEventListener('click', () => {
+    authReady().then((user) => {
+      if (!user) { status('Not signed in — tap the cloud circle (top right) first.'); return null; }
+      const emaxLocal = localVal(typeof EMAX_STORAGE_KEY !== 'undefined' ? EMAX_STORAGE_KEY : 'emax_categories') || {};
+      const nCats = Object.keys(emaxLocal).length;
+      const nTrades = (localVal('stable_trades') || []).length;
+      const nDb = Object.keys(localVal(typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'numerology_db') || {}).length;
+      const ok = confirm('Push THIS device to the cloud?\n\nThis device holds:\n· ' + nCats + ' EMAX categories\n· ' + nTrades + ' Stable trades\n· Database: ' + nDb + ' keys\n\nThe cloud backup will be overwritten with these numbers. Continue ONLY if they look like your good data.');
+      if (!ok) { status('Backup cancelled.'); return null; }
+      status('Pushing this device to the cloud…');
+      cloudPushAll();
+      setTimeout(() => status('Push sent. Wait ~30 seconds, then tap Check cloud to verify the counts landed.'), 1500);
+      return null;
+    }).catch((e) => status('Backup failed: ' + (e && e.message ? e.message : e)));
   });
 })();
 </script>
