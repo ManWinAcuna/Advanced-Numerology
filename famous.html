@@ -99,9 +99,29 @@
         <div class="cell sign" id="venusSign" title="">-</div>
       </div>
 
+      <div class="section-label" style="margin-top:14px">Personal Cycles</div>
+      <div class="grid3 headerrow">
+        <div class="cell head">PY</div>
+        <div class="cell head">PM</div>
+        <div class="cell head">PD</div>
+      </div>
+      <div class="grid3">
+        <div class="cell highlight" id="pyReduced">-</div>
+        <div class="cell highlight" id="pmReduced">-</div>
+        <div class="cell highlight" id="pdReduced">-</div>
+      </div>
+      <div class="grid3 subrow">
+        <div class="cell small" id="pyRaw">-</div>
+        <div class="cell small" id="pmRaw">-</div>
+        <div class="cell small" id="pdRaw">-</div>
+      </div>
+
     </div>
 
-    <!-- Right column -->
+    <!-- Right column: identity-adjacent stuff (static, doesn't change day to
+         day) first, then whatever's relative to today, Compatibility with
+         Today last - same order as My Profile and the Birthday Database's
+         entry popup. -->
     <div class="right">
 
       <div class="box stat-box compat-today-box" id="compatMeBox">
@@ -109,14 +129,19 @@
         <div class="box-value" id="compatMeScore">-</div>
       </div>
 
-      <div class="box stat-box compat-today-box" id="compatTodayBox">
-        <div class="box-label">🤝 Compatibility with Today</div>
-        <div class="box-value" id="compatTodayScore">-</div>
+      <div class="box stat-box">
+        <div class="box-label">🍀 Lucky Number</div>
+        <div class="box-value" id="luckyNumber">-</div>
       </div>
 
-      <div class="box stat-box compat-today-box" id="energyFlowBox">
-        <div class="box-label">⚡ Energy Flow</div>
-        <div class="box-value" id="energyFlowScore">-</div>
+      <div class="box stat-box">
+        <div class="box-label">✨ 28 Day</div>
+        <div class="box-value" id="twentyEightDay">-</div>
+      </div>
+
+      <div class="box stat-box">
+        <div class="box-label">🔢 Missing</div>
+        <div class="box-value box-value-muted" id="missing">-</div>
       </div>
 
       <div class="box stat-box">
@@ -135,35 +160,14 @@
         </div>
       </div>
 
-      <div class="grid3 headerrow">
-        <div class="cell head">PY</div>
-        <div class="cell head">PM</div>
-        <div class="cell head">PD</div>
-      </div>
-      <div class="grid3">
-        <div class="cell highlight" id="pyReduced">-</div>
-        <div class="cell highlight" id="pmReduced">-</div>
-        <div class="cell highlight" id="pdReduced">-</div>
-      </div>
-      <div class="grid3 subrow">
-        <div class="cell small" id="pyRaw">-</div>
-        <div class="cell small" id="pmRaw">-</div>
-        <div class="cell small" id="pdRaw">-</div>
+      <div class="box stat-box compat-today-box" id="energyFlowBox">
+        <div class="box-label">⚡ Energy Flow</div>
+        <div class="box-value" id="energyFlowScore">-</div>
       </div>
 
-      <div class="box stat-box">
-        <div class="box-label">🍀 Lucky Number</div>
-        <div class="box-value" id="luckyNumber">-</div>
-      </div>
-
-      <div class="box stat-box">
-        <div class="box-label">✨ 28 Day</div>
-        <div class="box-value" id="twentyEightDay">-</div>
-      </div>
-
-      <div class="box stat-box">
-        <div class="box-label">🔢 Missing</div>
-        <div class="box-value box-value-muted" id="missing">-</div>
+      <div class="box stat-box compat-today-box" id="compatTodayBox">
+        <div class="box-label">🤝 Compatibility with Today</div>
+        <div class="box-value" id="compatTodayScore">-</div>
       </div>
 
     </div>
