@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=6">
+<link rel="stylesheet" href="godlike.css?v=7">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -347,14 +347,18 @@
      gray = flat. The NOW card runs a live clock (seconds and all) and pins
      this hour against the day's number. Words stay out of the way. */
   var dayHtml = '<div class="gk-dr-title">The Day</div>';
+  // NOTE: hourFrac/tierOf are `var`-assigned (not `function` declarations) on
+  // purpose — this whole section spans two separate `if (rankedHours)` blocks
+  // below, and in strict mode a block-scoped `function` declared in the first
+  // block is invisible in the second (silent ReferenceError on tap, no modal).
+  var hourFrac = function (label) {
+    var mm2 = label.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!mm2) return 0;
+    var h = parseInt(mm2[1], 10) % 12 + (mm2[3].toUpperCase() === 'PM' ? 12 : 0);
+    return (h + parseInt(mm2[2], 10) / 60) / 24;
+  };
+  var tierOf = function (s) { return s >= 85 ? 'hot' : s >= 70 ? 'good' : s >= 49 ? 'mid' : 'bad'; };
   if (rankedHours) {
-    function hourFrac(label) {
-      var mm2 = label.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!mm2) return 0;
-      var h = parseInt(mm2[1], 10) % 12 + (mm2[3].toUpperCase() === 'PM' ? 12 : 0);
-      return (h + parseInt(mm2[2], 10) / 60) / 24;
-    }
-    function tierOf(s) { return s >= 85 ? 'hot' : s >= 70 ? 'good' : s >= 49 ? 'mid' : 'bad'; }
     var scoreByIndex = {};
     rankedHours.forEach(function (rh) { scoreByIndex[rh.row.index] = rh.score; });
     var chrono = hoursTable.rows.slice().sort(function (a, b) { return hourFrac(a.label) - hourFrac(b.label); });
@@ -370,22 +374,30 @@
       if (curTier === 'hot' || curTier === 'good') document.documentElement.classList.add('gk-hour-warm');
       else if (curTier === 'bad') document.documentElement.classList.add('gk-hour-cold');
     }
+    // PM birthdays run TWO personal-hour numbers at once (a digital-clock
+    // count and a military-clock count) — show both wherever the hour's
+    // number appears, not just the digital one.
+    var isPM = hoursTable.isPM;
+    var numOf = function (row) { return isPM ? row.digitalReduced + '·' + row.militaryReduced : String(row.digitalReduced); };
     if (curPos >= 0) {
       var cur = chrono[curPos], curSc = scoreByIndex[cur.index];
       var nxt = chrono[(curPos + 1) % 24], nxtSc = scoreByIndex[nxt.index];
       var curFin = cur.index === finIdx;
-      // this hour measured against the day's ruling number
+      // this hour measured against the day's ruling number (either count counts)
       var vsOk = null;
-      try { vsOk = numerologyCompat(cur.digitalReduced, ud) >= 49; } catch (e) {}
+      try {
+        vsOk = numerologyCompat(cur.digitalReduced, ud) >= 49 ||
+          (isPM && numerologyCompat(cur.militaryReduced, ud) >= 49);
+      } catch (e) {}
       dayHtml += '<div class="gk-nowcard gt-' + tierOf(curSc) + (curFin ? ' fin' : '') + '">' +
-        '<span class="gk-nc-num">' + cur.digitalReduced + '</span>' +
+        '<span class="gk-nc-num' + (isPM ? ' gk-nc-num-dual' : '') + '">' + numOf(cur) + '</span>' +
         '<div class="gk-nc-mid">' +
           '<span class="gk-nc-clock" id="gkClock"></span>' +
-          '<span class="gk-nc-sub">hour ' + cur.digitalReduced + ' · until ' + nxt.label + '</span>' +
+          '<span class="gk-nc-sub">hour ' + numOf(cur) + ' · until ' + nxt.label + '</span>' +
         '</div>' +
         '<div class="gk-nc-side">' +
           (vsOk != null ? '<span class="gk-nc-vs ' + (vsOk ? 'ok' : 'bad') + '">day ' + ud + ' ' + (vsOk ? '✓' : '✗') + '</span>' : '') +
-          '<span class="gk-nc-next">next <b>' + nxt.digitalReduced + '</b><i class="gk-dot gd-' + tierOf(nxtSc) + '"></i></span>' +
+          '<span class="gk-nc-next">next <b>' + numOf(nxt) + '</b><i class="gk-dot gd-' + tierOf(nxtSc) + '"></i></span>' +
         '</div>' +
       '</div>';
     }
@@ -450,7 +462,7 @@
         var isFin = row.index === finIdx;
         return '<div class="gk-hr-row t-' + tierOf(sc) + (isFin ? ' fin' : '') + (i === curPos ? ' now' : '') + '">' +
           '<span class="gk-hr-time">' + row.label + '</span>' +
-          '<span class="gk-hr-num">' + row.digitalReduced + '</span>' +
+          '<span class="gk-hr-num">' + numOf(row) + '</span>' +
           '<span class="gk-hr-tag">' + (i === curPos ? 'now' : isFin ? '$' : '') + '</span>' +
         '</div>';
       }).join('');

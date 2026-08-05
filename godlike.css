@@ -385,12 +385,17 @@ html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18p
    this zone to the ring's own diameter keeps the ring and its keyword
    plaques locked to the number regardless of what the page grows to below. */
 .gk-ringzone {
-  position: relative; width: min(78vw, 350px); height: min(78vw, 350px);
-  margin: 0 auto; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
+  /* Deliberately NOT given a fixed height: it sizes to its own content
+     (date + number + sub + faces) only. A forced height matching the ring's
+     full diameter left dead air above the date whenever that content was
+     shorter than the ring — this way the ring simply overflows evenly
+     above/below its (shorter) content box, which is the intended look. */
+  position: relative; width: min(78vw, 350px); margin: 0 auto;
+  display: flex; flex-direction: column; align-items: center;
 }
 .gk-arcs {
-  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+  position: absolute; top: 50%; left: 50%; width: min(78vw, 350px); height: min(78vw, 350px);
+  transform: translate(-50%, -50%); pointer-events: none;
 }
 .gk-arc-base { fill: none; stroke: rgba(255,255,255,.07); stroke-width: 1.5; }
 .gk-arc-dash { fill: none; stroke: color-mix(in srgb, var(--acc) 14%, transparent);
@@ -407,8 +412,13 @@ html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18p
 }
 @keyframes gkBloom { from { opacity: 0; transform: scale(.82); filter: blur(12px); } }
 
-/* keyword constellation: three words etched at the ring's stations */
-.gk-kws { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+/* keyword constellation: three words etched at the ring's stations. Sized
+   and centered exactly like .gk-arcs so the plaques track the ring's own
+   square, not the (now shorter) ringzone box it sits inside. */
+.gk-kws {
+  position: absolute; top: 50%; left: 50%; width: min(78vw, 350px); height: min(78vw, 350px);
+  transform: translate(-50%, -50%); pointer-events: none; z-index: 1;
+}
 .gk-kw {
   position: absolute; font-family: var(--gk-ui); text-transform: uppercase;
   font-size: 9px; letter-spacing: .32em; color: var(--acc); opacity: 0;
@@ -553,6 +563,7 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .gk-nowcard.gt-bad { border-color: rgba(224,82,77,.45);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 24px rgba(224,82,77,.13); }
 .gk-nc-num { font-family: var(--gk-display); font-weight: 700; font-size: 46px; line-height: 1; }
+.gk-nc-num-dual { font-size: 27px; letter-spacing: -.02em; }
 .gt-hot .gk-nc-num { color: #3fe081; text-shadow: 0 0 18px rgba(63,224,129,.5); }
 .gt-good .gk-nc-num { color: #2fbf6b; }
 .gt-mid .gk-nc-num { color: #93a0b1; }
@@ -637,7 +648,7 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .gk-hr-row.fin { background: rgba(245,197,66,.14); }
 .gk-hr-time { flex: 1; font-size: 12.5px; color: var(--muted); }
 .gk-hr-row.now .gk-hr-time { color: var(--text); }
-.gk-hr-num { font-family: var(--gk-display); font-weight: 700; font-size: 15px; width: 22px; text-align: center; }
+.gk-hr-num { font-family: var(--gk-display); font-weight: 700; font-size: 15px; min-width: 22px; text-align: center; }
 .gk-hr-row.t-hot .gk-hr-num { color: #3fe081; }
 .gk-hr-row.t-good .gk-hr-num { color: #2fbf6b; }
 .gk-hr-row.t-mid .gk-hr-num { color: #93a0b1; }
