@@ -24,13 +24,16 @@
     shown = true;
     const style = document.createElement('style');
     style.textContent = `
-      .upd-pill { position: fixed; top: calc(env(safe-area-inset-top) + 10px); left: 50%;
-        transform: translateX(-50%); z-index: 600; display: flex; align-items: center; gap: 10px;
+      /* Top-LEFT on purpose: the sign-in pill owns the top-right — the two
+         must never overlap (an undismissed update pill was eating the
+         sign-in button's taps). */
+      .upd-pill { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 10px;
+        z-index: 94; display: flex; align-items: center; gap: 10px;
         background: var(--panel, #0a0f1a); border: 1px solid var(--yellow, #f5c542);
-        color: var(--yellow, #f5c542); border-radius: 999px; padding: 9px 14px;
-        font-size: 13px; font-family: inherit; box-shadow: 0 4px 20px rgba(0,0,0,.5);
+        color: var(--yellow, #f5c542); border-radius: 999px; padding: 8px 12px;
+        font-size: 12px; font-family: inherit; box-shadow: 0 4px 20px rgba(0,0,0,.5);
         animation: updIn .2s ease; }
-      @keyframes updIn { from { transform: translate(-50%, -8px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+      @keyframes updIn { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
       .upd-pill button { background: none; border: none; color: inherit; font-family: inherit;
         font-size: 13px; cursor: pointer; padding: 0; }
       .upd-pill .upd-x { color: var(--muted, #5b6a80); font-size: 15px; }
@@ -40,8 +43,12 @@
     pill.className = 'upd-pill';
     pill.innerHTML = '<button class="upd-go">⬆ New version — tap to update</button><button class="upd-x" title="Later">×</button>';
     pill.querySelector('.upd-go').addEventListener('click', () => {
+      pill.querySelector('.upd-go').textContent = '⏳ Updating…';
       remember(sha);
       location.replace(location.pathname + '?v=' + sha.slice(0, 7));
+      // Standalone WebKit occasionally swallows same-path replace() calls —
+      // if we're still here after a beat, force a plain reload.
+      setTimeout(() => location.reload(), 1200);
     });
     pill.querySelector('.upd-x').addEventListener('click', () => {
       remember(sha);
@@ -53,7 +60,7 @@
 
   function check() {
     if (!navigator.onLine) return;
-    fetch(API, { headers: { Accept: 'application/vnd.github+json' } })
+    fetch(API, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         const sha = data && data.sha;

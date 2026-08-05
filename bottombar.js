@@ -55,8 +55,10 @@
     html.bb-standalone .scroll-viewport { position: static !important; inset: auto !important;
       overflow: visible !important; }
     /* style.css parks the sign-in pill bottom-right on phones — that spot
-       belongs to the bar now, so the pill goes back up top on bar pages. */
-    .auth-widget { top: calc(env(safe-area-inset-top) + 6px) !important; bottom: auto !important; }
+       belongs to the bar now, so the pill goes back up top on bar pages.
+       Top-RIGHT is its exclusive territory (update pill keeps top-left). */
+    .auth-widget { top: calc(env(safe-area-inset-top) + 12px) !important; bottom: auto !important;
+      right: 10px !important; left: auto !important; z-index: 95; }
     .bb-bar { pointer-events: auto; display: flex;
       background: var(--panel, #0a0f1a); border-top: 1px solid var(--border, #223048);
       padding-bottom: env(safe-area-inset-bottom); }
