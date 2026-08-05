@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Today</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="godlike.css?v=2">
+</head>
+<body>
+<div class="page">
+
+  <section class="gk-altar" id="gkAltar">
+    <div class="gk-altar-ring"></div>
+    <div class="gk-altar-label" id="gkDate"></div>
+    <div class="gk-altar-num" id="gkNum">·</div>
+    <div class="gk-altar-sub">Universal Day</div>
+    <div class="gk-orbits" id="gkOrbits"></div>
+    <div class="gk-brief" id="gkBrief"></div>
+    <div class="gk-crest" id="gkCrest">
+      <img src="logo.svg" alt="" class="gk-crest-img">
+      <div class="gk-crest-streak" id="gkCrestStreak"></div>
+    </div>
+  </section>
+
+  <nav class="gk-portals" id="gkPortals"></nav>
+
+</div>
+<script src="scroll-viewport.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="compat-engine.js"></script>
+<script src="big-store.js"></script>
+<script src="db-core.js"></script>
+<script src="firebase-loader.js"></script>
+<script src="bottombar.js?v=8"></script>
+<script src="update-check.js?v=2"></script>
+<script>
+/* THE TODAY PAGE — the daily landing (index.html points here). Universal Day
+   is the crown; Day Energy, the day's animal, alignment and flow orbit it.
+   Profile is its own untouched realm again. */
+(function () {
+  const now = new Date();
+  const ud = universalDayNumber(now);
+  const de = reduceNumber(now.getDate());
+  document.documentElement.setAttribute('data-energy', String(ud));
+  try { localStorage.setItem('gk_ud_' + now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()), String(ud)); } catch (e) { /* ignore */ }
+
+  document.getElementById('gkDate').textContent =
+    now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  const numEl = document.getElementById('gkNum');
+  numEl.textContent = ud;
+  numEl.classList.add('gk-glyph', 'gk-n' + ud);
+
+  let animal = null, animalEmoji = '';
+  try {
+    animal = getChineseDaySign(now);
+    animalEmoji = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[animal]) || '';
+  } catch (e) { /* ignore */ }
+
+  let compat = null, flow = null;
+  try {
+    const profile = loadProfile();
+    if (profile && profile.date) {
+      const [y, m, d] = profile.date.split('-').map(Number);
+      const me = new Date(); me.setFullYear(y, m - 1, d); me.setHours(0, 0, 0, 0);
+      compat = computeCompatibility(me, now).finalScore;
+      flow = computeEnergyFlow(me, now).finalScore;
+    }
+  } catch (e) { /* ignore */ }
+
+  const orbits = [];
+  orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
+  if (animal) orbits.push('<span class="gk-orbit">' + animalEmoji + ' <b>' + animal + '</b> day</span>');
+  if (compat != null) orbits.push('<span class="gk-orbit">Aligned <b>' + compat + '%</b></span>');
+  if (flow != null) orbits.push('<span class="gk-orbit">Flow <b>' + flow + '%</b></span>');
+  document.getElementById('gkOrbits').innerHTML = orbits.join('');
+
+  const bits = ['A <b>universal ' + ud + '</b> day'];
+  if (de !== ud) bits.push('energy <b>' + de + '</b>');
+  if (animal) bits.push('the day of the <b>' + animal + '</b>');
+  if (compat != null) bits.push('you are <b>' + compat + '% aligned</b>');
+  document.getElementById('gkBrief').innerHTML = bits.join(' · ') + '.';
+
+  const streak = (window.gkStableStreak ? window.gkStableStreak() : 0);
+  const crest = document.getElementById('gkCrest');
+  const lab = document.getElementById('gkCrestStreak');
+  lab.textContent = streak > 0 ? 'Streak ' + streak : 'The horse rests';
+  if (streak >= 4) crest.classList.add('gk-blazing');
+  else if (streak >= 1) crest.classList.add('gk-lit');
+
+  const DOORS = [
+    { href: 'stable.html', ico: '🐎', name: 'The Stable', sub: 'flow · discipline · review' },
+    { href: 'sports-betting.html', ico: '📈', name: 'Markets', sub: 'betting · stocks' },
+    { href: 'calendar.html', ico: '📅', name: 'Days', sub: 'calendar · astrology' },
+    { href: 'calculator.html', ico: '🧮', name: 'Tools', sub: 'numbers · lookups' },
+    { href: 'profile.html', ico: '👤', name: 'My Profile', sub: 'your numbers · your cycles' },
+  ];
+  const nav = document.getElementById('gkPortals');
+  nav.innerHTML = DOORS.map((d) =>
+    '<a class="gk-portal" href="' + d.href + '"><span class="gk-p-ico">' + d.ico + '</span>' +
+    '<span class="gk-p-name">' + d.name + '</span><div class="gk-p-sub">' + d.sub + '</div></a>').join('');
+  nav.addEventListener('click', (e) => {
+    const a = e.target.closest('a.gk-portal');
+    if (!a) return;
+    e.preventDefault();
+    if (window.gkNavigate) window.gkNavigate(a.getAttribute('href'));
+    else location.href = a.getAttribute('href');
+  });
+})();
+</script>
+<script src="godlike.js?v=2"></script>
+</body>
+</html>

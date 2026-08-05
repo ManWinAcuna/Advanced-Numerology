@@ -29,23 +29,29 @@
     const p = (v) => String(v).padStart(2, '0');
     return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
   }
-  const DE = gkReduce(new Date().getDate());
+  // UNIVERSAL DAY is the crown (owner's hierarchy: UD > Day Energy). Pages
+  // with db-core compute it directly and cache it; pages without fall back to
+  // today's cached value, then to Day Energy as a last resort.
+  function gkUniversal() {
+    const k = 'gk_ud_' + dayKey();
+    if (typeof universalDayNumber === 'function') {
+      try {
+        const v = universalDayNumber(new Date());
+        try { localStorage.setItem(k, String(v)); } catch (e) { /* ignore */ }
+        return v;
+      } catch (e) { /* fall through */ }
+    }
+    try { const c = localStorage.getItem(k); if (c) return parseInt(c, 10); } catch (e) { /* ignore */ }
+    return gkReduce(new Date().getDate());
+  }
+  const UD = gkUniversal();
 
   // The Stable stays numerology-BLIND: pinned realm accent, no energy attr,
   // and never the ceremony (it would reveal the day's number pre-wrap).
-  if (!IS_STABLE) doc.setAttribute('data-energy', String(DE));
+  if (!IS_STABLE && !doc.hasAttribute('data-energy')) doc.setAttribute('data-energy', String(UD));
 
   /* ----------------------------------------------------------- crest ----- */
-  // Engraved-line horse crest (brand seal). Streak states light it up.
-  const CREST_SVG =
-    '<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<circle cx="32" cy="32" r="30" stroke="#f5c542" stroke-opacity=".5" stroke-width="1"/>' +
-    '<circle cx="32" cy="32" r="26" stroke="#f5c542" stroke-opacity=".22" stroke-width=".6" stroke-dasharray="2 3"/>' +
-    '<path d="M22 46c1-7 2-12 6-17 3-4 7-6 9-10 1-2 1-4 3-5 1 2 2 3 4 4 2 0 3 1 4 3l-3 2c-1 2-2 3-4 3-1 3-1 6-2 9-2 6-5 9-9 11" stroke="#f5c542" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
-    '<path d="M37 14c-3 3-4 6-7 9m8-6c-2 3-4 5-6 8m-5 12c-2 3-3 5-3 9" stroke="#f5c542" stroke-opacity=".55" stroke-width=".9" stroke-linecap="round"/>' +
-    '<circle cx="38.5" cy="18.5" r="1" fill="#f5c542"/>' +
-    '</svg>';
-
+  // The crest is the REAL brand horse (logo.svg) — rendered by today.html.
   function stableStreak() {
     try {
       const days = JSON.parse(localStorage.getItem('stable_days') || '{}');
@@ -121,92 +127,20 @@
     c.className = 'gk-ceremony';
     c.innerHTML =
       '<div class="gk-cer-ring"></div>' +
-      '<div class="gk-cer-num gk-glyph gk-n' + DE + '">' + DE + '</div>' +
-      '<div class="gk-cer-line">Energy of the day</div>';
+      '<div class="gk-cer-num gk-glyph gk-n' + UD + '">' + UD + '</div>' +
+      '<div class="gk-cer-line">Universal Day</div>';
     document.body.appendChild(c);
     setTimeout(() => c.remove(), 2900);
   }
 
-  /* ------------------------------------------- the daily altar (profile) - */
-  function buildAltar() {
-    if (FILE !== 'profile') return;
-    const page = document.querySelector('.page');
-    if (!page || document.querySelector('.gk-altar')) return;
-
-    const read = (id) => {
-      const el = document.getElementById(id);
-      const t = el ? (el.textContent || '').trim() : '';
-      return t && t !== '-' ? t : null;
-    };
-    const ud = (typeof universalDayNumber === 'function') ? universalDayNumber(new Date()) : null;
-
-    const altar = document.createElement('section');
-    altar.className = 'gk-altar';
-    altar.innerHTML =
-      '<div class="gk-altar-ring"></div>' +
-      '<div class="gk-altar-label">' + new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + '</div>' +
-      '<div class="gk-altar-num gk-glyph gk-n' + DE + '">' + DE + '</div>' +
-      '<div class="gk-altar-sub">Energy of the day' + (ud ? ' · Universal ' + ud : '') + '</div>' +
-      '<div class="gk-orbits" id="gkOrbits"></div>' +
-      '<div class="gk-brief" id="gkBrief"></div>' +
-      '<div class="gk-crest" id="gkCrest">' + CREST_SVG + '<div class="gk-crest-streak" id="gkCrestStreak"></div></div>';
-    page.insertBefore(altar, page.firstChild);
-
-    // Portal doorways into the realms (the rest of profile flows beneath).
-    const portals = document.createElement('nav');
-    portals.className = 'gk-portals';
-    const DOORS = [
-      { href: 'stable.html', ico: '🐎', name: 'The Stable', sub: 'flow · discipline · review' },
-      { href: 'sports-betting.html', ico: '📈', name: 'Markets', sub: 'betting · stocks' },
-      { href: 'calendar.html', ico: '📅', name: 'Days', sub: 'calendar · astrology' },
-      { href: 'calculator.html', ico: '🧮', name: 'Tools', sub: 'numbers · lookups' },
-    ];
-    portals.innerHTML = DOORS.map((d) =>
-      '<a class="gk-portal" href="' + d.href + '"><span class="gk-p-ico">' + d.ico + '</span>' +
-      '<span class="gk-p-name">' + d.name + '</span><div class="gk-p-sub">' + d.sub + '</div></a>').join('');
-    portals.addEventListener('click', (e) => {
-      const a = e.target.closest('a.gk-portal');
-      if (!a) return;
-      e.preventDefault();
-      window.gkNavigate(a.getAttribute('href'));
-    });
-    altar.insertAdjacentElement('afterend', portals);
-
-    // Orbits + brief fill from the app's own computed values (render.js runs
-    // first; retry once for async fills).
-    function fill() {
-      const compat = read('compatTodayScore');
-      const energy = read('energyFlowScore');
-      const bestHour = read('bestHourTime');
-      const orbits = document.getElementById('gkOrbits');
-      const brief = document.getElementById('gkBrief');
-      if (!orbits || !brief) return;
-      orbits.innerHTML =
-        (compat ? '<span class="gk-orbit">Aligned <b>' + compat + '</b></span>' : '') +
-        (energy ? '<span class="gk-orbit">Flow <b>' + energy + '</b></span>' : '') +
-        (ud ? '<span class="gk-orbit">Universal <b>' + ud + '</b></span>' : '');
-      const bits = [];
-      bits.push('An <b>energy ' + DE + '</b> day');
-      if (compat) bits.push('you are <b>' + compat + ' aligned</b>');
-      if (bestHour) bits.push('best hour <b>' + bestHour + '</b>');
-      brief.innerHTML = bits.join(' · ') + '.';
-    }
-    fill();
-    setTimeout(fill, 700);
-
-    const streak = stableStreak();
-    const crest = document.getElementById('gkCrest');
-    const label = document.getElementById('gkCrestStreak');
-    if (label) label.textContent = streak > 0 ? 'Streak ' + streak : 'The horse rests';
-    if (crest && streak >= 4) crest.classList.add('gk-blazing');
-    else if (crest && streak >= 1) crest.classList.add('gk-lit');
-  }
+  // The Daily Altar now lives on its own page (today.html) — profile is a
+  // pure realm again. The streak reader is exported for the today page.
+  window.gkStableStreak = stableStreak;
 
   /* --------------------------------------------------------------- boot -- */
   function boot() {
     arrive();
     ceremony();
-    buildAltar();
     tagGlyphs();
     choreograph();
     setTimeout(() => tagGlyphs(), 800); // async-rendered numbers

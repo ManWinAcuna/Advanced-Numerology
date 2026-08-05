@@ -10,9 +10,10 @@
       { href: 'stocks.html', icon: '📊', label: 'Stocks' },
     ], match: ['sports-betting', 'betting', 'bet-log', 'stats', 'polymarket', 'ufc', 'tennis', 'stocks'] },
     { id: 'days', icon: '📅', label: 'Days', items: [
+      { href: 'today.html', icon: '☀️', label: 'Today' },
       { href: 'calendar.html', icon: '📅', label: 'Calendar' },
       { href: 'astrology.html', icon: '🌙', label: 'Astrology' },
-    ], match: ['calendar', 'astrology'] },
+    ], match: ['today', 'calendar', 'astrology'] },
     { id: 'stable', icon: '🐎', label: 'Stable', href: 'stable.html', match: ['stable'] },
     { id: 'tools', icon: '🧮', label: 'Tools', items: [
       { href: 'calculator.html', icon: '🧮', label: 'Calculator' },

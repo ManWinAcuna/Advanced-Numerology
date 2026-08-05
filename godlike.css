@@ -16,10 +16,13 @@
   --acc-ghost: rgba(245, 197, 66, .10);
   --void: #000000;
 
-  /* re-aim style.css's whole surface at the new world */
+  /* re-aim style.css's whole surface at the new world.
+     --panel stays SOLID: countless components (the EMAX popup's tiles and
+     banners above all) rely on it for containment — glass is applied only
+     through the explicit surface overrides below, never via this var. */
   --bg: #000000;
-  --panel: rgba(255, 255, 255, .025);
-  --border: rgba(255, 255, 255, .07);
+  --panel: #0d0c0a;
+  --border: rgba(255, 255, 255, .09);
   --text: #ece7dc;
   --muted: #77705f;
   --yellow: var(--acc);            /* every accent in the app becomes reactive */
@@ -47,6 +50,8 @@ html[data-energy="9"]  { --acc: #9d84ff; --acc-dim: rgba(157,132,255,.55); --acc
 html[data-energy="11"] { --acc: #86e8ff; --acc-dim: rgba(134,232,255,.55); --acc-ghost: rgba(134,232,255,.09); }
 html[data-energy="22"] { --acc: #3fce9f; --acc-dim: rgba(63,206,159,.55);  --acc-ghost: rgba(63,206,159,.09); }
 html[data-energy="28"] { --acc: #ffd75e; --acc-dim: rgba(255,215,94,.6);   --acc-ghost: rgba(255,215,94,.11); }
+html[data-energy="13"] { --acc: #ff6242; --acc-dim: rgba(255,98,66,.55);   --acc-ghost: rgba(255,98,66,.09); }
+html[data-energy="33"] { --acc: #f0a8c8; --acc-dim: rgba(240,168,200,.55); --acc-ghost: rgba(240,168,200,.09); }
 
 /* The Stable realm keeps its heritage accent inside the shared DNA */
 html.gk-stable { --acc: #00e5ff; --acc-dim: rgba(0,229,255,.55); --acc-ghost: rgba(0,229,255,.09); }
@@ -101,9 +106,11 @@ h1, h2, h3,
   color: var(--muted);
 }
 
-/* hero numerals: struck metal — gradient-filled, edge-lit, precise */
-.box-value, .cell.highlight, .dayleft-value, .pinnacle-card-value,
-.bw-hour-time, .gk-glyph {
+/* hero numerals: struck metal — gradient-filled, edge-lit, precise.
+   ONLY on elements with no app-driven background of their own (the tier
+   pills of compat/energy scores broke under text-clipping — those keep
+   their app colors and just get the display face). */
+.cell.highlight, .dayleft-value, .pinnacle-card-value, .gk-glyph {
   font-family: var(--gk-display) !important;
   font-weight: 700;
   background: linear-gradient(168deg,
@@ -115,6 +122,12 @@ h1, h2, h3,
   text-shadow: none;
   filter: drop-shadow(0 1px 0 rgba(0,0,0,.9))
           drop-shadow(0 0 14px color-mix(in srgb, var(--acc) 22%, transparent));
+}
+/* score pills & hour readouts: display face only, app keeps their colors */
+.box-value, .bw-hour-time {
+  font-family: var(--gk-display) !important;
+  font-weight: 700;
+  -webkit-text-fill-color: currentColor;
 }
 
 /* ---------------------------------------------------- living glyphs -------
@@ -141,12 +154,20 @@ h1, h2, h3,
 @keyframes gkDrift    { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 
 /* --------------------------------------------------------- glass depth -- */
-.box, .stat-box, .pinnacle-card, .collapsible, .modal-box,
+.box, .stat-box, .pinnacle-card, .collapsible,
 .months-box, .hours-box {
   background: linear-gradient(172deg, rgba(255,255,255,.035), rgba(255,255,255,.012)) !important;
   border: 1px solid rgba(255,255,255,.07) !important;
   border-radius: 16px !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 18px 44px rgba(0,0,0,.55);
+}
+/* Popups need CONTAINMENT, not glass — a translucent modal over busy content
+   (the EMAX popup especially) turned to mush. Solid dark panel, clean edge. */
+.modal-box {
+  background: #0b0a08 !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.85);
 }
 .profile-section {
   background: linear-gradient(180deg, rgba(255,255,255,.014), transparent 70%);
@@ -214,9 +235,8 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
 /* ------------------------------------------------------- the daily altar -- */
 .gk-altar {
   position: relative;
-  min-height: 62vh;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 34px 16px 10px; margin-bottom: 8px;
+  text-align: center; padding: 44px 16px 8px; margin-bottom: 6px;
 }
 .gk-altar-ring {
   position: absolute; top: 50%; left: 50%; width: min(74vw, 340px); height: min(74vw, 340px);
@@ -266,8 +286,12 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
   letter-spacing: .06em; max-width: 340px; line-height: 1.6;
 }
 .gk-brief b { color: var(--text); }
-.gk-crest { margin-top: 22px; opacity: .9; }
+.gk-crest { margin-top: 20px; opacity: .95; }
 .gk-crest svg { width: 54px; height: 54px; display: block; margin: 0 auto; }
+.gk-crest-img { width: 64px; height: 64px; display: block; margin: 0 auto;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.8)); }
+.gk-crest.gk-lit .gk-crest-img { filter: drop-shadow(0 0 10px var(--acc-dim)); }
+.gk-crest.gk-blazing .gk-crest-img { filter: drop-shadow(0 0 14px var(--acc)) drop-shadow(0 0 30px var(--acc-dim)); }
 .gk-crest-streak {
   font-family: var(--gk-ui); font-size: 9px; letter-spacing: .3em; text-transform: uppercase;
   color: var(--muted); margin-top: 6px; text-align: center;
