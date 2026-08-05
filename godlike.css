@@ -152,15 +152,17 @@ h1, h2, h3,
    pills of compat/energy scores broke under text-clipping — those keep
    their app colors and just get the display face). */
 /* Numeral hierarchy (Profile/Calculator/Famous Lookup): Lifepath/Day Born/
-   Day#/Combo are the actual chart anchors - everything else on the page is
-   secondary (Lucky Number, 28 Day) or purely diagnostic (Missing). With
-   identical styling they all read as equally important, and a 3-digit
-   Missing list visually outweighed the real anchors just by being longer.
-   Tier 1 (this rule): visible frame + the brightest glow of any number on
-   the page. Tier 2 (Lucky Number/28 Day): left as plain .box-value,
-   unchanged - sits naturally in the middle once 1 and 3 move. Tier 3: see
-   .box-value-muted below. */
-.grid4 .cell.highlight {
+   Day#/Combo and Personal Year/Month/Day are the actual chart anchors -
+   everything else on the page is secondary (Lucky Number, 28 Day) or
+   purely diagnostic (Missing). Personal Cycles sits in a 3-column grid
+   rather than the 4-column one, so it never picked up this treatment even
+   though it's just as fundamental as Lifepath - same fixed-at-birth vs.
+   right-now split as the EMAX fact grid earlier, same fix. Tier 1 (this
+   rule): visible frame + the brightest glow of any number on the page.
+   Tier 2 (Lucky Number/28 Day): left as plain .box-value, unchanged - sits
+   naturally in the middle once 1 and 3 move. Tier 3: see .box-value-muted
+   below. */
+.grid4 .cell.highlight, .grid3 .cell.highlight {
   font-size: 25px;
   border: 1.5px solid color-mix(in srgb, var(--acc-text) 55%, transparent);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04),
