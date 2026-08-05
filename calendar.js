@@ -275,7 +275,7 @@ function openDayModal(date) {
     }
     const meDate = parseDateStr(profile.date);
     const result = computeCompatibility(meDate, date);
-    renderCompatResults(document.getElementById('dayCompareResults'), result, 'Me', dateLabel);
+    renderCompatHero(document.getElementById('dayCompareResults'), result, 'Me', dateLabel, { compact: true });
   });
   document.getElementById('dayModalOverlay').classList.add('active');
 }

@@ -815,6 +815,204 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   line-height: 1;
 }
 
+/* ------------------------------------------------ compatibility hero ----
+   renderCompatHero() (compat-render.js) - shield-badge treatment shared by
+   the full Compatibility Calculator page and every compact popup (EMAX,
+   Calendar day-compare, Profile/Calculator/Famous's Compatibility boxes).
+   Score tiers (good/mid/bad) get their own semantic color here, independent
+   of the day's --acc - a compatibility score means the same thing every
+   day, unlike the energy-reactive numerals elsewhere. */
+.compat-hero {
+  --tier-c: var(--good);
+  --tier-glow: rgba(139, 195, 74, .4);
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 6px 4px 4px;
+  text-align: center;
+  position: relative;
+}
+
+.compat-people {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compat-person {
+  flex: 1;
+  min-width: 0;
+  background: linear-gradient(172deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 10px 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.compat-person-animal { font-size: 38px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .6)); }
+.compat-person-name {
+  font-family: var(--gk-display); font-weight: 700; font-size: 14px;
+  color: var(--acc-text); margin-top: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.compat-person-date {
+  margin-top: 10px; font-size: 11px; color: var(--muted); letter-spacing: .03em;
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; display: inline-block;
+}
+.compat-link-glyph { font-size: 18px; color: var(--gold); flex: none; opacity: .8; }
+
+.compat-badge-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-top: 28px; position: relative;
+}
+
+/* embers: same rising-drift language as Today's altar (.gk-embers), tinted
+   by the score's own tier color instead of the day's energy accent, and
+   scoped tight to the badge instead of the full viewport. */
+.compat-embers {
+  position: absolute; inset: -30px -50px; overflow: hidden; pointer-events: none;
+}
+.compat-embers i {
+  position: absolute; bottom: 4px; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--tier-c); opacity: 0; filter: blur(.4px);
+  animation: compatEmber linear infinite;
+}
+@keyframes compatEmber {
+  0% { transform: translateY(0); opacity: 0; }
+  12% { opacity: .65; }
+  100% { transform: translateY(-190px); opacity: 0; }
+}
+
+/* the shield: pointed cap tapering to a bottom point. Its true visual
+   center of mass sits ~41% down (area-weighted centroid of the cap /
+   rectangle / taper regions), not the geometric 50% - .shield-inner is
+   positioned there explicitly rather than flex-centered. */
+.shield {
+  width: 200px; height: 224px; position: relative;
+  clip-path: polygon(50% 0%, 92% 14%, 92% 48%, 50% 100%, 8% 48%, 8% 14%);
+  background: linear-gradient(165deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .005) 55%);
+  animation: shieldIn 1s cubic-bezier(.2, .85, .25, 1.05) backwards;
+}
+.shield::before {
+  content: ''; position: absolute; inset: 3px;
+  clip-path: polygon(50% 0%, 92% 14%, 92% 48%, 50% 100%, 8% 48%, 8% 14%);
+  background: var(--panel);
+}
+.shield::after {
+  content: ''; position: absolute; inset: 0;
+  clip-path: polygon(50% 0%, 92% 14%, 92% 48%, 50% 100%, 8% 48%, 8% 14%);
+  box-shadow: inset 0 0 0 2px var(--tier-c), inset 0 0 26px var(--tier-glow);
+  filter: drop-shadow(0 0 20px var(--tier-glow));
+}
+@keyframes shieldIn { from { opacity: 0; transform: scale(.75) translateY(10px); filter: blur(6px); } }
+
+.shield-inner {
+  position: absolute; left: 50%; top: 41%; transform: translate(-50%, -50%);
+  z-index: 1; text-align: center;
+}
+.shield-score {
+  font-family: var(--gk-display); font-weight: 700; font-size: 46px; line-height: 1;
+  background: linear-gradient(168deg,
+    color-mix(in srgb, var(--tier-c) 92%, #fff 8%) 12%,
+    color-mix(in srgb, var(--tier-c) 70%, #000 12%) 48%,
+    color-mix(in srgb, var(--tier-c) 96%, #fff 14%) 86%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  animation: compatNumIn .7s cubic-bezier(.2, .9, .25, 1.1) .35s backwards;
+}
+.shield-score span { font-size: 18px; }
+@keyframes compatNumIn { from { opacity: 0; transform: scale(.8); filter: blur(8px); } }
+.shield-tag {
+  font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .2em; font-size: 9px;
+  color: var(--muted); margin-top: 6px;
+}
+
+.compat-verdict-head {
+  font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .08em; font-weight: 700;
+  font-size: 19px; margin-top: 20px; color: var(--tier-c);
+}
+.compat-verdict-body {
+  color: var(--muted); font-size: 13px; line-height: 1.7; margin-top: 8px;
+}
+
+.compat-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px;
+  margin-top: 24px;
+}
+.compat-card {
+  --cc-t: var(--good);
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--cc-t) 35%, transparent);
+  border-radius: 14px;
+  padding: 12px 6px 10px;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--cc-t) 12%, transparent);
+}
+.compat-card-name {
+  font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .08em; font-size: 9px;
+  color: var(--muted); margin-bottom: 8px; line-height: 1.4;
+}
+.compat-card-vs {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font-family: var(--gk-display); font-weight: 700;
+}
+.compat-card-vs span { font-size: 19px; color: var(--acc-text); }
+.compat-card-vs i { font-size: 9px; color: var(--muted); font-family: var(--gk-ui); font-style: normal; }
+.compat-card-vs.compat-card-vs-glyph span { font-size: 23px; }
+.compat-card-tier {
+  margin-top: 7px; font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .06em;
+  font-size: 10.5px; font-weight: 700; color: var(--cc-t);
+}
+
+.compat-bonus-row { margin-top: 16px; display: flex; flex-direction: column; gap: 7px; }
+.compat-bonus-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(245, 197, 66, .08); border: 1px solid rgba(245, 197, 66, .22);
+  border-radius: 12px; padding: 9px 12px; font-size: 12px; color: var(--text); text-align: left;
+}
+.compat-bonus-chip .ic { font-size: 14px; flex: none; }
+
+.compat-reveal-btn {
+  display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border);
+  border-radius: 999px; padding: 9px 16px; color: var(--gold); font-family: var(--gk-ui);
+  font-size: 11px; letter-spacing: .07em; text-transform: uppercase; cursor: pointer;
+}
+.compat-reveal-body {
+  max-height: 0; overflow: hidden; transition: max-height .4s ease; text-align: left;
+}
+.compat-reveal-body.open { max-height: 1200px; }
+
+/* compact: EMAX item popup / Calendar day-compare / Profile-style
+   Compatibility modals - same hero, sized for a modal-box rather than the
+   full page. */
+.compat-hero.compact { max-width: 380px; padding-top: 0; }
+.compat-hero.compact .compat-badge-wrap { margin-top: 6px; }
+.compat-hero.compact .shield { width: 140px; height: 157px; }
+.compat-hero.compact .shield-score { font-size: 30px; }
+.compat-hero.compact .shield-score span { font-size: 12px; }
+.compat-hero.compact .shield-tag { font-size: 8px; }
+.compat-hero.compact .compat-verdict-head { font-size: 15px; margin-top: 14px; }
+.compat-hero.compact .compat-verdict-body { font-size: 12px; }
+.compat-hero.compact .compat-cards { margin-top: 16px; gap: 7px; }
+.compat-hero.compact .compat-card { padding: 9px 4px 8px; border-radius: 11px; }
+.compat-hero.compact .compat-card-vs span { font-size: 16px; }
+.compat-hero.compact .compat-card-vs.compat-card-vs-glyph span { font-size: 19px; }
+.compat-hero.compact .compat-card-tier { font-size: 9.5px; }
+
+/* -------------------------------------------------- mode select refresh --
+   compatibility.html's landing choice, brought in line with the app's
+   glass-panel card language instead of the plain flat .mode-card box. */
+.compat-mode-select { max-width: 460px; gap: 12px; }
+.mode-card {
+  align-items: center; text-align: center; gap: 4px;
+  background: linear-gradient(172deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01));
+  border-radius: 16px; padding: 22px 14px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mode-card:hover { border-color: color-mix(in srgb, var(--acc-text) 45%, transparent); box-shadow: var(--glow-cyan); }
+}
+.mode-icon { font-size: 28px; filter: drop-shadow(0 0 10px var(--acc-ghost)); }
+.mode-title {
+  font-family: var(--gk-display); font-weight: 700; font-size: 13px; color: var(--text);
+  text-transform: uppercase; letter-spacing: .03em; margin-top: 8px;
+}
+.mode-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
 /* ------------------------------------------------------------- reduce ---- */
 @media (prefers-reduced-motion: reduce) {
   .gk-ceremony { animation-duration: .1s; animation-delay: .4s; }
@@ -822,4 +1020,6 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   .gk-embers i, .gk-arc-dash, .gk-strike { animation: none !important; }
   .gk-arc-fill { transition: none; }
   .gk-ms-sweep { animation-duration: .1s; }
+  .shield, .shield-score { animation: none; }
+  .compat-embers i { animation: none !important; opacity: 0; }
 }

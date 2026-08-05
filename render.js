@@ -363,7 +363,7 @@ function closeModal() {
 document.getElementById('compatTodayBox').addEventListener('click', () => {
   if (!lastBirthDate) return;
   const result = computeCompatibility(lastBirthDate, getToday());
-  renderCompatResults(document.getElementById('compatModalBody'), result, 'You', 'Today');
+  renderCompatHero(document.getElementById('compatModalBody'), result, 'You', 'Today', { compact: true });
   openModal();
 });
 
@@ -409,7 +409,7 @@ if (compatMeBox) {
     const famousNameEl = document.getElementById('famousSearch');
     const dayName = (famousNameEl && famousNameEl.value) ? famousNameEl.value : 'This Date';
     const result = computeCompatibility(meDate, lastBirthDate);
-    renderCompatResults(document.getElementById('compatModalBody'), result, 'Me', dayName);
+    renderCompatHero(document.getElementById('compatModalBody'), result, 'Me', dayName, { compact: true });
     openModal();
   });
 }

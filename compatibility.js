@@ -114,5 +114,5 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   }
 
   const result = computeCompatibility(dateA, dateB);
-  renderCompatResults(compatResultsEl, result, nameA, nameB);
+  renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB });
 });

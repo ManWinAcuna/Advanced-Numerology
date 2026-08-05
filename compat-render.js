@@ -48,8 +48,12 @@ function breakdownSection(title, score, rows) {
 // computeLuckyBonus) - `from` isn't used here (this component has no
 // concept of "who's viewing"), it's read directly by consumers that DO know
 // (see emax-category.js rewriting "your" to a real name before calling in).
-function bonusSectionHtml(bonuses) {
-  if (!bonuses || !bonuses.notes.length) return '';
+// Shared by bonusSectionHtml (the plain list) and bonusChipsHtml (the newer
+// chip treatment) - computeLuckyBonus checks both directions, so the same
+// rule name can legitimately fire twice for two different dates; grouping
+// by rule keeps that from reading as a duplicate glitch.
+function groupBonusNotes(bonuses) {
+  if (!bonuses || !bonuses.notes.length) return [];
   const order = [];
   const detailsByRule = new Map();
   bonuses.notes.forEach((note) => {
@@ -63,16 +67,32 @@ function bonusSectionHtml(bonuses) {
     }
     if (detail) detailsByRule.get(rule).push(detail);
   });
-  const rows = order.map((rule) => {
+  return order.map((rule) => {
     const details = detailsByRule.get(rule);
     return details.length ? `${rule} - ${details.join(' · ')}` : rule;
   });
+}
+
+function bonusSectionHtml(bonuses) {
+  const rows = groupBonusNotes(bonuses);
+  if (!rows.length) return '';
   return `
     <div class="breakdown-section bonus-section">
       <div class="breakdown-header"><span>🍀 Lucky Number Bonuses</span></div>
       <div class="breakdown-rows">
         ${rows.map((n) => `<div class="breakdown-row bonus-row">${escapeHtml(n)}</div>`).join('')}
       </div>
+    </div>
+  `;
+}
+
+// Chip treatment of the same grouped notes, for renderCompatHero below.
+function bonusChipsHtml(bonuses) {
+  const rows = groupBonusNotes(bonuses);
+  if (!rows.length) return '';
+  return `
+    <div class="compat-bonus-row">
+      ${rows.map((n) => `<div class="compat-bonus-chip"><span class="ic">🍀</span>${escapeHtml(n)}</div>`).join('')}
     </div>
   `;
 }
@@ -117,6 +137,169 @@ function renderCompatResults(containerEl, r, nameA, nameB) {
       ${bonusSectionHtml(r.bonuses)}
     </div>
   `;
+}
+
+/* =========================== The hero redesign ==========================
+   renderCompatHero() - the newer, shield-badge treatment (Boost13,
+   2026-08-05). Not a replacement for renderCompatResults(): the sports
+   betting matchup breakdowns (tennis.js/ufc.js) keep using the plain
+   version - this is scoped to the numerology-app's own compatibility
+   surfaces (Compatibility Calculator, EMAX item popup, Database's
+   compare-with-me, Profile/Calculator/Famous's compat modals, Calendar's
+   day-compare). Reuses breakdownSection/bonusSectionHtml's row data for
+   the "see full breakdown" reveal, so the deep numbers always match
+   exactly what renderCompatResults would have shown - no second source
+   of truth for the same math. */
+
+const COMPAT_TIER_COLOR = { good: 'var(--good)', mid: 'var(--gold)', bad: 'var(--bad)' };
+const COMPAT_TIER_GLOW = {
+  good: 'rgba(139, 195, 74, .4)',
+  mid: 'rgba(245, 197, 66, .4)',
+  bad: 'rgba(229, 57, 63, .4)',
+};
+
+// Same 3-tier thresholds as scoreClass() everywhere else in the app - only
+// the WORDING varies per category now, not the underlying good/mid/bad
+// math, so nothing about what counts as "good" ever drifts between the
+// hero and the full breakdown beneath it.
+const COMPAT_NUMEROLOGY_WORDS = { good: 'In Sync', mid: 'Workable', bad: 'Clashing' };
+const COMPAT_VIETNAMESE_WORDS = { good: 'Kindred', mid: 'Neutral', bad: 'Friction' };
+const COMPAT_WESTERN_WORDS = { good: 'Aligned', mid: 'Mixed Signals', bad: 'At Odds' };
+function compatTierWord(score, bank) { return bank[scoreClass(score)]; }
+
+// Reuses the engine's own flags (computeCompatibility already computes
+// 'perfect'/85+, 'ideal'/77+, 'clash'/<49) instead of inventing new
+// thresholds for the verdict copy - the mid band (49-76, no flag) is the
+// only case handled directly here.
+function compatVerdictCopy(r) {
+  if (r.flags.includes('perfect')) {
+    return { head: 'Exceptional Compatibility', body: 'A rare, deep alignment — this connection amplifies both sides.' };
+  }
+  if (r.flags.includes('ideal')) {
+    return { head: 'Strong Compatibility', body: 'Real alignment here — worth building on, not just a nice number.' };
+  }
+  if (r.flags.includes('clash')) {
+    return { head: 'Challenging Compatibility', body: 'The numbers are working against this one — go in with eyes open.' };
+  }
+  return { head: 'Workable Compatibility', body: 'Enough common ground to work with. Nothing forcing this, nothing fighting it either.' };
+}
+
+function compatHeroDate(date) {
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// A handful of randomly-placed/timed embers, same drifting-particle
+// language as Today's altar - purely decorative, re-generated fresh each
+// render (no need to persist between calls).
+function compatEmbersHtml() {
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const left = 22 + Math.random() * 56;
+    const delay = (Math.random() * 4).toFixed(1);
+    const dur = (5 + Math.random() * 2.5).toFixed(1);
+    html += `<i style="left:${left}%;animation-delay:${delay}s;animation-duration:${dur}s"></i>`;
+  }
+  return html;
+}
+
+// opts: { dateA, dateB } (Date objects - render the two-person zodiac-
+// animal header; omitted entirely if either is missing) and
+// { compact: true } (smaller badge/type, used inside modals/popups where
+// the person is already established by the surrounding UI - EMAX's item
+// popup, Database's compare-with-me, Profile's compat modal, Calendar's
+// day-compare).
+function renderCompatHero(containerEl, r, nameA, nameB, opts) {
+  opts = opts || {};
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+
+  const tier = scoreClass(r.finalScore);
+  const verdict = compatVerdictCopy(r);
+
+  let headerHtml = '';
+  if (opts.dateA && opts.dateB) {
+    const animalA = getChineseZodiacYear(opts.dateA);
+    const animalB = getChineseZodiacYear(opts.dateB);
+    headerHtml = `
+      <div class="compat-people">
+        <div class="compat-person">
+          <div class="compat-person-animal">${VIETNAMESE_ZODIAC_EMOJI[animalA] || '🐾'}</div>
+          <div class="compat-person-name">${escapeHtml(nameA)}</div>
+          <div class="compat-person-date">${compatHeroDate(opts.dateA)}</div>
+        </div>
+        <div class="compat-link-glyph">∞</div>
+        <div class="compat-person">
+          <div class="compat-person-animal">${VIETNAMESE_ZODIAC_EMOJI[animalB] || '🐾'}</div>
+          <div class="compat-person-name">${escapeHtml(nameB)}</div>
+          <div class="compat-person-date">${compatHeroDate(opts.dateB)}</div>
+        </div>
+      </div>`;
+  }
+
+  const cardsHtml = `
+    <div class="compat-cards">
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.numerology.score)]}">
+        <div class="compat-card-name">Numerology</div>
+        <div class="compat-card-vs"><span>${r.numerology.entityLifePath}</span><i>vs</i><span>${r.numerology.dayLifePath}</span></div>
+        <div class="compat-card-tier">${compatTierWord(r.numerology.score, COMPAT_NUMEROLOGY_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.vietnamese.score)]}">
+        <div class="compat-card-name">Vietnamese Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityYearSign] || ''}</span><i>vs</i><span>${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.dayYearSign] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(r.vietnamese.score, COMPAT_VIETNAMESE_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.western.score)]}">
+        <div class="compat-card-name">Western Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${ZODIAC_SYMBOLS[r.western.entitySunSign] || ''}</span><i>vs</i><span>${ZODIAC_SYMBOLS[r.western.daySunSign] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(r.western.score, COMPAT_WESTERN_WORDS)}</div>
+      </div>
+    </div>`;
+
+  const numerologyRows = [
+    { label: `✨ Lifepath (${r.numerology.entityLifePath} &rarr; ${r.numerology.dayLifePath})`, score: r.numerology.lifePathScore },
+    { label: `📅 Day (${r.numerology.entityDay} &rarr; ${r.numerology.dayDay})`, score: r.numerology.dayScore },
+    { label: `🔢 Day of Year (${r.numerology.entityDoy} &rarr; ${r.numerology.dayDoy})`, score: r.numerology.doyScore },
+  ];
+  const vietnameseRows = [
+    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityYearSign] || ''} Year (${r.vietnamese.entityYearSign} &rarr; ${r.vietnamese.dayYearSign})`, score: r.vietnamese.yearScore },
+    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityMonthSign] || ''} Month (${r.vietnamese.entityMonthSign} &rarr; ${r.vietnamese.dayMonthSign})`, score: r.vietnamese.monthScore },
+    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityDaySign] || ''} Day (${r.vietnamese.entityDaySign} &rarr; ${r.vietnamese.dayDaySign})`, score: r.vietnamese.daySignScore },
+  ];
+  const westernRows = [
+    { label: `${ZODIAC_SYMBOLS[r.western.entitySunSign] || ''} Sign (${r.western.entitySunSign} &rarr; ${r.western.daySunSign})`, score: r.western.score },
+  ];
+
+  containerEl.innerHTML = `
+    <div class="compat-hero${opts.compact ? ' compact' : ''}" style="--tier-c:${COMPAT_TIER_COLOR[tier]}; --tier-glow:${COMPAT_TIER_GLOW[tier]}">
+      ${headerHtml}
+      <div class="compat-badge-wrap">
+        <div class="compat-embers">${compatEmbersHtml()}</div>
+        <div class="shield">
+          <div class="shield-inner">
+            <div class="shield-score">${r.finalScore}<span>%</span></div>
+            <div class="shield-tag">Compatibility</div>
+          </div>
+        </div>
+      </div>
+      <div class="compat-verdict-head">${verdict.head}</div>
+      <div class="compat-verdict-body">${verdict.body}</div>
+      ${cardsHtml}
+      ${bonusChipsHtml(r.bonuses)}
+      <button type="button" class="compat-reveal-btn" data-compat-reveal>▾ See full breakdown</button>
+      <div class="compat-reveal-body" data-compat-reveal-body>
+        ${breakdownSection('Numerology', r.numerology.score, numerologyRows)}
+        ${breakdownSection('Vietnamese Zodiac', r.vietnamese.score, vietnameseRows)}
+        ${breakdownSection('Western Zodiac', r.western.score, westernRows)}
+      </div>
+    </div>
+  `;
+
+  const revealBtn = containerEl.querySelector('[data-compat-reveal]');
+  const revealBody = containerEl.querySelector('[data-compat-reveal-body]');
+  revealBtn.addEventListener('click', () => {
+    const open = revealBody.classList.toggle('open');
+    revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+  });
 }
 
 // Renders a computeEnergyFlow() result - Personal Year/Month/Day vs

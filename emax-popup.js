@@ -614,19 +614,12 @@ function openItemModal(entry, categoryNameOverride, backTo) {
         ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseMonth] || '', 'Month', chineseMonth)}
         ${emaxFactTile(VIETNAMESE_ZODIAC_EMOJI[chineseDay] || '', 'Day', chineseDay)}
       </div>
-      <button class="emax-breakdown-toggle" id="itemModalBreakdownToggle" type="button">▾ See full breakdown</button>
     </div>`;
 
   const compatEl = document.getElementById('itemModalCompat');
   const renderResult = { ...result, bonuses: emaxRewriteBonusNotes(result.bonuses, entry.name) };
-  renderCompatResults(compatEl, renderResult, entry.name, 'Me');
   compatEl.classList.add('emax-breakdown-body');
-  compatEl.hidden = true;
-  document.getElementById('itemModalBreakdownToggle').addEventListener('click', () => {
-    const toggleBtn = document.getElementById('itemModalBreakdownToggle');
-    compatEl.hidden = !compatEl.hidden;
-    toggleBtn.textContent = compatEl.hidden ? '▾ See full breakdown' : '▴ Hide full breakdown';
-  });
+  renderCompatHero(compatEl, renderResult, entry.name, 'Me', { compact: true });
 
   document.getElementById('itemModalHeader').addEventListener('click', (e) => {
     const backBtn = e.target.closest('#itemModalBack');

@@ -7058,25 +7058,13 @@ button.emax-fact-tile-tap {
 }
 .emax-fact-tile-tap.showing-compound .emax-fact-value { color: var(--yellow); }
 
-.emax-breakdown-toggle {
-  background: none;
-  border: none;
-  color: var(--yellow);
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 8px 0 0;
-}
-@media (hover: hover) and (pointer: fine) {
-  .emax-breakdown-toggle:hover { text-decoration: underline; }
-}
-
-/* Reusing renderCompatResults' output for the expanded breakdown - it
-   renders its own name/score hero too, which would duplicate the one
-   already shown above, so it's hidden here without touching the shared
-   compat-render.js component itself (Database/Compatibility Calculator's
-   own popups still show it, untouched). */
-.emax-breakdown-body .score-hero { display: none; }
+/* Reusing renderCompatHero's output for the expanded compat section below
+   the fact grid - its shield score badge would duplicate the ring already
+   shown above (same finalScore, two treatments), so only the badge is
+   hidden here without touching the shared compat-render.js component
+   itself (Database/Compatibility Calculator's own popups keep it). */
+.emax-breakdown-body .compat-badge-wrap { display: none; }
+.emax-breakdown-body .compat-hero { padding-top: 0; }
 
 /* ---- Timeline mini-popup (tap the item's own picture) ---- */
 .emax-timeline-section {

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=17">
+<link rel="stylesheet" href="godlike.css?v=18">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -223,11 +223,11 @@
   if (pd != null) orbits.push('<span class="gk-orbit">Personal <b>' + pd + '</b></span>');
   if (compat != null) orbits.push('<span class="gk-orbit gk-orbit-tap" id="gkOrbitAligned">Aligned <b>' + compat + '%</b></span>');
   document.getElementById('gkOrbits').innerHTML = orbits.join('');
-  // the Aligned pill opens the same compatibility breakdown popup used
-  // everywhere else in the app (numerology / Vietnamese / western meters)
+  // the Aligned pill opens the same compatibility hero used everywhere
+  // else in the app (shield score, per-category cards, meters on reveal)
   document.getElementById('gkOrbits').addEventListener('click', function (e) {
     if (!e.target.closest('#gkOrbitAligned') || !compatFull) return;
-    renderCompatResults(modalBody, compatFull, 'You', 'Today');
+    renderCompatHero(modalBody, compatFull, 'You', 'Today', { compact: true });
     modalBackdrop.classList.add('open');
   });
 
