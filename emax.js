@@ -209,7 +209,15 @@ document.getElementById('categoriesContainer').addEventListener('click', (e) => 
       case 'move-up': swapCategories(fromIndex, fromIndex - currentGridColumns()); break;
       case 'move-down': swapCategories(fromIndex, fromIndex + currentGridColumns()); break;
     }
+    // render() rebuilds the whole grid via innerHTML - the tapped button
+    // gets destroyed mid-click, and losing focus mid-scroll is what was
+    // dragging the page back to the top (the real scrolling element is
+    // .scroll-viewport, not the document - see scroll-viewport.js). Save/
+    // restore its position across the rebuild so the view holds still.
+    const viewport = document.querySelector('.scroll-viewport');
+    const savedScroll = viewport ? viewport.scrollTop : null;
     render();
+    if (viewport && savedScroll != null) viewport.scrollTop = savedScroll;
     return;
   }
 
