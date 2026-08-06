@@ -585,11 +585,28 @@ function buildLightShadowStory(parts, opts) {
   const flat = parts.filter((p) => p.entry.flat);
   if (resolved.length === 0 && flat.length === 0) return null;
 
+  // Flat notes ("nothing to reveal") aren't Light- or Shadow-specific, so
+  // they're folded into BOTH lists, in their original position - visible
+  // whichever toggle you open (Energy still lands in its proper 2nd slot
+  // whether it's flat or has a real compound), invisible when neither
+  // toggle is open. Round 7 fix: they used to float between the collapsed
+  // toggles and the summary, showing even with nothing expanded.
+  const lightRows = [];
+  const shadowRows = [];
+  parts.forEach((p) => {
+    if (p.entry.light) {
+      lightRows.push({ label: p.label, text: p.entry.light });
+      shadowRows.push({ label: p.label, text: p.entry.shadow });
+    } else if (p.entry.flat) {
+      lightRows.push({ label: p.label, text: p.entry.note, flat: true });
+      shadowRows.push({ label: p.label, text: p.entry.note, flat: true });
+    }
+  });
+
   return {
     intro: opts.intro || '',
-    lightRows: resolved.map((p) => ({ label: p.label, text: p.entry.light })),
-    shadowRows: resolved.map((p) => ({ label: p.label, text: p.entry.shadow })),
-    flatRows: flat.map((p) => ({ label: p.label, text: p.entry.note })),
+    lightRows,
+    shadowRows,
     summary: resolved.length ? summarizeInteraction(resolved) : null,
     parts: resolved,
   };

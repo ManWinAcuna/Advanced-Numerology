@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=24">
+<link rel="stylesheet" href="godlike.css?v=25">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -326,29 +326,18 @@
     if (wholeStory) {
       h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>';
       if (wholeStory.intro) h += '<div class="story-intro">' + wholeStory.intro + '</div>';
-      // Flat notes ("nothing to reveal") no longer lead - when other
-      // numbers have real content, a null result up top buried the good
-      // stuff under a "never mind" line. Now it's a quiet aside between
-      // the toggles and the closing summary instead of the opening line.
-      var flatNotesHtml = (wholeStory.flatRows && wholeStory.flatRows.length)
-        ? wholeStory.flatRows.map(function (row) {
-          return '<div class="story-flat-note"><b>' + row.label + ':</b> ' + row.text + '</div>';
-        }).join('')
-        : '';
-      if (!wholeStory.lightRows.length) h += flatNotesHtml;
-      if (wholeStory.lightRows.length) {
-        h += '<div class="story-cols">' +
-          '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
-          '<button type="button" class="story-col-toggle shadow" data-col="shadow">☾ Shadow</button>' +
-          '</div>';
-        h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(function (row) {
-          return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
-        }).join('') + '</div>';
-        h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(function (row) {
-          return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
-        }).join('') + '</div>';
-        h += flatNotesHtml;
+      // Flat notes ("nothing to reveal") are folded into both toggle
+      // bodies, in their normal position - only visible when you actually
+      // open Light or Shadow, never floating in the collapsed default view.
+      function storyRowHtml(row) {
+        return '<div class="story-row' + (row.flat ? ' flat' : '') + '"><b>' + row.label + ':</b> ' + row.text + '</div>';
       }
+      h += '<div class="story-cols">' +
+        '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
+        '<button type="button" class="story-col-toggle shadow" data-col="shadow">☾ Shadow</button>' +
+        '</div>';
+      h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(storyRowHtml).join('') + '</div>';
+      h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(storyRowHtml).join('') + '</div>';
       if (wholeStory.summary) h += '<div class="story-summary">' + wholeStory.summary + '</div>';
       h += '</div>';
     }
