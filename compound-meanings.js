@@ -516,14 +516,16 @@ function compoundRawDayNum(date) {
 // Weaves 1+ ALREADY-RESOLVED numbers into one paragraph. parts: [{ label,
 // entry }], in priority order (most narratively important first - caller
 // decides the order). Numbers with no compound flavor (plain single digit)
-// are dropped. The lead number gets the full light+shadow treatment; every
-// number after that is named as its own pull ("but Energy wants something
-// else") rather than picked as a winner or silently folded in - Boost13
-// round 3's explicit call: name the tension directly, don't resolve it.
-// Split out from weaveCompoundStory() so callers who already have a
-// resolved entry (Life Path, via compoundEntryForLifePath) don't have to
-// route it back through a fake raw total just to reuse this logic.
-function weaveResolvedStory(parts) {
+// are dropped. Every number is named, including the lead (round 2 fix -
+// an unlabeled lead sentence left the reader unable to tell which of
+// their numbers was even talking); every number after the lead gets its
+// own full light+shadow treatment too, not just a clipped light line.
+// opts.intro (optional): a bridging sentence prepended before the lead,
+// so the story reads as going deeper on whatever's already on screen
+// rather than a disconnected dump - the caller supplies it because only
+// the caller knows what's already showing on its own card.
+function weaveResolvedStory(parts, opts) {
+  opts = opts || {};
   const withFlavor = parts.filter((p) => p.entry.light);
 
   if (withFlavor.length === 0) return null;
@@ -542,7 +544,8 @@ function weaveResolvedStory(parts) {
 
   const lead = resolved[0];
   const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-  let text = `${lead.entry.light} ${lead.entry.shadow}`;
+  let text = opts.intro ? `${opts.intro} ` : '';
+  text += `${lead.label}: ${lead.entry.light} ${lead.entry.shadow}`;
 
   for (let i = 1; i < resolved.length; i++) {
     const other = resolved[i];
@@ -550,9 +553,13 @@ function weaveResolvedStory(parts) {
     // forcing "wants something else" onto two numbers that actually agree
     // reads as manufactured conflict where there isn't any.
     const agrees = resolved.slice(0, i).some((p) => p.entry.root === other.entry.root);
+    // Only the first word (right after the colon) gets lowercased - light
+    // and shadow are each already a complete, separately-capitalized
+    // sentence, so lowercasing shadow's lead word too broke the sentence
+    // boundary ("...beautiful. that same magnetism..." instead of "That").
     text += agrees
-      ? ` And ${other.label} doubles down on the same thing: ${lower(other.entry.light)}`
-      : ` But ${other.label} wants something else: ${lower(other.entry.light)}`;
+      ? ` And ${other.label} doubles down on the same thing: ${lower(other.entry.light)} ${other.entry.shadow}`
+      : ` But ${other.label} wants something else: ${lower(other.entry.light)} ${other.entry.shadow}`;
   }
 
   return { text, parts: resolved };
@@ -561,6 +568,6 @@ function weaveResolvedStory(parts) {
 // Convenience wrapper for callers that only have raw totals (Today page's
 // Universal Day/Energy/Personal Day/Combo/Day# - none of which need the
 // Life-Path-style display-string resolver). parts: [{ label, raw }].
-function weaveCompoundStory(parts) {
-  return weaveResolvedStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })));
+function weaveCompoundStory(parts, opts) {
+  return weaveResolvedStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
 }

@@ -139,7 +139,13 @@
       storyParts.unshift({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
       storyParts.push({ label: 'Combo', raw: compoundRawCombo(me) });
     }
-    wholeStory = weaveCompoundStory(storyParts);
+    // Bridges the story back to the card's own title (round 2 fix - it
+    // used to just drop in below the divider with no connection to the
+    // ud/lifePath already shown above it).
+    var storyIntro = lifePath
+      ? ('Underneath that ' + ud + ' and your Lifepath ' + lifePath + ',')
+      : ('Underneath that ' + ud + ',');
+    wholeStory = weaveCompoundStory(storyParts, { intro: storyIntro });
   } catch (e) {}
 
   /* Fresh installs (icon re-adds) start with empty localStorage; the cloud
