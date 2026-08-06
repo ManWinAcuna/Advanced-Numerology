@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=23">
+<link rel="stylesheet" href="godlike.css?v=24">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -326,17 +326,24 @@
     if (wholeStory) {
       h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>';
       if (wholeStory.intro) h += '<div class="story-intro">' + wholeStory.intro + '</div>';
-      h += '<div class="story-cols">' +
-        '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
-        '<button type="button" class="story-col-toggle shadow" data-col="shadow">☾ Shadow</button>' +
-        '</div>';
-      h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(function (row) {
-        return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
-      }).join('') + '</div>';
-      h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(function (row) {
-        return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
-      }).join('') + '</div>';
-      h += '<div class="story-summary">' + wholeStory.summary + '</div>';
+      if (wholeStory.flatRows && wholeStory.flatRows.length) {
+        h += wholeStory.flatRows.map(function (row) {
+          return '<div class="story-flat-note"><b>' + row.label + ':</b> ' + row.text + '</div>';
+        }).join('');
+      }
+      if (wholeStory.lightRows.length) {
+        h += '<div class="story-cols">' +
+          '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
+          '<button type="button" class="story-col-toggle shadow" data-col="shadow">☾ Shadow</button>' +
+          '</div>';
+        h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(function (row) {
+          return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
+        }).join('') + '</div>';
+        h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(function (row) {
+          return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
+        }).join('') + '</div>';
+      }
+      if (wholeStory.summary) h += '<div class="story-summary">' + wholeStory.summary + '</div>';
       h += '</div>';
     }
     return h;
@@ -344,16 +351,22 @@
 
   // Light/Shadow toggles are rebuilt fresh every time cardHtml() runs, so
   // this listens on modalBody itself (event delegation) instead of
-  // re-attaching to elements that get thrown away on every open.
+  // re-attaching to elements that get thrown away on every open. Mutually
+  // exclusive - opening one always closes the other, only one showing at
+  // a time.
   modalBody.addEventListener('click', function (e) {
     var btn = e.target.closest('.story-col-toggle');
     if (!btn) return;
     var col = btn.dataset.col;
+    var otherCol = col === 'light' ? 'shadow' : 'light';
     var body = modalBody.querySelector('[data-col-body="' + col + '"]');
+    var otherBody = modalBody.querySelector('[data-col-body="' + otherCol + '"]');
+    var otherBtn = modalBody.querySelector('.story-col-toggle.' + otherCol);
     if (!body) return;
     var open = body.hidden;
     body.hidden = !open;
     btn.classList.toggle('open', open);
+    if (open && otherBody) { otherBody.hidden = true; otherBtn.classList.remove('open'); }
   });
 
   var pressTimer = null, pressed = false;

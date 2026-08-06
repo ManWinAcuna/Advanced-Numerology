@@ -431,8 +431,15 @@ function compoundEntryFromResolved(r) {
     return Object.assign({}, r, { light: e.light, shadow: e.shadow, flowTag, generated: false });
   }
 
+  // A single-digit total (day-of-month 1-9, or day-of-year 1-9) has no
+  // bigger number hiding underneath it at all - that's real information
+  // ("today is exactly what it looks like"), not nothing, so it still
+  // gets a note rather than silently vanishing from the story.
   if (r.compound < 10) {
-    return Object.assign({}, r, { light: null, shadow: null, flowTag: null, generated: false });
+    return Object.assign({}, r, {
+      light: null, shadow: null, flowTag: null, generated: false, flat: true,
+      note: `Just a plain ${r.compound} today - no bigger number hiding underneath it, nothing else to reveal.`,
+    });
   }
 
   const driver = Math.floor(r.compound / 10);
@@ -575,13 +582,15 @@ function weaveCompoundStory(parts, opts) {
 function buildLightShadowStory(parts, opts) {
   opts = opts || {};
   const resolved = parts.filter((p) => p.entry.light);
-  if (resolved.length === 0) return null;
+  const flat = parts.filter((p) => p.entry.flat);
+  if (resolved.length === 0 && flat.length === 0) return null;
 
   return {
     intro: opts.intro || '',
     lightRows: resolved.map((p) => ({ label: p.label, text: p.entry.light })),
     shadowRows: resolved.map((p) => ({ label: p.label, text: p.entry.shadow })),
-    summary: summarizeInteraction(resolved),
+    flatRows: flat.map((p) => ({ label: p.label, text: p.entry.note })),
+    summary: resolved.length ? summarizeInteraction(resolved) : null,
     parts: resolved,
   };
 }

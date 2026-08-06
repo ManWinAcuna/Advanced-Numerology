@@ -562,6 +562,8 @@ button.gk-altar-num {
    sentences need the full width to stay readable regardless of how many
    are open at once. */
 .story-intro { color: var(--muted); margin-bottom: 8px; }
+.story-flat-note { color: var(--muted); margin-bottom: 8px; }
+.story-flat-note b { color: var(--acc-text); font-family: var(--gk-ui); font-weight: 700; }
 .story-cols { display: flex; gap: 8px; margin-bottom: 2px; }
 .story-col-toggle {
   flex: 1; background: none; border: 1px solid var(--border); border-radius: 8px;
