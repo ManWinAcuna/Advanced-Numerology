@@ -625,6 +625,15 @@ function buildLightShadowStory(parts, opts) {
   };
 }
 
+// Shared root -> plain theme name, used for both the interaction summary
+// below and the pair generator further down.
+function rootThemeName(root) {
+  if (root === 28) return 'Wealth';
+  if (COMPOUND_MASTER_PURE[root]) return COMPOUND_MASTER_PURE[root].theme;
+  if (COMPOUND_ROOT_MECHANISM[root]) return COMPOUND_ROOT_MECHANISM[root].name;
+  return String(root);
+}
+
 // One tight sentence on how the day's numbers relate - groups labels by
 // shared root (reinforcement) vs different roots (real mix), naming each
 // group's theme rather than repeating the full light/shadow text already
@@ -639,13 +648,7 @@ function summarizeInteraction(resolved) {
     if (g) g.labels.push(p.label);
     else groups.push({ root: p.entry.root, labels: [p.label] });
   });
-  const themeFor = (root) => {
-    if (root === 28) return 'wealth';
-    if (COMPOUND_MASTER_PURE[root]) return COMPOUND_MASTER_PURE[root].theme.toLowerCase();
-    if (COMPOUND_ROOT_MECHANISM[root]) return COMPOUND_ROOT_MECHANISM[root].name.toLowerCase();
-    return String(root);
-  };
-  const groupText = groups.map((g) => `${g.labels.join(' & ')} (${themeFor(g.root)})`);
+  const groupText = groups.map((g) => `${g.labels.join(' & ')} (${rootThemeName(g.root).toLowerCase()})`);
   return groups.length === 1
     ? `${groupText[0]} - everything's pulling the same direction today.`
     : `${groupText.join(' vs. ')} - today's a genuine mix, not one clean signal.`;
@@ -675,72 +678,96 @@ function buildLightShadowCompoundStory(parts, opts) {
 // exactly across every pairing, with real documented reasoning behind
 // WHY certain numbers clash (Structure vs Freedom, Power vs Avoidance,
 // etc.) or reinforce (a stable "container" number paired with an
-// intense one). Round 9's first pass used a crude "same root = good"
-// guess instead of that real engine - fixed: scoreClass(numerologyCompat(
-// rootA, rootB)) now drives which of 3 tiers (good/mid/bad) gets used,
-// same thresholds as every other compat score in this app.
-const COMPOUND_PAIRS = [
-  {
-    id: 'ud_lifepath', label: 'Universal Day & your Lifepath',
-    good: {
-      light: "Today's whole shape genuinely supports who you are at your core - real reinforcement, not coincidence. Lean into it instead of overthinking it.",
-      shadow: 'You lean on the alignment so hard you skip the actual effort the day still requires.',
-    },
-    mid: {
-      light: "Today's whole shape and who you are at your core coexist without much friction - workable, not electric, and that's fine.",
-      shadow: "Nothing's actively pulling you off course, but nothing's actively helping either - easy to drift through today on autopilot.",
-    },
-    bad: {
-      light: "Today's whole shape doesn't match who you are at your core - real growth happens in that gap, if you're willing to stretch into it.",
-      shadow: 'You resist adapting to what today actually needs because it doesn\'t feel like "you," and the day makes you pay for the resistance.',
-    },
-  },
-  {
-    id: 'energy_dayborn', label: 'Energy & your Day Born',
-    good: {
-      light: "The day's own daily rhythm genuinely matches the one you were born into - things move with unusual ease today.",
-      shadow: 'That ease tips into complacency - you coast because nothing is actively pushing you.',
-    },
-    mid: {
-      light: "The day's rhythm and your own aren't fighting each other, just running in parallel - nothing dramatic either way.",
-      shadow: 'Without real friction or real flow, it\'s easy to just go through the motions today.',
-    },
-    bad: {
-      light: "The day moves at a genuinely different pace than the one you were born into - good day to practice flexibility instead of fighting the mismatch.",
-      shadow: "You force your own natural pace onto a day that isn't built for it, and end up fighting friction that didn't need to exist.",
-    },
-  },
-  {
-    id: 'dayofyear_dayofyear', label: "Today's Day# & your own Day#",
-    good: {
-      light: "Today's position in the year genuinely echoes your own birth-year position - real anniversary energy, even on an ordinary date.",
-      shadow: 'You get nostalgic or stuck looking backward instead of dealing with what\'s actually in front of you today.',
-    },
-    mid: {
-      light: "Today's spot in the year and your own don't reinforce each other, but they don't clash either - a neutral stretch of calendar.",
-      shadow: 'Nothing here to anchor to, so it\'s easy to lose track of where you actually are.',
-    },
-    bad: {
-      light: "Today sits in a genuinely different part of the year than your own birth position - unfamiliar territory, nothing here to lean on old patterns for.",
-      shadow: 'Without the familiar footing, you can feel unmoored or improvise carelessly.',
-    },
-  },
-  {
-    id: 'lifepath_personalday', label: 'Your Lifepath & your Personal Day',
-    good: {
-      light: "How today lands on you personally genuinely matches your core identity - you get to just be yourself today, no translation needed.",
-      shadow: 'You lean so hard into "being yourself" that you miss a chance to try something outside your usual pattern.',
-    },
-    mid: {
-      light: "How today lands on you and who you actually are aren't fighting each other, just not perfectly in sync either - a normal day, nothing more.",
-      shadow: 'Without real pull in either direction, it\'s easy to just default to habit instead of actually showing up.',
-    },
-    bad: {
-      light: "Today asks something of you that's genuinely outside your core identity - a real stretch day, and stretch days are where you actually grow.",
-      shadow: "You default to your usual identity pattern instead of meeting the day where it actually is, and miss what it was asking for.",
-    },
-  },
-];
+// intense one). scoreClass(numerologyCompat(rootA, rootB)) drives which
+// of 3 tiers (good/mid/bad) applies, same thresholds as every other
+// compat score in this app.
+//
+// Round 11 (2026-08-06): a tier alone ("good"/"mid"/"bad") isn't an
+// explanation - the first version of this section had exactly 12 static
+// sentences (4 pairs x 3 tiers), so EVERY "good" pairing read identically
+// regardless of which two roots actually produced it. User: "it should
+// genuinely feel like practical and educational... add some imagery make
+// it land." Fixed with a real generator instead of a lookup table: every
+// root gets one concrete image (COMPOUND_ROOT_IMAGE) standing in for what
+// it actually does, and composePairSentence() builds the sentence from
+// the SPECIFIC two roots in play - a 6-vs-9 pairing and a 1-vs-11 pairing
+// now read nothing alike, because they're about genuinely different
+// things, not two "good" labels wearing the same paragraph.
+const COMPOUND_ROOT_IMAGE = {
+  1: 'the first domino, already leaning',
+  3: "a live mic that's already on",
+  4: 'a load-bearing wall',
+  5: "a river that won't sit still",
+  6: "the one who shows up with soup when you're sick",
+  7: 'a locked door that checks twice before it opens',
+  8: 'the closer who signs the deal at the buzzer',
+  9: "water taking the shape of whatever it's poured into",
+  11: 'lightning - brilliant, but not something you stand under unprotected',
+  22: 'a cathedral going up one stone at a time',
+  28: 'money compounding quietly while you sleep',
+  33: "a lighthouse, visible from further than you'd expect",
+};
+
+// Per pair-type, what each side of the comparison actually represents in
+// plain words - fills the {a}/{b} slots composePairSentence() builds
+// sentences around.
+const COMPOUND_PAIR_LEADIN = {
+  ud_lifepath: { label: 'Universal Day & your Lifepath', a: "today's whole shape", b: 'who you are at your core' },
+  energy_dayborn: { label: 'Energy & your Day Born', a: "the day's own daily rhythm", b: 'the rhythm you were born into' },
+  dayofyear_dayofyear: { label: "Today's Day# & your own Day#", a: "today's spot in the year", b: 'your own birth-year position' },
+  lifepath_personalday: { label: 'Your Lifepath & your Personal Day', a: 'who you are at your core', b: 'how today lands on you personally' },
+};
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Builds one pair's { light, shadow }, using the two SPECIFIC roots
+// involved and the real tier their numerologyCompat() score lands in -
+// the image + theme for whichever roots actually showed up today, not a
+// generic template that reads the same for every combination.
+function composePairSentence(pairId, rootA, rootB, tier) {
+  const lead = COMPOUND_PAIR_LEADIN[pairId];
+  const imageA = COMPOUND_ROOT_IMAGE[rootA];
+  const imageB = COMPOUND_ROOT_IMAGE[rootB];
+  if (!lead || !imageA || !imageB) return null;
+  const themeA = rootThemeName(rootA).toLowerCase();
+  const themeB = rootThemeName(rootB).toLowerCase();
+
+  // Same root on both sides - the good/bad templates below both assume two
+  // DIFFERENT images being weighed against each other, which reads as an
+  // outright repeated clause when there's only one image to work with.
+  // This is also CUE's own named pattern (NUMEROLOGY_RESEARCH.md): "same-
+  // theme overlap... comfortable, but can tip into too much of the same
+  // thing, nothing balances it out" - worth naming directly, not papering
+  // over with a duplicate sentence.
+  if (rootA === rootB) {
+    return tier === 'good'
+      ? {
+        light: `${cap(lead.a)} and ${lead.b} are the exact same energy meeting itself today - ${imageA}, doubled. When ${themeA} shows up this consistently, that's not coincidence, it's a signal worth trusting.`,
+        shadow: `That much of the same thing, with nothing else to balance it, can tip into excess - more ${themeA} than today actually needs.`,
+      }
+      : {
+        light: `${cap(lead.a)} and ${lead.b} are the exact same energy meeting itself today - ${imageA}, doubled. Comfortable and familiar, but with nothing else in the mix to check it.`,
+        shadow: `Too much of the same thing with nothing to balance it - ${themeA} left unchecked tends to overcorrect into its own worst habit.`,
+      };
+  }
+
+  if (tier === 'good') {
+    return {
+      light: `${cap(lead.a)} moves like ${imageA} - ${themeA}, doing what it does best. And ${lead.b} moves like ${imageB} - ${themeB}, doing the same. Today those two are actually pulling the same direction instead of competing for the same ground - real reinforcement, not coincidence.`,
+      shadow: 'The reinforcement is real enough that it\'s easy to coast on it and skip the effort today still asks for.',
+    };
+  }
+  if (tier === 'bad') {
+    return {
+      light: `${cap(lead.a)} moves like ${imageA}. ${cap(lead.b)} moves like ${imageB}. ${cap(themeA)} and ${themeB} don't share a lane today - real tension, not just a mismatch. But tension is also where the actual growth is, if you meet it instead of avoiding it.`,
+      shadow: `Neither side bends today - ${imageA} keeps doing what it does, and ${imageB} keeps pulling its own direction. Something has to give, and if you're not deliberate about it, it won't be your call.`,
+    };
+  }
+  return {
+    light: `${cap(lead.a)} moves like ${imageA}; ${lead.b} moves like ${imageB}. The two share the day without much friction - not reinforcing each other, not fighting either.`,
+    shadow: 'Nothing\'s pulling you off course, but nothing\'s actively helping either - easy to drift on autopilot with two forces this neutral.',
+  };
+}
 
 // Builds the pair rows given each pair's two already-resolved entries.
 // pairs: [{ id, entryA, entryB }] - entries missing (e.g. no birth date on
@@ -752,12 +779,13 @@ function buildPairRows(pairs) {
   const lightRows = [];
   const shadowRows = [];
   pairs.forEach(({ id, entryA, entryB }) => {
-    const def = COMPOUND_PAIRS.find((p) => p.id === id);
-    if (!def || !entryA || !entryB) return;
+    const lead = COMPOUND_PAIR_LEADIN[id];
+    if (!lead || !entryA || !entryB) return;
     const score = numerologyCompat(entryA.root, entryB.root);
-    const bank = def[scoreClass(score)];
-    lightRows.push({ label: def.label, text: bank.light });
-    shadowRows.push({ label: def.label, text: bank.shadow });
+    const sentence = composePairSentence(id, entryA.root, entryB.root, scoreClass(score));
+    if (!sentence) return;
+    lightRows.push({ label: lead.label, text: sentence.light });
+    shadowRows.push({ label: lead.label, text: sentence.shadow });
   });
   return { lightRows, shadowRows };
 }
