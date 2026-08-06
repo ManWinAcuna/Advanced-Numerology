@@ -1339,6 +1339,15 @@ body::after {
   will-change: transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  /* Same horizontal-swipe lockdown as html/body/.scroll-viewport (see
+     .scroll-viewport's own comment) - a modal sits OUTSIDE that scroll
+     container as its own fixed layer, so it needs the same protection
+     repeated here: a sideways drag on a popup should never be able to
+     bounce it, trigger the browser's edge-swipe-back gesture, or reveal
+     the page underneath. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .modal-overlay.active {
@@ -1354,6 +1363,9 @@ body::after {
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   padding: 24px;
   box-shadow: 0 0 30px rgba(245, 197, 66, 0.25), 0 0 80px rgba(0, 0, 0, 0.6);
   transition: max-width 0.15s ease;
@@ -5543,6 +5555,10 @@ body {
   justify-content: center;
   padding: 30px 14px;
   overflow-y: auto;
+  /* See .modal-overlay's own comment - same horizontal-swipe lockdown. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .stock-modal {
@@ -5554,6 +5570,8 @@ body {
   border-radius: 14px;
   padding: 18px;
   box-shadow: var(--glow-cyan);
+  overflow-x: hidden;
+  touch-action: pan-y;
 }
 
 .stock-modal-close {

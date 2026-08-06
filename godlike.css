@@ -692,10 +692,15 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   position: fixed; inset: 0; z-index: 2600; display: flex; align-items: center; justify-content: center;
   padding: 24px 16px; background: rgba(0,0,0,.72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  /* Same horizontal-swipe lockdown as the shared .modal-overlay (see its
+     comment in style.css) - this page has its own modal system, so it
+     needs the same protection repeated here. */
+  overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y;
 }
 .gk-modal-backdrop.open { opacity: 1; pointer-events: auto; }
 .gk-modal {
   position: relative; width: 100%; max-width: 380px; max-height: 78vh; overflow-y: auto;
+  overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y;
   background: rgba(13,12,10,.97); border: 1px solid var(--border); border-radius: 20px;
   padding: 24px 20px 20px; text-align: left;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 24px 60px rgba(0,0,0,.65);
