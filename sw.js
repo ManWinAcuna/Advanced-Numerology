@@ -3,10 +3,27 @@
    next page downloaded is the "flash" between pages (an inline background
    can't paint a frame that hasn't arrived yet). Cache-first with
    background refresh (stale-while-revalidate) makes navigation instant
-   from device cache. The update-check pill stays the freshness authority:
-   tapping it tells this worker to drop every cache before reloading, so a
-   new deploy still lands cleanly instead of trickling in. */
-const CACHE = 'app-v1';
+   from device cache. The update-check pill stays a secondary freshness
+   nudge: tapping it drops every cache before reloading, for a clean jump
+   straight to a specific deploy.
+
+   v2 (2026-08-06): v1 applied stale-first to EVERY same-origin GET,
+   including the top-level HTML documents themselves. That's a real bug,
+   not just staleness - a cached HTML page references a FIXED set of
+   versioned script URLs (godlike.css?v=31 etc.), so once the HTML itself
+   goes stale it can NEVER discover newer script versions exist, no matter
+   how many times the page reloads or how long you wait - there's no path
+   back to fresh without an explicit cache-clear. Confirmed live: a device
+   stuck on an old snapshot showed zero sign of Round-13+ work (search UI,
+   Imprint Alignment, everything) despite many reloads. Fix: page
+   NAVIGATIONS go network-first (falling back to cache only when offline),
+   so the HTML is always current and always references the right script
+   versions; sub-resources (scripts/styles/images) keep the original
+   cache-first-with-background-refresh behavior, since a fresh HTML
+   requesting a NEW version number is a cache miss anyway and fetches
+   clean. CACHE renamed so activate() drops every v1 entry, including any
+   stale cached HTML. */
+const CACHE = 'app-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -31,6 +48,21 @@ self.addEventListener('fetch', (e) => {
   // Cross-origin (GitHub API, Firebase, CDNs) goes straight to network -
   // this cache is only for the app's own files.
   if (url.origin !== self.location.origin) return;
+
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            e.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, res.clone())));
+          }
+          return res;
+        })
+        .catch(() => caches.open(CACHE).then((cache) => cache.match(req)))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(req).then((cached) => {
