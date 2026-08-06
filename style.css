@@ -7094,6 +7094,24 @@ button.emax-fact-tile-tap {
 .emax-breakdown-body .compat-badge-wrap { display: none; }
 .emax-breakdown-body .compat-hero { padding-top: 0; }
 
+/* Despite the name, this is now ONLY Database's "Compare with me" trigger
+   (category.js) - EMAX's own toggle button that originally justified the
+   class name was removed when its popup got the hero treatment, but the
+   class/styling itself is still real and in use elsewhere, so it stayed
+   rather than being deleted along with EMAX's button. */
+.emax-breakdown-toggle {
+  background: none;
+  border: none;
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 0 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .emax-breakdown-toggle:hover { text-decoration: underline; }
+}
+
 /* ---- Timeline mini-popup (tap the item's own picture) ---- */
 .emax-timeline-section {
   margin-top: 14px;
