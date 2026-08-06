@@ -555,6 +555,7 @@ button.gk-altar-num {
   font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .16em; font-size: 9.5px;
   color: var(--muted); margin-bottom: 6px;
 }
+.gk-card-story-label-sub { margin-top: 12px; }
 
 /* Light/Shadow split (round 4, 2026-08-06) - two independent toggles,
    side by side, each opening its own full-width block below rather than

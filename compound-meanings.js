@@ -753,8 +753,8 @@ function composePairSentence(pairId, rootA, rootB, tier) {
 
   if (tier === 'good') {
     return {
-      light: `${cap(lead.a)} moves like ${imageA} - ${themeA}, doing what it does best. And ${lead.b} moves like ${imageB} - ${themeB}, doing the same. Today those two are actually pulling the same direction instead of competing for the same ground - real reinforcement, not coincidence.`,
-      shadow: 'The reinforcement is real enough that it\'s easy to coast on it and skip the effort today still asks for.',
+      light: `${cap(lead.a)} moves like ${imageA}, and ${lead.b} moves like ${imageB} - today those two are pulling the same direction, real reinforcement, not coincidence.`,
+      shadow: `That reinforcement is real enough to coast on - easy to let ${imageA} and ${imageB} carry the day instead of putting in the effort it still asks for.`,
     };
   }
   if (tier === 'bad') {
@@ -764,8 +764,8 @@ function composePairSentence(pairId, rootA, rootB, tier) {
     };
   }
   return {
-    light: `${cap(lead.a)} moves like ${imageA}; ${lead.b} moves like ${imageB}. The two share the day without much friction - not reinforcing each other, not fighting either.`,
-    shadow: 'Nothing\'s pulling you off course, but nothing\'s actively helping either - easy to drift on autopilot with two forces this neutral.',
+    light: `${cap(lead.a)} moves like ${imageA}; ${lead.b} moves like ${imageB} - the two share the day without much friction, not reinforcing each other, not fighting either.`,
+    shadow: `Nothing's pulling you off course, but nothing's actively helping either - ${themeA} and ${themeB} are neutral enough toward each other that it's easy to drift on autopilot.`,
   };
 }
 
@@ -786,6 +786,96 @@ function buildPairRows(pairs) {
     if (!sentence) return;
     lightRows.push({ label: lead.label, text: sentence.light });
     shadowRows.push({ label: lead.label, text: sentence.shadow });
+  });
+  return { lightRows, shadowRows };
+}
+
+/* ------------------------------------------------- "My Numbers" identity -- */
+// Round 12 (2026-08-06): the pair rows above compare TODAY against "you",
+// but never actually say what "you" are on your own - user: "I think we
+// need a separate button underneath light and shadow... my own light and
+// my own shadow." Gets its own toggle pair, covering the SAME 4 "mine"
+// values already computed for the pairs above (Lifepath, Day Born, your
+// own Day#, Personal Day) as standalone identity content - who you are,
+// independent of what today happens to be. Reuses COMPOUND_ROOT_IMAGE (one
+// consistent set of images across the page) and COMPOUND_DIGIT_FLAVOR's
+// existing driver clauses for roots 1-9 (already written in "you" voice),
+// composed into fresh sentences - not a copy of the today-facing entry
+// text. No raw compound numbers surface here, prose only, same house rule
+// as the pair rows.
+//
+// Master numbers name their pure/impure oscillation same as everywhere
+// else in this file, EXCEPT 11 - which never gets framed as oscillating
+// into "2" (2 doesn't exist standalone, see feedback-no-standalone-two
+// memory, and the user's own hard line: "impure 11 doesn't exist" as a
+// swing into some other number - it's a less-stable, borrowed version of
+// the SAME 11, never a swing into "2"). 22/4 and 33/6 have a real
+// companion root, named directly.
+function composeIdentitySentence(entry) {
+  if (!entry) return null;
+
+  if (entry.flat) {
+    const note = `Just a plain ${entry.compound} in this slot - no bigger number underneath, nothing else to unpack.`;
+    return { light: note, shadow: note, flat: true };
+  }
+
+  const root = entry.root;
+  const image = COMPOUND_ROOT_IMAGE[root];
+  if (!image) return null;
+  const theme = rootThemeName(root);
+
+  if (root === 28) {
+    return {
+      light: `You are ${image} - wealth built through steady discipline, not chased.`,
+      shadow: 'But push that too far and the chase itself becomes the point - cutting corners or overextending just to feel the payoff sooner.',
+    };
+  }
+
+  if (root === 11 || root === 22 || root === 33) {
+    if (!entry.impure) {
+      const burden = root === 11 ? 'anxiety or reactivity' : root === 22 ? 'genuine overwhelm' : "a burden you didn't sign up for";
+      return {
+        light: `You are ${image} - ${theme.toLowerCase()} runs in you at full, natural strength.`,
+        shadow: `Push it too far without grounding it and that same charge tips into ${burden}.`,
+      };
+    }
+    // No legitimate companion for 11 (2 doesn't exist standalone) - a less
+    // stable version of the SAME 11, never a swing into some other number.
+    if (root === 11) {
+      return {
+        light: `You are ${image}, most of the time - it doesn't always arrive at full voltage though; some days it runs closer to raw instinct than the settled, refined version.`,
+        shadow: 'That instability tips into real emotional volatility - reactive decisions, mood driving the moment instead of clear judgment.',
+      };
+    }
+    const companionImage = COMPOUND_ROOT_IMAGE[entry.companion];
+    const companionTheme = rootThemeName(entry.companion).toLowerCase();
+    return {
+      light: `You are ${image}, most of the time - but some days you're just ${companionImage} instead, ${companionTheme} on the immediate task in front of you rather than the whole vision. Both are really you, depending on what the moment's actually asking for.`,
+      shadow: `The switch itself is the trap - reaching for ${theme.toLowerCase()}-scale ambition with only ${companionTheme} bandwidth, or playing small on a day that called for the big vision.`,
+    };
+  }
+
+  const flavor = COMPOUND_DIGIT_FLAVOR[root];
+  if (!flavor) return null;
+  return {
+    light: `You are ${image} - ${flavor.driverGood}, and that's not just today's mood, it's how you're built.`,
+    shadow: `But push that too far and ${flavor.driverBad}.`,
+  };
+}
+
+// Builds the "My Numbers" rows from the same 4 "mine" entries the pairs
+// above already compute. items: [{ label, entry }] - missing entries (no
+// birthdate on file) are silently skipped, same graceful-degradation rule
+// as everywhere else in this file.
+function buildIdentityRows(items) {
+  const lightRows = [];
+  const shadowRows = [];
+  items.forEach(({ label, entry }) => {
+    if (!entry) return;
+    const sentence = composeIdentitySentence(entry);
+    if (!sentence) return;
+    lightRows.push({ label, text: sentence.light, flat: !!sentence.flat });
+    shadowRows.push({ label, text: sentence.shadow, flat: !!sentence.flat });
   });
   return { lightRows, shadowRows };
 }

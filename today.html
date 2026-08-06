@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=25">
+<link rel="stylesheet" href="godlike.css?v=26">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -156,14 +156,30 @@
     // date instead. Needs a real birthday on file for all four.
     if (wholeStory && me && r) {
       var lpEntry = compoundEntryForLifePath(r.lifePath, r.lifePathCompound);
+      var dayBornEntry = compoundEntry(compoundRawEnergy(me));
+      var dayNumMineEntry = compoundEntry(compoundRawDayNum(me));
+      var personalDayMineEntry = compoundEntry(compoundRawPersonalDay(me, day0));
       var pairRows = buildPairRows([
         { id: 'ud_lifepath', entryA: compoundEntry(compoundRawUniversalDay(day0)), entryB: lpEntry },
-        { id: 'energy_dayborn', entryA: compoundEntry(compoundRawEnergy(day0)), entryB: compoundEntry(compoundRawEnergy(me)) },
-        { id: 'dayofyear_dayofyear', entryA: compoundEntry(compoundRawDayNum(day0)), entryB: compoundEntry(compoundRawDayNum(me)) },
-        { id: 'lifepath_personalday', entryA: lpEntry, entryB: compoundEntry(compoundRawPersonalDay(me, day0)) },
+        { id: 'energy_dayborn', entryA: compoundEntry(compoundRawEnergy(day0)), entryB: dayBornEntry },
+        { id: 'dayofyear_dayofyear', entryA: compoundEntry(compoundRawDayNum(day0)), entryB: dayNumMineEntry },
+        { id: 'lifepath_personalday', entryA: lpEntry, entryB: personalDayMineEntry },
       ]);
       wholeStory.lightRows = wholeStory.lightRows.concat(pairRows.lightRows);
       wholeStory.shadowRows = wholeStory.shadowRows.concat(pairRows.shadowRows);
+
+      // Round 12: "My Numbers" - the person's own 4 numbers described on
+      // their own terms, independent of today. Same graceful-degradation
+      // rule as the pairs above (needs a birthday on file, already gated
+      // by the `me && r` check this whole block sits inside).
+      var identityRows = buildIdentityRows([
+        { label: 'Lifepath', entry: lpEntry },
+        { label: 'Day Born', entry: dayBornEntry },
+        { label: 'Day#', entry: dayNumMineEntry },
+        { label: 'Personal Day', entry: personalDayMineEntry },
+      ]);
+      wholeStory.myLightRows = identityRows.lightRows;
+      wholeStory.myShadowRows = identityRows.shadowRows;
     }
   } catch (e) {}
 
@@ -355,6 +371,19 @@
         '</div>';
       h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(storyRowHtml).join('') + '</div>';
       h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(storyRowHtml).join('') + '</div>';
+      // Round 12: a second, independent toggle pair - who YOU are (Lifepath,
+      // Day Born, your own Day#, Personal Day), on its own terms, separate
+      // from today's numbers above. Mutually exclusive with all four
+      // toggles (event-delegated handler below closes every other body).
+      if (wholeStory.myLightRows && wholeStory.myLightRows.length) {
+        h += '<div class="gk-card-story-label gk-card-story-label-sub">🧭 My Numbers</div>';
+        h += '<div class="story-cols">' +
+          '<button type="button" class="story-col-toggle light mine" data-col="mine-light">My Light</button>' +
+          '<button type="button" class="story-col-toggle shadow mine" data-col="mine-shadow">My Shadow</button>' +
+          '</div>';
+        h += '<div class="story-col-body" data-col-body="mine-light" hidden>' + wholeStory.myLightRows.map(storyRowHtml).join('') + '</div>';
+        h += '<div class="story-col-body" data-col-body="mine-shadow" hidden>' + wholeStory.myShadowRows.map(storyRowHtml).join('') + '</div>';
+      }
       if (wholeStory.summary) h += '<div class="story-summary">' + wholeStory.summary + '</div>';
       h += '</div>';
     }
@@ -364,21 +393,21 @@
   // Light/Shadow toggles are rebuilt fresh every time cardHtml() runs, so
   // this listens on modalBody itself (event delegation) instead of
   // re-attaching to elements that get thrown away on every open. Mutually
-  // exclusive - opening one always closes the other, only one showing at
-  // a time.
+  // exclusive across ALL toggles on the card (round 12: now 4 - Light,
+  // Shadow, My Light, My Shadow - not just a hardcoded pair) - opening one
+  // always closes every other, only one showing at a time.
   modalBody.addEventListener('click', function (e) {
     var btn = e.target.closest('.story-col-toggle');
     if (!btn) return;
     var col = btn.dataset.col;
-    var otherCol = col === 'light' ? 'shadow' : 'light';
     var body = modalBody.querySelector('[data-col-body="' + col + '"]');
-    var otherBody = modalBody.querySelector('[data-col-body="' + otherCol + '"]');
-    var otherBtn = modalBody.querySelector('.story-col-toggle.' + otherCol);
     if (!body) return;
     var open = body.hidden;
-    body.hidden = !open;
-    btn.classList.toggle('open', open);
-    if (open && otherBody) { otherBody.hidden = true; otherBtn.classList.remove('open'); }
+    var allBodies = modalBody.querySelectorAll('.story-col-body');
+    var allBtns = modalBody.querySelectorAll('.story-col-toggle');
+    for (var i = 0; i < allBodies.length; i++) allBodies[i].hidden = true;
+    for (var j = 0; j < allBtns.length; j++) allBtns[j].classList.remove('open');
+    if (open) { body.hidden = false; btn.classList.add('open'); }
   });
 
   var pressTimer = null, pressed = false;
