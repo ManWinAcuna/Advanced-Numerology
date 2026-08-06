@@ -2384,6 +2384,7 @@ const CATEGORY_EMOJI_KEYWORDS = [
   { keywords: ['power outage', 'blackout'], emoji: '🔌' },
   { keywords: ['war'], emoji: '⚔️' },
   { keywords: ['plane crash'], emoji: '💥' },
+  { keywords: ['market crash', 'crash'], emoji: '📉' },
   { keywords: ['book', 'novel'], emoji: '📚' },
   { keywords: ['author', 'writer'], emoji: '✍️' },
   { keywords: ['inventor'], emoji: '💡' },
@@ -2430,6 +2431,7 @@ const EMAX_STARTER_CATEGORIES = [
   'Anime', 'Shows', 'Songs', 'Video Games', 'YouTubers',
   'Food & Beverage Brands', 'Historical Figures', 'Books', 'Authors',
   'Inventors', 'Inventions', 'US Presidents', 'Earthquakes', 'Hurricanes', 'Power Outages', 'Wars', 'Plane Crashes',
+  'ES Market Crashes', 'NQ Market Crashes',
 ];
 
 function loadEmaxDB() {

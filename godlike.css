@@ -1109,3 +1109,29 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   .shield, .shield-score { animation: none; }
   .compat-embers i { animation: none !important; opacity: 0; }
 }
+
+/* ===== EMAX landing search + multi-filter (2026-08-06) ===== */
+.emax-search-box { margin-bottom: 12px; }
+.emax-filter-actions { margin: 10px 0 2px; }
+.emax-filter-group { margin-top: 10px; }
+.emax-filter-group-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.emax-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.emax-f-chip {
+  background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 999px;
+  padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.emax-f-chip.on { border-color: var(--gold); color: var(--gold); background: rgba(245, 197, 66, .1); font-weight: 600; }
+.emax-filter-planets-toggle {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  border-top: 1px dashed var(--border); margin-top: 12px; padding: 10px 0 0;
+  color: var(--acc-text); font-size: 12px; letter-spacing: .05em; cursor: pointer; font-family: inherit;
+}
+#emaxSearchResults { margin-bottom: 12px; }
+.emax-search-results-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.emax-search-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%;
+  text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; cursor: pointer; font-family: inherit;
+}
+.emax-search-row-name { color: var(--text); font-size: 14px; }
+.emax-search-row-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }

@@ -823,6 +823,196 @@ document.getElementById('reverseLookupClearBtn').addEventListener('click', () =>
   document.getElementById('reverseLookupResults').innerHTML = '';
 });
 
+/* ===================== Landing search + multi-filter (2026-08-06) ===================== */
+// "a search bar where I can search for any of the inputs no matter what"
+// + multi-select filters that "clear out the categories and only show
+// what I'm looking for". The old Reverse Lookup box (above) stays as-is;
+// this is the promoted, front-and-center version: live-as-you-type,
+// multiple values per dimension (OR within a dimension, AND across
+// dimensions), results replacing the category grid.
+//
+// Every per-entry value comes from the app's own established functions -
+// Life Path buckets are compatLifePathInfo (the same 1/3-9/11/13/22/22-4/
+// 28/33/33-6 set the distribution chart already uses), Personal Year is
+// emaxPersonalYearForYear + getActiveBirthYear (same as Reverse Lookup),
+// PM/PD reduce the same raws Profile shows. Nothing re-derived.
+const EMAX_FILTER_TODAY = new Date();
+const EMAX_FILTER_NUM_SET = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '11', '22', '28', '33'];
+const EMAX_FILTER_DIMS = [
+  { key: 'lifePath', label: 'Lifepath', values: ['1', '3', '4', '5', '6', '7', '8', '9', '11', '13', '22', '22/4', '28', '33', '33/6'], get: (d) => compatLifePathInfo(d).display },
+  { key: 'energy', label: 'Secondary Energy', values: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '11', '22', '28'], get: (d) => String(getReducedDay(d)) },
+  { key: 'dayNum', label: 'Day#', values: EMAX_FILTER_NUM_SET, get: (d) => String(getReducedDayOfYear(d)) },
+  { key: 'py', label: 'Personal Year', values: ['1', '3', '4', '5', '6', '7', '8', '9', '11', '22', '33'], get: (d) => String(emaxPersonalYearForYear(d, getActiveBirthYear(d, EMAX_FILTER_TODAY))) },
+  { key: 'pm', label: 'Personal Month', values: EMAX_FILTER_NUM_SET, get: (d) => String(reduceNumber(getPersonalMonthRaw(d, EMAX_FILTER_TODAY))) },
+  { key: 'pd', label: 'Personal Day', values: EMAX_FILTER_NUM_SET, get: (d) => String(reduceNumber(getPersonalDayRaw(reduceNumber(getPersonalMonthRaw(d, EMAX_FILTER_TODAY)), EMAX_FILTER_TODAY))) },
+  { key: 'chYear', label: 'Chinese Year', values: VIETNAMESE_KEYS, get: (d) => getChineseZodiacYear(d) },
+  { key: 'chMonth', label: 'Chinese Month', values: VIETNAMESE_KEYS, get: (d) => getChineseMonth(d) },
+  { key: 'chDay', label: 'Chinese Day', values: VIETNAMESE_KEYS, get: (d) => getChineseDaySign(d) },
+].concat(ASTRO_BODIES.map((b) => ({
+  key: 'body_' + b.key, label: `${b.symbol} ${b.label}`, values: ASTRO_ZODIAC_SIGNS, planet: true,
+  get: (d) => getAstroBodyInfo(b.key, d).sign,
+})));
+
+let emaxSearchQuery = '';
+const emaxFilterSel = {}; // dimKey -> Set of selected value strings
+
+// Per-dimension memo (entry.id -> value). Values are pure functions of the
+// entry's date (plus a today fixed at page load for PY/PM/PD), so caching
+// per session is safe - matters for the planet dimensions, whose astro
+// math over a few thousand entries would otherwise rerun on every chip
+// toggle and keystroke.
+const emaxFilterMemo = {};
+function emaxFilterValueFor(dim, entry) {
+  let m = emaxFilterMemo[dim.key];
+  if (!m) m = emaxFilterMemo[dim.key] = new Map();
+  if (m.has(entry.id)) return m.get(entry.id);
+  let v = null;
+  try { v = dim.get(parseDateStr(entry.date)); } catch (e) { v = null; }
+  m.set(entry.id, v);
+  return v;
+}
+
+function emaxActiveFilterDims() {
+  return EMAX_FILTER_DIMS.filter((dim) => emaxFilterSel[dim.key] && emaxFilterSel[dim.key].size);
+}
+
+// Search matches names AND dates - the ISO form the entry stores
+// (1987-10-19), the US form the rest of the app displays (10/19/1987),
+// or a bare year (works for year-only entries too).
+function emaxEntryMatchesQuery(entry, q) {
+  if (entry.name.toLowerCase().includes(q)) return true;
+  if (entry.date) {
+    if (entry.date.includes(q)) return true;
+    const parts = entry.date.split('-');
+    if (parts.length === 3 && `${parts[1]}/${parts[2]}/${parts[0]}`.includes(q)) return true;
+  }
+  if (entry.year != null && String(entry.year).includes(q)) return true;
+  return false;
+}
+
+// Filters need a full date (same year-only exclusion precedent as Reverse
+// Lookup - a bare year can't give a Life Path or a planet sign, and this
+// app never fabricates the missing month/day). Dimensions check in
+// cheap-first order (numerology arithmetic, then zodiac tables, then the
+// astro engine) with short-circuit fails, so the expensive planet math
+// only ever runs on entries that survived everything cheaper.
+function emaxEntryMatchesFilters(entry, activeDims) {
+  if (!entry.date) return false;
+  for (let i = 0; i < activeDims.length; i++) {
+    const dim = activeDims[i];
+    const v = emaxFilterValueFor(dim, entry);
+    if (v == null || !emaxFilterSel[dim.key].has(String(v))) return false;
+  }
+  return true;
+}
+
+function emaxRunSearchFilter() {
+  const q = emaxSearchQuery.trim().toLowerCase();
+  const activeDims = emaxActiveFilterDims();
+  const active = q.length > 0 || activeDims.length > 0;
+
+  const resultsEl = document.getElementById('emaxSearchResults');
+  const gridEl = document.getElementById('categoriesContainer');
+  resultsEl.hidden = !active;
+  gridEl.style.display = active ? 'none' : '';
+
+  const btn = document.getElementById('emaxFilterToggleBtn');
+  const activeCount = activeDims.reduce((s, dim) => s + emaxFilterSel[dim.key].size, 0);
+  btn.textContent = activeCount ? `⚙ Filters (${activeCount})` : '⚙ Filters';
+
+  if (!active) { resultsEl.innerHTML = ''; return; }
+
+  const results = [];
+  db.categories.forEach((cat) => {
+    cat.entries.forEach((entry) => {
+      if (q && !emaxEntryMatchesQuery(entry, q)) return;
+      if (activeDims.length && !emaxEntryMatchesFilters(entry, activeDims)) return;
+      results.push({ entry, cat });
+    });
+  });
+
+  const rowHtml = (r) => {
+    const dateStr = r.entry.date
+      ? (() => { const p = r.entry.date.split('-'); return p.length === 3 ? `${p[1]}/${p[2]}/${p[0]}` : r.entry.date; })()
+      : (r.entry.year != null ? String(r.entry.year) : '');
+    return `
+      <button type="button" class="emax-search-row" data-open-entry="${escapeHtml(r.entry.id)}">
+        <span class="emax-search-row-name">${escapeHtml(r.entry.name)}</span>
+        <span class="emax-search-row-meta">${escapeHtml(r.cat.name)}${dateStr ? ' · ' + dateStr : ''}</span>
+      </button>`;
+  };
+  resultsEl.innerHTML = `
+    <div class="emax-audit-summary">${results.length} match${results.length === 1 ? '' : 'es'} across your whole collection.</div>
+    <div class="emax-search-results-list">${results.map(rowHtml).join('') || '<div class="emax-nomination-empty">Nothing matches - loosen the search or filters.</div>'}</div>`;
+}
+
+function emaxFilterPanelHtml() {
+  const groupHtml = (dim) => `
+    <div class="emax-filter-group" data-filter-group="${dim.key}">
+      <div class="emax-filter-group-label">${dim.label}</div>
+      <div class="emax-filter-chips">
+        ${dim.values.map((v) => `<button type="button" class="emax-f-chip" data-dim="${dim.key}" data-val="${escapeHtml(String(v))}">${escapeHtml(String(v))}</button>`).join('')}
+      </div>
+    </div>`;
+  const core = EMAX_FILTER_DIMS.filter((d) => !d.planet).map(groupHtml).join('');
+  const planets = EMAX_FILTER_DIMS.filter((d) => d.planet).map(groupHtml).join('');
+  return `
+    <div class="emax-filter-actions">
+      <button type="button" class="btn-link" id="emaxFilterClearBtn">Clear all filters</button>
+    </div>
+    ${core}
+    <button type="button" class="emax-filter-planets-toggle" id="emaxFilterPlanetsToggle">🪐 Planet signs <span id="emaxFilterPlanetsChevron">▸</span></button>
+    <div id="emaxFilterPlanets" hidden>${planets}</div>`;
+}
+
+document.getElementById('emaxFilterPanel').innerHTML = emaxFilterPanelHtml();
+
+document.getElementById('emaxFilterToggleBtn').addEventListener('click', () => {
+  const panel = document.getElementById('emaxFilterPanel');
+  panel.hidden = !panel.hidden;
+});
+
+document.getElementById('emaxFilterPlanetsToggle').addEventListener('click', () => {
+  const el = document.getElementById('emaxFilterPlanets');
+  el.hidden = !el.hidden;
+  document.getElementById('emaxFilterPlanetsChevron').textContent = el.hidden ? '▸' : '▾';
+});
+
+document.getElementById('emaxFilterPanel').addEventListener('click', (e) => {
+  const chip = e.target.closest('.emax-f-chip');
+  if (chip) {
+    const { dim, val } = chip.dataset;
+    if (!emaxFilterSel[dim]) emaxFilterSel[dim] = new Set();
+    if (emaxFilterSel[dim].has(val)) { emaxFilterSel[dim].delete(val); chip.classList.remove('on'); }
+    else { emaxFilterSel[dim].add(val); chip.classList.add('on'); }
+    emaxRunSearchFilter();
+    return;
+  }
+  if (e.target.id === 'emaxFilterClearBtn') {
+    Object.keys(emaxFilterSel).forEach((k) => emaxFilterSel[k].clear());
+    document.querySelectorAll('#emaxFilterPanel .emax-f-chip.on').forEach((c) => c.classList.remove('on'));
+    emaxRunSearchFilter();
+  }
+});
+
+let emaxSearchDebounce = null;
+document.getElementById('emaxSearchInput').addEventListener('input', (e) => {
+  emaxSearchQuery = e.target.value;
+  clearTimeout(emaxSearchDebounce);
+  emaxSearchDebounce = setTimeout(emaxRunSearchFilter, 120);
+});
+
+// Tapping a result opens the shared item popup right here - same pattern
+// as the Audit/Nomination detail rows above, no category-page navigation.
+document.getElementById('emaxSearchResults').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-open-entry]');
+  if (!row) return;
+  const entry = emaxFindEntryById(db, row.dataset.openEntry);
+  if (!entry) return;
+  const ownerCat = db.categories.find((c) => c.entries.some((en) => en.id === entry.id));
+  if (ownerCat) openItemModal(entry, ownerCat.name);
+});
+
 /* ===================== Clean Up Garbled Events (2026-08-02) =====================
  * UI-only wrapper around emaxCleanAndRescanGarbled (db-core.js) - real user
  * report, with a screenshot, that already-scraped entries kept showing raw

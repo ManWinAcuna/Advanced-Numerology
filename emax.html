@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>EMAX</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=29">
+<link rel="stylesheet" href="godlike.css?v=30">
 </head>
 <body>
 <div class="page">
@@ -48,6 +48,19 @@
         <button id="rearrangeToggleBtn" class="btn-link" type="button">⇅ Rearrange</button>
       </div>
     </div>
+
+    <!-- Search + filter across the WHOLE collection (2026-08-06). While
+         either is active, the category grid below hides and only the
+         matching entries show - tapping one opens the shared item popup
+         right here (emax-popup.js), no navigation needed. -->
+    <div class="box emax-search-box">
+      <div class="inline-form">
+        <input type="text" id="emaxSearchInput" placeholder="🔎 Search every entry — name or date" autocomplete="off">
+        <button id="emaxFilterToggleBtn" class="btn-link" type="button">⚙ Filters</button>
+      </div>
+      <div id="emaxFilterPanel" hidden></div>
+    </div>
+    <div id="emaxSearchResults" hidden></div>
 
     <div id="categoriesContainer"></div>
 
@@ -177,12 +190,12 @@
 <script src="compat-data.js"></script>
 <script src="compat-engine.js"></script>
 <script src="big-store.js"></script>
-<script src="db-core.js"></script>
+<script src="db-core.js?v=2"></script>
 <script src="firebase-loader.js"></script>
 <script src="compat-render.js?v=2"></script>
-<script src="emax-seed-data.js"></script>
+<script src="emax-seed-data.js?v=2"></script>
 <script src="emax-popup.js"></script>
-<script src="emax.js"></script>
+<script src="emax.js?v=2"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
