@@ -186,6 +186,18 @@ function luckyNumberBonus(luckyNumber, luckyDigits, comparedDate, from) {
       notes.push({ points: 10, text: `Lucky Number Day - ${monthName} ${day} is built from your lucky digits ${a}/${b}`, from });
     } else if (combinedDayMatch) {
       notes.push({ points: 10, text: `Lucky Number Day - the ${day}${ORDINAL_SUFFIX(day)} matches your lucky digits ${a}/${b} combined`, from });
+    } else {
+      // Zero-sandwiched: a 0 doesn't add a new digit, it just amplifies
+      // what's already there - so the lucky pair can still be "showing"
+      // wrapped in zeros (month 8 + day 20 -> 8, 2, 0 -> strip the 0 ->
+      // 8/2, same set as lucky 82). Same zero-stripping the Day-of-Year
+      // check below already does; this brings the Day check in line with
+      // it. Order-independent (sameDigitSet), only fires when neither of
+      // the two exact checks above already claimed this day.
+      const dateDigits = `${month}${day}`.split('').map(Number).filter((d) => d !== 0);
+      if (sameDigitSet(dateDigits, luckyDigits)) {
+        notes.push({ points: 10, text: `Lucky Number Day - ${monthName} ${day} still shows your lucky digits ${a}/${b} once the 0s are stripped`, from });
+      }
     }
   }
 
