@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=30">
+<link rel="stylesheet" href="godlike.css?v=31">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -64,7 +64,8 @@
 <script src="big-store.js"></script>
 <script src="db-core.js?v=3"></script>
 <script src="firebase-loader.js"></script>
-<script src="compat-render.js?v=4"></script>
+<script src="imprint-alignment.js?v=1"></script>
+<script src="compat-render.js?v=6"></script>
 <script src="bottombar.js?v=8"></script>
 <script src="update-check.js?v=3"></script>
 <script>
@@ -300,7 +301,7 @@
   // else in the app (shield score, per-category cards, meters on reveal)
   document.getElementById('gkOrbits').addEventListener('click', function (e) {
     if (!e.target.closest('#gkOrbitAligned') || !compatFull) return;
-    renderCompatHero(modalBody, compatFull, 'You', 'Today', { compact: true });
+    renderCompatHero(modalBody, compatFull, 'You', 'Today', { compact: true, pillDateA: me, pillDateB: day0 });
     modalBackdrop.classList.add('open');
   });
 

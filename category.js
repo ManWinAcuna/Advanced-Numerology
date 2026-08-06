@@ -305,7 +305,7 @@ function openEntryModal(entry) {
   // Compatibility with Today - it was rendered here (same classes, same
   // look) but never actually wired to open anything.
   document.getElementById('entryCompatTodayBox').addEventListener('click', () => {
-    renderCompatHero(document.getElementById('compareMiniBody'), todayCompat, entry.name, 'Today', { compact: true });
+    renderCompatHero(document.getElementById('compareMiniBody'), todayCompat, entry.name, 'Today', { compact: true, pillDateA: dateObj, pillDateB: today });
     document.getElementById('compareMiniOverlay').classList.add('active');
   });
 
@@ -334,7 +334,7 @@ function openCompareMini(entry, dateObj) {
   }
   const meDate = parseDateStr(profile.date);
   const result = computeCompatibility(meDate, dateObj);
-  renderCompatHero(document.getElementById('compareMiniBody'), result, 'Me', entry.name, { compact: true });
+  renderCompatHero(document.getElementById('compareMiniBody'), result, 'Me', entry.name, { compact: true, pillDateA: meDate, pillDateB: dateObj });
   document.getElementById('compareMiniOverlay').classList.add('active');
 }
 

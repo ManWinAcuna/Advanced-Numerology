@@ -1067,6 +1067,43 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
    Compatibility modals - same hero, sized for a modal-box rather than the
    full page. */
 .compat-hero.compact { max-width: 380px; padding-top: 0; }
+
+/* ===== Imprint Alignment (2026-08-06) - pill + result blocks ===== */
+.imprint-pill {
+  display: block; margin: 16px auto 0; background: rgba(192, 132, 252, .08);
+  border: 1px solid rgba(192, 132, 252, .35); border-radius: 999px; padding: 9px 16px;
+  color: #c084fc; font-family: var(--gk-ui); font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase; cursor: pointer;
+}
+.imprint-pill.open { background: rgba(192, 132, 252, .16); }
+.imprint-pill-body { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+
+.imprint-result {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+}
+.imprint-result-head { display: flex; align-items: center; gap: 12px; }
+.imprint-result-score {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-family: var(--gk-display); font-weight: 700; font-size: 15px;
+  border: 2px solid currentColor;
+}
+.imprint-result-score.good { color: var(--good); }
+.imprint-result-score.mid { color: var(--gold); }
+.imprint-result-score.bad { color: var(--bad); }
+.imprint-result-label { font-size: 12.5px; color: var(--text); line-height: 1.4; }
+.imprint-result-label i { color: var(--muted); font-style: normal; }
+
+.imprint-reveal-btn {
+  display: block; margin: 10px 0 0; background: none; border: none; padding: 0;
+  color: var(--acc-text); font-family: var(--gk-ui); font-size: 10.5px; letter-spacing: .05em;
+  cursor: pointer;
+}
+.imprint-reveal-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.imprint-match-row { font-size: 12px; color: var(--text); margin-bottom: 6px; line-height: 1.5; }
+.imprint-match-row:last-child { margin-bottom: 0; }
+.imprint-match-row b { color: var(--acc-text); }
+.imprint-match-pts { color: var(--good); font-weight: 700; margin-left: 2px; }
+.imprint-match-empty { font-size: 12px; color: var(--muted); font-style: italic; }
 .compat-hero.compact .compat-badge-wrap { margin-top: 6px; }
 .compat-hero.compact .shield { width: 148px; height: 166px; }
 .compat-hero.compact .shield-score { font-size: 33px; }

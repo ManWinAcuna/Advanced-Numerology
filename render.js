@@ -471,7 +471,7 @@ function closeModal() {
 document.getElementById('compatTodayBox').addEventListener('click', () => {
   if (!lastBirthDate) return;
   const result = computeCompatibility(lastBirthDate, getToday());
-  renderCompatHero(document.getElementById('compatModalBody'), result, 'You', 'Today', { compact: true });
+  renderCompatHero(document.getElementById('compatModalBody'), result, 'You', 'Today', { compact: true, pillDateA: lastBirthDate, pillDateB: getToday() });
   openModal();
 });
 
@@ -517,7 +517,7 @@ if (compatMeBox) {
     const famousNameEl = document.getElementById('famousSearch');
     const dayName = (famousNameEl && famousNameEl.value) ? famousNameEl.value : 'This Date';
     const result = computeCompatibility(meDate, lastBirthDate);
-    renderCompatHero(document.getElementById('compatModalBody'), result, 'Me', dayName, { compact: true });
+    renderCompatHero(document.getElementById('compatModalBody'), result, 'Me', dayName, { compact: true, pillDateA: meDate, pillDateB: lastBirthDate });
     openModal();
   });
 }

@@ -148,6 +148,8 @@ document.querySelectorAll('.mode-card').forEach((card) => {
 
     if (mode === 'today') {
       personInputsEl.innerHTML = personInputHTML('Birthday', 'A');
+    } else if (mode === 'imprint') {
+      personInputsEl.innerHTML = personInputHTML('Person (whose imprints)', 'A') + personInputHTML('Candidate Date', 'B');
     } else {
       personInputsEl.innerHTML = personInputHTML('Person A', 'A') + personInputHTML('Person B', 'B');
     }
@@ -177,7 +179,7 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   const dateAInput = document.querySelector('.person-date[data-person="A"]');
   const dateAISO = displayToISO(dateAInput.value);
   if (!dateAISO) {
-    alert(`Please enter a valid date (MM/DD/YYYY) for ${mode === 'today' ? 'the birthday' : 'Person A'}.`);
+    alert(`Please enter a valid date (MM/DD/YYYY) for ${mode === 'today' ? 'the birthday' : (mode === 'imprint' ? 'the person' : 'Person A')}.`);
     return;
   }
   const dateA = parseDateInput(dateAISO);
@@ -194,11 +196,24 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     const dateBInput = document.querySelector('.person-date[data-person="B"]');
     const dateBISO = displayToISO(dateBInput.value);
     if (!dateBISO) {
-      alert('Please enter a valid date (MM/DD/YYYY) for Person B.');
+      alert(`Please enter a valid date (MM/DD/YYYY) for ${mode === 'imprint' ? 'the candidate date' : 'Person B'}.`);
       return;
     }
     dateB = parseDateInput(dateBISO);
-    nameB = document.querySelector('.person-name[data-person="B"]').value.trim() || 'Person B';
+    nameB = document.querySelector('.person-name[data-person="B"]').value.trim() || (mode === 'imprint' ? 'Candidate Date' : 'Person B');
+  }
+
+  // Imprint Alignment (2026-08-06): one-sided read (A's history vs B as
+  // the candidate), not a two-equal-sides compat score - its own render
+  // function, not renderCompatHero.
+  if (mode === 'imprint') {
+    const result = computeImprintAlignment(dateA, dateB);
+    compatResultsEl.classList.add('active');
+    setModalWidth(compatResultsEl, false);
+    compatResultsEl.innerHTML = imprintAlignmentResultHtml(result, nameA, nameB);
+    wireImprintRevealButtons(compatResultsEl);
+    compatModalOverlayEl.classList.add('active');
+    return;
   }
 
   const result = computeCompatibility(dateA, dateB);

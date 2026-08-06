@@ -221,7 +221,12 @@ function compatMeterRow(label, score) {
 // { compact: true } (smaller badge/type, used inside modals/popups where
 // the person is already established by the surrounding UI - EMAX's item
 // popup, Database's compare-with-me, Profile's compat modal, Calendar's
-// day-compare).
+// day-compare). opts.pillDateA/pillDateB (2026-08-06, Imprint Alignment):
+// SEPARATE from dateA/dateB on purpose - dateA/dateB only ever controls
+// the two-person zodiac header above, and threading them through to every
+// existing compact-mode call site would have started showing that header
+// everywhere unintentionally. Passing pillDateA/pillDateB shows the "Check
+// My Imprints" pill regardless of whether the header is showing.
 function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   opts = opts || {};
   containerEl.classList.add('active');
@@ -284,6 +289,7 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       <div class="compat-verdict-head">${verdict.head}</div>
       <div class="compat-verdict-body">${verdict.body}</div>
       ${cardsHtml}
+      ${opts.pillDateA && opts.pillDateB ? '<button type="button" class="imprint-pill" data-imprint-pill>✨ Check My Imprints</button><div class="imprint-pill-body" data-imprint-pill-body hidden></div>' : ''}
       ${bonusChipsHtml(r.bonuses)}
       <button type="button" class="compat-reveal-btn" data-compat-reveal>▾ See full breakdown</button>
       <div class="compat-reveal-body" data-compat-reveal-body>
@@ -299,6 +305,72 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   revealBtn.addEventListener('click', () => {
     const open = revealBody.classList.toggle('open');
     revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+  });
+
+  const pillBtn = containerEl.querySelector('[data-imprint-pill]');
+  if (pillBtn) {
+    pillBtn.addEventListener('click', () => {
+      const body = containerEl.querySelector('[data-imprint-pill-body]');
+      const open = body.hidden;
+      if (open && !body.dataset.built) {
+        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB);
+        body.dataset.built = '1';
+        wireImprintRevealButtons(body);
+      }
+      body.hidden = !open;
+      pillBtn.classList.toggle('open', open);
+    });
+  }
+}
+
+/* =========================== Imprint Alignment (2026-08-06) ==========
+   The pill above computes BOTH directions whenever two real dates are on
+   hand (user's own call: "both sides" rather than guessing which side is
+   "the person") - side A's imprints checked against side B as the
+   candidate date, AND side B's imprints against side A. Deliberately NOT
+   the shield style: this isn't two equal sides compared against each
+   other, it's one person's history read against one date, so it gets its
+   own plainer treatment. */
+// "You's imprints" reads as broken grammar - the handful of fixed pronoun-
+// like labels this app already passes as nameA/nameB (You/Me/Today) get a
+// real possessive instead of a blind apostrophe-s.
+const IMPRINT_POSSESSIVE = { You: 'Your', Me: 'My', Today: "Today's" };
+function imprintPossessive(name) {
+  return IMPRINT_POSSESSIVE[name] || `${name}'s`;
+}
+
+function imprintAlignmentResultHtml(result, personName, candidateName) {
+  const rows = result.matches.length
+    ? result.matches.map((m) => `<div class="imprint-match-row"><b>${escapeHtml(m.label)}:</b> ${escapeHtml(m.text)} <span class="imprint-match-pts">+${m.points}</span></div>`).join('')
+    : '<div class="imprint-match-empty">No imprint themes matched this date.</div>';
+  return `
+    <div class="imprint-result">
+      <div class="imprint-result-head">
+        <div class="imprint-result-score ${result.tier}">${result.score}</div>
+        <div class="imprint-result-label">${escapeHtml(imprintPossessive(personName))} imprints <i>&times;</i> ${escapeHtml(candidateName)}</div>
+      </div>
+      <button type="button" class="imprint-reveal-btn" data-imprint-reveal>▾ See what matched</button>
+      <div class="imprint-reveal-body" data-imprint-reveal-body hidden>${rows}</div>
+    </div>`;
+}
+
+function imprintPillContentHtml(dateA, nameA, dateB, nameB) {
+  const rA = computeImprintAlignment(dateA, dateB);
+  const rB = computeImprintAlignment(dateB, dateA);
+  return imprintAlignmentResultHtml(rA, nameA, nameB) + imprintAlignmentResultHtml(rB, nameB, nameA);
+}
+
+// Each imprint-pill-body can hold up to 2 result blocks (both directions),
+// each with its own independent reveal toggle - queried fresh rather than
+// relying on unique ids, since a page could have multiple compat heroes.
+function wireImprintRevealButtons(scopeEl) {
+  scopeEl.querySelectorAll('[data-imprint-reveal]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const body = btn.nextElementSibling;
+      const open = body.hidden;
+      body.hidden = !open;
+      btn.textContent = open ? '▴ Hide what matched' : '▾ See what matched';
+    });
   });
 }
 
