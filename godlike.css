@@ -574,6 +574,12 @@ button.gk-altar-num {
 .story-col-toggle.actions.open { border-color: rgba(139, 195, 74, .45); color: #8bc34a; background: rgba(139, 195, 74, .08); }
 .story-row.do b { color: #8bc34a; }
 .story-row.dont b { color: var(--bad); }
+
+/* Per-number identity popups (round 14, profile/calculator) - tappable
+   Lifepath/Day Born/Day#/PD cells, light+shadow stacked in one popup. */
+.idnum-tap { cursor: pointer; }
+.story-row b.idn-light { color: var(--gold); }
+.story-row b.idn-shadow { color: var(--bad); }
 .story-col-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .story-row { margin-bottom: 8px; }
 .story-row:last-child { margin-bottom: 0; }

@@ -926,7 +926,7 @@ const IDENTITY_SLOTS = {
     shadowLead: 'Its slip side:',
   },
   today: {
-    opener: 'And today lands on you as',
+    opener: 'Today lands on you as',
     lightTail: 'This one moves with the calendar - a season, not a trait.',
     shadowLead: 'Leaned on too hard,',
   },
@@ -1033,90 +1033,102 @@ function buildIdentityRows(items) {
 // synthesized from the whole mix - the dominant today-energy, the
 // best-aligned today-vs-me pair, and the worst one. Concrete real-life
 // moves, not restatements of the light/shadow prose.
-const COMPOUND_ROOT_DO = {
-  1: "Make the first move on the thing you've been circling - the call, the ask, the first rep. Today rewards whoever goes first.",
-  3: 'Say it out loud - post it, pitch it, tell the person. The version in your head does nothing.',
-  4: 'Do the unglamorous block of work - one focused hour on the boring foundational thing beats five scattered ones today.',
-  5: "Make the pivot you've been putting off - change the plan, book the thing, cut the dead weight. Movement is the play.",
-  6: 'Show up for one specific person - the call, the favor, the dinner. Small and real beats big and vague today.',
-  7: 'Read the fine print before you commit - one closer look at the thing everyone else is skimming pays for the whole day.',
-  8: 'Close something with money or authority attached - send the invoice, make the ask, sign it. Execution is cheap today.',
-  9: 'End something cleanly - archive the project, send the last message, let the finished thing actually finish.',
-  11: "Trust the first gut read and act on it early - your signal is louder than usual, don't talk yourself out of it.",
-  22: "Put an hour into the long-game thing - the project measured in years, not days. Today's bricks actually stick.",
-  28: "Make the money move you've been sitting on - the transfer, the allocation, the price change. Compounding starts on a specific day; make it this one.",
-  33: 'Say the useful true thing to someone who needs it - it carries further today than you expect.',
+// Round 13b correction: actionables are built from TODAY's energies ONLY
+// and every line weaves TWO of them together. The first version pulled
+// single-root canned texts, and its pair-scoring logic could leak the
+// PERSON's roots in (user, seeing a root-9 "end something cleanly" on a
+// 6/6/11/28 day: "I don't get where the let something go cleanly do
+// comes from... none of them are talking through all the energies
+// combined"). Fragments compose as lead + qualifier so the whole set
+// reads the actual blend, not four disconnected one-number tips.
+const COMPOUND_MOVE_LEAD = {
+  1: "make the first move on the thing you've been circling - the call, the ask, the first rep",
+  3: 'say the thing out loud - post it, pitch it, tell the person',
+  4: 'put one focused hour into the unglamorous foundational work',
+  5: "make the pivot you've been putting off",
+  6: 'show up for one specific person - the call, the favor, the dinner',
+  7: 'take the closer look everyone else is skipping',
+  8: 'close the thing with money or authority attached - the invoice, the ask, the signature',
+  9: "end something cleanly - the last message, the archived project, the goodbye that's overdue",
+  11: 'trust the first gut read',
+  22: 'put an hour into the years-long thing',
+  28: "make the money move you've been sitting on",
+  33: 'say the useful true thing to someone who needs it',
 };
-// Written as continuations of the rendered "Don't:" label - no leading
-// "Don't" in the text itself, or the row reads "Don't: Don't...".
-const COMPOUND_ROOT_DONT = {
-  1: 'Wait for permission or consensus - go. But no bulldozing someone who needed two more minutes.',
-  3: 'Scatter it - one message, said once, well. Ten half-versions across ten places is how today leaks.',
-  4: "Defend the plan just because it's yours - rigid isn't the same as solid.",
-  5: "Burn a commitment just to feel motion - restless isn't a reason.",
-  6: 'Say yes to a favor you already resent - obligation dressed as care curdles fast today.',
-  7: 'Disappear into analysis - two hours of research on a ten-minute decision is hiding, not rigor.',
-  8: 'Squeeze the extra 10% just because you can - the overreach is what gets remembered.',
-  9: "Reopen what's already closed - the old argument, the sold position, the ex. Finished means finished.",
-  11: "Make the big call from a mood spike - intensity feels like clarity today and isn't.",
-  22: "Measure the cathedral against the day - building slow isn't building wrong.",
-  28: 'Chase the payoff so hard you cut a corner - greed taxes exactly the wealth it\'s chasing.',
-  33: 'Pour everything into the audience while the person next to you gets the leftovers.',
+const COMPOUND_MOVE_TAIL = {
+  1: "don't wait for anyone's permission to do it",
+  3: "say it while you're at it; the version in your head does nothing",
+  4: 'give it enough structure to survive the week',
+  5: 'stay loose enough to change the route midway',
+  6: 'keep a real person in the loop while you do it',
+  7: 'read the fine print before you commit',
+  8: 'put a number and a deadline on it',
+  9: "drop whatever's already finished to make room first",
+  11: 'run it through the gut check first; your signal is loud today',
+  22: 'aim it at the long game, not the quick win',
+  28: 'let it feed the thing that compounds',
+  33: "tell someone what you learned while it's fresh",
+};
+// Continuations of the rendered "Don't:" label - no leading "Don't" in
+// the text itself, or the row reads "Don't: Don't...".
+const COMPOUND_TRAP_LEAD = {
+  1: 'bulldoze ahead just because waiting is uncomfortable',
+  3: 'scatter it across ten half-versions',
+  4: "defend the plan just because it's yours",
+  5: 'burn a commitment just to feel motion',
+  6: 'say yes to a favor you already resent',
+  7: 'disappear into analysis',
+  8: 'squeeze the extra 10% just because you can',
+  9: "reopen what's already closed",
+  11: 'make the big call from a mood spike',
+  22: 'measure the cathedral against the day',
+  28: 'chase the payoff so hard you cut a corner',
+  33: 'pour everything into the audience while the person next to you gets leftovers',
+};
+const COMPOUND_TRAP_TAIL = {
+  1: 'especially when someone just needed two more minutes',
+  3: "especially in writing you can't take back",
+  4: "especially when the plan's already cracking",
+  5: "especially the ones you'd want back tomorrow",
+  6: 'especially for people who never asked',
+  7: 'especially on a ten-minute decision',
+  8: 'especially when trust is on the table',
+  9: 'especially the ones that ended for a reason',
+  11: 'especially when the mood is doing the talking',
+  22: 'especially on a slow-brick day',
+  28: 'especially with money on the table',
+  33: 'especially at home',
 };
 
-// todayParts: [{ label, entry }] - today's resolved numbers, in display
-// order (Universal Day first, which also breaks frequency ties in its
-// favor). pairs: same [{ id, entryA, entryB }] array buildPairRows gets,
-// or null with no birthday on file - the do/don't picks then come from
-// today's own mix alone. Never emits the same root's DO (or DON'T) text
-// twice; do and don't MAY share a root (lean into its good side, dodge
-// its trap - that's coherent, not repetitive).
-function buildActionables(todayParts, pairs) {
+// todayParts: [{ label, entry }] - today's resolved numbers only, in
+// display order (Universal Day first, which also breaks frequency ties
+// in its favor). The person's own numbers never enter this - actionables
+// align with the DAY. Each line leads with one of today's roots and
+// closes on another, rotating so every distinct root in the mix gets
+// woven in across the four lines.
+function buildActionables(todayParts) {
   const roots = [];
   (todayParts || []).forEach((p) => {
-    if (p.entry && COMPOUND_ROOT_DO[p.entry.root]) roots.push(p.entry.root);
+    if (p.entry && COMPOUND_MOVE_LEAD[p.entry.root]) roots.push(p.entry.root);
   });
   if (!roots.length) return null;
   const freq = {};
   roots.forEach((r) => { freq[r] = (freq[r] || 0) + 1; });
-  const ordered = roots.filter((r, i) => roots.indexOf(r) === i).sort((a, b) => freq[b] - freq[a]);
-  const dominant = ordered[0];
+  const D = roots.filter((r, i) => roots.indexOf(r) === i).sort((a, b) => freq[b] - freq[a]);
+  const n = D.length;
 
-  // Best/worst pairings, scored by the app's real compat engine - same
-  // scores that drive the pair rows' tiers.
-  let best = null, worst = null;
-  (pairs || []).forEach((p) => {
-    if (!p.entryA || !p.entryB) return;
-    const score = numerologyCompat(p.entryA.root, p.entryB.root);
-    if (!best || score > best.score) best = { score, rootToday: p.entryA.root, rootMine: p.entryB.root };
-    if (!worst || score < worst.score) worst = { score, rootToday: p.entryA.root, rootMine: p.entryB.root };
-  });
-
-  const usedDo = [];
-  const usedDont = [];
-  function pick(bank, used, candidates) {
-    for (let i = 0; i < candidates.length; i++) {
-      const r = candidates[i];
-      if (r != null && bank[r] && used.indexOf(r) === -1) { used.push(r); return bank[r]; }
-    }
-    return null;
-  }
-  const fallback = ordered.slice();
-  if (best && fallback.indexOf(best.rootMine) === -1) fallback.push(best.rootMine);
-  if (worst && fallback.indexOf(worst.rootMine) === -1) fallback.push(worst.rootMine);
-
-  // Do 1: the day's dominant energy. Do 2: the best-aligned pairing's
-  // energy (where effort converts easiest). Don't 1: the worst pairing's
-  // trap. Don't 2: the dominant energy's own shadow trap.
-  const do1 = pick(COMPOUND_ROOT_DO, usedDo, [dominant].concat(fallback));
-  const do2 = pick(COMPOUND_ROOT_DO, usedDo, (best ? [best.rootToday, best.rootMine] : []).concat(fallback));
-  const dont1 = pick(COMPOUND_ROOT_DONT, usedDont, (worst ? [worst.rootToday, worst.rootMine] : []).concat(fallback.slice().reverse()));
-  const dont2 = pick(COMPOUND_ROOT_DONT, usedDont, [dominant].concat(fallback));
+  const doLine = (lead, tail) => (tail != null && tail !== lead
+    ? `${cap(COMPOUND_MOVE_LEAD[lead])} - and ${COMPOUND_MOVE_TAIL[tail]}.`
+    : `${cap(COMPOUND_MOVE_LEAD[lead])}.`);
+  const dontLine = (lead, tail) => (tail != null && tail !== lead
+    ? `${cap(COMPOUND_TRAP_LEAD[lead])} - ${COMPOUND_TRAP_TAIL[tail]}.`
+    : `${cap(COMPOUND_TRAP_LEAD[lead])}.`);
 
   const out = [];
-  if (do1) out.push({ kind: 'do', text: do1 });
-  if (do2) out.push({ kind: 'do', text: do2 });
-  if (dont1) out.push({ kind: 'dont', text: dont1 });
-  if (dont2) out.push({ kind: 'dont', text: dont2 });
-  return out.length ? out : null;
+  out.push({ kind: 'do', text: doLine(D[0], n > 1 ? D[1] : null) });
+  if (n > 1) out.push({ kind: 'do', text: doLine(D[n > 2 ? 2 : 1], D[0]) });
+  const dontTail = n > 3 ? D[3] : D[2 % n];
+  out.push({ kind: 'dont', text: dontLine(D[1 % n], n > 1 ? dontTail : null) });
+  if (n > 1) out.push({ kind: 'dont', text: dontLine(D[0], D[1]) });
+  return out;
 }

@@ -179,6 +179,21 @@ function openStoryModal(title, story) {
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
+// Round 14 (2026-08-06): per-number identity popups - tap Lifepath/Day
+// Born/Day#/PD to get just that number's own "who you are" section
+// (moved here from Today's modal, where it described the profile owner
+// but lived on the wrong page). Light and shadow stacked, no toggles.
+function openIdentityModal(label, entry, slot) {
+  resetRootImages();
+  const s = composeIdentitySentence(entry, slot);
+  if (!s) return;
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>` +
+    `<div class="story-row"><b class="idn-light">☀ Light:</b> ${s.light}</div>` +
+    `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${s.shadow}</div>`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
 function renderCompoundStories(r, birthDate) {
   const coreParts = [
     { label: 'Life Path', raw: null, entry: compoundEntryForLifePath(r.lifePath, r.lifePathCompound) },
@@ -213,6 +228,25 @@ function renderCompoundStories(r, birthDate) {
   if (bigLink) {
     bigLink.style.display = bigPictureStory ? '' : 'none';
     bigLink.onclick = () => openStoryModal('The Big Picture', bigPictureStory);
+  }
+
+  // Round 14: the 4 identity numbers become tappable, each opening its
+  // own popup. Profile + Calculator only - the copy is written as "you
+  // are...", which doesn't fit describing a famous person. Slots match
+  // Today's old My Numbers framing exactly (core/rhythm/year/today).
+  if (!/famous/i.test(location.pathname)) {
+    const identityTargets = [
+      { id: 'lifePath', label: 'Lifepath', slot: 'core', entry: coreParts[0].entry },
+      { id: 'dayBornReduced', label: 'Day Born', slot: 'rhythm', entry: coreParts[1].entry },
+      { id: 'dayNumReduced', label: 'Day#', slot: 'year', entry: coreParts[2].entry },
+      { id: 'pdReduced', label: 'Personal Day', slot: 'today', entry: cycleParts[2].entry },
+    ];
+    identityTargets.forEach((t) => {
+      const el = document.getElementById(t.id);
+      if (!el) return;
+      el.classList.add('idnum-tap');
+      el.onclick = () => openIdentityModal(t.label, t.entry, t.slot);
+    });
   }
 }
 

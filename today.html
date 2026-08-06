@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=27">
+<link rel="stylesheet" href="godlike.css?v=28">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -171,32 +171,22 @@
       ];
       var pairRows = buildPairRows(pairDefs);
 
-      // Round 12: "My Numbers" - who the person IS (their own 4 numbers,
-      // slot-aware: Lifepath = permanent core, Day Born = permanent
-      // rhythm, Day# = permanent year-position, Personal Day = a season
-      // that moves with the calendar), followed by the 4 today-vs-me
-      // comparison pairs (round 12b: the pairs live HERE, not in the main
-      // Light/Shadow - they're about "my numbers vs the day", so the main
-      // toggles stay purely about today's own numbers). Needs a birthday
-      // on file, already gated by the `me && r` check this sits inside.
-      var identityRows = buildIdentityRows([
-        { label: 'Lifepath', entry: lpEntry, slot: 'core' },
-        { label: 'Day Born', entry: dayBornEntry, slot: 'rhythm' },
-        { label: 'Day#', entry: dayNumMineEntry, slot: 'year' },
-        { label: 'Personal Day', entry: personalDayMineEntry, slot: 'today' },
-      ]);
-      wholeStory.myLightRows = identityRows.lightRows.concat(pairRows.lightRows);
-      wholeStory.myShadowRows = identityRows.shadowRows.concat(pairRows.shadowRows);
+      // Round 14: purely the 4 today-vs-me comparison pairs ("Me × Today")
+      // - the standalone identity descriptions moved to Profile/Calculator
+      // as per-number popups (tap Lifepath/Day Born/Day#/PD there), since
+      // they describe the person, not the day. Needs a birthday on file,
+      // already gated by the `me && r` check this sits inside.
+      wholeStory.myLightRows = pairRows.lightRows;
+      wholeStory.myShadowRows = pairRows.shadowRows;
     }
 
-    // Round 13: 2 do's + 2 don'ts synthesized from ALL the energies
-    // combined (dominant today-energy, best-aligned pair, worst pair) -
-    // explicitly not one-per-number. Works without a birthday too
-    // (pairDefs null - picks come from today's own mix alone).
+    // Round 13b: 2 do's + 2 don'ts woven from TODAY's energies combined -
+    // each line leads with one of today's roots and closes on another, so
+    // the set reads the actual blend. The person's own numbers never
+    // enter this (that leak was the round-13 bug).
     if (wholeStory) {
       wholeStory.actionables = buildActionables(
-        storyParts.map(function (p) { return { label: p.label, entry: compoundEntry(p.raw) }; }),
-        pairDefs
+        storyParts.map(function (p) { return { label: p.label, entry: compoundEntry(p.raw) }; })
       );
     }
   } catch (e) {}
@@ -401,12 +391,12 @@
         '</div>';
       h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(storyRowHtml).join('') + '</div>';
       h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(storyRowHtml).join('') + '</div>';
-      // Round 12: a second, independent toggle pair - who YOU are (Lifepath,
-      // Day Born, your own Day#, Personal Day), on its own terms, separate
-      // from today's numbers above. Mutually exclusive with all four
-      // toggles (event-delegated handler below closes every other body).
+      // Round 14: "Me × Today" - the 4 my-numbers-vs-the-day comparisons
+      // (identity descriptions moved to Profile/Calculator per-number
+      // popups). Mutually exclusive with all toggles (event-delegated
+      // handler below closes every other body).
       if (wholeStory.myLightRows && wholeStory.myLightRows.length) {
-        h += '<div class="gk-card-story-label gk-card-story-label-sub">🧭 My Numbers</div>';
+        h += '<div class="gk-card-story-label gk-card-story-label-sub">🧭 Me × Today</div>';
         h += '<div class="story-cols">' +
           '<button type="button" class="story-col-toggle light mine" data-col="mine-light">My Light</button>' +
           '<button type="button" class="story-col-toggle shadow mine" data-col="mine-shadow">My Shadow</button>' +
