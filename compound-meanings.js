@@ -693,20 +693,96 @@ function buildLightShadowCompoundStory(parts, opts) {
 // the SPECIFIC two roots in play - a 6-vs-9 pairing and a 1-vs-11 pairing
 // now read nothing alike, because they're about genuinely different
 // things, not two "good" labels wearing the same paragraph.
-const COMPOUND_ROOT_IMAGE = {
-  1: 'the first domino, already leaning',
-  3: "a live mic that's already on",
-  4: 'a load-bearing wall',
-  5: "a river that won't sit still",
-  6: "the one who shows up with soup when you're sick",
-  7: 'a locked door that checks twice before it opens',
-  8: 'the closer who signs the deal at the buzzer',
-  9: "water taking the shape of whatever it's poured into",
-  11: 'lightning - brilliant, but not something you stand under unprotected',
-  22: 'a cathedral going up one stone at a time',
-  28: 'money compounding quietly while you sleep',
-  33: "a lighthouse, visible from further than you'd expect",
+// Round 13 (2026-08-06): one image per root meant every repeat of a root
+// repeated the exact same phrase verbatim ("soup when you're sick" 3-4
+// times in one card). Each root now has a small bank, and nextRootImage()
+// rotates through it - within one card build the same image never shows
+// twice (resetRootImages() at the start of each build restarts the cycle).
+const COMPOUND_ROOT_IMAGES = {
+  1: [
+    'the first domino, already leaning',
+    "the cold open - no warm-up, straight in",
+    "the hand that hits the buzzer before the question's finished",
+  ],
+  3: [
+    "a live mic that's already on",
+    'the group chat lighting up the second you post',
+    'a song stuck in everyone\'s head by noon',
+  ],
+  4: [
+    'a load-bearing wall',
+    'brick laid on brick, checked with a level',
+    'the gym session nobody claps for that still changes everything',
+  ],
+  5: [
+    "a river that won't sit still",
+    'a packed bag by the door',
+    'the tab you open "just to look" that turns into a booked flight',
+  ],
+  6: [
+    "the one who shows up with soup when you're sick",
+    'the friend who texts "did you land safe?"',
+    'dinner on the table before anyone asked',
+  ],
+  7: [
+    'a locked door that checks twice before it opens',
+    'the fine print actually getting read',
+    'the friend who googles the restaurant before agreeing to go',
+  ],
+  8: [
+    'the closer who signs the deal at the buzzer',
+    'an invoice that actually gets sent',
+    'the firm handshake that ends the meeting early',
+  ],
+  9: [
+    "water taking the shape of whatever it's poured into",
+    'the last box taped shut before a move',
+    'the deep exhale after you finally hit send',
+  ],
+  11: [
+    'lightning - brilliant, but not something you stand under unprotected',
+    'a radio picking up stations nobody else hears',
+    'the gut feeling that texts you before the news does',
+  ],
+  22: [
+    'a cathedral going up one stone at a time',
+    'a 30-year mortgage on a house worth owning',
+    'scaffolding around something that will outlive the builder',
+  ],
+  28: [
+    'money compounding quietly while you sleep',
+    'rent arriving from a property you bought years ago',
+    'interest hitting the account on schedule',
+  ],
+  33: [
+    "a lighthouse, visible from further than you'd expect",
+    'the teacher whose one line you still quote years later',
+    'a porch light the whole street navigates by',
+  ],
 };
+
+let COMPOUND_IMAGE_USE = {};
+let COMPOUND_CLOSER_USE = {};
+function resetRootImages() { COMPOUND_IMAGE_USE = {}; COMPOUND_CLOSER_USE = {}; }
+function nextRootImage(root) {
+  const bank = COMPOUND_ROOT_IMAGES[root];
+  if (!bank) return null;
+  const i = COMPOUND_IMAGE_USE[root] || 0;
+  COMPOUND_IMAGE_USE[root] = i + 1;
+  return bank[i % bank.length];
+}
+
+// Plain what-to-actually-do phrasing per root, shared by the pair prose
+// and the actionables below - masters/28 don't live in
+// COMPOUND_ROOT_MECHANISM, so they get their own concrete domains here.
+function rootDomain(root) {
+  if (root === 11) return 'reading the room and trusting the gut call';
+  if (root === 22) return 'the long-game project';
+  if (root === 28) return 'the money play';
+  if (root === 33) return 'saying the thing people actually need to hear';
+  const mech = COMPOUND_ROOT_MECHANISM[root];
+  return mech ? mech.domain : 'the day';
+}
 
 // Per pair-type, what each side of the comparison actually represents in
 // plain words - fills the {a}/{b} slots composePairSentence() builds
@@ -723,49 +799,62 @@ function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 // Builds one pair's { light, shadow }, using the two SPECIFIC roots
 // involved and the real tier their numerologyCompat() score lands in -
 // the image + theme for whichever roots actually showed up today, not a
-// generic template that reads the same for every combination.
+// generic template that reads the same for every combination. Round 13:
+// every tier now closes on a concrete what-to-do-with-it line (the user:
+// "too abstract, not enough real-life" - imagery alone is decoration),
+// and images come from nextRootImage() so a root that appears in several
+// rows never repeats the same phrase.
 function composePairSentence(pairId, rootA, rootB, tier) {
   const lead = COMPOUND_PAIR_LEADIN[pairId];
-  const imageA = COMPOUND_ROOT_IMAGE[rootA];
-  const imageB = COMPOUND_ROOT_IMAGE[rootB];
-  if (!lead || !imageA || !imageB) return null;
+  if (!lead || !COMPOUND_ROOT_IMAGES[rootA] || !COMPOUND_ROOT_IMAGES[rootB]) return null;
   const themeA = rootThemeName(rootA).toLowerCase();
   const themeB = rootThemeName(rootB).toLowerCase();
+  const domainA = rootDomain(rootA);
 
-  // Same root on both sides - the good/bad templates below both assume two
-  // DIFFERENT images being weighed against each other, which reads as an
-  // outright repeated clause when there's only one image to work with.
-  // This is also CUE's own named pattern (NUMEROLOGY_RESEARCH.md): "same-
-  // theme overlap... comfortable, but can tip into too much of the same
-  // thing, nothing balances it out" - worth naming directly, not papering
-  // over with a duplicate sentence.
+  // Same root on both sides - one image, named once, doubled. This is
+  // also CUE's own named pattern (NUMEROLOGY_RESEARCH.md): "same-theme
+  // overlap... comfortable, but can tip into too much of the same thing,
+  // nothing balances it out" - worth naming directly.
   if (rootA === rootB) {
+    const image = nextRootImage(rootA);
     return tier === 'good'
       ? {
-        light: `${cap(lead.a)} and ${lead.b} are the exact same energy meeting itself today - ${imageA}, doubled. When ${themeA} shows up this consistently, that's not coincidence, it's a signal worth trusting.`,
-        shadow: `That much of the same thing, with nothing else to balance it, can tip into excess - more ${themeA} than today actually needs.`,
+        light: `${cap(lead.a)} and ${lead.b} run on the same current today - ${image}, doubled. That much ${themeA} in one day isn't coincidence, it's an assignment: spend it on ${domainA}.`,
+        shadow: `Doubled ${themeA} has no counterweight - even the good thing needs a stop time today, or it runs to excess.`,
       }
       : {
-        light: `${cap(lead.a)} and ${lead.b} are the exact same energy meeting itself today - ${imageA}, doubled. Comfortable and familiar, but with nothing else in the mix to check it.`,
-        shadow: `Too much of the same thing with nothing to balance it - ${themeA} left unchecked tends to overcorrect into its own worst habit.`,
+        light: `${cap(lead.a)} and ${lead.b} run on the same current today - ${image}, doubled. Familiar and comfortable, but nothing's balancing it.`,
+        shadow: `Unchecked ${themeA} overcorrects into its own worst habit - bring in one outside opinion before you commit to anything big today.`,
       };
   }
 
+  const imageA = nextRootImage(rootA);
+  const imageB = nextRootImage(rootB);
   if (tier === 'good') {
-    return {
-      light: `${cap(lead.a)} moves like ${imageA}, and ${lead.b} moves like ${imageB} - today those two are pulling the same direction, real reinforcement, not coincidence.`,
-      shadow: `That reinforcement is real enough to coast on - easy to let ${imageA} and ${imageB} carry the day instead of putting in the effort it still asks for.`,
-    };
+    // Two good pairs sharing a today-side root would otherwise close on
+    // the identical "put real weight on X" line twice - the second one
+    // acknowledges the stack instead of restating it.
+    const repeated = COMPOUND_CLOSER_USE[rootA];
+    COMPOUND_CLOSER_USE[rootA] = true;
+    return repeated
+      ? {
+        light: `${cap(lead.a)} is ${imageA}, and ${lead.b} is ${imageB} - same direction again. The day keeps stacking ${themeA} green lights; take the hint.`,
+        shadow: `Stacked green lights still need a driver - pick the one ${themeA} thing that matters most and actually do it.`,
+      }
+      : {
+        light: `${cap(lead.a)} is ${imageA}, and ${lead.b} is ${imageB} - same direction, doubled. Put real weight on ${domainA}; it moves easier today than it usually does.`,
+        shadow: `Easy ${themeA} alignment breeds coasting - if you don't aim it at something specific, the day spends the energy on nothing.`,
+      };
   }
   if (tier === 'bad') {
     return {
-      light: `${cap(lead.a)} moves like ${imageA}. ${cap(lead.b)} moves like ${imageB}. ${cap(themeA)} and ${themeB} don't share a lane today - real tension, not just a mismatch. But tension is also where the actual growth is, if you meet it instead of avoiding it.`,
-      shadow: `Neither side bends today - ${imageA} keeps doing what it does, and ${imageB} keeps pulling its own direction. Something has to give, and if you're not deliberate about it, it won't be your call.`,
+      light: `${cap(lead.a)} is ${imageA}; ${lead.b} is ${imageB}. ${cap(themeA)} and ${themeB} won't share a lane today - so don't make them. Give each its own hour and both actually work.`,
+      shadow: `Forced together they jam: ${themeA} decisions made in a ${themeB} mood (or the reverse) are the ones you end up walking back tomorrow.`,
     };
   }
   return {
-    light: `${cap(lead.a)} moves like ${imageA}; ${lead.b} moves like ${imageB} - the two share the day without much friction, not reinforcing each other, not fighting either.`,
-    shadow: `Nothing's pulling you off course, but nothing's actively helping either - ${themeA} and ${themeB} are neutral enough toward each other that it's easy to drift on autopilot.`,
+    light: `${cap(lead.a)} is ${imageA}; ${lead.b} is ${imageB}. No friction between them, no boost either - the day hands you a flat surface, and what happens on it is on you.`,
+    shadow: `Flat is where drift lives - without one deliberate ${themeA} or ${themeB} move, this part of the day just passes.`,
   };
 }
 
@@ -873,7 +962,7 @@ function identityClauses(entry) {
         long: true,
       };
     }
-    const companionImage = COMPOUND_ROOT_IMAGE[entry.companion];
+    const companionImage = nextRootImage(entry.companion);
     const companionTheme = rootThemeName(entry.companion).toLowerCase();
     return {
       good: `most of the time, anyway; some days you're just ${companionImage} instead, ${companionTheme} on the task in front of you rather than the whole vision. Both are really you`,
@@ -888,9 +977,10 @@ function identityClauses(entry) {
 
 function composeIdentitySentence(entry, slot) {
   if (!entry) return null;
-  const image = COMPOUND_ROOT_IMAGE[entry.root];
+  if (!COMPOUND_ROOT_IMAGES[entry.root]) return null;
   const clauses = identityClauses(entry);
-  if (!image || !clauses) return null;
+  if (!clauses) return null;
+  const image = nextRootImage(entry.root);
   const s = IDENTITY_SLOTS[slot] || IDENTITY_SLOTS.core;
   const tail = clauses.long ? '' : ` ${s.lightTail}`;
   return {
@@ -933,4 +1023,100 @@ function buildIdentityRows(items) {
     shadowRows.push({ label, text: sentence.shadow });
   });
   return { lightRows, shadowRows };
+}
+
+/* ----------------------------------------------------------- actionables -- */
+// Round 13 (2026-08-06): "add a button that says actionables where it
+// gives you 4 actionables to align with the energies all together" -
+// explicitly NOT one per number ("not one actionable per energy I'm
+// talking about all of the energies combined"): 2 do's + 2 don'ts
+// synthesized from the whole mix - the dominant today-energy, the
+// best-aligned today-vs-me pair, and the worst one. Concrete real-life
+// moves, not restatements of the light/shadow prose.
+const COMPOUND_ROOT_DO = {
+  1: "Make the first move on the thing you've been circling - the call, the ask, the first rep. Today rewards whoever goes first.",
+  3: 'Say it out loud - post it, pitch it, tell the person. The version in your head does nothing.',
+  4: 'Do the unglamorous block of work - one focused hour on the boring foundational thing beats five scattered ones today.',
+  5: "Make the pivot you've been putting off - change the plan, book the thing, cut the dead weight. Movement is the play.",
+  6: 'Show up for one specific person - the call, the favor, the dinner. Small and real beats big and vague today.',
+  7: 'Read the fine print before you commit - one closer look at the thing everyone else is skimming pays for the whole day.',
+  8: 'Close something with money or authority attached - send the invoice, make the ask, sign it. Execution is cheap today.',
+  9: 'End something cleanly - archive the project, send the last message, let the finished thing actually finish.',
+  11: "Trust the first gut read and act on it early - your signal is louder than usual, don't talk yourself out of it.",
+  22: "Put an hour into the long-game thing - the project measured in years, not days. Today's bricks actually stick.",
+  28: "Make the money move you've been sitting on - the transfer, the allocation, the price change. Compounding starts on a specific day; make it this one.",
+  33: 'Say the useful true thing to someone who needs it - it carries further today than you expect.',
+};
+// Written as continuations of the rendered "Don't:" label - no leading
+// "Don't" in the text itself, or the row reads "Don't: Don't...".
+const COMPOUND_ROOT_DONT = {
+  1: 'Wait for permission or consensus - go. But no bulldozing someone who needed two more minutes.',
+  3: 'Scatter it - one message, said once, well. Ten half-versions across ten places is how today leaks.',
+  4: "Defend the plan just because it's yours - rigid isn't the same as solid.",
+  5: "Burn a commitment just to feel motion - restless isn't a reason.",
+  6: 'Say yes to a favor you already resent - obligation dressed as care curdles fast today.',
+  7: 'Disappear into analysis - two hours of research on a ten-minute decision is hiding, not rigor.',
+  8: 'Squeeze the extra 10% just because you can - the overreach is what gets remembered.',
+  9: "Reopen what's already closed - the old argument, the sold position, the ex. Finished means finished.",
+  11: "Make the big call from a mood spike - intensity feels like clarity today and isn't.",
+  22: "Measure the cathedral against the day - building slow isn't building wrong.",
+  28: 'Chase the payoff so hard you cut a corner - greed taxes exactly the wealth it\'s chasing.',
+  33: 'Pour everything into the audience while the person next to you gets the leftovers.',
+};
+
+// todayParts: [{ label, entry }] - today's resolved numbers, in display
+// order (Universal Day first, which also breaks frequency ties in its
+// favor). pairs: same [{ id, entryA, entryB }] array buildPairRows gets,
+// or null with no birthday on file - the do/don't picks then come from
+// today's own mix alone. Never emits the same root's DO (or DON'T) text
+// twice; do and don't MAY share a root (lean into its good side, dodge
+// its trap - that's coherent, not repetitive).
+function buildActionables(todayParts, pairs) {
+  const roots = [];
+  (todayParts || []).forEach((p) => {
+    if (p.entry && COMPOUND_ROOT_DO[p.entry.root]) roots.push(p.entry.root);
+  });
+  if (!roots.length) return null;
+  const freq = {};
+  roots.forEach((r) => { freq[r] = (freq[r] || 0) + 1; });
+  const ordered = roots.filter((r, i) => roots.indexOf(r) === i).sort((a, b) => freq[b] - freq[a]);
+  const dominant = ordered[0];
+
+  // Best/worst pairings, scored by the app's real compat engine - same
+  // scores that drive the pair rows' tiers.
+  let best = null, worst = null;
+  (pairs || []).forEach((p) => {
+    if (!p.entryA || !p.entryB) return;
+    const score = numerologyCompat(p.entryA.root, p.entryB.root);
+    if (!best || score > best.score) best = { score, rootToday: p.entryA.root, rootMine: p.entryB.root };
+    if (!worst || score < worst.score) worst = { score, rootToday: p.entryA.root, rootMine: p.entryB.root };
+  });
+
+  const usedDo = [];
+  const usedDont = [];
+  function pick(bank, used, candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const r = candidates[i];
+      if (r != null && bank[r] && used.indexOf(r) === -1) { used.push(r); return bank[r]; }
+    }
+    return null;
+  }
+  const fallback = ordered.slice();
+  if (best && fallback.indexOf(best.rootMine) === -1) fallback.push(best.rootMine);
+  if (worst && fallback.indexOf(worst.rootMine) === -1) fallback.push(worst.rootMine);
+
+  // Do 1: the day's dominant energy. Do 2: the best-aligned pairing's
+  // energy (where effort converts easiest). Don't 1: the worst pairing's
+  // trap. Don't 2: the dominant energy's own shadow trap.
+  const do1 = pick(COMPOUND_ROOT_DO, usedDo, [dominant].concat(fallback));
+  const do2 = pick(COMPOUND_ROOT_DO, usedDo, (best ? [best.rootToday, best.rootMine] : []).concat(fallback));
+  const dont1 = pick(COMPOUND_ROOT_DONT, usedDont, (worst ? [worst.rootToday, worst.rootMine] : []).concat(fallback.slice().reverse()));
+  const dont2 = pick(COMPOUND_ROOT_DONT, usedDont, [dominant].concat(fallback));
+
+  const out = [];
+  if (do1) out.push({ kind: 'do', text: do1 });
+  if (do2) out.push({ kind: 'do', text: do2 });
+  if (dont1) out.push({ kind: 'dont', text: dont1 });
+  if (dont2) out.push({ kind: 'dont', text: dont2 });
+  return out.length ? out : null;
 }

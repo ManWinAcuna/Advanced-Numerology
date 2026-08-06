@@ -571,6 +571,9 @@ button.gk-altar-num {
 }
 .story-col-toggle.light.open { border-color: rgba(245, 197, 66, .45); color: var(--gold); background: rgba(245, 197, 66, .08); }
 .story-col-toggle.shadow.open { border-color: rgba(229, 57, 63, .45); color: var(--bad); background: rgba(229, 57, 63, .08); }
+.story-col-toggle.actions.open { border-color: rgba(139, 195, 74, .45); color: #8bc34a; background: rgba(139, 195, 74, .08); }
+.story-row.do b { color: #8bc34a; }
+.story-row.dont b { color: var(--bad); }
 .story-col-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .story-row { margin-bottom: 8px; }
 .story-row:last-child { margin-bottom: 0; }

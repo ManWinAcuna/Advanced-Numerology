@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=26">
+<link rel="stylesheet" href="godlike.css?v=27">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -147,6 +147,9 @@
     // it was named here but nothing in the story below actually engages
     // with it, so the mention was a promise the content never kept.
     var storyIntro = 'Underneath that ' + ud + ',';
+    // Fresh image rotation per build (round 13) - each root's image bank
+    // restarts, so within this one card no image phrase ever repeats.
+    resetRootImages();
     wholeStory = buildLightShadowCompoundStory(storyParts, { intro: storyIntro });
 
     // Round 9: none of the rows above actually compare today's numbers
@@ -154,17 +157,19 @@
     // rows, just more of them) each contrasting a today number against
     // the structurally-identical number computed from their own birth
     // date instead. Needs a real birthday on file for all four.
+    var pairDefs = null;
     if (wholeStory && me && r) {
       var lpEntry = compoundEntryForLifePath(r.lifePath, r.lifePathCompound);
       var dayBornEntry = compoundEntry(compoundRawEnergy(me));
       var dayNumMineEntry = compoundEntry(compoundRawDayNum(me));
       var personalDayMineEntry = compoundEntry(compoundRawPersonalDay(me, day0));
-      var pairRows = buildPairRows([
+      pairDefs = [
         { id: 'ud_lifepath', entryA: compoundEntry(compoundRawUniversalDay(day0)), entryB: lpEntry },
         { id: 'energy_dayborn', entryA: compoundEntry(compoundRawEnergy(day0)), entryB: dayBornEntry },
         { id: 'dayofyear_dayofyear', entryA: compoundEntry(compoundRawDayNum(day0)), entryB: dayNumMineEntry },
         { id: 'lifepath_personalday', entryA: lpEntry, entryB: personalDayMineEntry },
-      ]);
+      ];
+      var pairRows = buildPairRows(pairDefs);
 
       // Round 12: "My Numbers" - who the person IS (their own 4 numbers,
       // slot-aware: Lifepath = permanent core, Day Born = permanent
@@ -182,6 +187,17 @@
       ]);
       wholeStory.myLightRows = identityRows.lightRows.concat(pairRows.lightRows);
       wholeStory.myShadowRows = identityRows.shadowRows.concat(pairRows.shadowRows);
+    }
+
+    // Round 13: 2 do's + 2 don'ts synthesized from ALL the energies
+    // combined (dominant today-energy, best-aligned pair, worst pair) -
+    // explicitly not one-per-number. Works without a birthday too
+    // (pairDefs null - picks come from today's own mix alone).
+    if (wholeStory) {
+      wholeStory.actionables = buildActionables(
+        storyParts.map(function (p) { return { label: p.label, entry: compoundEntry(p.raw) }; }),
+        pairDefs
+      );
     }
   } catch (e) {}
 
@@ -366,6 +382,18 @@
       // open Light or Shadow, never floating in the collapsed default view.
       function storyRowHtml(row) {
         return '<div class="story-row' + (row.flat ? ' flat' : '') + '"><b>' + row.label + ':</b> ' + row.text + '</div>';
+      }
+      // Round 13: Actionables first - 2 do's + 2 don'ts from the whole
+      // mix, above the explanations. Same toggle group as everything
+      // else (only one section open at a time).
+      if (wholeStory.actionables && wholeStory.actionables.length) {
+        h += '<div class="story-cols">' +
+          '<button type="button" class="story-col-toggle actions" data-col="actions">⚡ Actionables</button>' +
+          '</div>';
+        h += '<div class="story-col-body" data-col-body="actions" hidden>' +
+          wholeStory.actionables.map(function (a) {
+            return '<div class="story-row ' + a.kind + '"><b>' + (a.kind === 'do' ? 'Do' : "Don't") + ':</b> ' + a.text + '</div>';
+          }).join('') + '</div>';
       }
       h += '<div class="story-cols">' +
         '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
