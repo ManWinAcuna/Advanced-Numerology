@@ -146,10 +146,11 @@ function renderCompatResults(containerEl, r, nameA, nameB) {
    version - this is scoped to the numerology-app's own compatibility
    surfaces (Compatibility Calculator, EMAX item popup, Database's
    compare-with-me, Profile/Calculator/Famous's compat modals, Calendar's
-   day-compare). Reuses breakdownSection/bonusSectionHtml's row data for
-   the "see full breakdown" reveal, so the deep numbers always match
-   exactly what renderCompatResults would have shown - no second source
-   of truth for the same math. */
+   day-compare). The "see full breakdown" reveal deliberately stops at the
+   3 category scores (a meter each) - the cards above already name the
+   category, so the reveal's only job is showing the number, not
+   re-explaining it via every sub-component row (that's what made the old
+   full breakdown feel like it snowballed). */
 
 const COMPAT_TIER_COLOR = { good: 'var(--good)', mid: 'var(--gold)', bad: 'var(--bad)' };
 const COMPAT_TIER_GLOW = {
@@ -200,6 +201,15 @@ function compatEmbersHtml() {
     html += `<i style="left:${left}%;animation-delay:${delay}s;animation-duration:${dur}s"></i>`;
   }
   return html;
+}
+
+// The reveal's one row per category - name + score + meter, nothing about
+// how that score was built (see the header comment above).
+function compatMeterRow(label, score) {
+  return `
+    <div class="breakdown-header"><span>${label}</span><span>${score}</span></div>
+    <div class="meter"><div class="meter-fill" style="width:${score}%"></div></div>
+  `;
 }
 
 // opts: { dateA, dateB } (Date objects - render the two-person zodiac-
@@ -255,20 +265,6 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       </div>
     </div>`;
 
-  const numerologyRows = [
-    { label: `✨ Lifepath (${r.numerology.entityLifePath} &rarr; ${r.numerology.dayLifePath})`, score: r.numerology.lifePathScore },
-    { label: `📅 Day (${r.numerology.entityDay} &rarr; ${r.numerology.dayDay})`, score: r.numerology.dayScore },
-    { label: `🔢 Day of Year (${r.numerology.entityDoy} &rarr; ${r.numerology.dayDoy})`, score: r.numerology.doyScore },
-  ];
-  const vietnameseRows = [
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityYearSign] || ''} Year (${r.vietnamese.entityYearSign} &rarr; ${r.vietnamese.dayYearSign})`, score: r.vietnamese.yearScore },
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityMonthSign] || ''} Month (${r.vietnamese.entityMonthSign} &rarr; ${r.vietnamese.dayMonthSign})`, score: r.vietnamese.monthScore },
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.entityDaySign] || ''} Day (${r.vietnamese.entityDaySign} &rarr; ${r.vietnamese.dayDaySign})`, score: r.vietnamese.daySignScore },
-  ];
-  const westernRows = [
-    { label: `${ZODIAC_SYMBOLS[r.western.entitySunSign] || ''} Sign (${r.western.entitySunSign} &rarr; ${r.western.daySunSign})`, score: r.western.score },
-  ];
-
   containerEl.innerHTML = `
     <div class="compat-hero${opts.compact ? ' compact' : ''}" style="--tier-c:${COMPAT_TIER_COLOR[tier]}; --tier-glow:${COMPAT_TIER_GLOW[tier]}">
       ${headerHtml}
@@ -287,9 +283,9 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       ${bonusChipsHtml(r.bonuses)}
       <button type="button" class="compat-reveal-btn" data-compat-reveal>▾ See full breakdown</button>
       <div class="compat-reveal-body" data-compat-reveal-body>
-        ${breakdownSection('Numerology', r.numerology.score, numerologyRows)}
-        ${breakdownSection('Vietnamese Zodiac', r.vietnamese.score, vietnameseRows)}
-        ${breakdownSection('Western Zodiac', r.western.score, westernRows)}
+        ${compatMeterRow('Numerology', r.numerology.score)}
+        ${compatMeterRow('Vietnamese Zodiac', r.vietnamese.score)}
+        ${compatMeterRow('Western Zodiac', r.western.score)}
       </div>
     </div>
   `;

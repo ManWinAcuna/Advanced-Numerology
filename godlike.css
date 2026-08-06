@@ -975,7 +975,10 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .compat-reveal-body {
   max-height: 0; overflow: hidden; transition: max-height .4s ease; text-align: left;
 }
-.compat-reveal-body.open { max-height: 1200px; }
+.compat-reveal-body.open { max-height: 220px; }
+.compat-reveal-body .breakdown-header { margin: 14px 0 6px; font-size: 12.5px; }
+.compat-reveal-body .breakdown-header:first-child { margin-top: 4px; }
+.compat-reveal-body .meter { margin-bottom: 0; }
 
 /* compact: EMAX item popup / Calendar day-compare / Profile-style
    Compatibility modals - same hero, sized for a modal-box rather than the
