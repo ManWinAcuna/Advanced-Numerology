@@ -15,7 +15,9 @@
 /* THE STABLE — its own world. Deliberately does NOT load style.css: MANWIN
    cyberpunk HUD (black + neon cyan/orange) + gold horse, phone-first. */
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { background: #04060c; color: #dfe7f3; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100%; }
+/* overscroll-behavior kills the iOS rubber-band on short views (Review) -
+   the bounce was visually dragging the fixed tab bar off its spot. */
+html, body { background: #04060c; color: #dfe7f3; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100%; overscroll-behavior-y: none; }
 body { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
 button, input, textarea, select { font-family: inherit; }
 
@@ -85,6 +87,8 @@ label.st-lbl { display: block; font-size: 11px; letter-spacing: 1px; color: #5b6
 .ttag { font-size: 10px; padding: 3px 8px; border-radius: 999px; background: #0d1424; border: 1px solid #223048; color: #9fb0c8; }
 .trade-note { margin-top: 6px; font-size: 12px; color: #9fb0c8; }
 .trade-del { background: none; border: none; color: #5b6a80; font-size: 11px; text-decoration: underline; margin-top: 6px; cursor: pointer; }
+.shot-toggle { display: block; background: none; border: 1px solid #223048; color: #9fb0c8; border-radius: 6px;
+  padding: 5px 10px; font-size: 11px; margin-top: 6px; cursor: pointer; }
 .day-head { font-size: 11px; letter-spacing: 2px; color: #5b6a80; margin: 16px 0 8px; text-transform: uppercase; }
 .day-head b { color: #dfe7f3; }
 
@@ -180,7 +184,7 @@ label.st-lbl { display: block; font-size: 11px; letter-spacing: 1px; color: #5b6
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
-<script src="stable.js"></script>
+<script src="stable.js?v=2"></script>
 <script src="update-check.js?v=2"></script>
 <script src="godlike.js?v=2"></script>
 </body>

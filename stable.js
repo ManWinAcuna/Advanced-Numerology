@@ -122,7 +122,7 @@ function dayRec(key) {
 
 /* ---------------- tags ---------------- */
 const TAGS = {
-  saw:  ['sweep', 'momentum shift', 'level reclaim', 'FVG fill', 'trend day', 'range chop', 'news move', 'failed break'],
+  saw:  ['sweep', 'SMT', 'momentum shift', 'level reclaim', 'FVG fill', 'trend day', 'range chop', 'news move', 'failed break'],
   mkt:  ['Asia', 'London', 'NY AM', 'NY PM', 'trending', 'ranging', 'high vol', 'low vol', 'news soon'],
   felt: ['calm', 'confident', 'rushed', 'hesitant', 'revenge-y', 'bored', 'locked in'],
   exec: ['A+ clean', 'chased', 'moved stop', 'early exit', 'late entry', 'oversized'],
@@ -171,6 +171,10 @@ function show(view) {
   document.getElementById('view-' + view).classList.add('active');
   views[view]();
   document.getElementById('stStreak').textContent = disciplineStreak();
+  // Landing on a shorter view (Review) while scrolled deep in a longer one
+  // left the body overscrolled - iOS settles that with a rubber-band that
+  // visually drags the fixed tab bar. Every tab switch starts at the top.
+  window.scrollTo(0, 0);
 }
 document.querySelectorAll('.st-tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.view)));
 document.getElementById('stBack').addEventListener('click', () => { location.href = 'profile.html'; });
@@ -439,11 +443,24 @@ function renderHistory() {
         '<span class="trade-time">' + new Date(t.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</span></div>' +
         (tags.length ? '<div class="trade-tags">' + tags.map((x) => '<span class="ttag">' + esc(x) + '</span>').join('') + '</div>' : '') +
         (t.note ? '<div class="trade-note">' + esc(t.note) + '</div>' : '') +
-        (t.shot && shots[t.shot] ? '<img src="' + shots[t.shot] + '" style="max-width:100%;border-radius:6px;margin-top:6px">' : '') +
+        // Screenshot collapsed behind a toggle - full-size charts inline
+        // made History a wall of images; tap to reveal only the one you
+        // actually want to re-see.
+        (t.shot && shots[t.shot]
+          ? '<button class="shot-toggle" data-shot="' + t.id + '">📷 view chart</button>' +
+            '<div id="shot-' + t.id + '" hidden><img src="' + shots[t.shot] + '" style="max-width:100%;border-radius:6px;margin-top:6px"></div>'
+          : '') +
         '<button class="trade-del" data-del="' + t.id + '">delete</button></div>';
     });
   });
   el.innerHTML = html;
+  el.querySelectorAll('[data-shot]').forEach((b) => b.addEventListener('click', () => {
+    const wrap = document.getElementById('shot-' + b.dataset.shot);
+    if (!wrap) return;
+    const open = wrap.hidden;
+    wrap.hidden = !open;
+    b.textContent = open ? '▴ hide chart' : '📷 view chart';
+  }));
   el.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Delete this trade?')) return;
     const gone = trades.find((t) => t.id === b.dataset.del);

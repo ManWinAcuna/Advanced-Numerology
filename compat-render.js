@@ -302,35 +302,80 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   });
 }
 
+/* Shared shield-badge shell for cycle-based breakdowns (Energy Flow, Month
+   Outlook detail, Year Roadmap detail) - user: "make sure the new
+   compatibility screen is whole app wide" - these three still wore the old
+   score-hero/score-big treatment after every person-vs-person surface
+   moved to renderCompatHero's shield. Same visual language, caller-
+   specific cards/extras/meters. */
+function compatHeroShellHtml(finalScore, shieldTag, verdictHead, verdictBody, cardsHtml, extraHtml, meterRowsHtml) {
+  const tier = scoreClass(finalScore);
+  return `
+    <div class="compat-hero compact" style="--tier-c:${COMPAT_TIER_COLOR[tier]}; --tier-glow:${COMPAT_TIER_GLOW[tier]}">
+      <div class="compat-badge-wrap">
+        <div class="compat-embers">${compatEmbersHtml()}</div>
+        <div class="shield">
+          <div class="shield-inner">
+            <div class="shield-score">${finalScore}<span>%</span></div>
+            <div class="shield-tag">${shieldTag}</div>
+          </div>
+        </div>
+      </div>
+      <div class="compat-verdict-head">${verdictHead}</div>
+      <div class="compat-verdict-body">${verdictBody}</div>
+      ${cardsHtml}
+      ${extraHtml || ''}
+      <button type="button" class="compat-reveal-btn" data-compat-reveal>▾ See full breakdown</button>
+      <div class="compat-reveal-body" data-compat-reveal-body>${meterRowsHtml}</div>
+    </div>
+  `;
+}
+function wireCompatReveal(containerEl) {
+  const revealBtn = containerEl.querySelector('[data-compat-reveal]');
+  const revealBody = containerEl.querySelector('[data-compat-reveal-body]');
+  if (!revealBtn) return;
+  revealBtn.addEventListener('click', () => {
+    const open = revealBody.classList.toggle('open');
+    revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+  });
+}
+
 // Renders a computeEnergyFlow() result - Personal Year/Month/Day vs
 // Universal Year/Month/Day, numerology + Vietnamese zodiac only.
+const ENERGY_FLOW_VERDICT = {
+  good: { head: 'Flowing With You', body: "Your cycles and the world's are in step — push." },
+  mid: { head: 'Mixed Flow', body: 'Some cycles align, others drag — pick your spots.' },
+  bad: { head: 'Against the Current', body: "The day's cycles cut across yours — go light." },
+};
 function renderEnergyFlowResults(containerEl, r) {
   containerEl.classList.add('active');
   setModalWidth(containerEl, false);
 
-  const numerologyRows = [
-    { label: `Year (${r.numerology.personalYear} &harr; ${r.numerology.universalYear})`, score: r.numerology.yearScore },
-    { label: `Month (${r.numerology.personalMonth} &harr; ${r.numerology.universalMonth})`, score: r.numerology.monthScore },
-    { label: `Day (${r.numerology.personalDay} &harr; ${r.numerology.universalDay})`, score: r.numerology.dayScore },
-  ];
+  const verdict = ENERGY_FLOW_VERDICT[scoreClass(r.finalScore)];
+  const cardsHtml = `
+    <div class="compat-cards">
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.numerology.score)]}">
+        <div class="compat-card-name">Numerology</div>
+        <div class="compat-card-vs"><span>${r.numerology.personalDay}</span><i>vs</i><span>${r.numerology.universalDay}</span></div>
+        <div class="compat-card-tier">${compatTierWord(r.numerology.score, COMPAT_NUMEROLOGY_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.vietnamese.score)]}">
+        <div class="compat-card-name">Vietnamese Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.personalDaySign] || ''}</span><i>vs</i><span>${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.universalDaySign] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(r.vietnamese.score, COMPAT_VIETNAMESE_WORDS)}</div>
+      </div>
+    </div>`;
 
-  const vietnameseRows = [
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.personalYearSign] || ''} Year (${r.vietnamese.personalYearSign} &harr; ${r.vietnamese.universalYearSign})`, score: r.vietnamese.yearScore },
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.personalMonthSign] || ''} Month (${r.vietnamese.personalMonthSign} &harr; ${r.vietnamese.universalMonthSign})`, score: r.vietnamese.monthScore },
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[r.vietnamese.personalDaySign] || ''} Day (${r.vietnamese.personalDaySign} &harr; ${r.vietnamese.universalDaySign})`, score: r.vietnamese.daySignScore },
-  ];
+  const meters =
+    compatMeterRow(`Year (${r.numerology.personalYear} ↔ ${r.numerology.universalYear})`, r.numerology.yearScore) +
+    compatMeterRow(`Month (${r.numerology.personalMonth} ↔ ${r.numerology.universalMonth})`, r.numerology.monthScore) +
+    compatMeterRow(`Day (${r.numerology.personalDay} ↔ ${r.numerology.universalDay})`, r.numerology.dayScore) +
+    compatMeterRow(`Zodiac Year (${r.vietnamese.personalYearSign} ↔ ${r.vietnamese.universalYearSign})`, r.vietnamese.yearScore) +
+    compatMeterRow(`Zodiac Month (${r.vietnamese.personalMonthSign} ↔ ${r.vietnamese.universalMonthSign})`, r.vietnamese.monthScore) +
+    compatMeterRow(`Zodiac Day (${r.vietnamese.personalDaySign} ↔ ${r.vietnamese.universalDaySign})`, r.vietnamese.daySignScore);
 
-  containerEl.innerHTML = `
-    <div class="score-hero">
-      <div class="score-names">Your Energy <span class="score-vs">&times;</span> Today's Energy</div>
-      <div class="score-big ${scoreClass(r.finalScore)}">${r.finalScore}<span class="score-out-of">/100</span></div>
-    </div>
-    <div class="score-breakdown">
-      ${breakdownSection('Numerology (Year / Month / Day)', r.numerology.score, numerologyRows)}
-      ${breakdownSection('Vietnamese Zodiac (Year / Month / Day)', r.vietnamese.score, vietnameseRows)}
-      ${bonusSectionHtml(r.bonuses)}
-    </div>
-  `;
+  containerEl.innerHTML = compatHeroShellHtml(r.finalScore, 'Energy Flow', verdict.head, verdict.body, cardsHtml, bonusChipsHtml(r.bonuses), meters);
+  wireCompatReveal(containerEl);
 }
 
 // Renders a computeMonthOutlook() result - all 12 calendar months ranked
@@ -371,33 +416,44 @@ function renderMonthOutlook(containerEl, rankedMonths) {
 // universalMonthScore, vietnameseScore, westernScore, luckyNote) rather than
 // running a different comparison, so this breakdown always adds up to the
 // same score the list already showed for that month.
+const MONTH_DETAIL_VERDICT = {
+  good: { head: 'Strong Month', body: 'The cycle backs you here — worth aiming real plans at.' },
+  mid: { head: 'Workable Month', body: 'Neutral tape — what you bring matters more than what it gives.' },
+  bad: { head: 'Challenging Month', body: 'The cycle leans against you — lighter commitments, more review.' },
+};
 function renderMonthDetail(containerEl, m) {
-  const numerologyRows = [
-    { label: `Personal Month (Lifepath &harr; ${m.personalMonth})`, score: m.personalMonthScore },
-    { label: `Universal Month (Lifepath &harr; ${m.universalMonth})`, score: m.universalMonthScore },
-  ];
-  const vietnameseRows = [
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[m.personMonthSign] || ''} Month Sign (${m.personMonthSign} &harr; ${m.animal})`, score: m.vietnameseScore },
-  ];
-  const westernRows = [
-    { label: `${ZODIAC_SYMBOLS[m.personSunSign] || ''} Sign (${m.personSunSign} &harr; ${m.westernRepSign})`, score: m.westernScore },
-  ];
-  const bonuses = { total: m.luckyBonus, notes: m.luckyNote ? [m.luckyNote] : [] };
-
   containerEl.classList.add('active');
   setModalWidth(containerEl, false);
-  containerEl.innerHTML = `
-    <div class="score-hero">
-      <div class="score-names">You <span class="score-vs">&times;</span> ${m.name} ${m.cycleYear}</div>
-      <div class="score-big ${scoreClass(m.finalScore)}">${m.finalScore}<span class="score-out-of">/100</span></div>
-    </div>
-    <div class="score-breakdown">
-      ${breakdownSection('Numerology', m.numerologyScore, numerologyRows)}
-      ${breakdownSection('Vietnamese Zodiac', m.vietnameseScore, vietnameseRows)}
-      ${breakdownSection('Western Zodiac', m.westernScore, westernRows)}
-      ${bonusSectionHtml(bonuses)}
-    </div>
-  `;
+
+  const verdict = MONTH_DETAIL_VERDICT[scoreClass(m.finalScore)];
+  const cardsHtml = `
+    <div class="compat-cards">
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(m.numerologyScore)]}">
+        <div class="compat-card-name">Numerology</div>
+        <div class="compat-card-vs"><span>PM ${m.personalMonth}</span><i>·</i><span>UM ${m.universalMonth}</span></div>
+        <div class="compat-card-tier">${compatTierWord(m.numerologyScore, COMPAT_NUMEROLOGY_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(m.vietnameseScore)]}">
+        <div class="compat-card-name">Vietnamese Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${VIETNAMESE_ZODIAC_EMOJI[m.personMonthSign] || ''}</span><i>vs</i><span>${VIETNAMESE_ZODIAC_EMOJI[m.animal] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(m.vietnameseScore, COMPAT_VIETNAMESE_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(m.westernScore)]}">
+        <div class="compat-card-name">Western Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${ZODIAC_SYMBOLS[m.personSunSign] || ''}</span><i>vs</i><span>${ZODIAC_SYMBOLS[m.westernRepSign] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(m.westernScore, COMPAT_WESTERN_WORDS)}</div>
+      </div>
+    </div>`;
+
+  const bonuses = { total: m.luckyBonus, notes: m.luckyNote ? [m.luckyNote] : [] };
+  const meters =
+    compatMeterRow(`Personal Month (Lifepath ↔ ${m.personalMonth})`, m.personalMonthScore) +
+    compatMeterRow(`Universal Month (Lifepath ↔ ${m.universalMonth})`, m.universalMonthScore) +
+    compatMeterRow(`Month Sign (${m.personMonthSign} ↔ ${m.animal})`, m.vietnameseScore) +
+    compatMeterRow(`Sign (${m.personSunSign} ↔ ${m.westernRepSign})`, m.westernScore);
+
+  containerEl.innerHTML = compatHeroShellHtml(m.finalScore, `${m.name} ${m.cycleYear}`, verdict.head, verdict.body, cardsHtml, bonusChipsHtml(bonuses), meters);
+  wireCompatReveal(containerEl);
 }
 
 // Renders a computeYearRoadmap() result (db-core.js) - every calendar year
@@ -448,28 +504,43 @@ const YEAR_ROADMAP_VERDICT_NOTE = {
   mid: 'Neither a matched zodiac year nor Personal Year 7/11 - a neutral year.',
 };
 function renderYearRoadmapDetail(containerEl, roadmap, y) {
-  const numerologyRows = [
-    { label: `Personal Year (Lifepath &harr; ${y.personalYear})`, score: y.personalYearScore },
-    { label: `Universal Year (Lifepath &harr; ${y.universalYear})`, score: y.universalYearScore },
-  ];
-  const vietnameseRows = [
-    { label: `${VIETNAMESE_ZODIAC_EMOJI[roadmap.ownAnimal] || ''} Birth Animal (${roadmap.ownAnimal} &harr; ${y.animal})`, score: y.vietnameseScore },
-  ];
-
   containerEl.classList.add('active');
   setModalWidth(containerEl, false);
-  containerEl.innerHTML = `
-    <div class="score-hero">
-      <div class="score-names">You <span class="score-vs">&times;</span> ${emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate)}</div>
-      <div class="score-big ${scoreClass(y.finalScore)}">${y.finalScore}<span class="score-out-of">/100</span></div>
-    </div>
+
+  const calloutHtml = `
     <div class="year-roadmap-emax-callout ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">
       <div class="year-roadmap-emax-verdict">${y.verdict.toUpperCase()} <span class="year-roadmap-emax-magnitude">(${y.magnitude > 0 ? '+' : ''}${y.magnitude})</span></div>
       <div class="year-roadmap-emax-note">${YEAR_ROADMAP_VERDICT_NOTE[y.verdict]}</div>
-    </div>
-    <div class="score-breakdown">
-      ${breakdownSection('Numerology', y.numerologyScore, numerologyRows)}
-      ${breakdownSection('Vietnamese Zodiac', y.vietnameseScore, vietnameseRows)}
-    </div>
-  `;
+    </div>`;
+
+  const cardsHtml = `
+    <div class="compat-cards">
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(y.numerologyScore)]}">
+        <div class="compat-card-name">Numerology</div>
+        <div class="compat-card-vs"><span>PY ${y.personalYear}</span><i>·</i><span>UY ${y.universalYear}</span></div>
+        <div class="compat-card-tier">${compatTierWord(y.numerologyScore, COMPAT_NUMEROLOGY_WORDS)}</div>
+      </div>
+      <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(y.vietnameseScore)]}">
+        <div class="compat-card-name">Vietnamese Zodiac</div>
+        <div class="compat-card-vs compat-card-vs-glyph"><span>${VIETNAMESE_ZODIAC_EMOJI[roadmap.ownAnimal] || ''}</span><i>vs</i><span>${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''}</span></div>
+        <div class="compat-card-tier">${compatTierWord(y.vietnameseScore, COMPAT_VIETNAMESE_WORDS)}</div>
+      </div>
+    </div>`;
+
+  const meters =
+    compatMeterRow(`Personal Year (Lifepath ↔ ${y.personalYear})`, y.personalYearScore) +
+    compatMeterRow(`Universal Year (Lifepath ↔ ${y.universalYear})`, y.universalYearScore) +
+    compatMeterRow(`Birth Animal (${roadmap.ownAnimal} ↔ ${y.animal})`, y.vietnameseScore);
+
+  const verdict = MONTH_DETAIL_VERDICT[scoreClass(y.finalScore)];
+  containerEl.innerHTML = compatHeroShellHtml(
+    y.finalScore,
+    emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
+    verdict.head.replace('Month', 'Year'),
+    verdict.body,
+    cardsHtml,
+    calloutHtml,
+    meters
+  );
+  wireCompatReveal(containerEl);
 }

@@ -925,10 +925,19 @@ const IDENTITY_SLOTS = {
     lightTail: 'A quieter current than the others, but always on.',
     shadowLead: 'Its slip side:',
   },
+  // No "moves with the calendar" tail - user: "that's obvious".
   today: {
     opener: 'Today lands on you as',
-    lightTail: 'This one moves with the calendar - a season, not a trait.',
+    lightTail: '',
     shadowLead: 'Leaned on too hard,',
+  },
+  // Combo (Western sign + Vietnamese animal, fused into one number) -
+  // permanent like core, but a different origin than date arithmetic, so
+  // it names its own cross-system nature instead of "default setting".
+  combo: {
+    opener: 'Your zodiac blend runs as',
+    lightTail: 'Western sign and Vietnamese animal, fused into one current.',
+    shadowLead: 'Its slip side:',
   },
 };
 
@@ -982,7 +991,7 @@ function composeIdentitySentence(entry, slot) {
   if (!clauses) return null;
   const image = nextRootImage(entry.root);
   const s = IDENTITY_SLOTS[slot] || IDENTITY_SLOTS.core;
-  const tail = clauses.long ? '' : ` ${s.lightTail}`;
+  const tail = clauses.long || !s.lightTail ? '' : ` ${s.lightTail}`;
   return {
     light: `${s.opener} ${image} - ${clauses.good}.${tail}`,
     shadow: `${s.shadowLead} ${clauses.bad}.`,

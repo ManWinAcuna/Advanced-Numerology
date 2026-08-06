@@ -239,6 +239,7 @@ function renderCompoundStories(r, birthDate) {
       { id: 'lifePath', label: 'Lifepath', slot: 'core', entry: coreParts[0].entry },
       { id: 'dayBornReduced', label: 'Day Born', slot: 'rhythm', entry: coreParts[1].entry },
       { id: 'dayNumReduced', label: 'Day#', slot: 'year', entry: coreParts[2].entry },
+      { id: 'combo', label: 'Combo', slot: 'combo', entry: coreParts[3].entry },
       { id: 'pdReduced', label: 'Personal Day', slot: 'today', entry: cycleParts[2].entry },
     ];
     identityTargets.forEach((t) => {
