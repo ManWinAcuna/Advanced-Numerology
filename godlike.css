@@ -919,6 +919,13 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
     color-mix(in srgb, var(--tier-c) 70%, #000 12%) 48%,
     color-mix(in srgb, var(--tier-c) 96%, #fff 14%) 86%);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  /* Without this the internal light/dark gradient bands read as a flat
+     solid color, especially at the compact popup's smaller size - every
+     other engraved numeral in the app (.cell.highlight, .dayleft-value,
+     .gk-glyph) pairs the same gradient-clip with this exact depth shadow
+     for the same reason. */
+  text-shadow: none;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .9)) drop-shadow(0 0 14px var(--tier-glow));
   animation: compatNumIn .7s cubic-bezier(.2, .9, .25, 1.1) .35s backwards;
 }
 .shield-score span { font-size: 18px; }
@@ -990,9 +997,9 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
    full page. */
 .compat-hero.compact { max-width: 380px; padding-top: 0; }
 .compat-hero.compact .compat-badge-wrap { margin-top: 6px; }
-.compat-hero.compact .shield { width: 140px; height: 157px; }
-.compat-hero.compact .shield-score { font-size: 30px; }
-.compat-hero.compact .shield-score span { font-size: 12px; }
+.compat-hero.compact .shield { width: 148px; height: 166px; }
+.compat-hero.compact .shield-score { font-size: 33px; }
+.compat-hero.compact .shield-score span { font-size: 13px; }
 .compat-hero.compact .shield-tag { font-size: 8px; }
 .compat-hero.compact .compat-verdict-head { font-size: 15px; margin-top: 14px; }
 .compat-hero.compact .compat-verdict-body { font-size: 12px; }
