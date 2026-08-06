@@ -4,6 +4,15 @@ const modeSelectEl = document.getElementById('modeSelect');
 const compatFormEl = document.getElementById('compatForm');
 const personInputsEl = document.getElementById('personInputs');
 const compatResultsEl = document.getElementById('compatResults');
+const compatModalOverlayEl = document.getElementById('compatModalOverlay');
+
+function closeCompatModal() {
+  compatModalOverlayEl.classList.remove('active');
+}
+document.getElementById('compatModalClose').addEventListener('click', closeCompatModal);
+compatModalOverlayEl.addEventListener('click', (e) => {
+  if (e.target === compatModalOverlayEl) closeCompatModal();
+});
 
 function getAllDbEntries() {
   const db = loadDB();
@@ -55,7 +64,7 @@ document.querySelectorAll('.mode-card').forEach((card) => {
     mode = card.dataset.mode;
     modeSelectEl.style.display = 'none';
     compatFormEl.classList.add('active');
-    compatResultsEl.classList.remove('active');
+    closeCompatModal();
     compatResultsEl.innerHTML = '';
 
     if (mode === 'today') {
@@ -71,7 +80,7 @@ document.getElementById('backToModes').addEventListener('click', (e) => {
   e.preventDefault();
   modeSelectEl.style.display = 'grid';
   compatFormEl.classList.remove('active');
-  compatResultsEl.classList.remove('active');
+  closeCompatModal();
 });
 
 function parseDateInput(value) {
@@ -115,4 +124,5 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
 
   const result = computeCompatibility(dateA, dateB);
   renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB });
+  compatModalOverlayEl.classList.add('active');
 });
