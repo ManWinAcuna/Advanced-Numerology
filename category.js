@@ -292,7 +292,7 @@ function openEntryModal(entry) {
         </div>
       </div>
       ${hoursHtml}
-      <div class="box stat-box compat-today-box">
+      <div class="box stat-box compat-today-box" id="entryCompatTodayBox">
         <div class="box-label">🤝 Compatibility with Today</div>
         <div class="box-value ${scoreClass(todayCompat.finalScore)}">${todayCompat.finalScore}%</div>
       </div>
@@ -300,6 +300,14 @@ function openEntryModal(entry) {
 
     <button type="button" class="emax-breakdown-toggle" id="compareToggleBtn" style="margin-top:20px">🤝 Compare with me</button>
   `;
+
+  // Same box, same tap-to-expand behavior as Profile/Calculator/Famous's
+  // Compatibility with Today - it was rendered here (same classes, same
+  // look) but never actually wired to open anything.
+  document.getElementById('entryCompatTodayBox').addEventListener('click', () => {
+    renderCompatHero(document.getElementById('compareMiniBody'), todayCompat, entry.name, 'Today', { compact: true });
+    document.getElementById('compareMiniOverlay').classList.add('active');
+  });
 
   document.getElementById('entryModalEditBtn').addEventListener('click', () => {
     closeEntryModal();
