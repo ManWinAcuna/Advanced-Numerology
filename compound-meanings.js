@@ -338,7 +338,7 @@ const COMPOUND_MASTER_PURE = {
 const COMPOUND_MASTER_IMPURE = {
   11: {
     light: "Same base 11 meaning, but it's a borrowed intuition rather than an intrinsic one - runs a touch less stable than a pure 11.",
-    shadow: "There's no legitimate root-2 for it to switch into (root 2 doesn't exist), so the instability shows up as raw volatility rather than a clean second identity.",
+    shadow: 'That instability tips into raw emotional volatility - reactive decisions, mood driving the moment instead of clear judgment.',
   },
   22: {
     light: "Some moments you're operating as the grand-scale 22 (building something that outlasts you); other moments you're just a grounded, practical 4 (heads-down on the immediate task) - which one shows up depends on what you're actually engaging with, not a fixed trait.",
@@ -354,38 +354,46 @@ const COMPOUND_MASTER_IMPURE = {
 // Composes a practical entry for any compound NOT in COMPOUND_CURATED,
 // following the same Driver->Bridge->Outcome method by design - not a
 // generic filler, a real (if simpler) application of the method above.
-function deriveCompoundEntry(driverDigit, bridgeDigit, root) {
+// digits: the compound's FULL digit sequence (e.g. 219 -> [2,1,9], not
+// collapsed down to 2 digits first) - the first digit is the Driver, every
+// digit after it is a Bridge, chained in order. A triple-digit compound
+// (Day-of-year runs up to 366) gets the same real treatment as a 2-digit
+// one, not silently reduced away before it ever gets a definition.
+function deriveCompoundEntry(digits, root) {
   const mech = COMPOUND_ROOT_MECHANISM[root];
   if (!mech) return null;
-  const d = COMPOUND_DIGIT_FLAVOR[driverDigit];
-  const b = COMPOUND_DIGIT_FLAVOR[bridgeDigit];
-  if (!d || !b) return null;
+  const flavors = digits.map((d) => COMPOUND_DIGIT_FLAVOR[d]);
+  if (flavors.some((f) => !f)) return null;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  // A bridge digit identical to the one right before it (366 -> 3,6,6)
+  // would otherwise repeat the exact same clause twice back to back -
+  // reads like a copy-paste error, not emphasis. Dropped from the prose;
+  // the flow tag still shows the honest repeated digit.
+  const bridgeDigits = digits.slice(1).filter((d, i) => d !== digits[i]);
+  const lightChain = [cap(flavors[0].driverGood)].concat(bridgeDigits.map((d) => COMPOUND_DIGIT_FLAVOR[d].bridgeGood));
+  const shadowChain = [cap(flavors[0].driverBad)].concat(bridgeDigits.map((d) => COMPOUND_DIGIT_FLAVOR[d].bridgeBad));
   return {
     root,
-    light: `${cap(d.driverGood)}, ${b.bridgeGood} - good day for ${mech.domain}.`,
-    shadow: `${cap(d.driverBad)}, ${b.bridgeBad}.`,
+    light: `${lightChain.join(', ')} - good day for ${mech.domain}.`,
+    shadow: `${shadowChain.join(', ')}.`,
     generated: true,
   };
 }
 
-/* ------------------------------------------------------------ resolution -- */
-// Brings a raw total into compound-lookup range (roughly 2-52) with one
-// digit-sum pass if needed. Only Day-of-year's raw value (up to 366) ever
-// needs this; everything else in this feature already lands in range.
-function compoundNormalize(rawTotal) {
-  return rawTotal > 52 ? digitSum(rawTotal) : rawTotal;
-}
-
-// Resolves a raw total to { compound, root, impure, companion }. impure/
-// companion only apply when root is a master (11/22/33) - mirrors the same
-// rule already implemented in compatLifePathInfo()/compatReduceLifepath()
-// (compat-engine.js), generalized to any raw total rather than just a Life
-// Path pool sum. See feedback-no-standalone-two: a bare 2 is always an 11.
+// Resolves a raw total to { compound, root, impure, companion }. The raw
+// total IS the compound, whatever its digit count - a triple-digit total
+// (Day-of-year runs up to 366) never gets pre-collapsed before it's given
+// its own definition; the reduction loop below already handles any size.
+// impure/companion only apply when root is a master (11/22/33) - mirrors
+// the same rule already implemented in compatLifePathInfo()/
+// compatReduceLifepath() (compat-engine.js), generalized to any raw total
+// rather than just a Life Path pool sum. See feedback-no-standalone-two:
+// a bare 2 is always an 11.
 function compoundResolve(rawTotal) {
-  const compound = compoundNormalize(rawTotal);
+  const compound = rawTotal;
+  // The raw total IS the master directly - always pure, no reduction happened.
   if (compound === 11 || compound === 22 || compound === 33) {
-    return { compound, root: compound, impure: rawTotal !== compound, companion: digitSum(compound) };
+    return { compound, root: compound, impure: false, companion: digitSum(compound) };
   }
   if (compound === 28) return { compound, root: 28, impure: false, companion: null };
   if (compound === 20) return { compound, root: 11, impure: true, companion: 2 };
@@ -442,22 +450,27 @@ function compoundEntryFromResolved(r) {
     });
   }
 
-  const driver = Math.floor(r.compound / 10);
-  const bridge = r.compound % 10;
-  const driverFlavor = COMPOUND_DIGIT_FLAVOR[driver];
-  const bridgeFlavor = COMPOUND_DIGIT_FLAVOR[bridge];
-  const flowTag = (driverFlavor && bridgeFlavor)
-    ? (driver === bridge
-      ? `${r.compound} - ${driverFlavor.label}, doubled`
-      : `${r.compound} - ${driverFlavor.label} → ${bridgeFlavor.label}`)
+  // Full digit sequence, not just the first two - a triple-digit compound
+  // (Day-of-year runs up to 366) gets its own real chain, not silently
+  // collapsed to 2 digits before it ever gets a definition.
+  const digits = String(r.compound).split('').map(Number);
+  const flavors = digits.map((d) => COMPOUND_DIGIT_FLAVOR[d]);
+  const allSameDigit = digits.every((d) => d === digits[0]);
+  const flowTag = flavors.every((f) => f)
+    ? (allSameDigit
+      ? `${r.compound} - ${flavors[0].label}, doubled`
+      : `${r.compound} - ${flavors.map((f) => f.label).join(' → ')}`)
     : String(r.compound);
 
+  // Curated entries are all 2-digit (matching the source PDF), so a
+  // triple-digit compound never matches here - it always goes through the
+  // generator below instead, same method, just chained across more digits.
   const curated = COMPOUND_CURATED[r.compound];
   if (curated) {
     return Object.assign({}, r, { light: curated.light, shadow: curated.shadow, flowTag, generated: false });
   }
 
-  const derived = deriveCompoundEntry(driver, bridge, r.root);
+  const derived = deriveCompoundEntry(digits, r.root);
   if (!derived) {
     return Object.assign({}, r, { light: null, shadow: null, flowTag, generated: false });
   }
