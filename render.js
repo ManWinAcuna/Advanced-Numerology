@@ -147,6 +147,79 @@ function render() {
     `;
     monthsBody.appendChild(tr);
   });
+
+  renderCompoundStories(r, birthDate);
+}
+
+// Boost13, 2026-08-06: Core Numbers and Personal Cycles each get their own
+// tap-to-reveal "whole story" (the specific compound behind each number,
+// not just its reduced root), plus one page-wide "big picture" combining
+// both. Purely the person's own numbers - today's date never enters this
+// (that's Today page's job alone). Idempotent: inserts each tap target
+// once, then just re-wires its click handler on every render() call so a
+// changed birthdate always reopens with fresh content.
+function insertStoryLink(id, afterSelector, label) {
+  let el = document.getElementById(id);
+  if (el) return el;
+  const anchor = document.querySelector(afterSelector);
+  if (!anchor) return null;
+  el = document.createElement('button');
+  el.type = 'button';
+  el.id = id;
+  el.className = 'story-link';
+  el.textContent = label;
+  anchor.insertAdjacentElement('afterend', el);
+  return el;
+}
+
+function openStoryModal(title, story) {
+  if (!story) return;
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${title}</div><div class="story-modal-text">${story.text}</div>`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
+function renderCompoundStories(r, birthDate) {
+  const coreParts = [
+    { label: 'Life Path', raw: null, entry: compoundEntryForLifePath(r.lifePath, r.lifePathCompound) },
+    { label: 'Day Born', raw: r.dayBornRaw },
+    { label: 'Day#', raw: r.dayNumRaw },
+    { label: 'Combo', raw: compoundRawCombo(birthDate) },
+  ].map((p) => ({ label: p.label, entry: p.entry || compoundEntry(p.raw) }));
+  const coreStory = weaveResolvedStory(coreParts);
+
+  const cycleParts = [
+    { label: 'Personal Year', raw: r.py.raw },
+    { label: 'Personal Month', raw: r.pm.raw },
+    { label: 'Personal Day', raw: r.pd.raw },
+  ].map((p) => ({ label: p.label, entry: compoundEntry(p.raw) }));
+  const cyclesStory = weaveResolvedStory(cycleParts);
+
+  const bigPictureStory = weaveResolvedStory(coreParts.concat(cycleParts));
+
+  const coreLink = insertStoryLink('coreNumbersStoryLink', '.grid4.subrow', '📖 the full story');
+  if (coreLink) {
+    coreLink.style.display = coreStory ? '' : 'none';
+    coreLink.onclick = () => openStoryModal('Core Numbers', coreStory);
+  }
+
+  const cyclesLink = insertStoryLink('personalCyclesStoryLink', '.grid3.subrow', '📖 the full story');
+  if (cyclesLink) {
+    cyclesLink.style.display = cyclesStory ? '' : 'none';
+    cyclesLink.onclick = () => openStoryModal('Personal Cycles', cyclesStory);
+  }
+
+  const bigLink = insertStoryLink('bigPictureStoryLink', '#personalCyclesStoryLink', '🔮 the big picture');
+  if (bigLink) {
+    bigLink.style.display = bigPictureStory ? '' : 'none';
+    bigLink.onclick = () => openStoryModal('The Big Picture', bigPictureStory);
+  }
+}
+
+const storyModalOverlayEl = document.getElementById('storyModalOverlay');
+if (storyModalOverlayEl) {
+  document.getElementById('storyModalClose').addEventListener('click', () => storyModalOverlayEl.classList.remove('active'));
+  storyModalOverlayEl.addEventListener('click', (e) => { if (e.target === storyModalOverlayEl) storyModalOverlayEl.classList.remove('active'); });
 }
 
 attachDateMask(document.getElementById('bday'));

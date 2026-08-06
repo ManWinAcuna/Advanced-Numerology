@@ -539,6 +539,36 @@ button.gk-altar-num {
 .gk-card-hours { margin-top: 9px; font-size: 12px; color: var(--muted); }
 .gk-card-hours b { color: var(--gold); }
 
+/* the compound "whole story" - tap-to-reveal only (Boost13, 2026-08-06):
+   folded into the same numeral card, plus its own explicit door in below
+   the verdict so it isn't only discoverable by tapping the number. */
+.gk-story-link {
+  display: block; margin: 10px auto 0; background: none; border: 1px solid var(--border);
+  border-radius: 999px; padding: 7px 14px; color: var(--acc-text); font-family: var(--gk-ui);
+  font-size: 11px; letter-spacing: .06em; cursor: pointer; position: relative; z-index: 1;
+}
+.gk-card-story {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12.5px; line-height: 1.7; color: var(--text);
+}
+.gk-card-story-label {
+  font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .16em; font-size: 9.5px;
+  color: var(--muted); margin-bottom: 6px;
+}
+
+/* Core Numbers / Personal Cycles / big-picture story links (render.js,
+   Boost13 2026-08-06) - inserted right after each grid's subrow. */
+.story-link {
+  display: block; width: 100%; margin: 6px 0 14px; background: none; border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 0; color: var(--acc-text); font-family: var(--gk-ui);
+  font-size: 11px; letter-spacing: .04em; cursor: pointer;
+}
+.story-modal-title {
+  font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .14em;
+  font-size: 13px; color: var(--acc-text); margin-bottom: 10px;
+}
+.story-modal-text { font-size: 13.5px; line-height: 1.7; color: var(--text); }
+
 /* whole-page aura: warmth scales with alignment only — never a warning */
 .gk-aura {
   position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0;

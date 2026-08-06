@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Numerology Calculator</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=21">
+<link rel="stylesheet" href="godlike.css?v=22">
 </head>
 <body>
 <div class="page">
@@ -285,12 +285,22 @@
   </div>
 </div>
 
+<!-- Compound "whole story" (Boost13, 2026-08-06) - same reason as the
+     modal above, deliberately outside .page. -->
+<div class="modal-overlay" id="storyModalOverlay">
+  <div class="modal-box modal-box-narrow">
+    <button class="modal-close" id="storyModalClose" title="Close">&times;</button>
+    <div id="storyModalBody"></div>
+  </div>
+</div>
+
 <script src="scroll-viewport.js"></script>
 <script src="astronomy.browser.min.js"></script>
 <script src="astro-engine.js"></script>
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
 <script src="compat-engine.js"></script>
+<script src="compound-meanings.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>

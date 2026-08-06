@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=21">
+<link rel="stylesheet" href="godlike.css?v=22">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -34,6 +34,7 @@
     </div>
     <div class="gk-orbits" id="gkOrbits"></div>
     <div class="gk-verdict" id="gkVerdict"></div>
+    <button class="gk-story-link" id="gkStoryLink" type="button" style="display:none">📖 the full story</button>
     <div class="gk-crest" id="gkCrest">
       <div class="gk-notches" id="gkNotches"></div>
       <img src="logo.svg" alt="" class="gk-crest-img">
@@ -57,6 +58,7 @@
 <script src="numerology.js"></script>
 <script src="compat-data.js"></script>
 <script src="compat-engine.js"></script>
+<script src="compound-meanings.js"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js"></script>
 <script src="firebase-loader.js"></script>
@@ -118,6 +120,26 @@
   try {
     animal = getChineseDaySign(now);
     animalEmoji = (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[animal]) || '';
+  } catch (e) {}
+
+  /* --------------------------------------- the compound "whole story" ---
+     Boost13, 2026-08-06: the specific compound behind Universal Day/Energy/
+     Personal Day/Combo/Day# tells a richer story than the reduced roots
+     alone (a 31 Universal Day reads differently than a plain 4, even
+     though they're the same final number). Tap-to-reveal only - folded
+     into the numeral's existing card, not shown by default. */
+  var wholeStory = null;
+  try {
+    var storyParts = [
+      { label: 'Universal Day', raw: compoundRawUniversalDay(day0) },
+      { label: 'Energy', raw: compoundRawEnergy(day0) },
+      { label: 'Day#', raw: compoundRawDayNum(day0) },
+    ];
+    if (me) {
+      storyParts.unshift({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
+      storyParts.push({ label: 'Combo', raw: compoundRawCombo(me) });
+    }
+    wholeStory = weaveCompoundStory(storyParts);
   } catch (e) {}
 
   /* Fresh installs (icon re-adds) start with empty localStorage; the cloud
@@ -293,6 +315,9 @@
       }
       if (carriers.length) h += '<div class="gk-card-hours">Hours carrying the ' + ud + ': <b>' + carriers.join(' · ') + '</b></div>';
     }
+    if (wholeStory) {
+      h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>' + wholeStory.text + '</div>';
+    }
     return h;
   }
   var pressTimer = null, pressed = false;
@@ -301,6 +326,14 @@
     numEl.classList.remove('gk-strike'); void numEl.offsetWidth; numEl.classList.add('gk-strike');
     openModal(cardHtml());
   });
+
+  // Same card either way - the explicit link just gives the story a second,
+  // more discoverable door in besides tapping the numeral itself.
+  var storyLink = document.getElementById('gkStoryLink');
+  if (wholeStory) {
+    storyLink.style.display = '';
+    storyLink.addEventListener('click', function () { openModal(cardHtml()); });
+  }
 
   /* ------------------------------------------- long-press: tomorrow ghost - */
   var ghost = document.getElementById('gkGhost');
