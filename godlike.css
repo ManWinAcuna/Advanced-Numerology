@@ -72,6 +72,12 @@ html.gk-stable { --acc: #00e5ff; --acc-dim: rgba(0,229,255,.55); --acc-ghost: rg
 /* ------------------------------------------------------------- the void -- */
 html, body { background: var(--void) !important; }
 
+/* Cross-document view transitions (iOS 18.2+ / modern browsers): the old
+   page stays painted until the next one is ready, then crossfades - kills
+   the blank frame between full page loads that no background color or
+   cache speed can remove. Older browsers ignore the at-rule entirely. */
+@view-transition { navigation: auto; }
+
 /* The starfield dies; sacred geometry is etched into the dark instead —
    golden-ratio circles + a faint radial grid, felt more than seen. */
 body::before {

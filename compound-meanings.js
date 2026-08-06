@@ -931,12 +931,11 @@ const IDENTITY_SLOTS = {
     lightTail: '',
     shadowLead: 'Leaned on too hard,',
   },
-  // Combo (Western sign + Vietnamese animal, fused into one number) -
-  // permanent like core, but a different origin than date arithmetic, so
-  // it names its own cross-system nature instead of "default setting".
+  // Combo - no derivation talk (user: "don't explain how we got the
+  // combo"), just the identity itself.
   combo: {
-    opener: 'Your zodiac blend runs as',
-    lightTail: 'Western sign and Vietnamese animal, fused into one current.',
+    opener: 'Your combo runs as',
+    lightTail: '',
     shadowLead: 'Its slip side:',
   },
 };
