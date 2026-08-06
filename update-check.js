@@ -10,7 +10,15 @@
   const API = 'https://api.github.com/repos/ManWinAcuna/Advanced-Numerology/commits/main?per_page=1';
   const KEY = 'app_last_seen_sha';
   const POLL_MS = 5 * 60 * 1000;
+  // GitHub's unauthenticated REST API allows 60 req/hr/IP - a long, active
+  // session (many reloads, many app-switches each firing the visibility
+  // check below) can burn through that fast, and a 403 rate-limit response
+  // used to fail completely silently (r.ok false -> sha undefined -> the
+  // pill just never shows, with no sign anything went wrong). lastCheckAt
+  // throttles the visibilitychange trigger so backgrounding/foregrounding
+  // repeatedly can't spam the budget on its own.
   let shown = false;
+  let lastCheckAt = 0;
 
   function currentSeen() {
     try { return localStorage.getItem(KEY); } catch (e) { return null; }
@@ -66,8 +74,17 @@
 
   function check() {
     if (!navigator.onLine) return;
+    lastCheckAt = Date.now();
     fetch(API, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 403 || r.status === 429) {
+          // Rate-limited - used to die here silently forever. Retry sooner
+          // than the normal 5-minute cadence instead of just giving up.
+          setTimeout(check, 45000);
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then((data) => {
         const sha = data && data.sha;
         if (!sha) return;
@@ -75,14 +92,27 @@
         if (!seen) { remember(sha); return; }
         if (seen !== sha) showBanner(sha);
       })
-      .catch(() => { /* offline / rate-limited — try again later */ });
+      .catch(() => { /* offline - try again on the normal cadence */ });
   }
 
   setTimeout(check, 3000);
   setInterval(check, POLL_MS);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') check();
+    if (document.visibilityState === 'visible' && Date.now() - lastCheckAt > 60000) check();
   });
+
+  // Standard PWA safety net: if a new service worker ever DOES take control
+  // mid-session (e.g. the SW file itself changed), the page that's already
+  // loaded is still running on the OLD cached resources until it reloads -
+  // do that once automatically instead of leaving the user stuck looking at
+  // stale content with no visible sign anything updated.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (sessionStorage.getItem('sw_auto_reloaded')) return;
+      sessionStorage.setItem('sw_auto_reloaded', '1');
+      location.reload();
+    });
+  }
 
   // Instant page switches: sw.js serves every same-origin file cache-first
   // (with background refresh), so tab-to-tab navigation stops showing a
