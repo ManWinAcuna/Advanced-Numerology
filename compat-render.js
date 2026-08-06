@@ -205,10 +205,14 @@ function compatEmbersHtml() {
 
 // The reveal's one row per category - name + score + meter, nothing about
 // how that score was built (see the header comment above).
+// Flat orange/yellow is .meter-fill's shared default everywhere else in the
+// app (Month Outlook, Energy Flow) - here each row is its own category
+// score, so the fill takes on that score's own tier color (red/gold/green)
+// instead, the same semantic coloring already driving the cards and shield.
 function compatMeterRow(label, score) {
   return `
     <div class="breakdown-header"><span>${label}</span><span>${score}</span></div>
-    <div class="meter"><div class="meter-fill" style="width:${score}%"></div></div>
+    <div class="meter"><div class="meter-fill" style="width:${score}%; background:${COMPAT_TIER_COLOR[scoreClass(score)]}"></div></div>
   `;
 }
 

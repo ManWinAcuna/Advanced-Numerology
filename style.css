@@ -150,6 +150,16 @@ body::after {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
+  /* Pages with little content (Compatibility's mode-select, a short EMAX
+     category, etc.) left .scroll-viewport's document shorter than the
+     screen - that's exactly the condition where iOS's layout-viewport
+     miscalculation (see bottombar.js's own comment on the 78pt shortfall)
+     shows up as the bottom tab bar sitting visibly higher than it does on
+     a tall page like Today. Forcing every page to occupy at least a full
+     screen removes "how much content is on this page" as a variable, so
+     the bar lands in the same place everywhere. */
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .topnav {
