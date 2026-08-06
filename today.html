@@ -130,13 +130,18 @@
      into the numeral's existing card, not shown by default. */
   var wholeStory = null;
   try {
+    // Fixed order (round 3): Universal Day, Energy, Day#, Personal Day,
+    // Combo - always all of them, nothing picked/dropped for being less
+    // "notable". The old top-2 picking logic buried Universal Day (the
+    // card's own headline number) behind whichever number happened to be
+    // a master/impure - exactly backwards from the point of this feature.
     var storyParts = [
       { label: 'Universal Day', raw: compoundRawUniversalDay(day0) },
       { label: 'Energy', raw: compoundRawEnergy(day0) },
       { label: 'Day#', raw: compoundRawDayNum(day0) },
     ];
     if (me) {
-      storyParts.unshift({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
+      storyParts.push({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
       storyParts.push({ label: 'Combo', raw: compoundRawCombo(me) });
     }
     // Bridges the story back to the card's own title (round 2 fix - it

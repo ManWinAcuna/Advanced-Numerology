@@ -513,34 +513,27 @@ function compoundRawDayNum(date) {
 }
 
 /* -------------------------------------------------------------- weaving -- */
-// Weaves 1+ ALREADY-RESOLVED numbers into one paragraph. parts: [{ label,
-// entry }], in priority order (most narratively important first - caller
-// decides the order). Numbers with no compound flavor (plain single digit)
-// are dropped. Every number is named, including the lead (round 2 fix -
-// an unlabeled lead sentence left the reader unable to tell which of
-// their numbers was even talking); every number after the lead gets its
-// own full light+shadow treatment too, not just a clipped light line.
-// opts.intro (optional): a bridging sentence prepended before the lead,
-// so the story reads as going deeper on whatever's already on screen
-// rather than a disconnected dump - the caller supplies it because only
-// the caller knows what's already showing on its own card.
+// Weaves ALREADY-RESOLVED numbers into one paragraph. parts: [{ label,
+// entry }], in the exact order the caller wants them to appear - every
+// number with real compound flavor gets included, none get cherry-picked
+// out (round 3 fix: the old "pick the 1-2 most notable" cap actively
+// dropped Universal Day - the headline number on the card - in favor of
+// a more "interesting" master/impure number buried further down the
+// list, which defeated the entire point: the reader couldn't find out
+// what THEIR OWN number's compound meant). Numbers with no compound
+// flavor at all (a plain single digit) are still dropped - there's
+// nothing this file can add there that the page's own root-level content
+// doesn't already say. Every number is named, including the lead, and
+// every number gets its own full light+shadow treatment, not a clipped
+// line. opts.intro (optional): a bridging sentence prepended before the
+// lead, so the story reads as going deeper on whatever's already on
+// screen rather than a disconnected dump - the caller supplies it because
+// only the caller knows what's already showing on its own card.
 function weaveResolvedStory(parts, opts) {
   opts = opts || {};
-  const withFlavor = parts.filter((p) => p.entry.light);
+  const resolved = parts.filter((p) => p.entry.light);
 
-  if (withFlavor.length === 0) return null;
-
-  // Cap at the 1-2 most relevant, not every number with flavor - a master/
-  // impure/28 hit is inherently more notable than an ordinary compound, so
-  // those get pulled forward even if they weren't first in the caller's
-  // own priority order; otherwise the original order (caller's call) wins.
-  const notable = (p) => p.entry.impure || p.entry.root === 28 || [11, 22, 33].includes(p.entry.root);
-  const picked = withFlavor.filter(notable).slice(0, 2);
-  for (const p of withFlavor) {
-    if (picked.length >= 2) break;
-    if (!picked.includes(p)) picked.push(p);
-  }
-  const resolved = picked;
+  if (resolved.length === 0) return null;
 
   const lead = resolved[0];
   const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
