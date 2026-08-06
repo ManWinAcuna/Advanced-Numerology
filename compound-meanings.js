@@ -656,3 +656,86 @@ function summarizeInteraction(resolved) {
 function buildLightShadowCompoundStory(parts, opts) {
   return buildLightShadowStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
 }
+
+/* ------------------------------------------------- today-vs-me pairing -- */
+// Round 9 (2026-08-06): the per-number rows above describe each number in
+// isolation - none of them actually say how today's energy interacts with
+// the PERSON specifically. Four pairs fix that, each contrasting a
+// TODAY number against the structurally-identical number computed from
+// the person's own birth date instead (same calculation, different date):
+//   - Universal Day (today's full-date compound) <-> Lifepath (their own)
+//   - Energy (today's day-of-month digit) <-> Day Born (their own)
+//   - Day# (today's day-of-year) <-> their own birth Day#
+//   - Lifepath (who they are) <-> Personal Day (how today lands on them)
+// The 4th pair is two of the person's OWN numbers rather than today-vs-
+// them, but uses the same agree/differ framing for consistency. Bespoke
+// sentences per pair (not excerpts of the per-number text, not shown
+// alongside their raw compound numbers) - whether the two sides AGREE
+// (share a root - genuine reinforcement) or DIFFER (real tension) is the
+// only thing that varies within a pair; the content itself is written
+// for that specific relationship, same de-woo'd practical voice as
+// everything else in this file.
+const COMPOUND_PAIRS = [
+  {
+    id: 'ud_lifepath', label: 'Universal Day & your Lifepath',
+    agree: {
+      light: "Today's whole shape matches who you are at your core - the day isn't asking you to be anyone other than yourself, so this is as natural as it gets.",
+      shadow: 'You coast on feeling "naturally aligned" and skip the actual effort the day still requires.',
+    },
+    differ: {
+      light: "Today's whole shape doesn't match who you are at your core - real growth happens in that gap, if you're willing to stretch into it.",
+      shadow: 'You resist adapting to what today actually needs because it doesn\'t feel like "you," and the day makes you pay for the resistance.',
+    },
+  },
+  {
+    id: 'energy_dayborn', label: 'Energy & your Day Born',
+    agree: {
+      light: "The day's own daily rhythm matches the one you were born into - things move with unusual ease today, like the day already knows your pace.",
+      shadow: 'That ease tips into complacency - you coast because nothing is actively pushing you.',
+    },
+    differ: {
+      light: "The day moves at a different pace than the one you were born into - good day to practice flexibility instead of fighting the mismatch.",
+      shadow: "You force your own natural pace onto a day that isn't built for it, and end up fighting friction that didn't need to exist.",
+    },
+  },
+  {
+    id: 'dayofyear_dayofyear', label: "Today's Day# & your own Day#",
+    agree: {
+      light: "Today's position in the year echoes your own birth-year position - a kind of anniversary energy, even on an ordinary date.",
+      shadow: 'You get nostalgic or stuck looking backward instead of dealing with what\'s actually in front of you today.',
+    },
+    differ: {
+      light: "Today sits in a completely different part of the year than your own birth position - unfamiliar territory, nothing here to lean on old patterns for.",
+      shadow: 'Without the familiar footing, you can feel unmoored or improvise carelessly.',
+    },
+  },
+  {
+    id: 'lifepath_personalday', label: 'Your Lifepath & your Personal Day',
+    agree: {
+      light: "How today lands on you personally matches your core identity - you get to just be yourself today, no translation needed.",
+      shadow: 'You lean so hard into "being yourself" that you miss a chance to try something outside your usual pattern.',
+    },
+    differ: {
+      light: "Today asks something of you that's genuinely outside your core identity - a real stretch day, and stretch days are where you actually grow.",
+      shadow: "You default to your usual identity pattern instead of meeting the day where it actually is, and miss what it was asking for.",
+    },
+  },
+];
+
+// Builds the pair rows given each pair's two already-resolved entries.
+// pairs: [{ id, entryA, entryB }] - entries missing (e.g. no birth date on
+// file) are silently skipped, same graceful-degradation rule as
+// everywhere else in this file.
+function buildPairRows(pairs) {
+  const lightRows = [];
+  const shadowRows = [];
+  pairs.forEach(({ id, entryA, entryB }) => {
+    const def = COMPOUND_PAIRS.find((p) => p.id === id);
+    if (!def || !entryA || !entryB) return;
+    const agree = entryA.root === entryB.root;
+    const bank = agree ? def.agree : def.differ;
+    lightRows.push({ label: def.label, text: bank.light });
+    shadowRows.push({ label: def.label, text: bank.shadow });
+  });
+  return { lightRows, shadowRows };
+}

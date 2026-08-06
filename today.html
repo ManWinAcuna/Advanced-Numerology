@@ -142,12 +142,29 @@
     ];
     if (me) storyParts.push({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
     // Bridges the story back to the card's own title (round 2 fix - it
-    // used to just drop in below the divider with no connection to the
-    // ud/lifePath already shown above it).
-    var storyIntro = lifePath
-      ? ('Underneath that ' + ud + ' and your Lifepath ' + lifePath + ',')
-      : ('Underneath that ' + ud + ',');
+    // used to just drop in below the divider with no connection to the ud
+    // already shown above it). Lifepath dropped from this line (round 9) -
+    // it was named here but nothing in the story below actually engages
+    // with it, so the mention was a promise the content never kept.
+    var storyIntro = 'Underneath that ' + ud + ',';
     wholeStory = buildLightShadowCompoundStory(storyParts, { intro: storyIntro });
+
+    // Round 9: none of the rows above actually compare today's numbers
+    // against the PERSON - four pairs added on top (same toggles, same
+    // rows, just more of them) each contrasting a today number against
+    // the structurally-identical number computed from their own birth
+    // date instead. Needs a real birthday on file for all four.
+    if (wholeStory && me && r) {
+      var lpEntry = compoundEntryForLifePath(r.lifePath, r.lifePathCompound);
+      var pairRows = buildPairRows([
+        { id: 'ud_lifepath', entryA: compoundEntry(compoundRawUniversalDay(day0)), entryB: lpEntry },
+        { id: 'energy_dayborn', entryA: compoundEntry(compoundRawEnergy(day0)), entryB: compoundEntry(compoundRawEnergy(me)) },
+        { id: 'dayofyear_dayofyear', entryA: compoundEntry(compoundRawDayNum(day0)), entryB: compoundEntry(compoundRawDayNum(me)) },
+        { id: 'lifepath_personalday', entryA: lpEntry, entryB: compoundEntry(compoundRawPersonalDay(me, day0)) },
+      ]);
+      wholeStory.lightRows = wholeStory.lightRows.concat(pairRows.lightRows);
+      wholeStory.shadowRows = wholeStory.shadowRows.concat(pairRows.shadowRows);
+    }
   } catch (e) {}
 
   /* Fresh installs (icon re-adds) start with empty localStorage; the cloud
