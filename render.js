@@ -47,7 +47,7 @@ function render() {
   const r = computeAll(birthDate, today);
   lastMonthsTable = r.monthsTable;
 
-  setText('lifePath', r.lifePath);
+  setText('lifePath', lifePathDisplayText(r.lifePath));
   setText('dayBornReduced', r.dayBornReduced);
   setText('dayNumReduced', r.dayNumReduced);
   setText('combo', r.combo);

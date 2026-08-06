@@ -62,9 +62,9 @@
 <script src="compat-engine.js"></script>
 <script src="compound-meanings.js?v=4"></script>
 <script src="big-store.js"></script>
-<script src="db-core.js?v=2"></script>
+<script src="db-core.js?v=3"></script>
 <script src="firebase-loader.js"></script>
-<script src="compat-render.js?v=2"></script>
+<script src="compat-render.js?v=4"></script>
 <script src="bottombar.js?v=8"></script>
 <script src="update-check.js?v=3"></script>
 <script>
@@ -354,7 +354,7 @@
   /* --------------------------------------- the strike & the meaning card -- */
   function cardHtml() {
     var m = meanOf(ud);
-    var h = '<div class="gk-card-title">' + ud + (lifePath ? ' × lifepath ' + lifePath : '') + '</div>';
+    var h = '<div class="gk-card-title">' + ud + (lifePath ? ' × lifepath ' + lifePathDisplayText(lifePath) : '') + '</div>';
     h += '<div class="gk-card-body">' + m.kw.join(' · ') + '. ' + m.move;
     if (lifePath === 9) h += ' For a 9, a ' + ud + ' day ' + (ud === 5 || ud === 9 ? 'moves WITH you — adapt freely.' : ud === 7 || ud === 11 ? 'pulls against your flow — don’t chase clarity, wait for it.' : ud === 8 || ud === 28 ? 'pays your completion energy in full — close things and collect.' : 'asks you to bend your flow to its shape.');
     h += '</div>';

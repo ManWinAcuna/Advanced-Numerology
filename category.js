@@ -211,7 +211,7 @@ function openEntryModal(entry) {
       <div class="cell head">Day#</div><div class="cell head">Combo</div>
     </div>
     <div class="grid4">
-      <div class="cell highlight">${r.lifePath}</div>
+      <div class="cell highlight">${lifePathDisplayText(r.lifePath)}</div>
       <div class="cell highlight">${r.dayBornReduced}</div>
       <div class="cell highlight">${r.dayNumReduced}</div>
       <div class="cell highlight">${r.combo}</div>

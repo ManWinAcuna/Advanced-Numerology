@@ -1345,7 +1345,7 @@ function openStockModal(inst) {
   const anchorCards = inst.reads.map((r) => `
     <div class="stock-anchor-card${r.primary ? ' primary' : ''}${stocksAnchorTone(r) ? ' ' + stocksAnchorTone(r) : ''}">
       <div class="stock-anchor-label">${escapeHtml(r.label)}</div>
-      <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(String(r.lifePath)) : escapeHtml(r.animal)}</div>
+      <div class="stock-anchor-number">${r.lifePath != null ? escapeHtml(lifePathDisplayText(String(r.lifePath))) : escapeHtml(r.animal)}</div>
       <div class="stock-anchor-sub">${r.lifePath != null ? `Life Path${r.lifePathMeaning ? ' · ' + escapeHtml(r.lifePathMeaning.label) : ''}` : 'Zodiac only'}</div>
       <div class="stock-anchor-date">${escapeHtml(r.dateDisplay)}</div>
       <div class="stock-anchor-zodiac">

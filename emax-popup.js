@@ -521,7 +521,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
   const score = result.finalScore;
   const scoreCls = scoreClass(score);
 
-  const lifePath = getLifePath(themDate);
+  const lifePath = lifePathDisplayText(getLifePath(themDate));
   const lifePathCompound = getLifePathCompound(themDate);
   const dayBorn = getReducedDay(themDate);
   const dayBornCompound = getRawDay(themDate);

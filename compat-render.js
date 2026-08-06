@@ -109,7 +109,7 @@ function renderCompatResults(containerEl, r, nameA, nameB) {
   }).join('');
 
   const numerologyRows = [
-    { label: `✨ Lifepath (${r.numerology.entityLifePath} &rarr; ${r.numerology.dayLifePath})`, score: r.numerology.lifePathScore },
+    { label: `✨ Lifepath (${lifePathDisplayText(r.numerology.entityLifePath)} &rarr; ${lifePathDisplayText(r.numerology.dayLifePath)})`, score: r.numerology.lifePathScore },
     { label: `📅 Day (${r.numerology.entityDay} &rarr; ${r.numerology.dayDay})`, score: r.numerology.dayScore },
     { label: `🔢 Day of Year (${r.numerology.entityDoy} &rarr; ${r.numerology.dayDoy})`, score: r.numerology.doyScore },
   ];
@@ -254,7 +254,7 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
     <div class="compat-cards">
       <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.numerology.score)]}">
         <div class="compat-card-name">Numerology</div>
-        <div class="compat-card-vs"><span>${r.numerology.entityLifePath}</span><i>vs</i><span>${r.numerology.dayLifePath}</span></div>
+        <div class="compat-card-vs"><span>${lifePathDisplayText(r.numerology.entityLifePath)}</span><i>vs</i><span>${lifePathDisplayText(r.numerology.dayLifePath)}</span></div>
         <div class="compat-card-tier">${compatTierWord(r.numerology.score, COMPAT_NUMEROLOGY_WORDS)}</div>
       </div>
       <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.vietnamese.score)]}">
@@ -356,7 +356,7 @@ function renderEnergyFlowResults(containerEl, r) {
     <div class="compat-cards">
       <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.numerology.score)]}">
         <div class="compat-card-name">Numerology</div>
-        <div class="compat-card-vs"><span>${r.numerology.personalDay}</span><i>vs</i><span>${r.numerology.universalDay}</span></div>
+        <div class="compat-card-vs"><span>${r.numerology.personalDay}</span><i>vs</i><span>${lifePathDisplayText(r.numerology.universalDay)}</span></div>
         <div class="compat-card-tier">${compatTierWord(r.numerology.score, COMPAT_NUMEROLOGY_WORDS)}</div>
       </div>
       <div class="compat-card" style="--cc-t:${COMPAT_TIER_COLOR[scoreClass(r.vietnamese.score)]}">
@@ -369,7 +369,7 @@ function renderEnergyFlowResults(containerEl, r) {
   const meters =
     compatMeterRow(`Year (${r.numerology.personalYear} ↔ ${r.numerology.universalYear})`, r.numerology.yearScore) +
     compatMeterRow(`Month (${r.numerology.personalMonth} ↔ ${r.numerology.universalMonth})`, r.numerology.monthScore) +
-    compatMeterRow(`Day (${r.numerology.personalDay} ↔ ${r.numerology.universalDay})`, r.numerology.dayScore) +
+    compatMeterRow(`Day (${r.numerology.personalDay} ↔ ${lifePathDisplayText(r.numerology.universalDay)})`, r.numerology.dayScore) +
     compatMeterRow(`Zodiac Year (${r.vietnamese.personalYearSign} ↔ ${r.vietnamese.universalYearSign})`, r.vietnamese.yearScore) +
     compatMeterRow(`Zodiac Month (${r.vietnamese.personalMonthSign} ↔ ${r.vietnamese.universalMonthSign})`, r.vietnamese.monthScore) +
     compatMeterRow(`Zodiac Day (${r.vietnamese.personalDaySign} ↔ ${r.vietnamese.universalDaySign})`, r.vietnamese.daySignScore);

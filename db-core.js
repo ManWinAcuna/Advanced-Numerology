@@ -1649,7 +1649,7 @@ const EMAX_DISTRIBUTION_DIMENSIONS = {
 };
 
 function emaxDistributionKey(dimension, birthDate) {
-  if (dimension === 'lifePath') return compatLifePathInfo(birthDate).display;
+  if (dimension === 'lifePath') return lifePathDisplayText(compatLifePathInfo(birthDate).display);
   if (dimension === 'lifePathCompound') return String(getLifePathCompound(birthDate));
   if (dimension === 'reducedDay') return String(getReducedDay(birthDate));
   if (dimension === 'rawDay') return String(getRawDay(birthDate));
@@ -3022,7 +3022,7 @@ function lifePathInsight(lookupValue) {
 function universalDayInsight(personLookupValue, matchDate) {
   const dayInfo = compatLifePathInfo(matchDate);
   const score = sportsNumerologyCompat(personLookupValue, dayInfo.lookupValue);
-  return { score, clash: clashTypeForScore(score), dayDisplay: dayInfo.display };
+  return { score, clash: clashTypeForScore(score), dayDisplay: lifePathDisplayText(dayInfo.display) };
 }
 
 function universalDayInsightHtml(name, personLookupValue, matchDate) {
@@ -3062,7 +3062,7 @@ function personInsightHtml(name, lifePathDisplay, lookupValue) {
   return `
     <div class="pm-insight-person">
       <div class="pm-breakdown-name">${escapeHtml(name)}</div>
-      <div class="pm-insight-lifepath">Life Path <span class="score-inline mid">${escapeHtml(lifePathDisplay)}</span> &middot; ${escapeHtml(insight.theme)}</div>
+      <div class="pm-insight-lifepath">Life Path <span class="score-inline mid">${escapeHtml(lifePathDisplayText(lifePathDisplay))}</span> &middot; ${escapeHtml(insight.theme)}</div>
       <div class="pm-insight-badges">
         ${insightBadgeHtml(insight.volatility)}
         ${insight.athletic ? insightBadgeHtml(insight.athletic) : ''}
@@ -4013,6 +4013,20 @@ function initWeightsLab(btnId, resultsElId, loadPredictions, sideNames) {
 function universalDayNumber(date) {
   const v = compatLifePathInfo(date).lookupValue;
   return v === 2 ? 11 : v;
+}
+
+// Same rule as universalDayNumber above, but for the DISPLAY STRING
+// (lifePathBreakdown()/compatLifePathInfo()'s own `.display` field, which
+// renders the impure-11 case as "11/2") - the user's own hard line: "11/2
+// doesn't fucking exist... erase any kind of 11/2 that's anywhere in the
+// app." 2 was never a standalone root (feedback-no-standalone-two), so
+// nothing should ever show the fake "/2" - just plain "11". 22/4 and 33/6
+// stay untouched: 4 and 6 are real roots, unlike 2. EVERY UI call site
+// that shows a Life-Path-shaped display string to the user must route it
+// through this first - numerology.js/compat-engine.js themselves are
+// never edited, so this wraps their output instead of changing it there.
+function lifePathDisplayText(display) {
+  return display === '11/2' ? '11' : display;
 }
 
 // No 2: see universalDayNumber above - a universal 2 is an 11.

@@ -183,7 +183,7 @@ function renderGrid() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(viewYear, viewMonth, d);
-    const universalDay = compatLifePathInfo(date).display;
+    const universalDay = lifePathDisplayText(compatLifePathInfo(date).display);
     const zodiacMarker = d === 7
       ? `<span class="calendar-day-zodiac-marker" title="Chinese Zodiac Month starts: ${incomingZodiacSign}">${incomingZodiacEmoji}</span>`
       : '';
@@ -239,7 +239,7 @@ function isoWeekNumber(date) {
 }
 
 function openDayModal(date) {
-  const universalDay = compatLifePathInfo(date).display;
+  const universalDay = lifePathDisplayText(compatLifePathInfo(date).display);
   const reducedEnergy = calendarDayReduce(dailyEnergyRaw(date), date);
   const dayOfYear = getDayOfYear(date);
   const chineseDaySign = getChineseDaySign(date);
