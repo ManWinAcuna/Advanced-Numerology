@@ -14,29 +14,45 @@ compatModalOverlayEl.addEventListener('click', (e) => {
   if (e.target === compatModalOverlayEl) closeCompatModal();
 });
 
-function getAllDbEntries() {
-  const db = loadDB();
+// Source-scoped search (2026-08-06) - replaces the old single giant
+// <select> of every Database entry flattened together, which had gotten
+// unusable now that EMAX alone can hold thousands of entries across dozens
+// of categories. Pick a source first (Database or EMAX), then type to
+// search just that source - same player-search/player-suggestions UI
+// pattern Famous Lookup already uses (famous.js), reused here instead of
+// inventing a second search widget. Year-only entries (no full date) are
+// excluded, same precedent as EMAX's own Reverse Lookup/filters - a bare
+// year can't drive a real compatibility calculation.
+function getSourceEntries(source) {
+  if (source !== 'database' && source !== 'emax') return [];
+  const loaded = source === 'database' ? loadDB() : loadEmaxDB();
   const entries = [];
-  db.categories.forEach((cat) => {
+  loaded.categories.forEach((cat) => {
     cat.entries.forEach((e) => {
-      entries.push({ name: e.name, date: e.date, category: cat.name });
+      if (e.date) entries.push({ name: e.name, date: e.date, category: cat.name });
     });
   });
   return entries;
 }
 
+// Current search results per person key ("A"/"B") - held here so the
+// suggestions list's click handler can look up which entry a given row
+// actually refers to without re-running the search.
+const sourceMatches = {};
+
 function personInputHTML(label, key) {
-  const entries = getAllDbEntries();
-  const options = entries
-    .map((e) => `<option value="${e.date}" data-name="${escapeHtml(e.name)}">${escapeHtml(e.name)} (${escapeHtml(e.category)})</option>`)
-    .join('');
   return `
     <div class="person-input box" data-person="${key}">
       <div class="box-label">${label}</div>
-      <select class="db-picker" data-person="${key}">
-        <option value="">Choose from database...</option>
-        ${options}
+      <select class="db-picker source-picker" data-person="${key}">
+        <option value="manual">✍️ Type manually</option>
+        <option value="database">🗂 Search Database</option>
+        <option value="emax">⚡ Search EMAX</option>
       </select>
+      <div class="player-search-wrap source-search-wrap" data-person="${key}" hidden>
+        <input type="text" class="player-search source-search" data-person="${key}" placeholder="Search by name..." autocomplete="off">
+        <div class="player-suggestions source-suggestions" data-person="${key}"></div>
+      </div>
       <div class="inline-form">
         <input type="text" class="person-name" data-person="${key}" placeholder="Name (optional)">
         <input type="text" class="person-date" data-person="${key}" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
@@ -45,19 +61,82 @@ function personInputHTML(label, key) {
   `;
 }
 
+function renderSourceSuggestions(key, matches) {
+  const container = document.querySelector(`.source-suggestions[data-person="${key}"]`);
+  container.innerHTML = matches.length
+    ? matches.slice(0, 30).map((m, idx) => `
+      <div class="suggestion-item" data-index="${idx}">
+        <span class="suggestion-name">${escapeHtml(m.name)}</span>
+        <span class="suggestion-meta">${escapeHtml(m.category)}</span>
+      </div>
+    `).join('')
+    : '<div class="suggestion-empty">No matches found</div>';
+  container.classList.add('open');
+}
+
+function handleSourceSearchInput(key, source, value) {
+  const container = document.querySelector(`.source-suggestions[data-person="${key}"]`);
+  const q = value.trim().toLowerCase();
+  if (!q) {
+    sourceMatches[key] = [];
+    container.innerHTML = '';
+    container.classList.remove('open');
+    return;
+  }
+  const matches = getSourceEntries(source).filter((e) => e.name.toLowerCase().includes(q));
+  sourceMatches[key] = matches;
+  renderSourceSuggestions(key, matches);
+}
+
+function selectSourceEntry(key, entry) {
+  document.querySelector(`.person-date[data-person="${key}"]`).value = isoToDisplay(entry.date);
+  document.querySelector(`.person-name[data-person="${key}"]`).value = entry.name;
+  document.querySelector(`.source-search[data-person="${key}"]`).value = entry.name;
+  const container = document.querySelector(`.source-suggestions[data-person="${key}"]`);
+  container.innerHTML = '';
+  container.classList.remove('open');
+}
+
 function wirePersonInputs() {
   document.querySelectorAll('.person-date').forEach((input) => attachDateMask(input));
 
-  document.querySelectorAll('.db-picker').forEach((sel) => {
+  document.querySelectorAll('.source-picker').forEach((sel) => {
     sel.addEventListener('change', () => {
       const key = sel.dataset.person;
-      const opt = sel.options[sel.selectedIndex];
-      if (!opt.value) return;
-      document.querySelector(`.person-date[data-person="${key}"]`).value = isoToDisplay(opt.value);
-      document.querySelector(`.person-name[data-person="${key}"]`).value = opt.dataset.name || '';
+      const wrap = document.querySelector(`.source-search-wrap[data-person="${key}"]`);
+      const searchInput = document.querySelector(`.source-search[data-person="${key}"]`);
+      wrap.hidden = sel.value === 'manual';
+      if (!wrap.hidden) { searchInput.value = ''; searchInput.focus(); }
+      document.querySelector(`.source-suggestions[data-person="${key}"]`).classList.remove('open');
+    });
+  });
+
+  document.querySelectorAll('.source-search').forEach((input) => {
+    input.addEventListener('input', () => {
+      const key = input.dataset.person;
+      const source = document.querySelector(`.source-picker[data-person="${key}"]`).value;
+      handleSourceSearchInput(key, source, input.value);
+    });
+  });
+
+  document.querySelectorAll('.source-suggestions').forEach((container) => {
+    container.addEventListener('click', (e) => {
+      const item = e.target.closest('.suggestion-item');
+      if (!item) return;
+      const key = container.dataset.person;
+      const match = (sourceMatches[key] || [])[Number(item.dataset.index)];
+      if (match) selectSourceEntry(key, match);
     });
   });
 }
+
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.source-suggestions.open').forEach((container) => {
+    const key = container.dataset.person;
+    const searchInput = document.querySelector(`.source-search[data-person="${key}"]`);
+    if (e.target !== searchInput && !container.contains(e.target)) container.classList.remove('open');
+  });
+});
 
 document.querySelectorAll('.mode-card').forEach((card) => {
   card.addEventListener('click', () => {

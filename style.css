@@ -1677,6 +1677,8 @@ body::after {
   margin-bottom: 8px;
 }
 
+.person-input .source-search-wrap { margin-bottom: 8px; }
+
 .btn-large {
   font-size: 15px;
   padding: 10px 20px;
