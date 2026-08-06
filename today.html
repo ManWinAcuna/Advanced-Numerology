@@ -165,21 +165,23 @@
         { id: 'dayofyear_dayofyear', entryA: compoundEntry(compoundRawDayNum(day0)), entryB: dayNumMineEntry },
         { id: 'lifepath_personalday', entryA: lpEntry, entryB: personalDayMineEntry },
       ]);
-      wholeStory.lightRows = wholeStory.lightRows.concat(pairRows.lightRows);
-      wholeStory.shadowRows = wholeStory.shadowRows.concat(pairRows.shadowRows);
 
-      // Round 12: "My Numbers" - the person's own 4 numbers described on
-      // their own terms, independent of today. Same graceful-degradation
-      // rule as the pairs above (needs a birthday on file, already gated
-      // by the `me && r` check this whole block sits inside).
+      // Round 12: "My Numbers" - who the person IS (their own 4 numbers,
+      // slot-aware: Lifepath = permanent core, Day Born = permanent
+      // rhythm, Day# = permanent year-position, Personal Day = a season
+      // that moves with the calendar), followed by the 4 today-vs-me
+      // comparison pairs (round 12b: the pairs live HERE, not in the main
+      // Light/Shadow - they're about "my numbers vs the day", so the main
+      // toggles stay purely about today's own numbers). Needs a birthday
+      // on file, already gated by the `me && r` check this sits inside.
       var identityRows = buildIdentityRows([
-        { label: 'Lifepath', entry: lpEntry },
-        { label: 'Day Born', entry: dayBornEntry },
-        { label: 'Day#', entry: dayNumMineEntry },
-        { label: 'Personal Day', entry: personalDayMineEntry },
+        { label: 'Lifepath', entry: lpEntry, slot: 'core' },
+        { label: 'Day Born', entry: dayBornEntry, slot: 'rhythm' },
+        { label: 'Day#', entry: dayNumMineEntry, slot: 'year' },
+        { label: 'Personal Day', entry: personalDayMineEntry, slot: 'today' },
       ]);
-      wholeStory.myLightRows = identityRows.lightRows;
-      wholeStory.myShadowRows = identityRows.shadowRows;
+      wholeStory.myLightRows = identityRows.lightRows.concat(pairRows.lightRows);
+      wholeStory.myShadowRows = identityRows.shadowRows.concat(pairRows.shadowRows);
     }
   } catch (e) {}
 

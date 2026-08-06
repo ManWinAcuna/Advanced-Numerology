@@ -811,71 +811,126 @@ function buildPairRows(pairs) {
 // swing into some other number - it's a less-stable, borrowed version of
 // the SAME 11, never a swing into "2"). 22/4 and 33/6 have a real
 // companion root, named directly.
-function composeIdentitySentence(entry) {
-  if (!entry) return null;
+//
+// Round 12b fix (IMG_2510): identity content comes from the ROOT, which
+// every entry always has - a "flat" entry (single-digit compound, e.g. a
+// plain 9 Lifepath) still gets the full root identity, never a "nothing
+// to unpack" shrug. The flat note is about missing COMPOUND flavor; who
+// you ARE is never missing. Also: the four slots are not interchangeable
+// - Lifepath is the permanent core, Day Born a permanent rhythm, Day# a
+// permanent year-position, but Personal Day CHANGES DAILY and must never
+// be framed as "how you're built".
+const IDENTITY_SLOTS = {
+  core: {
+    opener: 'At your core, you are',
+    lightTail: "That's not a mood - it's your default setting.",
+    shadowLead: 'The lifelong trap:',
+  },
+  rhythm: {
+    opener: 'Day to day, you run like',
+    lightTail: "It's the rhythm you fall back into without thinking.",
+    shadowLead: 'On an off day,',
+  },
+  year: {
+    opener: 'Your spot in the year makes you',
+    lightTail: 'A quieter current than the others, but always on.',
+    shadowLead: 'Its slip side:',
+  },
+  today: {
+    opener: 'And today lands on you as',
+    lightTail: 'This one moves with the calendar - a season, not a trait.',
+    shadowLead: 'Leaned on too hard,',
+  },
+};
 
-  if (entry.flat) {
-    const note = `Just a plain ${entry.compound} in this slot - no bigger number underneath, nothing else to unpack.`;
-    return { light: note, shadow: note, flat: true };
-  }
-
+// The root's identity clauses (good/bad), shared by all slots - each
+// slot's opener/tail wraps these differently. `long: true` marks clauses
+// that are already full multi-part sentences (oscillating masters), so
+// the slot tail is skipped rather than stapled onto an already-complete
+// thought.
+function identityClauses(entry) {
   const root = entry.root;
-  const image = COMPOUND_ROOT_IMAGE[root];
-  if (!image) return null;
-  const theme = rootThemeName(root);
-
   if (root === 28) {
     return {
-      light: `You are ${image} - wealth built through steady discipline, not chased.`,
-      shadow: 'But push that too far and the chase itself becomes the point - cutting corners or overextending just to feel the payoff sooner.',
+      good: 'wealth built through steady discipline, not chased',
+      bad: 'the chase itself becomes the point - cutting corners or overextending just to feel the payoff sooner',
     };
   }
-
   if (root === 11 || root === 22 || root === 33) {
     if (!entry.impure) {
       const burden = root === 11 ? 'anxiety or reactivity' : root === 22 ? 'genuine overwhelm' : "a burden you didn't sign up for";
       return {
-        light: `You are ${image} - ${theme.toLowerCase()} runs in you at full, natural strength.`,
-        shadow: `Push it too far without grounding it and that same charge tips into ${burden}.`,
+        good: `${rootThemeName(root).toLowerCase()} running at full, natural strength`,
+        bad: `left ungrounded, that same charge tips into ${burden}`,
       };
     }
     // No legitimate companion for 11 (2 doesn't exist standalone) - a less
     // stable version of the SAME 11, never a swing into some other number.
     if (root === 11) {
       return {
-        light: `You are ${image}, most of the time - it doesn't always arrive at full voltage though; some days it runs closer to raw instinct than the settled, refined version.`,
-        shadow: 'That instability tips into real emotional volatility - reactive decisions, mood driving the moment instead of clear judgment.',
+        good: "though it doesn't always arrive at full voltage; some days it runs closer to raw instinct than the settled, refined version",
+        bad: 'that instability tips into real emotional volatility - reactive decisions, mood driving the moment instead of clear judgment',
+        long: true,
       };
     }
     const companionImage = COMPOUND_ROOT_IMAGE[entry.companion];
     const companionTheme = rootThemeName(entry.companion).toLowerCase();
     return {
-      light: `You are ${image}, most of the time - but some days you're just ${companionImage} instead, ${companionTheme} on the immediate task in front of you rather than the whole vision. Both are really you, depending on what the moment's actually asking for.`,
-      shadow: `The switch itself is the trap - reaching for ${theme.toLowerCase()}-scale ambition with only ${companionTheme} bandwidth, or playing small on a day that called for the big vision.`,
+      good: `most of the time, anyway; some days you're just ${companionImage} instead, ${companionTheme} on the task in front of you rather than the whole vision. Both are really you`,
+      bad: `the switch itself is the trap - reaching for ${rootThemeName(root).toLowerCase()}-scale ambition with only ${companionTheme} bandwidth, or playing small on a day that called for the big vision`,
+      long: true,
     };
   }
-
   const flavor = COMPOUND_DIGIT_FLAVOR[root];
   if (!flavor) return null;
+  return { good: flavor.driverGood, bad: flavor.driverBad };
+}
+
+function composeIdentitySentence(entry, slot) {
+  if (!entry) return null;
+  const image = COMPOUND_ROOT_IMAGE[entry.root];
+  const clauses = identityClauses(entry);
+  if (!image || !clauses) return null;
+  const s = IDENTITY_SLOTS[slot] || IDENTITY_SLOTS.core;
+  const tail = clauses.long ? '' : ` ${s.lightTail}`;
   return {
-    light: `You are ${image} - ${flavor.driverGood}, and that's not just today's mood, it's how you're built.`,
-    shadow: `But push that too far and ${flavor.driverBad}.`,
+    light: `${s.opener} ${image} - ${clauses.good}.${tail}`,
+    shadow: `${s.shadowLead} ${clauses.bad}.`,
   };
 }
 
 // Builds the "My Numbers" rows from the same 4 "mine" entries the pairs
-// above already compute. items: [{ label, entry }] - missing entries (no
-// birthdate on file) are silently skipped, same graceful-degradation rule
-// as everywhere else in this file.
+// above already compute. items: [{ label, entry, slot }] - missing
+// entries (no birthdate on file) are silently skipped, same graceful-
+// degradation rule as everywhere else in this file. A root that repeats
+// across slots (e.g. Day Born 3 AND Day# 3) gets a stack note on its
+// second appearance instead of the byte-identical sentence twice.
 function buildIdentityRows(items) {
   const lightRows = [];
   const shadowRows = [];
-  items.forEach(({ label, entry }) => {
+  const seen = {};
+  items.forEach(({ label, entry, slot }) => {
     if (!entry) return;
-    const sentence = composeIdentitySentence(entry);
+    const prior = seen[entry.root];
+    let sentence;
+    if (prior) {
+      const themeLower = rootThemeName(entry.root).toLowerCase();
+      sentence = slot === 'today'
+        ? {
+          light: `Today runs on the same ${themeLower} current as your ${prior} - the day is speaking your native language, doubled.`,
+          shadow: `Doubled also means overdone - your own worst ${themeLower} habit has nothing checking it today.`,
+        }
+        : {
+          light: `Same ${themeLower} current as your ${prior}, running through this number too - stacked, not incidental. That's why it's so loud in you.`,
+          shadow: `Stacked also means doubled exposure - when ${themeLower} slips into its bad side, there's a second copy pushing the same way.`,
+        };
+    } else {
+      sentence = composeIdentitySentence(entry, slot);
+      if (sentence) seen[entry.root] = label;
+    }
     if (!sentence) return;
-    lightRows.push({ label, text: sentence.light, flat: !!sentence.flat });
-    shadowRows.push({ label, text: sentence.shadow, flat: !!sentence.flat });
+    lightRows.push({ label, text: sentence.light });
+    shadowRows.push({ label, text: sentence.shadow });
   });
   return { lightRows, shadowRows };
 }
