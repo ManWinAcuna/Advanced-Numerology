@@ -45,6 +45,12 @@
     pill.querySelector('.upd-go').addEventListener('click', () => {
       pill.querySelector('.upd-go').textContent = '⏳ Updating…';
       remember(sha);
+      // Drop the service worker's whole cache first, so the reload (and
+      // every page after it) refetches the new deploy instead of being
+      // served the pre-update files from cache.
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage('SW_CLEAR');
+      }
       location.replace(location.pathname + '?v=' + sha.slice(0, 7));
       // Standalone WebKit occasionally swallows same-path replace() calls —
       // if we're still here after a beat, force a plain reload.
@@ -77,4 +83,12 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') check();
   });
+
+  // Instant page switches: sw.js serves every same-origin file cache-first
+  // (with background refresh), so tab-to-tab navigation stops showing a
+  // blank frame while the next page re-downloads. Registered here because
+  // this script is already on every page.
+  if ('serviceWorker' in navigator) {
+    try { navigator.serviceWorker.register('sw.js'); } catch (e) { /* ignore */ }
+  }
 })();
