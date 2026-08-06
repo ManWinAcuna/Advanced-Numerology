@@ -315,10 +315,9 @@ function openEntryModal(entry) {
   document.getElementById('entryModalOverlay').classList.add('active');
 }
 
-// "Compare with me" - just the percentage, not the full numerology/
-// Vietnamese/western breakdown (that's what renderCompatResults' meters
-// and bonus list are for, and the entry popup is already a lot of
-// content). A small popup of its own, layered above the entry popup.
+// "Compare with me" - the same shield-hero popup used everywhere else in
+// the app now (Boost13, 2026-08-05); the entry popup above it already
+// covers the entry's own numbers, so this stays compact.
 function openCompareMini(entry, dateObj) {
   const profile = loadProfile();
   if (!profile || !profile.date) {
@@ -327,12 +326,7 @@ function openCompareMini(entry, dateObj) {
   }
   const meDate = parseDateStr(profile.date);
   const result = computeCompatibility(meDate, dateObj);
-  document.getElementById('compareMiniBody').innerHTML = `
-    <div class="score-hero">
-      <div class="score-names">Me <span class="score-vs">&times;</span> ${escapeHtml(entry.name)}</div>
-      <div class="score-big ${scoreClass(result.finalScore)}">${result.finalScore}<span class="score-out-of">/100</span></div>
-    </div>
-  `;
+  renderCompatHero(document.getElementById('compareMiniBody'), result, 'Me', entry.name, { compact: true });
   document.getElementById('compareMiniOverlay').classList.add('active');
 }
 
