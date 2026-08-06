@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<style>html{background:#000}</style>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -82,6 +84,9 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
       <div class="cell small" id="dayNumRaw">-</div>
       <div class="cell small"></div>
     </div>
+    <!-- Static (not JS-injected): insertStoryLink() reuses these by id, so
+         they no longer pop in after first paint and shove the page down. -->
+    <button class="story-link" id="coreNumbersStoryLink" type="button">📖 the full story</button>
 
     <div class="profile-grid profile-core-grid">
       <div class="box stat-box">
@@ -142,6 +147,9 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
       <div class="cell small" id="pmRaw">-</div>
       <div class="cell small" id="pdRaw">-</div>
     </div>
+    <!-- Static for the same no-layout-jump reason as coreNumbersStoryLink. -->
+    <button class="story-link" id="personalCyclesStoryLink" type="button">📖 the full story</button>
+    <button class="story-link" id="bigPictureStoryLink" type="button">🔮 the big picture</button>
   </div>
 
   <div class="profile-section" id="profileTodaySection">

@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<style>html{background:#000}</style>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -72,6 +74,9 @@
         <div class="cell small" id="dayNumRaw">-</div>
         <div class="cell small"></div>
       </div>
+      <!-- Static (insertStoryLink reuses by id) so it doesn't pop in and
+           shift layout; hidden until a lookup produces a story. -->
+      <button class="story-link" id="coreNumbersStoryLink" type="button" style="display:none">📖 the full story</button>
 
       <div class="section-label">Vietnamese Zodiac</div>
       <div class="grid3 headerrow">
@@ -115,6 +120,8 @@
         <div class="cell small" id="pmRaw">-</div>
         <div class="cell small" id="pdRaw">-</div>
       </div>
+      <button class="story-link" id="personalCyclesStoryLink" type="button" style="display:none">📖 the full story</button>
+      <button class="story-link" id="bigPictureStoryLink" type="button" style="display:none">🔮 the big picture</button>
 
     </div>
 
