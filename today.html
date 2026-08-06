@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="godlike.css?v=22">
+<link rel="stylesheet" href="godlike.css?v=23">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -130,27 +130,24 @@
      into the numeral's existing card, not shown by default. */
   var wholeStory = null;
   try {
-    // Fixed order (round 3): Universal Day, Energy, Day#, Personal Day,
-    // Combo - always all of them, nothing picked/dropped for being less
-    // "notable". The old top-2 picking logic buried Universal Day (the
-    // card's own headline number) behind whichever number happened to be
-    // a master/impure - exactly backwards from the point of this feature.
+    // Fixed set (round 4): Universal Day, Energy, Day#, Personal Day only -
+    // always all of them, nothing picked/dropped for being less "notable".
+    // Combo dropped entirely - it's Western-sign + Chinese-animal derived,
+    // not date arithmetic, so it was never actually part of this set's own
+    // calculation to begin with.
     var storyParts = [
       { label: 'Universal Day', raw: compoundRawUniversalDay(day0) },
       { label: 'Energy', raw: compoundRawEnergy(day0) },
       { label: 'Day#', raw: compoundRawDayNum(day0) },
     ];
-    if (me) {
-      storyParts.push({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
-      storyParts.push({ label: 'Combo', raw: compoundRawCombo(me) });
-    }
+    if (me) storyParts.push({ label: 'Personal Day', raw: compoundRawPersonalDay(me, day0) });
     // Bridges the story back to the card's own title (round 2 fix - it
     // used to just drop in below the divider with no connection to the
     // ud/lifePath already shown above it).
     var storyIntro = lifePath
       ? ('Underneath that ' + ud + ' and your Lifepath ' + lifePath + ',')
       : ('Underneath that ' + ud + ',');
-    wholeStory = weaveCompoundStory(storyParts, { intro: storyIntro });
+    wholeStory = buildLightShadowCompoundStory(storyParts, { intro: storyIntro });
   } catch (e) {}
 
   /* Fresh installs (icon re-adds) start with empty localStorage; the cloud
@@ -327,10 +324,38 @@
       if (carriers.length) h += '<div class="gk-card-hours">Hours carrying the ' + ud + ': <b>' + carriers.join(' · ') + '</b></div>';
     }
     if (wholeStory) {
-      h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>' + wholeStory.text + '</div>';
+      h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>';
+      if (wholeStory.intro) h += '<div class="story-intro">' + wholeStory.intro + '</div>';
+      h += '<div class="story-cols">' +
+        '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
+        '<button type="button" class="story-col-toggle shadow" data-col="shadow">☾ Shadow</button>' +
+        '</div>';
+      h += '<div class="story-col-body" data-col-body="light" hidden>' + wholeStory.lightRows.map(function (row) {
+        return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
+      }).join('') + '</div>';
+      h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(function (row) {
+        return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
+      }).join('') + '</div>';
+      h += '<div class="story-summary">' + wholeStory.summary + '</div>';
+      h += '</div>';
     }
     return h;
   }
+
+  // Light/Shadow toggles are rebuilt fresh every time cardHtml() runs, so
+  // this listens on modalBody itself (event delegation) instead of
+  // re-attaching to elements that get thrown away on every open.
+  modalBody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.story-col-toggle');
+    if (!btn) return;
+    var col = btn.dataset.col;
+    var body = modalBody.querySelector('[data-col-body="' + col + '"]');
+    if (!body) return;
+    var open = body.hidden;
+    body.hidden = !open;
+    btn.classList.toggle('open', open);
+  });
+
   var pressTimer = null, pressed = false;
   numEl.addEventListener('click', function () {
     if (pressed) { pressed = false; return; }

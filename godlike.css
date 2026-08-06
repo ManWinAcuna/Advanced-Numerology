@@ -556,6 +556,29 @@ button.gk-altar-num {
   color: var(--muted); margin-bottom: 6px;
 }
 
+/* Light/Shadow split (round 4, 2026-08-06) - two independent toggles,
+   side by side, each opening its own full-width block below rather than
+   a cramped half-width column - narrow enough in a modal that real
+   sentences need the full width to stay readable regardless of how many
+   are open at once. */
+.story-intro { color: var(--muted); margin-bottom: 8px; }
+.story-cols { display: flex; gap: 8px; margin-bottom: 2px; }
+.story-col-toggle {
+  flex: 1; background: none; border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 0; font-family: var(--gk-ui); font-size: 11.5px; letter-spacing: .03em;
+  color: var(--muted); cursor: pointer;
+}
+.story-col-toggle.light.open { border-color: rgba(245, 197, 66, .45); color: var(--gold); background: rgba(245, 197, 66, .08); }
+.story-col-toggle.shadow.open { border-color: rgba(229, 57, 63, .45); color: var(--bad); background: rgba(229, 57, 63, .08); }
+.story-col-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.story-row { margin-bottom: 8px; }
+.story-row:last-child { margin-bottom: 0; }
+.story-row b { color: var(--acc-text); font-family: var(--gk-ui); font-weight: 700; }
+.story-summary {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-style: italic; color: var(--muted); font-size: 12px;
+}
+
 /* Core Numbers / Personal Cycles / big-picture story links (render.js,
    Boost13 2026-08-06) - inserted right after each grid's subrow. */
 .story-link {

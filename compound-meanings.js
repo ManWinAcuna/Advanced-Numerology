@@ -564,3 +564,56 @@ function weaveResolvedStory(parts, opts) {
 function weaveCompoundStory(parts, opts) {
   return weaveResolvedStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
 }
+
+/* -------------------------------------------------- light/shadow split -- */
+// Today's redesign (round 4, 2026-08-06): instead of one woven paragraph,
+// Light and Shadow become their own separate listings (one row per
+// number, all numbers always included - same no-cherry-picking rule as
+// weaveResolvedStory), plus a single closing sentence summarizing how the
+// numbers relate. parts: [{ label, entry }]. opts.intro: same bridging
+// sentence as weaveResolvedStory.
+function buildLightShadowStory(parts, opts) {
+  opts = opts || {};
+  const resolved = parts.filter((p) => p.entry.light);
+  if (resolved.length === 0) return null;
+
+  return {
+    intro: opts.intro || '',
+    lightRows: resolved.map((p) => ({ label: p.label, text: p.entry.light })),
+    shadowRows: resolved.map((p) => ({ label: p.label, text: p.entry.shadow })),
+    summary: summarizeInteraction(resolved),
+    parts: resolved,
+  };
+}
+
+// One tight sentence on how the day's numbers relate - groups labels by
+// shared root (reinforcement) vs different roots (real mix), naming each
+// group's theme rather than repeating the full light/shadow text already
+// shown above it.
+function summarizeInteraction(resolved) {
+  if (resolved.length === 1) {
+    return `${resolved[0].label} is the whole story today - nothing else in the mix.`;
+  }
+  const groups = [];
+  resolved.forEach((p) => {
+    const g = groups.find((g) => g.root === p.entry.root);
+    if (g) g.labels.push(p.label);
+    else groups.push({ root: p.entry.root, labels: [p.label] });
+  });
+  const themeFor = (root) => {
+    if (root === 28) return 'wealth';
+    if (COMPOUND_MASTER_PURE[root]) return COMPOUND_MASTER_PURE[root].theme.toLowerCase();
+    if (COMPOUND_ROOT_MECHANISM[root]) return COMPOUND_ROOT_MECHANISM[root].name.toLowerCase();
+    return String(root);
+  };
+  const groupText = groups.map((g) => `${g.labels.join(' & ')} (${themeFor(g.root)})`);
+  return groups.length === 1
+    ? `${groupText[0]} - everything's pulling the same direction today.`
+    : `${groupText.join(' vs. ')} - today's a genuine mix, not one clean signal.`;
+}
+
+// Raw-totals convenience wrapper, mirroring weaveCompoundStory's role for
+// weaveResolvedStory above.
+function buildLightShadowCompoundStory(parts, opts) {
+  return buildLightShadowStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
+}
