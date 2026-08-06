@@ -326,11 +326,16 @@
     if (wholeStory) {
       h += '<div class="gk-card-story"><div class="gk-card-story-label">The full story</div>';
       if (wholeStory.intro) h += '<div class="story-intro">' + wholeStory.intro + '</div>';
-      if (wholeStory.flatRows && wholeStory.flatRows.length) {
-        h += wholeStory.flatRows.map(function (row) {
+      // Flat notes ("nothing to reveal") no longer lead - when other
+      // numbers have real content, a null result up top buried the good
+      // stuff under a "never mind" line. Now it's a quiet aside between
+      // the toggles and the closing summary instead of the opening line.
+      var flatNotesHtml = (wholeStory.flatRows && wholeStory.flatRows.length)
+        ? wholeStory.flatRows.map(function (row) {
           return '<div class="story-flat-note"><b>' + row.label + ':</b> ' + row.text + '</div>';
-        }).join('');
-      }
+        }).join('')
+        : '';
+      if (!wholeStory.lightRows.length) h += flatNotesHtml;
       if (wholeStory.lightRows.length) {
         h += '<div class="story-cols">' +
           '<button type="button" class="story-col-toggle light" data-col="light">☀ Light</button>' +
@@ -342,6 +347,7 @@
         h += '<div class="story-col-body" data-col-body="shadow" hidden>' + wholeStory.shadowRows.map(function (row) {
           return '<div class="story-row"><b>' + row.label + ':</b> ' + row.text + '</div>';
         }).join('') + '</div>';
+        h += flatNotesHtml;
       }
       if (wholeStory.summary) h += '<div class="story-summary">' + wholeStory.summary + '</div>';
       h += '</div>';
