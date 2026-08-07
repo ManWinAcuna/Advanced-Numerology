@@ -2863,10 +2863,6 @@ body::after {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  /* First row is the weekday header; the six possible week rows all share
-     the same 1fr height so a row containing a zodiac/season marker can't
-     end up taller than the rows around it. */
-  grid-auto-rows: auto 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 8px;
 }
 
@@ -2881,6 +2877,16 @@ body::after {
 }
 
 .calendar-day {
+  /* Fixed height (2026-08-07), not the old fr-based row-stretch trick -
+     that only equalizes rows when the grid container itself has a bounded
+     height, which .calendar-grid never did, so a week containing a zodiac/
+     season/imprint marker actually rendered taller than the weeks around
+     it. A hard height makes every tile identical regardless of how many
+     markers it's carrying; overflow-y allows the rare over-stuffed day
+     (imprint + season + several planet transits at once) to scroll instead
+     of stretching the tile or clipping silently. */
+  height: 92px;
+  overflow-y: auto;
   background: #1c1c1c;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -2972,6 +2978,14 @@ body::after {
   font-size: 20px;
   vertical-align: middle;
   filter: drop-shadow(0 0 5px rgba(167, 107, 214, 0.85));
+}
+
+.calendar-day-imprint-marker {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 12px;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 4px rgba(192, 132, 252, 0.75));
 }
 
 .calendar-day-season-marker {
@@ -3074,7 +3088,7 @@ body::after {
 @media (max-width: 700px) {
   .calendar-card { padding: 10px; }
   .calendar-grid { gap: 4px; }
-  .calendar-day { padding: 6px 2px; }
+  .calendar-day { height: 78px; padding: 6px 2px; }
   .calendar-day-num { font-size: 12px; }
   .calendar-day-universal { font-size: 10px; padding: 1px 5px; }
   .calendar-nav-select { font-size: 14px; padding: 5px 6px; }

@@ -200,13 +200,26 @@ function renderGrid() {
     cell.className = 'calendar-day';
     if (isCurrentMonth && d === today.getDate()) cell.classList.add('today');
     if (date < todayMidnight) cell.classList.add('past');
+    let imprintMarker = '';
     if (meDate) {
       const tier = tierClass(computeCompatibility(meDate, date).finalScore);
       if (tier === 'good' || tier === 'bad') cell.classList.add(`tier-${tier}`);
+      // Imprint boost (2026-08-07) - inline on the tile itself, not just
+      // behind a tap into the day modal's compare pill, per the user's own
+      // call ("I should get that boost here").
+      const dayImprint = computeImprintAlignment(meDate, date);
+      if (dayImprint.matches.length) {
+        const emojis = [];
+        dayImprint.matches.forEach((m) => (m.domains || []).forEach((dm) => {
+          const e = dm.split(' ')[0];
+          if (!emojis.includes(e)) emojis.push(e);
+        }));
+        imprintMarker = `<span class="calendar-day-imprint-marker" title="Imprint boost: ${dayImprint.matches.map((m) => m.label).join(', ')}">${emojis.join('') || '🎯'}</span>`;
+      }
     }
     cell.innerHTML = `
       <div class="calendar-day-num">${d}</div>
-      <div class="calendar-day-universal">${universalDay}</div>${zodiacMarker}
+      <div class="calendar-day-universal">${universalDay}</div>${zodiacMarker}${imprintMarker}
       ${seasonMarker}
       ${transitMarkers}
     `;
@@ -253,10 +266,27 @@ function openDayModal(date) {
     `<div class="breakdown-row"><span>${t.symbol} ${t.label} Transit</span><span class="breakdown-score">Enters ${t.sign}</span></div>`
   ).join('');
 
+  // Imprint boost (2026-08-07) - inline in the day detail itself, not just
+  // behind the "Compare with My Profile" button below.
+  const profileForImprint = loadProfile();
+  let imprintRow = '';
+  if (profileForImprint && profileForImprint.date) {
+    const dayImprint = computeImprintAlignment(parseDateStr(profileForImprint.date), date);
+    if (dayImprint.matches.length) {
+      const emojis = [];
+      dayImprint.matches.forEach((m) => (m.domains || []).forEach((dm) => {
+        const e = dm.split(' ')[0];
+        if (!emojis.includes(e)) emojis.push(e);
+      }));
+      imprintRow = `<div class="breakdown-row"><span>${emojis.join('') || '🎯'} Imprint Boost</span><span class="breakdown-score">${dayImprint.matches.map((m) => m.label).join(', ')}</span></div>`;
+    }
+  }
+
   document.getElementById('dayModalBody').innerHTML = `
     <div class="day-modal-date">${dateLabel}</div>
     <div class="breakdown-rows day-modal-rows">
       <div class="breakdown-row"><span>Universal Day</span><span class="breakdown-score">${universalDay}</span></div>
+      ${imprintRow}
       <div class="breakdown-row"><span>Reduced Daily Energy</span><span class="breakdown-score">${reducedEnergy}</span></div>
       <div class="breakdown-row"><span>Day # of the Year</span><span class="breakdown-score">${dayOfYear}</span></div>
       <div class="breakdown-row"><span>📅 Week of the Year</span><span class="breakdown-score">Week ${isoWeek.week}${isoWeek.year !== date.getFullYear() ? ` of ${isoWeek.year}` : ''}</span></div>

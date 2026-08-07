@@ -13,7 +13,7 @@
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=1">
 <link rel="stylesheet" href="godlike.css?v=32">
 </head>
 <body>
@@ -290,16 +290,40 @@
   });
   showFace(0);
 
+  // Imprint boost (2026-08-07) - was previously only visible by tapping
+  // "Aligned" then tapping the collapsed "Check My Imprints" pill inside;
+  // user's own call: "I should get that boost here" - surfaced directly as
+  // its own orbit chip instead, matching the same tap-to-expand pattern
+  // already used for Aligned below, no extra navigation needed.
+  var imprint = null;
+  if (me) { try { imprint = computeImprintAlignment(me, day0); } catch (e) {} }
+
   // orbits
   var orbits = [];
   if (animal) orbits.push('<span class="gk-orbit">' + animalEmoji + ' <b>' + animal + '</b> day</span>');
   orbits.push('<span class="gk-orbit">Energy <b>' + de + '</b></span>');
   if (pd != null) orbits.push('<span class="gk-orbit">Personal <b>' + pd + '</b></span>');
   if (compat != null) orbits.push('<span class="gk-orbit gk-orbit-tap" id="gkOrbitAligned">Aligned <b>' + compat + '%</b></span>');
+  if (imprint && imprint.matches.length) {
+    var imprintEmojis = [];
+    imprint.matches.forEach(function (m) {
+      (m.domains || []).forEach(function (d) {
+        var e = d.split(' ')[0];
+        if (imprintEmojis.indexOf(e) === -1) imprintEmojis.push(e);
+      });
+    });
+    orbits.push('<span class="gk-orbit gk-orbit-tap" id="gkOrbitImprint">' + (imprintEmojis.join('') || '🎯') + ' Imprint</span>');
+  }
   document.getElementById('gkOrbits').innerHTML = orbits.join('');
   // the Aligned pill opens the same compatibility hero used everywhere
   // else in the app (shield score, per-category cards, meters on reveal)
   document.getElementById('gkOrbits').addEventListener('click', function (e) {
+    if (e.target.closest('#gkOrbitImprint') && imprint) {
+      modalBody.innerHTML = imprintAlignmentResultHtml(imprint, 'You', 'Today');
+      wireImprintRevealButtons(modalBody);
+      modalBackdrop.classList.add('open');
+      return;
+    }
     if (!e.target.closest('#gkOrbitAligned') || !compatFull) return;
     renderCompatHero(modalBody, compatFull, 'You', 'Today', { compact: true, pillDateA: me, pillDateB: day0 });
     modalBackdrop.classList.add('open');
