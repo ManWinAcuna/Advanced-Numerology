@@ -1259,46 +1259,148 @@ function buildActionables(todayParts) {
  * no-standalone-two memory) - its "impure" version is just a less-stable
  * version of the same 11, never a swing into another number.
  */
+// characteristics/moreCharacteristics (2026-08-08): the tap popups only
+// used light/shadow - user: "add some bullet points with characteristics
+// in those." Source is the PDF's own "Emotional Reality Checks" per
+// number (specific, second-person, already in this exact plain voice) -
+// 3 shown as the popup's bullets, 2 held in reserve as moreCharacteristics
+// for when a root repeats across slots (Day Born and Day# sharing a root,
+// etc.) so the repeat gets one genuinely new line instead of the same
+// bullets twice, same doctrine as the Vietnamese deep/cherry split.
+// Master numbers only carry characteristics on their PURE entry - the
+// impure/oscillating entries fall back to the pure root's list in
+// numberIdentityV2() below, since the reality checks describe the root
+// itself, not the pure/impure distinction.
 const NUMBER_IDENTITY_V2 = {
   1: {
     light: "You don't wait for someone else to fix things. You jump in and go first, and that courage inspires the people around you.",
     shadow: 'You can get bossy and stubborn without meaning to. Because you want to do everything yourself, you end up pushing people away.',
+    characteristics: [
+      'You act like you don\'t need anyone\'s praise, but your whole day breaks when your hard work goes unnoticed.',
+      'You run so fast into the future because you\'re scared of what will catch up to you if you stand still.',
+      'Your biggest secret is that you\'re exhausted from always having to be the strong one.',
+    ],
+    moreCharacteristics: [
+      'You build walls out of your independence, but you secretly wish someone cared enough to climb over them.',
+      'Deep down, you are terrified that if you aren\'t winning or leading, you don\'t matter at all.',
+    ],
   },
   2: {
     light: "You're gentle, and you're genuinely good at helping people get along. You listen well, and you make sure nobody feels left out.",
     shadow: 'You hide your real feelings just to keep the peace. You keep score of small favors, and you let people walk over you more than you should.',
+    characteristics: [
+      'You collect other people\'s problems so you don\'t have to look at the mess inside your own heart.',
+      'Your kindness is real, but you also use it as a shield to keep people from seeing how angry you really are.',
+      'You feel empty when you aren\'t fixing someone, because you haven\'t learned how to love yourself yet.',
+    ],
+    moreCharacteristics: [
+      'You say "I don\'t care, you choose" because you\'re terrified your actual preference will push people away.',
+      'You are so afraid of arguments that you let people hurt your feelings and then apologize to them for it.',
+    ],
   },
   3: {
     light: "You're full of joy and imagination. You color the room with your words, your art, or your jokes, and people light up around you.",
     shadow: 'You can get scattered and dramatic. When you feel insecure, you reach for charm or sharp words instead of saying what\'s actually wrong.',
+    characteristics: [
+      'You tell a joke every time the conversation gets deep because you\'re scared of crying in front of people.',
+      'You talk constantly so that nobody has the chance to ask you how you\'re actually doing.',
+      'Behind your bright, sunny smile is a little kid who is terrified of being left alone in the dark.',
+    ],
+    moreCharacteristics: [
+      'You crave a massive audience because you\'re worried a single person knowing the real you wouldn\'t be enough.',
+      'You spread your energy into ten different things so you never have to commit and risk failing at one.',
+    ],
   },
   4: {
     light: "You're the most reliable person in most rooms. You work hard, you follow through, and you build things that actually last.",
     shadow: "You can get rigid and afraid of change. You hold onto rules and routines even when they've stopped helping you.",
+    characteristics: [
+      'You control every little detail around you because you\'re terrified of what you cannot control.',
+      'You call yourself practical, but it\'s often just a safe excuse to never dream big and risk disappointment.',
+      'You judge others for being lazy because you\'re jealous that they know how to rest and you don\'t.',
+    ],
+    moreCharacteristics: [
+      'You think your hard work makes you valuable, but you\'re actually just too scared to let people love you for free.',
+      'You hold onto old habits like a shield, even when those habits are keeping you completely miserable.',
+    ],
   },
   5: {
     light: "You're adventurous and adaptable. You love learning new things, meeting new people, and showing others how to break out of a boring routine.",
     shadow: "You can get restless and reckless. The second something gets serious, you're already looking for the exit.",
+    characteristics: [
+      'You call it an adventure, but everyone else knows you\'re just running away from your problems again.',
+      'You keep people at a distance so you can leave them before they have a chance to leave you.',
+      'You think freedom means having no rules, but you\'ve become a prisoner to your own restlessness.',
+    ],
+    moreCharacteristics: [
+      'You crave constant change because you\'re terrified of sitting quietly with your own thoughts.',
+      'You chase every new thrill to numb the deep ache of feeling like you don\'t belong anywhere.',
+    ],
   },
   6: {
     light: "You're a natural protector. You create warm spaces, you take care of people who are sick or sad, and you make people feel like family.",
     shadow: "You can get controlling and overly critical. You meddle in other people's lives trying to fix them, then get resentful when they don't thank you for it.",
+    characteristics: [
+      'You fix everyone else\'s life so you can avoid facing the absolute breakdown in your own.',
+      'Your high standards aren\'t out of love - they\'re a weapon you use to make people feel like they\'re never enough.',
+      'You are so busy being the savior that you don\'t know how to let anyone save you when you drown.',
+    ],
+    moreCharacteristics: [
+      'You give love like a contract, expecting people to pay you back with absolute loyalty and compliance.',
+      'You complain about doing everything, but you secretly love it because it makes you feel irreplaceable.',
+    ],
   },
   7: {
     light: "You're sharp and deeply thoughtful. You look past the surface, and you actually understand how things work instead of just accepting what you're told.",
     shadow: 'You can get paranoid and cold. You overthink everything, you trust almost nobody, and you push real love away without meaning to.',
+    characteristics: [
+      'You use your big intellect as a castle wall so people can\'t get close enough to see your fragile heart.',
+      'You think everyone has a hidden motive, but it\'s just your own fear projected onto them.',
+      'You are so busy looking for the deep meaning of life that you miss the joy of actually living it.',
+    ],
+    moreCharacteristics: [
+      'You analyze love like a math problem because you\'re too terrified to actually let yourself feel it.',
+      'You isolate yourself and then complain that nobody ever reaches out to see if you\'re okay.',
+    ],
   },
   8: {
     light: "You're strong and focused. You turn big plans into real results, and you use your power to protect the people around you.",
     shadow: 'You can get obsessed with money, status, and control. You start treating people like pieces on a board instead of people.',
+    characteristics: [
+      'You are terrified of weakness, so you treat the people who love you like employees to maintain control.',
+      'You accumulate success like armor, hoping it will hide the little kid inside who felt powerless.',
+      'If you lost your status tomorrow, you wouldn\'t know who you are when you look in the mirror.',
+    ],
+    moreCharacteristics: [
+      'You think buying people expensive gifts can replace the emotional presence you refuse to give them.',
+      'You value efficiency so much that you treat human feelings like annoying errors in your system.',
+    ],
   },
   9: {
     light: "You're the ultimate shape-shifter. You walk into any room and instantly understand the people in it, reflecting their energy back so they feel completely seen.",
     shadow: 'You can lose your own center doing that. You blend in so much you start to lose track of who you actually are underneath it.',
+    characteristics: [
+      'You change your personality for every room you enter, leaving everyone wondering who the real you actually is.',
+      'You are so busy being a mirror for everyone else that you feel completely blank when you\'re left alone in a room.',
+      'You accumulate everyone else\'s feelings like lint, carrying a heavy sack of ghosts that aren\'t even yours.',
+    ],
+    moreCharacteristics: [
+      'You play the wise, detached observer because you\'re too scared to stand up and be judged for your own raw self.',
+      'You claim you understand everyone, but it\'s really just a trick to avoid letting anyone truly understand you.',
+    ],
   },
   11: {
     light: "You're wired like an antenna. Insight hits you suddenly and clearly, and you help people see things they couldn't see on their own.",
     shadow: "That same wiring runs hot. You can spiral into anxiety fast, because you're built to feel more than most people are built to handle.",
+    characteristics: [
+      'Your nervous anxiety isn\'t a medical mystery - it\'s the price you pay for refusing to ground your big ideas into real life.',
+      'You hover above real-world relationships because you\'re terrified real human intimacy is too messy for you.',
+      'You are a brilliant light bulb that spends all its time floating around looking for a socket to plug into.',
+    ],
+    moreCharacteristics: [
+      'You act like a special chosen messenger to hide how deeply uncomfortable you feel inside your own skin.',
+      'You judge others for being basic, but you secretly envy how simple and calm their minds are.',
+    ],
   },
   '11i': {
     light: "That same antenna is in you too, though it doesn't always run at full strength. Some days it's raw instinct more than clear insight.",
@@ -1307,6 +1409,15 @@ const NUMBER_IDENTITY_V2 = {
   22: {
     light: 'You take a big vision and actually build it. You can organize something massive and make it real, brick by brick.',
     shadow: 'You can get crushed by your own scale. The pressure gets so heavy you give up entirely and settle for something small out of fear.',
+    characteristics: [
+      'You talk about your massive, world-changing plans to mask the fact that you haven\'t cleaned your room in weeks.',
+      'You settle for being a small-time boss because you\'re too cowardly to risk failing at your actual grand scale.',
+      'Deep down, you are terrified that you are just an ordinary person playing dress-up as a grand master.',
+    ],
+    moreCharacteristics: [
+      'You think you\'re under a special curse of heavy pressure, but you\'re the one putting the anvil on your own chest.',
+      'You treat your life like a strict construction site, forgetting that people are meant to be loved, not just managed.',
+    ],
   },
   '22i': {
     light: "Some days that shows up as the big vision. Other days you're just heads-down on the one task in front of you, practical and grounded. Both are really you.",
@@ -1315,6 +1426,15 @@ const NUMBER_IDENTITY_V2 = {
   33: {
     light: "You're a powerhouse of protective love. You heal people, you protect the weak, and you lead with real warmth.",
     shadow: "You can slide into martyrdom. You carry the whole world's weight until you break down, and you resent that nobody's carrying yours.",
+    characteristics: [
+      'Your global worry for humanity is a clever distraction to avoid addressing your own private heartbreak.',
+      'You are so addicted to being needed that you stunt other people\'s growth just to keep them relying on you.',
+      'Behind your massive teacher persona is a crying child begging for permission to lay down and just rest.',
+    ],
+    moreCharacteristics: [
+      'You deliberately stay in toxic, broken relationships just so you can feel important playing the saintly savior.',
+      'You make sure everyone sees how much you sacrifice, ensuring they stay trapped in permanent debt to you.',
+    ],
   },
   '33i': {
     light: "Most of the time, anyway. Some days you're just the one who shows up with soup when someone's sick, caring for the one person in front of you instead of the whole horizon. Both are really you.",
@@ -1323,7 +1443,11 @@ const NUMBER_IDENTITY_V2 = {
 };
 
 function numberIdentityV2(root, impure) {
-  if ((root === 11 || root === 22 || root === 33) && impure) return NUMBER_IDENTITY_V2[`${root}i`];
+  if ((root === 11 || root === 22 || root === 33) && impure) {
+    const impureEntry = NUMBER_IDENTITY_V2[`${root}i`];
+    const pureEntry = NUMBER_IDENTITY_V2[root];
+    return Object.assign({}, impureEntry, { characteristics: pureEntry.characteristics, moreCharacteristics: pureEntry.moreCharacteristics });
+  }
   return NUMBER_IDENTITY_V2[root] || null;
 }
 

@@ -182,15 +182,33 @@ function openStoryModal(title, story) {
 // Round 14 (2026-08-06): per-number identity popups - tap Lifepath/Day
 // Born/Day#/PD to get just that number's own "who you are" section
 // (moved here from Today's modal, where it described the profile owner
-// but lived on the wrong page). Light and shadow stacked, no toggles.
-function openIdentityModal(label, entry, slot) {
-  resetRootImages();
-  const s = composeIdentitySentence(entry, slot);
-  if (!s) return;
-  document.getElementById('storyModalBody').innerHTML =
-    `<div class="story-modal-title">${label}</div>` +
-    `<div class="story-row"><b class="idn-light">☀ Light:</b> ${s.light}</div>` +
-    `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${s.shadow}</div>`;
+// but lived on the wrong page).
+//
+// 2026-08-08: switched from composeIdentitySentence's old slot-framed
+// engine to the same plain-voice NUMBER_IDENTITY_V2 bank the general
+// reading and Vietnamese/Western popups already use - user: "the tap
+// popups of lifepath day etc need to be updated with the new copy as
+// well." Also adds the "characteristics" bullets the user asked for
+// (source: the PDF's own Emotional Reality Checks). Same repeat doctrine
+// as the Vietnamese popups: when a root repeats across slots (Day Born
+// and Day# sharing a root, etc.) the repeat shows one new bullet from
+// moreCharacteristics instead of the same light/shadow/bullets again.
+function openIdentityModal(label, entry, opts) {
+  if (!entry) return;
+  const o = opts || {};
+  let body;
+  if (o.cherry) {
+    body = `<div class="story-modal-title">${label}</div>` +
+      `<div class="story-row">Same energy as your ${o.repeatOf}. One more layer:</div>` +
+      `<div class="story-row">${o.cherry}</div>`;
+  } else {
+    const bullets = (entry.characteristics || []).map((c) => `<li>${c}</li>`).join('');
+    body = `<div class="story-modal-title">${label}</div>` +
+      `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
+      `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>` +
+      (bullets ? `<div class="story-bullets-label">Characteristics</div><ul class="story-bullets">${bullets}</ul>` : '');
+  }
+  document.getElementById('storyModalBody').innerHTML = body;
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
@@ -295,18 +313,36 @@ function renderCompoundStories(r, birthDate) {
   // are...", which doesn't fit describing a famous person. Slots match
   // Today's old My Numbers framing exactly (core/rhythm/year/today).
   if (!isFamous) {
+    // root marks which slots share a number - the first occurrence gets
+    // the fuller read (light/shadow/characteristics), a repeat gets one
+    // new line from moreCharacteristics instead of the same content again.
     const identityTargets = [
-      { id: 'lifePath', label: 'Lifepath', slot: 'core', entry: coreParts[0].entry },
-      { id: 'dayBornReduced', label: 'Day Born', slot: 'rhythm', entry: coreParts[1].entry },
-      { id: 'dayNumReduced', label: 'Day#', slot: 'year', entry: coreParts[2].entry },
-      { id: 'combo', label: 'Combo', slot: 'combo', entry: coreParts[3].entry },
-      { id: 'pdReduced', label: 'Personal Day', slot: 'today', entry: cycleParts[2].entry },
+      { id: 'lifePath', label: 'Lifepath', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure },
+      { id: 'dayBornReduced', label: 'Day Born', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
+      { id: 'dayNumReduced', label: 'Day#', root: coreParts[2].entry.root, impure: coreParts[2].entry.impure },
+      { id: 'combo', label: 'Combo', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
+      { id: 'pdReduced', label: 'Personal Day', root: cycleParts[2].entry.root, impure: cycleParts[2].entry.impure },
     ];
+    const seenNumberSlots = {};
+    const cherryIdx = {};
+    identityTargets.forEach((t) => {
+      t.entry = numberIdentityV2(t.root, t.impure);
+      if (!t.entry) return;
+      const prior = seenNumberSlots[t.root];
+      if (prior) {
+        const more = t.entry.moreCharacteristics || [];
+        const i = cherryIdx[t.root] || 0;
+        cherryIdx[t.root] = i + 1;
+        t.opts = { cherry: more[i % more.length] || 'That same current runs doubled in you.', repeatOf: prior };
+      } else {
+        seenNumberSlots[t.root] = t.label;
+      }
+    });
     identityTargets.forEach((t) => {
       const el = document.getElementById(t.id);
-      if (!el) return;
+      if (!el || !t.entry) return;
       el.classList.add('idnum-tap');
-      el.onclick = () => openIdentityModal(t.label, t.entry, t.slot);
+      el.onclick = () => openIdentityModal(t.label, t.entry, t.opts);
     });
 
     // Western sign + Vietnamese year/month/day (natal, from the person's

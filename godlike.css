@@ -599,6 +599,15 @@ button.gk-altar-num {
 .idnum-tap { cursor: pointer; }
 .story-row b.idn-light { color: var(--gold); }
 .story-row b.idn-shadow { color: var(--bad); }
+
+/* Characteristics bullets (2026-08-08) - identity/zodiac tap popups. */
+.story-bullets { margin: 0; padding: 0 0 0 18px; }
+.story-bullets li { margin-bottom: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.story-bullets li:last-child { margin-bottom: 0; }
+.story-bullets-label {
+  font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .06em;
+  font-size: 10.5px; color: var(--muted); margin: 10px 0 6px;
+}
 .story-col-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .story-row { margin-bottom: 8px; }
 .story-row:last-child { margin-bottom: 0; }
