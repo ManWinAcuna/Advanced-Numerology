@@ -591,18 +591,27 @@ button.gk-altar-num {
 .story-tier-badge.story-tier-quiet { color: var(--muted); border-color: var(--border); background: rgba(255, 255, 255, .03); }
 
 /* Actionables - icon-led custom tab chips, not raw emoji (user: "be
-   creative"), Do/Don't/Watch blended into one flowing list. */
+   creative"), Do/Don't/Watch blended into one flowing list. Round 2
+   (user, 2026-08-08, screenshot): the whole row reads as a subtle pill,
+   not just the icon square - a soft kind-tinted background + rounded
+   corners on the full row. */
 .story-action-list { margin-bottom: 4px; }
-.story-action-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; }
+.story-action-row {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 7px;
+  padding: 9px 12px; border-radius: 14px; border: 1px solid transparent;
+}
 .story-action-row:last-child { margin-bottom: 0; }
+.story-action-row.do { background: rgba(139, 195, 74, .07); border-color: rgba(139, 195, 74, .16); }
+.story-action-row.dont { background: rgba(229, 57, 63, .07); border-color: rgba(229, 57, 63, .16); }
+.story-action-row.watch { background: rgba(245, 197, 66, .07); border-color: rgba(245, 197, 66, .16); }
 .story-action-tab {
   flex: 0 0 auto; width: 18px; height: 18px; border-radius: 5px; margin-top: 1px;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--gk-ui); font-size: 11px; font-weight: 700;
 }
-.story-action-row.do .story-action-tab { background: rgba(139, 195, 74, .16); color: #8bc34a; }
-.story-action-row.dont .story-action-tab { background: rgba(229, 57, 63, .16); color: var(--bad); }
-.story-action-row.watch .story-action-tab { background: rgba(245, 197, 66, .16); color: var(--gold); }
+.story-action-row.do .story-action-tab { background: rgba(139, 195, 74, .22); color: #8bc34a; }
+.story-action-row.dont .story-action-tab { background: rgba(229, 57, 63, .22); color: var(--bad); }
+.story-action-row.watch .story-action-tab { background: rgba(245, 197, 66, .22); color: var(--gold); }
 .story-action-text { flex: 1; font-size: 12.5px; line-height: 1.5; color: var(--text); }
 
 /* Today's energy / Good / Could improve / Background - each its own
