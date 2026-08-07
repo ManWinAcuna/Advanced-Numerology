@@ -574,25 +574,65 @@ button.gk-altar-num {
   font-family: var(--gk-ui); text-transform: uppercase; letter-spacing: .16em; font-size: 9.5px;
   color: var(--muted); margin-bottom: 6px;
 }
-.gk-card-story-label-sub { margin-top: 12px; }
+/* "Today Decoded" card (Boost13 UI pass, 2026-08-08) - replaces the old
+   Light/Shadow + Me x Today toggle set now that composeDayReading()
+   (compound-meanings.js) hands over ready-made prose instead of per-
+   number rows. Hybrid layout: a day-tier badge, then Actionables and
+   Today's energy always visible, then Good/Could improve/Background
+   behind one "See more" toggle. */
+.story-tier-badge {
+  display: inline-block; font-family: var(--gk-ui); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-bottom: 10px;
+  border: 1px solid var(--border);
+}
+.story-tier-badge.story-tier-good { color: var(--gold); border-color: rgba(245, 197, 66, .4); background: rgba(245, 197, 66, .08); }
+.story-tier-badge.story-tier-bad { color: var(--bad); border-color: rgba(229, 57, 63, .4); background: rgba(229, 57, 63, .08); }
+.story-tier-badge.story-tier-mixed { color: var(--acc-text); border-color: var(--acc-dim); background: rgba(255, 255, 255, .04); }
+.story-tier-badge.story-tier-quiet { color: var(--muted); border-color: var(--border); background: rgba(255, 255, 255, .03); }
 
-/* Light/Shadow split (round 4, 2026-08-06) - two independent toggles,
-   side by side, each opening its own full-width block below rather than
-   a cramped half-width column - narrow enough in a modal that real
-   sentences need the full width to stay readable regardless of how many
-   are open at once. */
-.story-intro { color: var(--muted); margin-bottom: 8px; }
-.story-cols { display: flex; gap: 8px; margin-bottom: 2px; }
+/* Actionables - icon-led custom tab chips, not raw emoji (user: "be
+   creative"), Do/Don't/Watch blended into one flowing list. */
+.story-action-list { margin-bottom: 4px; }
+.story-action-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; }
+.story-action-row:last-child { margin-bottom: 0; }
+.story-action-tab {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 5px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--gk-ui); font-size: 11px; font-weight: 700;
+}
+.story-action-row.do .story-action-tab { background: rgba(139, 195, 74, .16); color: #8bc34a; }
+.story-action-row.dont .story-action-tab { background: rgba(229, 57, 63, .16); color: var(--bad); }
+.story-action-row.watch .story-action-tab { background: rgba(245, 197, 66, .16); color: var(--gold); }
+.story-action-text { flex: 1; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+
+/* Today's energy / Good / Could improve / Background - each its own
+   labeled block. Good/Bad reuse the app-wide gold=positive, red=negative
+   color convention but with their own glyph (▲/▼), distinct from the
+   Actionables tab glyphs and from the sun/moon language used elsewhere. */
+.story-section { margin-top: 12px; }
+.story-section:first-child { margin-top: 0; }
+.story-section-label {
+  display: flex; align-items: center; gap: 6px; font-family: var(--gk-ui);
+  text-transform: uppercase; letter-spacing: .14em; font-size: 9.5px;
+  color: var(--muted); margin-bottom: 5px;
+}
+.story-section-label.good { color: var(--gold); }
+.story-section-label.bad { color: var(--bad); }
+.story-glyph {
+  display: inline-block; width: 14px; height: 14px; border-radius: 4px;
+  font-size: 9px; line-height: 14px; text-align: center;
+}
+.story-glyph.good { background: rgba(245, 197, 66, .16); color: var(--gold); }
+.story-glyph.bad { background: rgba(229, 57, 63, .16); color: var(--bad); }
+.story-section-body { font-size: 12.5px; line-height: 1.65; color: var(--text); }
+
 .story-col-toggle {
   flex: 1; background: none; border: 1px solid var(--border); border-radius: 8px;
   padding: 7px 0; font-family: var(--gk-ui); font-size: 11.5px; letter-spacing: .03em;
   color: var(--muted); cursor: pointer;
 }
-.story-col-toggle.light.open { border-color: rgba(245, 197, 66, .45); color: var(--gold); background: rgba(245, 197, 66, .08); }
-.story-col-toggle.shadow.open { border-color: rgba(229, 57, 63, .45); color: var(--bad); background: rgba(229, 57, 63, .08); }
-.story-col-toggle.actions.open { border-color: rgba(139, 195, 74, .45); color: #8bc34a; background: rgba(139, 195, 74, .08); }
-.story-row.do b { color: #8bc34a; }
-.story-row.dont b { color: var(--bad); }
+.story-more-toggle { display: block; width: 100%; margin-top: 12px; text-align: center; }
+.story-more-toggle.open { color: var(--acc-text); border-color: var(--acc-dim); background: rgba(255, 255, 255, .04); }
 
 /* Per-number identity popups (round 14, profile/calculator) - tappable
    Lifepath/Day Born/Day#/PD cells, light+shadow stacked in one popup. */

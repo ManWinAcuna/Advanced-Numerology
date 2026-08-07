@@ -729,50 +729,13 @@ function summarizeInteraction(resolved) {
     : `${groupText.join(' vs. ')} - today's a genuine mix, not one clean signal.`;
 }
 
-// Raw-totals convenience wrapper, mirroring weaveCompoundStory's role for
-// weaveResolvedStory above.
-function buildLightShadowCompoundStory(parts, opts) {
-  return buildLightShadowStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
-}
-
-/* ------------------------------------------------- today-vs-me pairing -- */
-// Round 9-10 (2026-08-06): the per-number rows above describe each number
-// in isolation - none of them actually say how today's energy interacts
-// with the PERSON specifically. Four pairs fix that, each contrasting a
-// TODAY number against the structurally-identical number computed from
-// the person's own birth date instead (same calculation, different date):
-//   - Universal Day (today's full-date compound) <-> Lifepath (their own)
-//   - Energy (today's day-of-month digit) <-> Day Born (their own)
-//   - Day# (today's day-of-year) <-> their own birth Day#
-//   - Lifepath (who they are) <-> Personal Day (how today lands on them)
-//
-// How well two numbers actually go together is NOT invented here - it's
-// numerologyCompat() (compat-data.js), the app's own established
-// compatibility engine, backed by NUMEROLOGY_RESEARCH.md: a third-party
-// source (CUE) independently cross-checked as matching our own table
-// exactly across every pairing, with real documented reasoning behind
-// WHY certain numbers clash (Structure vs Freedom, Power vs Avoidance,
-// etc.) or reinforce (a stable "container" number paired with an
-// intense one). scoreClass(numerologyCompat(rootA, rootB)) drives which
-// of 3 tiers (good/mid/bad) applies, same thresholds as every other
-// compat score in this app.
-//
-// Round 11 (2026-08-06): a tier alone ("good"/"mid"/"bad") isn't an
-// explanation - the first version of this section had exactly 12 static
-// sentences (4 pairs x 3 tiers), so EVERY "good" pairing read identically
-// regardless of which two roots actually produced it. User: "it should
-// genuinely feel like practical and educational... add some imagery make
-// it land." Fixed with a real generator instead of a lookup table: every
-// root gets one concrete image (COMPOUND_ROOT_IMAGE) standing in for what
-// it actually does, and composePairSentence() builds the sentence from
-// the SPECIFIC two roots in play - a 6-vs-9 pairing and a 1-vs-11 pairing
-// now read nothing alike, because they're about genuinely different
-// things, not two "good" labels wearing the same paragraph.
-// Round 13 (2026-08-06): one image per root meant every repeat of a root
-// repeated the exact same phrase verbatim ("soup when you're sick" 3-4
-// times in one card). Each root now has a small bank, and nextRootImage()
-// rotates through it - within one card build the same image never shows
-// twice (resetRootImages() at the start of each build restarts the cycle).
+// Root image bank - each root gets a small rotating set of concrete
+// images. Shared by the still-live Core Numbers identity engine
+// (composeIdentitySentence, below) via nextRootImage()/resetRootImages() -
+// the old Today-page pairing system that used to be this comment's home
+// (composePairSentence/buildPairRows/rootDomain/COMPOUND_PAIR_LEADIN) was
+// removed once the Today page moved to composeDayReading(), which
+// consumes the app's real computeCompatibility() instead.
 const COMPOUND_ROOT_IMAGES = {
   1: [
     'the first domino, already leaning',
@@ -847,112 +810,7 @@ function nextRootImage(root) {
   return bank[i % bank.length];
 }
 
-// Plain what-to-actually-do phrasing per root, shared by the pair prose
-// and the actionables below - masters/28 don't live in
-// COMPOUND_ROOT_MECHANISM, so they get their own concrete domains here.
-function rootDomain(root) {
-  if (root === 11) return 'reading the room and trusting the gut call';
-  if (root === 22) return 'the long-game project';
-  if (root === 28) return 'the money play';
-  if (root === 33) return 'saying the thing people actually need to hear';
-  const mech = COMPOUND_ROOT_MECHANISM[root];
-  return mech ? mech.domain : 'the day';
-}
-
-// Per pair-type, what each side of the comparison actually represents in
-// plain words - fills the {a}/{b} slots composePairSentence() builds
-// sentences around.
-const COMPOUND_PAIR_LEADIN = {
-  ud_lifepath: { label: 'Universal Day & your Lifepath', a: "today's whole shape", b: 'who you are at your core' },
-  energy_dayborn: { label: 'Energy & your Day Born', a: "the day's own daily rhythm", b: 'the rhythm you were born into' },
-  dayofyear_dayofyear: { label: "Today's Day# & your own Day#", a: "today's spot in the year", b: 'your own birth-year position' },
-  lifepath_personalday: { label: 'Your Lifepath & your Personal Day', a: 'who you are at your core', b: 'how today lands on you personally' },
-};
-
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
-// Builds one pair's { light, shadow }, using the two SPECIFIC roots
-// involved and the real tier their numerologyCompat() score lands in -
-// the image + theme for whichever roots actually showed up today, not a
-// generic template that reads the same for every combination. Round 13:
-// every tier now closes on a concrete what-to-do-with-it line (the user:
-// "too abstract, not enough real-life" - imagery alone is decoration),
-// and images come from nextRootImage() so a root that appears in several
-// rows never repeats the same phrase.
-function composePairSentence(pairId, rootA, rootB, tier) {
-  const lead = COMPOUND_PAIR_LEADIN[pairId];
-  if (!lead || !COMPOUND_ROOT_IMAGES[rootA] || !COMPOUND_ROOT_IMAGES[rootB]) return null;
-  const themeA = rootThemeName(rootA).toLowerCase();
-  const themeB = rootThemeName(rootB).toLowerCase();
-  const domainA = rootDomain(rootA);
-
-  // Same root on both sides - one image, named once, doubled. This is
-  // also CUE's own named pattern (NUMEROLOGY_RESEARCH.md): "same-theme
-  // overlap... comfortable, but can tip into too much of the same thing,
-  // nothing balances it out" - worth naming directly.
-  if (rootA === rootB) {
-    const image = nextRootImage(rootA);
-    return tier === 'good'
-      ? {
-        light: `${cap(lead.a)} and ${lead.b} run on the same current today - ${image}, doubled. That much ${themeA} in one day isn't coincidence, it's an assignment: spend it on ${domainA}.`,
-        shadow: `Doubled ${themeA} has no counterweight - even the good thing needs a stop time today, or it runs to excess.`,
-      }
-      : {
-        light: `${cap(lead.a)} and ${lead.b} run on the same current today - ${image}, doubled. Familiar and comfortable, but nothing's balancing it.`,
-        shadow: `Unchecked ${themeA} overcorrects into its own worst habit - bring in one outside opinion before you commit to anything big today.`,
-      };
-  }
-
-  const imageA = nextRootImage(rootA);
-  const imageB = nextRootImage(rootB);
-  if (tier === 'good') {
-    // Two good pairs sharing a today-side root would otherwise close on
-    // the identical "put real weight on X" line twice - the second one
-    // acknowledges the stack instead of restating it.
-    const repeated = COMPOUND_CLOSER_USE[rootA];
-    COMPOUND_CLOSER_USE[rootA] = true;
-    return repeated
-      ? {
-        light: `${cap(lead.a)} is ${imageA}, and ${lead.b} is ${imageB} - same direction again. The day keeps stacking ${themeA} green lights; take the hint.`,
-        shadow: `Stacked green lights still need a driver - pick the one ${themeA} thing that matters most and actually do it.`,
-      }
-      : {
-        light: `${cap(lead.a)} is ${imageA}, and ${lead.b} is ${imageB} - same direction, doubled. Put real weight on ${domainA}; it moves easier today than it usually does.`,
-        shadow: `Easy ${themeA} alignment breeds coasting - if you don't aim it at something specific, the day spends the energy on nothing.`,
-      };
-  }
-  if (tier === 'bad') {
-    return {
-      light: `${cap(lead.a)} is ${imageA}; ${lead.b} is ${imageB}. ${cap(themeA)} and ${themeB} won't share a lane today - so don't make them. Give each its own hour and both actually work.`,
-      shadow: `Forced together they jam: ${themeA} decisions made in a ${themeB} mood (or the reverse) are the ones you end up walking back tomorrow.`,
-    };
-  }
-  return {
-    light: `${cap(lead.a)} is ${imageA}; ${lead.b} is ${imageB}. No friction between them, no boost either - the day hands you a flat surface, and what happens on it is on you.`,
-    shadow: `Flat is where drift lives - without one deliberate ${themeA} or ${themeB} move, this part of the day just passes.`,
-  };
-}
-
-// Builds the pair rows given each pair's two already-resolved entries.
-// pairs: [{ id, entryA, entryB }] - entries missing (e.g. no birth date on
-// file) are silently skipped, same graceful-degradation rule as
-// everywhere else in this file. numerologyCompat/scoreClass are globals
-// from compat-data.js/compat-render.js - both already loaded on every
-// page this runs on, consumed here, never edited.
-function buildPairRows(pairs) {
-  const lightRows = [];
-  const shadowRows = [];
-  pairs.forEach(({ id, entryA, entryB }) => {
-    const lead = COMPOUND_PAIR_LEADIN[id];
-    if (!lead || !entryA || !entryB) return;
-    const score = numerologyCompat(entryA.root, entryB.root);
-    const sentence = composePairSentence(id, entryA.root, entryB.root, scoreClass(score));
-    if (!sentence) return;
-    lightRows.push({ label: lead.label, text: sentence.light });
-    shadowRows.push({ label: lead.label, text: sentence.shadow });
-  });
-  return { lightRows, shadowRows };
-}
 
 /* ------------------------------------------------- "My Numbers" identity -- */
 // Round 12 (2026-08-06): the pair rows above compare TODAY against "you",
@@ -1124,114 +982,6 @@ function buildIdentityRows(items) {
   return { lightRows, shadowRows };
 }
 
-/* ----------------------------------------------------------- actionables -- */
-// Round 13 (2026-08-06): "add a button that says actionables where it
-// gives you 4 actionables to align with the energies all together" -
-// explicitly NOT one per number ("not one actionable per energy I'm
-// talking about all of the energies combined"): 2 do's + 2 don'ts
-// synthesized from the whole mix - the dominant today-energy, the
-// best-aligned today-vs-me pair, and the worst one. Concrete real-life
-// moves, not restatements of the light/shadow prose.
-// Round 13b correction: actionables are built from TODAY's energies ONLY
-// and every line weaves TWO of them together. The first version pulled
-// single-root canned texts, and its pair-scoring logic could leak the
-// PERSON's roots in (user, seeing a root-9 "end something cleanly" on a
-// 6/6/11/28 day: "I don't get where the let something go cleanly do
-// comes from... none of them are talking through all the energies
-// combined"). Fragments compose as lead + qualifier so the whole set
-// reads the actual blend, not four disconnected one-number tips.
-const COMPOUND_MOVE_LEAD = {
-  1: "make the first move on the thing you've been circling - the call, the ask, the first rep",
-  3: 'say the thing out loud - post it, pitch it, tell the person',
-  4: 'put one focused hour into the unglamorous foundational work',
-  5: "make the pivot you've been putting off",
-  6: 'show up for one specific person - the call, the favor, the dinner',
-  7: 'take the closer look everyone else is skipping',
-  8: 'close the thing with money or authority attached - the invoice, the ask, the signature',
-  9: "end something cleanly - the last message, the archived project, the goodbye that's overdue",
-  11: 'trust the first gut read',
-  22: 'put an hour into the years-long thing',
-  28: "make the money move you've been sitting on",
-  33: 'say the useful true thing to someone who needs it',
-};
-const COMPOUND_MOVE_TAIL = {
-  1: "don't wait for anyone's permission to do it",
-  3: "say it while you're at it; the version in your head does nothing",
-  4: 'give it enough structure to survive the week',
-  5: 'stay loose enough to change the route midway',
-  6: 'keep a real person in the loop while you do it',
-  7: 'read the fine print before you commit',
-  8: 'put a number and a deadline on it',
-  9: "drop whatever's already finished to make room first",
-  11: 'run it through the gut check first; your signal is loud today',
-  22: 'aim it at the long game, not the quick win',
-  28: 'let it feed the thing that compounds',
-  33: "tell someone what you learned while it's fresh",
-};
-// Continuations of the rendered "Don't:" label - no leading "Don't" in
-// the text itself, or the row reads "Don't: Don't...".
-const COMPOUND_TRAP_LEAD = {
-  1: 'bulldoze ahead just because waiting is uncomfortable',
-  3: 'scatter it across ten half-versions',
-  4: "defend the plan just because it's yours",
-  5: 'burn a commitment just to feel motion',
-  6: 'say yes to a favor you already resent',
-  7: 'disappear into analysis',
-  8: 'squeeze the extra 10% just because you can',
-  9: "reopen what's already closed",
-  11: 'make the big call from a mood spike',
-  22: 'measure the cathedral against the day',
-  28: 'chase the payoff so hard you cut a corner',
-  33: 'pour everything into the audience while the person next to you gets leftovers',
-};
-const COMPOUND_TRAP_TAIL = {
-  1: 'especially when someone just needed two more minutes',
-  3: "especially in writing you can't take back",
-  4: "especially when the plan's already cracking",
-  5: "especially the ones you'd want back tomorrow",
-  6: 'especially for people who never asked',
-  7: 'especially on a ten-minute decision',
-  8: 'especially when trust is on the table',
-  9: 'especially the ones that ended for a reason',
-  11: 'especially when the mood is doing the talking',
-  22: 'especially on a slow-brick day',
-  28: 'especially with money on the table',
-  33: 'especially at home',
-};
-
-// todayParts: [{ label, entry }] - today's resolved numbers only, in
-// display order (Universal Day first, which also breaks frequency ties
-// in its favor). The person's own numbers never enter this - actionables
-// align with the DAY. Each line leads with one of today's roots and
-// closes on another, rotating so every distinct root in the mix gets
-// woven in across the four lines.
-function buildActionables(todayParts) {
-  const roots = [];
-  (todayParts || []).forEach((p) => {
-    if (p.entry && COMPOUND_MOVE_LEAD[p.entry.root]) roots.push(p.entry.root);
-  });
-  if (!roots.length) return null;
-  const freq = {};
-  roots.forEach((r) => { freq[r] = (freq[r] || 0) + 1; });
-  const D = roots.filter((r, i) => roots.indexOf(r) === i).sort((a, b) => freq[b] - freq[a]);
-  const n = D.length;
-
-  const doLine = (lead, tail) => (tail != null && tail !== lead
-    ? `${cap(COMPOUND_MOVE_LEAD[lead])} - and ${COMPOUND_MOVE_TAIL[tail]}.`
-    : `${cap(COMPOUND_MOVE_LEAD[lead])}.`);
-  const dontLine = (lead, tail) => (tail != null && tail !== lead
-    ? `${cap(COMPOUND_TRAP_LEAD[lead])} - ${COMPOUND_TRAP_TAIL[tail]}.`
-    : `${cap(COMPOUND_TRAP_LEAD[lead])}.`);
-
-  const out = [];
-  out.push({ kind: 'do', text: doLine(D[0], n > 1 ? D[1] : null) });
-  if (n > 1) out.push({ kind: 'do', text: doLine(D[n > 2 ? 2 : 1], D[0]) });
-  const dontTail = n > 3 ? D[3] : D[2 % n];
-  out.push({ kind: 'dont', text: dontLine(D[1 % n], n > 1 ? dontTail : null) });
-  if (n > 1) out.push({ kind: 'dont', text: dontLine(D[0], D[1]) });
-  return out;
-}
-
 /* ================= General Reading (Boost13, 2026-08-07) =================
  * Separate content bank + weave from everything above. Source is the
  * user's own "Master Blueprint of Identity" PDF (Numbers 1-9/11/22/33,
@@ -1271,6 +1021,74 @@ function buildActionables(todayParts) {
 // impure/oscillating entries fall back to the pure root's list in
 // numberIdentityV2() below, since the reality checks describe the root
 // itself, not the pure/impure distinction.
+// Day-energy framing for the Today page's opener, kept separate from
+// NUMBER_IDENTITY_V2 below. User, 2026-08-08: "it shouldn't say 'you're a
+// natural protector' ... if you're a 6 then yeah but if not then it
+// shouldn't say that, it should be about the energy of the day draws you
+// to be a protector nurturing or whatever I have on the pdf." The problem:
+// openText used NUMBER_IDENTITY_V2, which was written in first-person-claim
+// voice ("You're a natural protector") for describing a PERSON's own fixed
+// number - correct when describeComparisonFinding uses it for pair.imageRoot
+// (the person's real number), wrong when reused for the Universal Day root,
+// which isn't the person's number at all on most days.
+// Source: aa95df9a-The13G.pdf ("The Ultimate Cosmic Blueprint"), each
+// number's own "What it Signifies" field - already written in third-person
+// day/energy voice, not personal-identity voice - combined with the short
+// "In Their Light"/"In Their Shadow" adjective lists from the same page.
+// Reframed as "today runs on ___ energy, it can pull you toward ___" /
+// "that same energy can also tip into ___" - the day drawing something out
+// of whoever it lands on, not a claim about who the person fixedly is.
+const DAY_ENERGY = {
+  1: {
+    light: "Today runs on pioneer energy - the spark that stands alone and clears a path where no one else has walked. It can pull you toward being brave, confident, and full of brilliant ideas, standing tall like a captain leading a ship.",
+    shadow: 'That same energy can also tip into bossy, easily frustrated when others are slow, and hating being told what to do.',
+  },
+  2: {
+    light: "Today runs on diplomat energy - the bridge between worlds, the ultimate supporter that brings harmony out of chaos. It can pull you toward being kind, deeply empathetic, an amazing listener, and a master at making people feel loved.",
+    shadow: 'That same energy can also tip into oversensitive, passive-aggressive, and letting people walk all over you just to avoid a fight.',
+  },
+  3: {
+    light: "Today runs on performer energy - pure joy, creative expression, words, and sparkling imagination, the kind that turns thoughts into beautiful art and stories. It can pull you toward being hilarious, highly creative, full of infectious enthusiasm, and brightening up any room instantly.",
+    shadow: 'That same energy can also tip into scattered, gossipy, exaggerating the truth wildly, and using humor to run away from real pain.',
+  },
+  4: {
+    light: "Today runs on architect energy - structure, logic, hard work, roots, and safety, the kind that turns wild dreams into physical reality through discipline. It can pull you toward being reliable, fiercely loyal, super organized, and the person everyone trusts when things break down.",
+    shadow: "That same energy can also tip into stubborn, rigid like a stone wall, hating any kind of change, and worrying endlessly about the future.",
+  },
+  5: {
+    light: "Today runs on maverick energy - dynamic freedom, adventure, sensory experience, and constant change, the wind that cannot be trapped in a box. It can pull you toward being adaptable, brave, multitalented, charismatic, and loving the world with all 5 senses.",
+    shadow: 'That same energy can also tip into restless, easily addicted to distractions, running away when things get tough, and hating commitment.',
+  },
+  6: {
+    light: "Today runs on nurturer energy - the cosmic parent, unconditional love, home, responsibility, and healing, creating beautiful, safe spaces for everyone. It can pull you toward being deeply caring, protective, artistic, excellent at advice, and giving the best hugs in the world.",
+    shadow: "That same energy can also tip into meddlesome, trying to fix people who didn't ask to be fixed, and making yourself a martyr.",
+  },
+  7: {
+    light: "Today runs on sage energy - mystery, truth, deep wisdom, and analysis, the scientist and spiritual seeker that looks beneath the surface of everything. It can pull you toward being brilliant, intuitive, deeply spiritual, and a true original thinker who sees the matrix of life.",
+    shadow: 'That same energy can also tip into paranoid, cold, isolated, overthinking until you spiral, and looking down on others.',
+  },
+  8: {
+    light: "Today runs on powerhouse energy - material mastery, power, money, balance, and cosmic karma, hard work meeting massive rewards. It can pull you toward being strong, fair-minded, highly successful, generous, and able to manifest big things out of thin air.",
+    shadow: 'That same energy can also tip into power-hungry, obsessed with expensive status symbols, controlling, and cruel when crossed.',
+  },
+  9: {
+    light: "Today runs on mirror energy - the final single digit, the ultimate adapter, reflecting whatever or whoever is in front of it perfectly. It can pull you toward being highly empathetic, able to blend into any culture or group instantly, wise, and holding master completion energy.",
+    shadow: "That same energy can also tip into losing your own identity completely, acting fake to please others, and holding onto old past pain like a hoarder.",
+  },
+  11: {
+    light: "Today runs on cosmic antenna energy - a powerful channel for intuition, spiritual light, and sudden electric inspiration, connecting earth straight to heaven. It can pull you toward being visionary, deeply intuitive, inspiring, and lighting up the dark like a sudden bolt of lightning.",
+    shadow: 'That same energy can also tip into extremely anxious, nervous energy, intensely sensitive, and getting overwhelmed by reality easily.',
+  },
+  22: {
+    light: "Today runs on master builder energy - taking brilliant, psychic vision and crushing it down into solid, physical reality, the kind of day that builds things benefiting everyone. It can pull you toward being masterful, practical, unbelievably capable, and able to turn impossible dreams into solid gold structures.",
+    shadow: 'That same energy can also tip into crushed by extreme pressure, controlling, greedy, or totally paralyzed by a fear of failing.',
+  },
+  33: {
+    light: "Today runs on cosmic teacher energy - combining absolute creative expression with ultimate loving service, pure, radiant heart energy. It can pull you toward being unbelievably kind, wise, protective, inspiring, and teaching people how to love through your actions.",
+    shadow: "That same energy can also tip into suffocated by the world's pain, judgey of others' morals, and emotionally exhausted from codependency.",
+  },
+};
+
 const NUMBER_IDENTITY_V2 = {
   1: {
     light: "You don't wait for someone else to fix things. You jump in and go first, and that courage inspires the people around you.",
@@ -1791,6 +1609,688 @@ const WESTERN_IDENTITY = {
     ],
   },
 };
+
+// Real-Life Example bank (2026-08-08, Today-page rework): 2-3 concrete,
+// logically-coherent scenario images per number/animal/sign, curated
+// straight from the user's own source PDFs (deduped across 3 independent
+// copies of the same guide, keeping only genuinely distinct scenarios).
+// Used to rotate imagery so a daily visitor doesn't see the same sentence
+// every time their number is the featured one - see
+// [[project_todo_reading_rework]] / feedback_deep_probing_questions for why
+// this had to be sourced, not invented.
+const REAL_LIFE_EXAMPLES = {
+  1: [
+    'the kid on the playground who invents a brand new game and gets everyone to play it by their rules',
+    'the lone inventor working in a garage, building something nobody believed could ever work',
+    'the lonely coder who builds an app from a messy bedroom and changes how the world talks despite everyone saying it was impossible',
+  ],
+  2: [
+    'the friend who notices you\'re sad just from the way you typed a text and checks on you immediately',
+    'the one who sits between two people mid-argument and quietly helps them find their way back to each other',
+    'the assistant working behind the scenes, coordinating every piece so the person on stage looks perfect',
+  ],
+  3: [
+    'the kid who tells an animated, hilarious story at dinner, acting out every voice until the whole table is laughing',
+    'the artist painting a massive, colorful mural that turns a gray wall into something the whole block feels',
+    'the creator whose fast, colorful work catches thousands of people off guard and makes them smile',
+  ],
+  4: [
+    'the builder who measures three times and cuts once, so the thing they make outlasts them',
+    'the student who color-codes the whole plan and finishes a week early while everyone else is still starting',
+    'the one who quietly organizes the entire group project, sets the deadlines, and makes sure nobody\'s work gets lost',
+  ],
+  5: [
+    'the backpacker who buys a one-way ticket to somewhere they don\'t even speak the language',
+    'the kid who climbs the highest tree in the woods just to see what the view looks like from up there',
+    'the creator who\'s already moved on to the next trend before anyone else even noticed the last one',
+  ],
+  6: [
+    'the older sibling who automatically makes soup and finds a blanket the second someone in the house gets sick',
+    'the parent who stays up all night sewing a costume so their kid\'s school play goes right',
+    'the kid who finds an injured bird, builds it a warm box, and feeds it by hand every hour until it can fly again',
+  ],
+  7: [
+    'the scientist who spends years staring through a microscope to solve a mystery that changes everything after',
+    'the quiet mind who reads deep books alone, hunting for a pattern nobody else in the room even noticed was there',
+    'the researcher running late-night experiments by themselves, piecing together something real one small step at a time',
+  ],
+  8: [
+    'the CEO who builds something massive but makes sure it still leaves the world a little cleaner behind it',
+    'the kid who turns a lawn-mowing gig into an actual operation, organizing friends and managing the schedule to make real money',
+    'the one who coordinates the funding and the workers and the timeline for something enormous, and it actually gets built on time',
+  ],
+  9: [
+    'the kid who fits in perfectly with the athletes, the artists, and the quiet ones, shifting completely depending on who they\'re sitting with',
+    'the actor who doesn\'t just play the character, but actually becomes them, down to the voice and the posture',
+  ],
+  11: [
+    'the teacher whose one sentence makes someone stop a bad habit on the spot, no lecture required',
+    'the kid who gets a sudden gut feeling and somehow knows exactly how to help a friend, without being told a single thing',
+    'the writer who wakes up at 3am to put something down on paper that moves an entire room to tears, and can\'t fully explain where it came from',
+  ],
+  22: [
+    'the engineer who designs a system built to keep people safe for generations after they\'re gone',
+    'the student who organizes an entire school district\'s recycling system from scratch, one plan at a time',
+    'the one who coordinates funding and teams across countries so something that helps millions of people actually gets built',
+  ],
+  33: [
+    'the kid who befriends the loneliest, most bullied classmate and quietly walks them back to believing in themselves',
+    'the teacher who turns a struggling school around, one kid at a time, until every one of them finds their worth',
+    'the healer who goes straight into a war zone to help, because that\'s where the help is actually needed',
+  ],
+  Rat: [
+    'the kid who finds five hidden scholarships nobody else thought to dig for',
+    'the manager who catches the one mistake in the budget that saves the whole company\'s funds overnight',
+    'the one who always somehow knows the best deal in the room before anyone else has even looked',
+  ],
+  Ox: [
+    'the one who quietly finishes the group project alone, late at night, after everyone else already gave up on it',
+    'the farmer who\'s up before sunrise every single day for decades, without ever once complaining about it',
+    'the one who stays on-site twelve hours straight to get the roof finished before the storm hits',
+  ],
+  Tiger: [
+    'the kid who steps directly between the bully and the smaller student and just stares them down until they walk away',
+    'the speaker whose passion in a single speech rallies a crowd that was silent five minutes earlier',
+    'the leader who starts something new in the middle of a crash everyone else is running from',
+  ],
+  Cat: [
+    'the quiet kid who notices exactly who\'s secretly upset in the room without anyone saying a word',
+    'the diplomat who ends a dangerous standoff using nothing but soft, careful words',
+    'the one who walks into a chaotic, loud space and turns it into somewhere calm just by rearranging it',
+  ],
+  Dragon: [
+    'the student who steps on stage, commands the whole room instantly, and wins by a landslide',
+    'the founder who launches the bold, risky thing in weeks flat while everyone else is still hedging',
+    'the director who leads a massive crew and comes out the other side with something people remember for years',
+  ],
+  Snake: [
+    'the quiet friend who looks at you for one second and says "you\'re pretending to be happy, what\'s actually wrong"',
+    'the investigator who cracks the case everyone else gave up on by reading the one detail nobody else caught',
+    'the quiet one who solves the riddle that stumped the entire school for weeks',
+  ],
+  Horse: [
+    'the athlete whose sheer joy running the race pulls the entire team along with them to the win',
+    'the one who jumps from idea to idea, powered by nothing but pure excitement, and somehow it keeps working',
+    'the kid who signs up for the marathon out of nowhere and finishes it on stubborn energy alone',
+  ],
+  Goat: [
+    'the kid who writes something beautiful, just to make a grieving grandmother feel a little less alone that day',
+    'the designer whose soft, artistic work makes total strangers feel taken care of',
+    'the one who builds a literal safe space out of art, where people finally feel okay enough to cry',
+  ],
+  Monkey: [
+    'the kid who fixes the broken game everyone gave up on using a trick they figured out on their own',
+    'the inventor who turns an annoying daily chore into something people actually want to do',
+    'the one who makes something that costs nothing and somehow ends up reaching millions of people anyway',
+  ],
+  Rooster: [
+    'the student who shows up first, sharp, with a notebook so neat it wins first place on its own',
+    'the chef who won\'t let a single plate leave the kitchen unless it looks like it belongs in a gallery',
+    'the planner who runs a massive event down to the second and nothing goes visibly wrong',
+  ],
+  Dog: [
+    'the friend who stays out in the freezing rain just so nobody has to wait alone',
+    'the lawyer who fights for someone who can\'t pay them, for free, against people with way more power',
+  ],
+  Pig: [
+    'the kid who shares their whole lunch with someone who forgot theirs, no hesitation at all',
+    'the host who throws the party everyone\'s invited to, and somehow makes every single guest feel like family',
+  ],
+  Aries: [
+    'the kid who jumps in first, laughing, before anyone else works up the nerve to try it',
+    'the emergency worker who runs straight toward the danger everyone else is running away from',
+    'the founder who launches the bold new thing in weeks, ignoring everyone telling them to slow down',
+  ],
+  Taurus: [
+    'the one who saves the good part for later just to actually enjoy it slowly, instead of rushing it',
+    'the gardener who turns a rocky, useless plot into something thriving, one patient year at a time',
+    'the chef who spends ten hours getting one sauce exactly right because exactly right is the whole point',
+  ],
+  Gemini: [
+    'the student who\'s reading, listening to music, and holding a conversation all at the same time, and somehow keeping up with all three',
+    'the host who can make an entire room laugh and switch topics three times without ever losing anyone',
+    'the writer who turns out three completely different stories on three completely different topics in one single afternoon',
+  ],
+  Cancer: [
+    'the kid who notices the one lonely classmate and quietly shares their cookies with them, no announcement needed',
+    'the parent who turns a boring rainy weekend into a whole magical indoor camping trip',
+    'the one who cooks the comfort food and just sits there listening for as long as it takes',
+  ],
+  Leo: [
+    'the kid who takes the lead role on stage and still makes sure the whole cast gets a treat afterward',
+    'the manager who takes the full blame for the team\'s mistake in public, then turns around and treats everyone to dinner',
+    'the boss who throws money at making the team feel appreciated because the pride behind it is real',
+  ],
+  Virgo: [
+    'the kid who reorganizes the entire messy garage and labels every single box without being asked',
+    'the engineer who catches the one tiny structural flaw that would have collapsed the whole bridge',
+    'the editor who finds the one typo on page four hundred that three other teams completely missed',
+  ],
+  Libra: [
+    'the kid who spends twenty minutes splitting the cake exactly evenly so nobody feels shorted',
+    'the designer whose color choices alone make a loud, messy room go instantly calm',
+    'the diplomat who talks two furious sides into an actual peace agreement',
+  ],
+  Scorpio: [
+    'the best friend who stands next to you when the whole room turns on you, and keeps your secret for good',
+    'the therapist who walks someone all the way out of a tragedy and back into a real life',
+  ],
+  Sagittarius: [
+    'the kid who packs a small bag on a whim to hike a trail they\'ve never seen, laughing off the rain that hits halfway through',
+    'the student who spends an entire summer backpacking alone through a country just to learn the language',
+    'the professor whose lectures on the road open up an entire auditorium\'s idea of what\'s possible',
+  ],
+  Capricorn: [
+    'the student who studies two quiet hours a night for months and walks away with the highest grade in the state',
+    'the teenager who works a part-time job for years just to buy their own car outright',
+    'the executive who steers the whole company through a brutal recession and keeps it standing',
+  ],
+  Aquarius: [
+    'the kid who builds something real out of literal junk parts to try to actually fix a piece of the world',
+    'the student who starts an online movement that ends up pulling in twenty different schools',
+    'the inventor who turns down the corporate money because keeping the thing pure mattered more',
+  ],
+  Pisces: [
+    'the kid who gets completely lost in one song, crying real tears of pure joy over it',
+    'the kid whose painting of the ocean somehow says exactly what they were feeling and couldn\'t say out loud',
+    'the one whose voice alone is enough to make a scared, hurting person feel safe again',
+  ],
+};
+
+// ============================================================
+// Today-page reading, v2 (2026-08-08 Boost13 rebuild)
+// ============================================================
+// Doctrine locked in this session (see feedback_always_check_numerology_compat,
+// project_number_meanings.md): every relationship claim runs the app's real
+// numerologyCompat() score - never invented. Universal Day/Energy (today's
+// date-only numbers, same for every visitor) always open the reading before
+// any personal-comparison layer. Numerology always leads over zodiac in the
+// personal-finding section. Year/Month zodiac and numerology context always
+// stay one brief sentence regardless of how notable it is - only Day-level
+// findings (the 4 numerology pairs, the zodiac Day comparison) carry real
+// narrative weight. No raw numbers ever appear in the prose itself.
+
+const ZODIAC_TRINE_GROUPS = [
+  ['Rat', 'Dragon', 'Monkey'],
+  ['Ox', 'Snake', 'Rooster'],
+  ['Tiger', 'Horse', 'Dog'],
+  ['Cat', 'Goat', 'Pig'],
+];
+const ZODIAC_HARMONY_PAIRS = [
+  ['Rat', 'Ox'], ['Tiger', 'Pig'], ['Cat', 'Dog'],
+  ['Dragon', 'Rooster'], ['Snake', 'Monkey'], ['Horse', 'Goat'],
+];
+const ZODIAC_ORDER = ['Rat', 'Ox', 'Tiger', 'Cat', 'Dragon', 'Snake', 'Horse', 'Goat', 'Monkey', 'Rooster', 'Dog', 'Pig'];
+
+// Qualitative zodiac relation - no numeric compat table exists for the
+// Vietnamese zodiac, so this codifies the real Six Harmonies/Trine/Clash
+// structure (traditional, not invented) rather than guessing a relationship.
+function zodiacRelation(a, b) {
+  if (a === b) return { tier: 'same' };
+  if (ZODIAC_HARMONY_PAIRS.some(([x, y]) => (x === a && y === b) || (x === b && y === a))) {
+    return { tier: 'harmony' };
+  }
+  const idxA = ZODIAC_ORDER.indexOf(a);
+  const idxB = ZODIAC_ORDER.indexOf(b);
+  if (idxA >= 0 && idxB >= 0 && Math.abs(idxA - idxB) === 6) {
+    return { tier: 'clash' };
+  }
+  if (ZODIAC_TRINE_GROUPS.some((group) => group.includes(a) && group.includes(b))) {
+    return { tier: 'trine' };
+  }
+  return { tier: 'neutral' };
+}
+
+// Standing "watch/do" bank, dictated by the user 2026-08-06/08 (see
+// project_number_meanings.md) - checked ONLY against today's Universal Day
+// root and Energy root, never the person's own numbers, since these
+// represent the day's own universal energy: "regardless of the life path,
+// it's just energy."
+const STANDING_DAY_WATCH = {
+  1: { kind: 'watch', icon: '⚠️', line: 'watch for picking random arguments today' },
+  3: { kind: 'watch', icon: '⚠️', line: 'watch for getting scattered or talking too much' },
+  4: { kind: 'do', icon: '✅', line: 'actually do the work today, not just plan it' },
+  5: { kind: 'do', icon: '✅', line: 'get out, travel, be social today' },
+  6: { kind: 'do', icon: '✅', line: 'spend real time with family specifically' },
+  7: { kind: 'watch', icon: '⚠️', line: 'watch your body today, real risk of getting sick or hurt' },
+  8: { kind: 'do', icon: '✅', line: 'make money moves today, just do not cut ethical corners doing it' },
+  9: { kind: 'do', icon: '✅', line: 'release and adapt today, do not force what is not working' },
+  11: { kind: 'watch', icon: '⚠️', line: 'watch for emotionally crashing out, ground the big feeling before acting on it' },
+};
+
+// Roots featured in a day's Watch/Actionables list, with the 7-vs-8 "enemy
+// numbers" financial-timing exception applied: normally root 8 = make the
+// money move, but if Universal Day x Life Path OR Energy x Day Born lands
+// on a 7-and-8 combination specifically, that flips to a caution instead -
+// don't start something NEW financially today, 11 is the better day for
+// that. Confirmed scope (user, 2026-08-08): only those two pairs trigger
+// this, not Day# x Day# or Life Path x Personal Day.
+function getDayWatchItems(findings) {
+  const roots = [];
+  if (STANDING_DAY_WATCH[findings.uDayRoot]) roots.push(findings.uDayRoot);
+  if (findings.energyRoot !== findings.uDayRoot && STANDING_DAY_WATCH[findings.energyRoot]) {
+    roots.push(findings.energyRoot);
+  }
+  const items = roots.map((root) => Object.assign({ root: root }, STANDING_DAY_WATCH[root]));
+
+  const financialPairs = findings.pairs.filter((p) => p.id === 'lifePath' || p.id === 'day');
+  const hits78 = financialPairs.some((p) => (p.todayRoot === 7 && p.imageRoot === 8) || (p.todayRoot === 8 && p.imageRoot === 7));
+  if (!hits78) return items;
+
+  return items.map((item) => {
+    if (item.root !== 8) return item;
+    return {
+      root: 8,
+      kind: 'watch',
+      icon: '⚠️',
+      line: 'do not start new financial things today, 11 is a better day to start',
+    };
+  });
+}
+
+// Rebuild #3 (2026-08-08): consumes the app's REAL, already-weighted
+// compatibility engine (computeCompatibility, compat-engine.js) instead of
+// hand-rolling 4 equally-weighted pairs. That function already blends Life
+// Path x Universal Day (60%), Day Born x Energy (35%), and Day-of-year x
+// Day-of-year (5%) - real weights, already live on today.html today
+// (`compatFull = computeCompatibility(me, day0)`). User, 2026-08-08: "you
+// literally have my weighing scales" / "this has been the whole point, we
+// literally have a compatibility scale as well" - the 4-pair equal-footing
+// system this replaces let a 5%-weight number (Day#) compete evenly with a
+// 60%-weight number (Life Path) for which finding got featured, which is
+// exactly backwards. Nothing here recomputes a score - every score comes
+// straight from computeCompatibility's own real math.
+function computeDayFindings(birth, target) {
+  const uDayEntry = compoundEntry(compoundRawUniversalDay(target));
+  const energyEntry = compoundEntry(compoundRawEnergy(target));
+  const dayNumEntry = compoundEntry(compoundRawDayNum(target));
+
+  const lpEntry = compoundEntryForLifePath(getLifePath(birth), getLifePathCompound(birth));
+  const dayBornEntry = compoundEntry(compoundRawEnergy(birth));
+  const dayNumOwnEntry = compoundEntry(compoundRawDayNum(birth));
+
+  const compat = computeCompatibility(birth, target);
+
+  // Real weights straight from COMPAT_DEFAULT_WEIGHTS (compat-engine.js):
+  // lifePath 0.60, dayNum 0.35, doy 0.05. `lead: true` marks the two pairs
+  // whose "today" side IS Universal Day/Energy - the actual calendar day.
+  // Day-of-year carries 5% weight in the real engine - "not the main
+  // character" - so it is tagged `feature: false` and never becomes a
+  // headline finding, only ever background-eligible.
+  const pairDefs = [
+    { id: 'lifePath', score: compat.numerology.lifePathScore, weight: 0.60, imageRoot: lpEntry.root, todayRoot: uDayEntry.root, lead: true, feature: true },
+    { id: 'day', score: compat.numerology.dayScore, weight: 0.35, imageRoot: dayBornEntry.root, todayRoot: energyEntry.root, lead: true, feature: true },
+    { id: 'doy', score: compat.numerology.doyScore, weight: 0.05, imageRoot: dayNumOwnEntry.root, todayRoot: dayNumEntry.root, lead: false, feature: false },
+  ];
+  const pairs = pairDefs.map((p) => Object.assign({}, p, { tier: scoreClass(p.score) }));
+
+  const zYear = { target: getChineseZodiacYear(target), birth: getChineseZodiacYear(birth) };
+  const zMonth = { target: getChineseMonth(target), birth: getChineseMonth(birth) };
+  const zDay = { target: getChineseDaySign(target), birth: getChineseDaySign(birth) };
+
+  return {
+    uDayRoot: uDayEntry.root,
+    energyRoot: energyEntry.root,
+    dayNumRoot: dayNumEntry.root,
+    lpRoot: lpEntry.root,
+    dayBornRoot: dayBornEntry.root,
+    dayNumOwnRoot: dayNumOwnEntry.root,
+    pairs: pairs,
+    compat: compat,
+    zodiac: {
+      // Real weights from the same engine: Year 60% / Month 30% / Day 10% -
+      // Year dominates, opposite of the earlier "Day carries the weight"
+      // doctrine from before this rebuild. Flagged to the user; using the
+      // real engine weights here for consistency until told otherwise.
+      year: Object.assign({}, zYear, { score: compat.vietnamese.yearScore, weight: 0.60, relation: zodiacRelation(zYear.target, zYear.birth) }),
+      month: Object.assign({}, zMonth, { score: compat.vietnamese.monthScore, weight: 0.30, relation: zodiacRelation(zMonth.target, zMonth.birth) }),
+      day: Object.assign({}, zDay, { score: compat.vietnamese.daySignScore, weight: 0.10, relation: zodiacRelation(zDay.target, zDay.birth) }),
+    },
+  };
+}
+
+// Which pair(s) actually get featured in the personal-finding section.
+// Rebuild #3 (2026-08-08): only `feature: true` pairs (Life Path 60%, Day
+// 35%) are eligible - Day-of-year (5%) never becomes a headline finding no
+// matter how extreme its score, since it is not "the main character."
+// Ranked by weight first, score second - the 60%-weight pair wins a tie
+// over the 35%-weight one even at an identical score. A mixed day (one
+// good + one bad among the featurable pairs) gets both, balanced. Only-
+// good or only-bad features the higher-weight one. A quiet day (both
+// featurable pairs mid) still leads with Life Path (highest weight),
+// framed as steady.
+function selectFeaturedFinding(findings) {
+  const featurable = findings.pairs.filter((p) => p.feature);
+  const byWeight = (a, b) => b.weight - a.weight;
+  const goods = featurable.filter((p) => p.tier === 'good').sort((a, b) => byWeight(a, b) || b.score - a.score);
+  const bads = featurable.filter((p) => p.tier === 'bad').sort((a, b) => byWeight(a, b) || a.score - b.score);
+
+  if (goods.length && bads.length) {
+    return { dayType: 'mixed', good: goods[0], bad: bads[0] };
+  }
+  if (goods.length) {
+    return { dayType: 'good', lead: goods[0] };
+  }
+  if (bads.length) {
+    return { dayType: 'bad', lead: bads[0] };
+  }
+  const steady = featurable.slice().sort(byWeight)[0];
+  return { dayType: 'quiet', lead: steady };
+}
+
+function pickExample(key) {
+  const list = REAL_LIFE_EXAMPLES[key];
+  if (!list || !list.length) return null;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// Same as pickExample, but avoids repeating an image already used elsewhere
+// in this same reading - matters when the good and bad findings resolve to
+// the SAME root (a real, not-rare case: e.g. someone's own Day# and Day
+// Born can both land on the same digit), which would otherwise risk both
+// halves of a mixed day quoting the identical scenario.
+function pickExampleExcluding(key, usedImage) {
+  const list = REAL_LIFE_EXAMPLES[key];
+  if (!list || !list.length) return null;
+  const pool = usedImage ? list.filter((x) => x !== usedImage) : list;
+  const finalPool = pool.length ? pool : list;
+  return finalPool[Math.floor(Math.random() * finalPool.length)];
+}
+
+// No announcing lead-in phrases ("Something on your side today:", "Worth
+// watching today:") - user, 2026-08-08: "too template-y, cut them." The
+// good/bad framing now comes purely from which trait (light vs shadow) gets
+// used, not from a meta-label declaring what slot the sentence fills. Good
+// and bad findings render as two separate paragraphs (goodText/badText),
+// not blended into one with a connector - so no connector bank is needed.
+const QUIET_CLOSERS = [
+  ' Otherwise, today reads pretty steady.',
+  ' Beyond that, nothing dramatic today.',
+  ' Outside of that, today is pretty even.',
+];
+
+function pickRotating(bank) {
+  return bank[Math.floor(Math.random() * bank.length)];
+}
+
+// A compoundEntry()-resolved root is always one of 1-9, 11, 22, 33, or the
+// special fixed compound 28 - NUMBER_IDENTITY_V2 only covers the first 12,
+// so 28 (a real, valid Day Born/Day# value whenever a day-of-month or
+// day-of-year is literally 28) falls back to the app's own already-curated
+// COMPOUND_FIXED_STOP[28] content instead of silently going blank.
+function identityFor(root) {
+  if (root === 28) return COMPOUND_FIXED_STOP[28];
+  return numberIdentityV2(root, false);
+}
+
+// One-word archetype per root, taken directly from the source PDF's own
+// entity titles (Pioneer, Storyteller, Builder, Seeker, Executive...) -
+// used to name BOTH sides of a comparison concretely instead of an
+// abstract "good"/"bad" label.
+const ROOT_NOUN = {
+  1: 'pioneer', 2: 'peacemaker', 3: 'storyteller', 4: 'builder', 5: 'explorer',
+  6: 'caretaker', 7: 'seeker', 8: 'executive', 9: 'mirror', 11: 'antenna',
+  22: 'master builder', 33: 'guardian', 28: 'wealth-builder',
+};
+
+// Describes a PAIR (today's root vs the person's root) the way a featured
+// finding needs it - the whole point of this system is the comparison
+// itself, not one side described in isolation. User, 2026-08-08, after a
+// version that only named one root: "it's doing a comparison, compatibility
+// wise, it's not just grabbing shit just to grab it." Explicitly states
+// whether today's energy clashes with or supports the person's side (real
+// numerologyCompat() tier, not felt-sense), names both archetypes, then
+// backs it with the person's light/shadow sentence and a real image.
+// Returns { text, image, todayNoun, personNoun } so a caller building a
+// two-part reading can exclude an already-used image on a root repeat.
+// Rebuild #3 (2026-08-08): the only two pairs that ever reach this function
+// now are `lifePath` and `day` (both `lead: true`, `feature: true`) - doy
+// (5% weight) is excluded from featuring entirely in selectFeaturedFinding,
+// so there is no longer a "secondary/non-leading" case to frame differently.
+// Both featured pairs are always genuinely about Universal Day or Energy,
+// so the direct "Today's ___ energy..." framing is always correct here.
+function describeComparisonFinding(pair, lean, excludeImage) {
+  const personIdentity = identityFor(pair.imageRoot);
+  if (!personIdentity) return { text: '', image: null };
+  const todayNoun = ROOT_NOUN[pair.todayRoot] || 'today\'s energy';
+  const personNoun = ROOT_NOUN[pair.imageRoot] || 'your side';
+  const sameNoun = pair.todayRoot === pair.imageRoot;
+  const relSentence = sameNoun
+    ? (lean === 'good'
+      ? `You and today are both running ${personNoun} energy, and for you that's a real boost.`
+      : `You and today are both running ${personNoun} energy - but two of the same thing does not automatically mean smooth, this one is a real clash.`)
+    : (lean === 'good'
+      ? `Today's ${todayNoun} energy actually pairs well with your ${personNoun} side.`
+      : `Today's ${todayNoun} energy clashes with your ${personNoun} side.`);
+  const trait = lean === 'good' ? personIdentity.light : personIdentity.shadow;
+  const image = pickExampleExcluding(pair.imageRoot, excludeImage);
+  const text = image ? `${relSentence} ${trait} Think ${image}.` : `${relSentence} ${trait}`;
+  return { text: text, image: image, todayNoun: todayNoun, personNoun: personNoun };
+}
+
+// Actionables source (2026-08-08 rebuild #2): the actual "Universal /
+// Calendar Day Action Plan" per number, straight from the user's newest PDF
+// (aa95df9a-The13G.pdf, "The Ultimate Cosmic Blueprint") - 5 real Do's and
+// 5 real Don'ts per number, written specifically for this exact use case
+// (literally titled "Universal / Calendar Day Action Plan"). No
+// interpretation or reframing needed - verbatim from the source.
+const PDF_ACTION_PLAN = {
+  1: {
+    do: ["start that new project or hobby you've postponed", 'wear a bold outfit that makes you stand out', 'make a big decision entirely by yourself', 'speak up first in a meeting or class', 'do 20 jumping jacks to wake up your inner warrior'],
+    dont: ["wait around for someone else's permission", 'copy what your friends are doing today', 'shrink your voice to make others comfortable', 'spend the day lazily scrolling through social media', 'let past mistakes dictate your next move'],
+  },
+  2: {
+    do: ['write a heartfelt thank-you note to a close friend', 'work in a team or pair up for chores today', 'spend time listening deeply without interrupting', 'buy a small treat or flower for someone you love', 'take long, deep breaths when you feel tense'],
+    dont: ['get dragged into screaming matches or messy arguments', 'agree to something that makes your stomach twist up', 'make big decisions completely on your own without checking in', 'hide your true feelings under a fake, polite smile', 'forget to drink water and care for your physical body'],
+  },
+  3: {
+    do: ['draw, paint, sing, or write something purely for fun', 'tell a funny joke or story to make someone laugh out loud', 'wear something bright, happy, and expressive', 'call a friend just to chat and share positive vibes', 'let your inner child out to play and run around'],
+    dont: ['spend the day gossiping or spreading rumors about anyone', 'suppress your creative impulses or ideas', 'overcomplicate things or worry about boring details', 'hide your talents because you are scared of being judged', 'take life too seriously today, let it go'],
+  },
+  4: {
+    do: ['clean your room, desk, or backpack thoroughly', 'write down a clear budget or a to-do list for the week', 'do some grounding exercise, like walking barefoot on grass', "complete a difficult task you've been putting off", 'double-check your schedule so you are exactly on time'],
+    dont: ['slouch or leave your living spaces messy and unorganized', 'try to take quick, lazy shortcuts on important work', "refuse to listen to someone else's new suggestion", 'spend money on reckless, unnecessary items', 'overwork yourself to the point of utter exhaustion'],
+  },
+  5: {
+    do: ['take a completely new path or street home today', "try an unusual food or flavor you've never had before", "do something spontaneous that isn't on your schedule", 'meet or chat with a new person from a different background', 'shake up your body by dancing to high-energy music'],
+    dont: ['stick to the exact same boring routine all day', 'make permanent, heavy life promises today if you can avoid it', 'overindulge in junk food, video games, or quick distractions', 'run away from a difficult conversation that needs fixing', 'force yourself to sit completely still for long hours'],
+  },
+  6: {
+    do: ['check in on a family member or cook a delicious meal', 'add something beautiful, like a plant, to your room', 'pamper yourself with a long, warm bath or self-care routine', 'help someone solve a problem, but only if they ask', 'forgive someone and let go of an old grudge'],
+    dont: ['poke your nose into drama that has nothing to do with you', 'over-commit to helping others until you are completely exhausted', 'criticize small, imperfect details around you today', 'play the victim or complain about how much you do', 'ignore your own health and emotional needs'],
+  },
+  7: {
+    do: ['read an interesting book, watch a documentary, or learn something brand new', 'spend at least one hour in total, healing silence', 'meditate, journal your wildest dreams, or ponder deep life questions', 'go for a solo walk in a quiet forest or park', 'trust your immediate gut instincts completely today'],
+    dont: ['engage in shallow small talk or meaningless neighborhood gossip', 'crowd your mind with loud noises and chaotic crowds', 'overthink a simple problem until it turns into a massive disaster', 'be distrustful or suspicious of people who love you', 'ignore your inner voice just to follow the group'],
+  },
+  8: {
+    do: ['organize your money, savings, or review your big life goals', 'act with absolute power and step up as a bold leader', 'give generously to someone in need or buy someone lunch', 'stand up straight with your shoulders back and walk proudly', 'face a difficult financial or business choice head-on'],
+    dont: ['think with a scarcity mindset or complain about being broke', 'bully, boss around, or dominate people who are weaker', 'spend money recklessly on expensive items just to show off', 'let fear or self-doubt make you shrink into the background', 'be unfair or cut dishonest corners to win quickly'],
+  },
+  9: {
+    do: ['throw away or donate old clothes, broken items, or clear clutter', 'finish an ongoing project completely instead of starting something new', 'forgive someone from your past and officially let the matter drop', 'look in the mirror and say, "I am proudly myself, completely independent"', 'spend time around highly positive, clean-energy people'],
+    dont: ['hold onto old arguments, hurts, or past regrets today', 'try to morph or change your true opinions just to please a crowd', 'start massive new long-term commitments today', 'absorb the negative, grumpy moods of people around you', 'run away from an ending or a goodbye that needs to happen'],
+  },
+  11: {
+    do: ['pay close attention to your weird dreams or random gut feelings today', 'write down any sudden, wild ideas that pop into your head', 'stand up as a bold beacon of inspiration for someone else', 'keep your body calm with gentle stretches or deep meditation', 'look out for subtle signs, coincidences, or magic patterns'],
+    dont: ['ignore your absolute gut feelings or write them off as silly', 'drink tons of caffeine or sugar that sparks nervous anxiety', 'stay stuck in toxic, negative environments that drain you', 'dismiss your own grand, visionary dreams as totally impossible', 'spend the whole day overthinking minor details'],
+  },
+  22: {
+    do: ['take a major, concrete step toward a massive lifetime dream', 'sketch out a highly detailed, long-term master plan or map', 'focus entirely on tasks that help a huge group of people', 'think incredibly big, do not limit your imagination today', 'organize a major, chaotic mess into a perfect system'],
+    dont: ['think small, play safe, or let petty doubts hold you back', 'focus exclusively on selfish or tiny personal gains', 'give up when a massive project gets incredibly difficult', 'let lazy, unstructured disorganization ruin your schedule', 'ignore your physical health or forget to eat regular meals'],
+  },
+  33: {
+    do: ['teach or guide someone with absolute, endless patience', 'perform a completely random, beautiful act of secret kindness', 'radiate pure joy, positive compliments, and warm smiles', 'take extra care of your own emotional heart space today', 'speak up boldly for someone who has no voice to defend themselves'],
+    dont: ["absorb the world's heavy trauma or scroll through dark news", 'hold high, critical expectations over imperfect people', 'neglect your own health to play the ultimate martyr', 'let negative, bitter energy change your kind nature today', 'complain about how much emotional weight you carry'],
+  },
+};
+
+function pickRandomFrom(list) {
+  return list && list.length ? list[Math.floor(Math.random() * list.length)] : null;
+}
+
+// Builds 1-2 real lines: always one from Universal Day's own list (the
+// lead - "universal day and calendar day... main ingredients of the soup"),
+// plus one from the specific featured pair's own root when it differs -
+// user, 2026-08-08: "try to match them to whatever energies are on there...
+// try and make them the most relevant to the energy mix." Two real
+// numbers' real content, not one number stretched to cover a mix it was
+// never written for.
+function buildActionItems(uDayRoot, secondaryRoot, kind) {
+  const items = [];
+  const leadEntry = PDF_ACTION_PLAN[uDayRoot];
+  const leadLine = leadEntry ? pickRandomFrom(leadEntry[kind]) : null;
+  if (leadLine) items.push(leadLine);
+  if (secondaryRoot && secondaryRoot !== uDayRoot) {
+    const secEntry = PDF_ACTION_PLAN[secondaryRoot];
+    const secLine = secEntry ? pickRandomFrom(secEntry[kind]) : null;
+    if (secLine && secLine !== leadLine) items.push(secLine);
+  }
+  return items;
+}
+
+// The full narrative: Universal Day opens (same for everyone), then the
+// featured personal finding, then zodiac - Day-level only if genuinely
+// notable, Year/Month always exactly one brief context sentence regardless
+// of magnitude. No numbers ever appear in the prose (Boost13, round 4).
+// Returns { findings, featured, watchItems, openText, goodText, badText,
+// backgroundText } - separate pieces, not one blended string. User,
+// 2026-08-08: "make one paragraph for what's good and one paragraph for
+// what could improve, you don't have to blend it all like that, that is
+// super confusing." A mixed day gets BOTH goodText and badText as two
+// distinct paragraphs (no connecting conjunction); good/bad-only days get
+// just the one that applies; a quiet day's single steady finding goes in
+// goodText. Zodiac/numerology system labels (animal names, "day-animal",
+// "Universal Day", etc.) never appear in openText/goodText/badText - only
+// backgroundText is allowed to name the underlying system, per the user's
+// explicit scope: "background only, the one that matters."
+function composeDayReading(birth, target) {
+  const findings = computeDayFindings(birth, target);
+  const featured = selectFeaturedFinding(findings);
+
+  // DAY_ENERGY, not NUMBER_IDENTITY_V2 - the opener describes what today's
+  // energy draws out of whoever it lands on, not a personal identity claim
+  // ("you're a natural protector" is only true if the person IS actually a
+  // 6; most days the Universal Day root isn't the reader's own number at
+  // all). Root 28 isn't in DAY_ENERGY's source PDF, but COMPOUND_FIXED_STOP
+  // was already written in this same day-energy voice, so it needs no
+  // separate handling here.
+  const uDayEnergy = DAY_ENERGY[findings.uDayRoot] || COMPOUND_FIXED_STOP[findings.uDayRoot];
+  let openText = '';
+  if (uDayEnergy) {
+    openText = `${uDayEnergy.light} ${uDayEnergy.shadow}`;
+  }
+
+  let goodText = '';
+  let badText = '';
+  if (featured.dayType === 'mixed') {
+    const goodPart = describeComparisonFinding(featured.good, 'good');
+    const badPart = describeComparisonFinding(featured.bad, 'bad', goodPart.image);
+    goodText = goodPart.text;
+    badText = badPart.text;
+  } else if (featured.dayType === 'good') {
+    goodText = describeComparisonFinding(featured.lead, 'good').text;
+  } else if (featured.dayType === 'bad') {
+    badText = describeComparisonFinding(featured.lead, 'bad').text;
+  } else {
+    goodText = describeComparisonFinding(featured.lead, 'good').text + pickRotating(QUIET_CLOSERS);
+  }
+
+  // Plain juxtaposition, never "against" - the target/birth values can be
+  // literally identical (e.g. same Year animal), and "against" implies a
+  // comparison or opposition that misleads when there is nothing to
+  // contrast. Year/Month always stay this one flat background sentence
+  // regardless of how notable they are (numerology doctrine applies here
+  // too - Day carries the real weight, Year/Month are just context). The
+  // Day-level zodiac comparison also lives here now, not in the main
+  // narrative, since it is the one place zodiac terms are allowed.
+  // Says outright whether the two animals actually get along (real Six
+  // Harmonies/Trine/Clash relation, not just naming them) - user, 2026-08-08:
+  // "literally say if they do good with each other, like Rat month and
+  // Monkey month do."
+  function relationNote(tier) {
+    if (tier === 'harmony') return ', a natural match';
+    if (tier === 'trine') return ', they get along great';
+    if (tier === 'clash') return ', a bit of a clash';
+    return '';
+  }
+  const sameYear = findings.zodiac.year.target === findings.zodiac.year.birth;
+  const sameMonth = findings.zodiac.month.target === findings.zodiac.month.birth;
+  const yearPart = sameYear
+    ? `it's a ${findings.zodiac.year.target} year, same as your own birth year`
+    : `it's a ${findings.zodiac.year.target} year (you were born in a ${findings.zodiac.year.birth} year${relationNote(findings.zodiac.year.relation.tier)})`;
+  const monthPart = sameMonth
+    ? `a ${findings.zodiac.month.target} month, same as your own birth month`
+    : `a ${findings.zodiac.month.target} month (you were born in a ${findings.zodiac.month.birth} month${relationNote(findings.zodiac.month.relation.tier)})`;
+
+  let dayZodiacPart = '';
+  const dayRel = findings.zodiac.day.relation.tier;
+  if (dayRel === 'same' || dayRel === 'harmony') {
+    dayZodiacPart = ` Your own ${findings.zodiac.day.birth} day-animal also lines up well with today's ${findings.zodiac.day.target} day.`;
+  } else if (dayRel === 'clash') {
+    dayZodiacPart = ` Your own ${findings.zodiac.day.birth} day-animal and today's ${findings.zodiac.day.target} day are a clash, for what it's worth.`;
+  }
+
+  const backgroundText = `${yearPart[0].toUpperCase()}${yearPart.slice(1)}, and ${monthPart}.${dayZodiacPart}`;
+
+  // Actionables: Universal Day always contributes the lead Do and lead
+  // Don't (the main ingredient); the specific pair already featured in the
+  // paragraphs contributes a second, supporting Do/Don't from its OWN real
+  // PDF list when its root differs from Universal Day - "the energy mix,"
+  // not one number's list stretched to cover a combination it was never
+  // written for. Mixed day: good pair feeds the Do, bad pair feeds the
+  // Don't (matching which finding they already reinforce in the paragraph
+  // above). Good/quiet day: lead pair feeds the Do only. Bad day: lead
+  // pair feeds the Don't only. The fixed standing Watch item(s) - separate,
+  // user-dictated, root 1-11 only - always come last.
+  const actionables = [];
+  // Uses todayRoot here, NOT imageRoot - imageRoot is the person's fixed
+  // trait (Life Path, Day Born...), which is never actually "a day" and
+  // has no business pulling from a bank literally titled "Universal /
+  // Calendar Day Action Plan." todayRoot is always the pair's real
+  // day-varying side (Universal Day, Energy, today's Day#, or Personal
+  // Day), which is the only category this content bank was written for.
+  let doSecondary = null;
+  let dontSecondary = null;
+  if (featured.dayType === 'mixed') {
+    doSecondary = featured.good.todayRoot;
+    dontSecondary = featured.bad.todayRoot;
+  } else if (featured.dayType === 'good' || featured.dayType === 'quiet') {
+    doSecondary = featured.lead.todayRoot;
+  } else if (featured.dayType === 'bad') {
+    dontSecondary = featured.lead.todayRoot;
+  }
+  // If the featured pair's todayRoot collapsed onto Universal Day itself
+  // (e.g. a quiet day defaults to the Life Path pair, whose todayRoot IS
+  // Universal Day - the same root buildActionItems already uses as the
+  // lead), fall back to the Energy pair's todayRoot instead of silently
+  // losing the second item. Universal Day and Energy are BOTH "leading"
+  // per doctrine, not just Universal Day alone - only when they are
+  // literally the same number on a given date does this genuinely
+  // collapse to one item, which is honest, not a bug.
+  const dayPair = findings.pairs.find((p) => p.id === 'day');
+  if (doSecondary === findings.uDayRoot && dayPair) doSecondary = dayPair.todayRoot;
+  if (dontSecondary === findings.uDayRoot && dayPair) dontSecondary = dayPair.todayRoot;
+  buildActionItems(findings.uDayRoot, doSecondary, 'do').forEach((line) => {
+    actionables.push({ kind: 'do', icon: '✅', line: `Do: ${cap(line)}.` });
+  });
+  buildActionItems(findings.uDayRoot, dontSecondary, 'dont').forEach((line) => {
+    actionables.push({ kind: 'dont', icon: '🚫', line: `Don't: ${cap(line)}.` });
+  });
+  const watchItems = getDayWatchItems(findings);
+  watchItems.forEach((w) => actionables.push(w));
+
+  return {
+    findings: findings,
+    featured: featured,
+    watchItems: watchItems,
+    actionables: actionables,
+    openText: openText,
+    goodText: goodText,
+    badText: badText,
+    backgroundText: backgroundText,
+  };
+}
 
 // Round 2 (2026-08-07): the connector-rotation composer above read as a
 // template loop, exactly what the user's original Boost13 answer ruled
