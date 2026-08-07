@@ -110,28 +110,111 @@ function getImprintLuckyNumbers(birthDate) {
   };
 }
 
+/* ---------------------------------------------------- domain taxonomy -- */
+// 2026-08-07 Boost13: the original 4 themes (28/8/11/lucky-day) were built
+// assuming "imprint" always means "financial/big-outcome" - true for the
+// artist case studies, but the user's real theory tracks different themes
+// for different life areas (their own words: "6day imprints are for
+// relationships... 8/28 financial"). Every number that drives at least one
+// domain (primary or secondary) below.
+//
+// Numbers CAN and do span multiple domains (user's explicit call) - 8 is
+// both Financial and Career, 9 is Relationship(secondary)/Family/Spiritual,
+// etc. Relationship is the one domain with a primary/secondary split: only
+// 6 can trigger it on its own; 3 and 9 can only reinforce an already-hit 6
+// pair, never trigger the domain alone (see computeImprintPersonAlignment).
+// 2 is deliberately unassigned - it doesn't carry a domain of its own.
+const IMPRINT_DOMAINS = {
+  financial: { label: 'Financial', emoji: '💰', numbers: [8, 28] },
+  career: { label: 'Career', emoji: '💼', numbers: [1, 4, 8, 22] },
+  relationship: { label: 'Relationship', emoji: '❤️', numbers: [6], secondaryNumbers: [3, 9] },
+  family: { label: 'Family', emoji: '🏠', numbers: [6, 4, 9] },
+  health: { label: 'Health', emoji: '🩺', numbers: [5, 3] },
+  spiritual: { label: 'Spiritual', emoji: '✨', numbers: [11, 9, 3, 7, 33] },
+};
+
+// The full set of "first imprint day" themes now tracked, up from the
+// original 4. 33 isn't a real calendar day (no month has a 33rd) so it's
+// excluded here and handled separately via a pure-Life-Path day search
+// (getPure33Imprint) instead of a literal day-of-month search.
+const IMPRINT_TRACKED_NUMBERS = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28];
+
+function domainsForNumber(n) {
+  return Object.keys(IMPRINT_DOMAINS).filter((key) => {
+    const d = IMPRINT_DOMAINS[key];
+    return d.numbers.includes(n) || (d.secondaryNumbers && d.secondaryNumbers.includes(n));
+  });
+}
+
+function domainTagHtml(numbers) {
+  const keys = [];
+  (Array.isArray(numbers) ? numbers : [numbers]).forEach((n) => {
+    domainsForNumber(n).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
+  });
+  return keys.map((k) => `${IMPRINT_DOMAINS[k].emoji} ${IMPRINT_DOMAINS[k].label}`);
+}
+
 /* ------------------------------------------------- day-theme imprints -- */
-// The 4 day-of-month themes the user's case studies actually use: the
-// fixed-stop 28, the two master-adjacent days 8/11, and the person's own
-// lucky-number day (only when that number is itself a valid calendar day
-// 1-31 - a lucky number like 82 has no "28th"-style literal day to search
-// for, so that theme is simply skipped for that person, not guessed at).
-function getPersonDayThemeImprints(birthDate) {
-  const themes = [
-    { key: 'imprint28', label: '28-Day', day: 28 },
-    { key: 'imprint8', label: '8-Day', day: 8 },
-    { key: 'imprint11', label: '11-Day', day: 11 },
-  ];
+// getFirstMatchingLifepathDayNumber (numerology.js, untouched) already
+// walks forward day-by-day from birth looking for a calendar date whose
+// full reduction PURE-matches a target Life Path - exactly the mechanic
+// needed for 33, which can't be searched as a literal day-of-month. Only
+// the LP matters here (it's 33 by construction once found); "Not Found"
+// (no pure-33 date within the 10-year search window) means this person
+// simply doesn't carry that imprint, same precedent as any other skipped
+// theme.
+function getPure33Imprint(birthDate) {
+  const day = getFirstMatchingLifepathDayNumber(birthDate, 33);
+  return day === 'Not Found' ? null : { lp: 33 };
+}
+
+// Every domain-relevant number's first-imprint LP, plus the person's own
+// core Life Path - treated as just another value in the set, domain-tagged
+// through the exact same number-based lookup as everything else (a 6 Life
+// Path counts toward Relationship/Family regardless of where it came from).
+function getPersonImprintValues(birthDate) {
+  const values = [];
+  IMPRINT_TRACKED_NUMBERS.forEach((n) => {
+    const found = getFirstDayOfMonthImprint(birthDate, n);
+    if (found) values.push({ number: n, label: `${n}-Day imprint`, lp: found.lp });
+  });
+  const pure33 = getPure33Imprint(birthDate);
+  if (pure33) values.push({ number: 33, label: '33-Day imprint', lp: pure33.lp });
+  const coreLP = compatLifePathInfo(birthDate).lookupValue;
+  values.push({ number: coreLP, label: 'Life Path', lp: coreLP });
+  return values;
+}
+
+// Same set as above, but keeping the literal calendar "day" field event-
+// date mode gates on (candidate's day-of-month must literally hit it). 33
+// has no such day, so it's excluded here - it only makes sense in the
+// person-vs-person cross-compare, where LPs are compared directly with no
+// calendar-day requirement.
+function getPersonImprintDayThemes(birthDate) {
+  return IMPRINT_TRACKED_NUMBERS.map((n) => {
+    const found = getFirstDayOfMonthImprint(birthDate, n);
+    return found ? { number: n, label: `${n}-Day`, day: n, lp: found.lp } : null;
+  }).filter(Boolean);
+}
+
+// The lucky-number-day imprint stays domain-agnostic (2026-08-07 call):
+// it isn't a fixed theme number like 6 or 8, it's personal to each person,
+// so rather than locking it to one domain it gets checked against whatever
+// domain the thing it resonates with belongs to - at boosted weight, since
+// a first-imprint lucky number is a stronger signal than an ordinary theme
+// (see IMPRINT_LUCKY_EXACT/COMPAT below).
+function getPersonLuckyImprintValues(birthDate) {
   const lucky = getImprintLuckyNumbers(birthDate);
+  const values = [];
   if (lucky.primary >= 1 && lucky.primary <= 31) {
-    themes.push({ key: 'imprintLucky', label: `Lucky Day (${lucky.primary})`, day: lucky.primary });
+    const found = getFirstDayOfMonthImprint(birthDate, lucky.primary);
+    if (found) values.push({ label: `Lucky Day (${lucky.primary}) imprint`, lp: found.lp });
   }
-  return themes
-    .map((t) => {
-      const found = getFirstDayOfMonthImprint(birthDate, t.day);
-      return found ? Object.assign({}, t, found) : null;
-    })
-    .filter(Boolean);
+  if (lucky.alt != null && lucky.alt >= 1 && lucky.alt <= 31) {
+    const found = getFirstDayOfMonthImprint(birthDate, lucky.alt);
+    if (found) values.push({ label: `Alt Lucky Day (${lucky.alt}) imprint`, lp: found.lp });
+  }
+  return values;
 }
 
 /* ---------------------------------------------------- the full score --- */
@@ -148,8 +231,11 @@ function getPersonDayThemeImprints(birthDate) {
 //        ever imprint day (the app's EXISTING "First Imprints" Profile
 //        panel, getFirstMatchingLifepathDayNumber) equals the candidate's
 //        actual day-of-month
+// Every theme match also carries a `domains` tag (2026-08-07) for display -
+// this is a person-vs-EVENT-DATE read (a release date, a game day, "today"),
+// so the score/weighting itself is untouched by domains; only the label.
 function computeImprintAlignment(personBirthDate, candidateDate) {
-  const dayThemes = getPersonDayThemeImprints(personBirthDate);
+  const dayThemes = getPersonImprintDayThemes(personBirthDate);
   const candidateDay = candidateDate.getDate();
   const candidateLP = compatLifePathInfo(candidateDate).lookupValue;
 
@@ -158,14 +244,15 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
 
   dayThemes.forEach((theme) => {
     if (candidateDay !== theme.day) return;
+    const domains = domainTagHtml(theme.number);
     if (theme.lp === candidateLP) {
       score += 15;
-      matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: 'Exact Life Path match', points: 15 });
+      matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: 'Exact Life Path match', points: 15, domains });
     } else {
       const c = numerologyCompat(theme.lp, candidateLP);
       if (c >= 77) {
         score += 8;
-        matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: 8 });
+        matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: 8, domains });
       }
     }
   });
@@ -177,7 +264,7 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
       if (seenLuckyText.has(n.text)) return;
       seenLuckyText.add(n.text);
       score += n.points;
-      matches.push({ label: sourceLabel, text: n.text, points: n.points });
+      matches.push({ label: sourceLabel, text: n.text, points: n.points, domains: [] });
     });
   }
   const lucky = getImprintLuckyNumbers(personBirthDate);
@@ -187,7 +274,7 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
   const ownImprintDay = getFirstMatchingLifepathDayNumber(personBirthDate, candidateLP);
   if (ownImprintDay === candidateDay) {
     score += 10;
-    matches.push({ label: 'Rare Coincidence', text: `Today's day-of-month matches your own first ${candidateLP}LP imprint day`, points: 10 });
+    matches.push({ label: 'Rare Coincidence', text: `Today's day-of-month matches your own first ${candidateLP}LP imprint day`, points: 10, domains: [] });
   }
 
   score = Math.min(100, score);
@@ -200,53 +287,109 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
 // themed day, and it checks that date's own Universal Day LP. That's right
 // for a release date (verified against the user's real artist case
 // studies) but wrong for a real PERSON, who isn't a single date - they
-// carry their own full imprint history (their own 28/8/11/lucky-day
-// imprints, plus their own core Life Path) independent of what day-of-
-// month their birthday happens to fall on. Confirmed broken live: user
-// vs "Tyreese" (7 Life Path, whose first-8-imprint is 11) - Tyreese's LP
+// carry their own full imprint history independent of what day-of-month
+// their birthday happens to fall on. Confirmed broken live: user vs
+// "Tyreese" (7 Life Path, whose first-8-imprint is 11) - Tyreese's LP
 // exactly matches the user's own first-28-imprint (7), and his 8-imprint
-// (11) is compat-table-compatible with it (99, well past the 77 bar) -
-// neither of which the date-based function above can ever see, since it
-// never fetches the other side's Life Path or imprint history at all.
+// (11) is compat-table-compatible with it (99) - neither of which the
+// date-based function above can ever see.
 //
-// Fix: build each person's full set of imprint VALUES (day-theme imprints
-// + their own core Life Path, via compatLifePathInfo - the same function
-// already used to read a real Life Path elsewhere in this file/app), then
-// cross-compare every value on side A against every value on side B - not
-// requiring the two themes to match (a 28-imprint can resonate with an
-// 8-imprint, exactly like the Tyreese example). Same additive-only, +15
-// exact / +8 compatible, cap-at-100 philosophy as every other score in
-// this file - user's own call when scoped: more matches should stack, not
-// get averaged down, same as the rest of the app's additive bonuses.
-function getPersonImprintValues(birthDate) {
-  const themes = getPersonDayThemeImprints(birthDate);
-  const values = themes.map((t) => ({ label: `${t.label} imprint`, lp: t.lp }));
-  values.push({ label: 'Life Path', lp: compatLifePathInfo(birthDate).lookupValue });
-  return values;
+// 2026-08-07 reweigh: the very first version of this (full cross-product,
+// every value vs every value, flat additive) scored two essentially random
+// people 100/100 - checked against the whole compat table, 45% of all
+// possible number pairings already read "compatible", so a handful of
+// hits was never actually rare. Domains fix this two ways: (1) a value
+// only competes against same-domain values on the other side, not the
+// other person's ENTIRE imprint set, and (2) each domain scores by DENSITY
+// (weighted hits / max possible for that many pairs), not raw stacking -
+// 1 hit out of 6 possible pairs reads very differently than 5 out of 6.
+const IMPRINT_PAIR_EXACT = 15;
+const IMPRINT_PAIR_COMPAT = 8;
+const IMPRINT_SECONDARY_EXACT = 6;
+const IMPRINT_SECONDARY_COMPAT = 3;
+const IMPRINT_LUCKY_EXACT = 20;
+const IMPRINT_LUCKY_COMPAT = 12;
+
+function imprintPairWeight(lpA, lpB, exactPts, compatPts) {
+  if (lpA === lpB) return { weight: exactPts, kind: 'exact' };
+  const c = numerologyCompat(lpA, lpB);
+  if (c >= 77) return { weight: compatPts, kind: 'compat', compatScore: c };
+  return null;
 }
 
 function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
   const valuesA = getPersonImprintValues(personABirthDate);
   const valuesB = getPersonImprintValues(personBBirthDate);
+  const luckyA = getPersonLuckyImprintValues(personABirthDate);
+  const luckyB = getPersonLuckyImprintValues(personBBirthDate);
 
-  let score = 50;
-  const matches = [];
+  const domains = {};
 
-  valuesA.forEach((va) => {
-    valuesB.forEach((vb) => {
-      if (va.lp === vb.lp) {
-        score += 15;
-        matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: 15, kind: 'exact' });
-      } else {
-        const c = numerologyCompat(va.lp, vb.lp);
-        if (c >= 77) {
-          score += 8;
-          matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: 8, kind: 'compat', compatScore: c });
+  Object.keys(IMPRINT_DOMAINS).forEach((key) => {
+    const domain = IMPRINT_DOMAINS[key];
+    const domainValuesA = valuesA.filter((v) => domain.numbers.includes(v.number));
+    const domainValuesB = valuesB.filter((v) => domain.numbers.includes(v.number));
+    const totalPairs = domainValuesA.length * domainValuesB.length;
+
+    let weightedHits = 0;
+    const matches = [];
+
+    domainValuesA.forEach((va) => {
+      domainValuesB.forEach((vb) => {
+        const r = imprintPairWeight(va.lp, vb.lp, IMPRINT_PAIR_EXACT, IMPRINT_PAIR_COMPAT);
+        if (r) {
+          weightedHits += r.weight;
+          matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore });
         }
-      }
+      });
     });
+
+    let score = totalPairs > 0 ? Math.round(50 + 50 * weightedHits / (totalPairs * IMPRINT_PAIR_EXACT)) : 50;
+
+    // Secondary numbers (Relationship's 3/9) only reinforce an already-hit
+    // primary pair - they can't put the domain in play on their own.
+    if (domain.secondaryNumbers && matches.length > 0) {
+      const secA = valuesA.filter((v) => domain.secondaryNumbers.includes(v.number));
+      const secB = valuesB.filter((v) => domain.secondaryNumbers.includes(v.number));
+      secA.forEach((sa) => {
+        secB.forEach((sb) => {
+          const r = imprintPairWeight(sa.lp, sb.lp, IMPRINT_SECONDARY_EXACT, IMPRINT_SECONDARY_COMPAT);
+          if (r) {
+            score += r.weight;
+            matches.push({ aLabel: sa.label, aLp: sa.lp, bLabel: sb.label, bLp: sb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, secondary: true });
+          }
+        });
+      });
+    }
+
+    // Lucky-day imprints are domain-agnostic - checked against this
+    // domain's own values at boosted weight, stacked on top of the
+    // density score above rather than folded into its denominator.
+    luckyA.forEach((lv) => {
+      domainValuesB.forEach((ov) => {
+        const r = imprintPairWeight(lv.lp, ov.lp, IMPRINT_LUCKY_EXACT, IMPRINT_LUCKY_COMPAT);
+        if (r) {
+          score += r.weight;
+          matches.push({ aLabel: lv.label, aLp: lv.lp, bLabel: ov.label, bLp: ov.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, lucky: true });
+        }
+      });
+    });
+    luckyB.forEach((lv) => {
+      domainValuesA.forEach((ov) => {
+        const r = imprintPairWeight(lv.lp, ov.lp, IMPRINT_LUCKY_EXACT, IMPRINT_LUCKY_COMPAT);
+        if (r) {
+          score += r.weight;
+          matches.push({ aLabel: ov.label, aLp: ov.lp, bLabel: lv.label, bLp: lv.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, lucky: true });
+        }
+      });
+    });
+
+    score = Math.min(100, score);
+    domains[key] = { label: domain.label, emoji: domain.emoji, score, tier: scoreClass(score), matches };
   });
 
-  score = Math.min(100, score);
-  return { score, tier: scoreClass(score), matches };
+  const domainScores = Object.keys(domains).map((k) => domains[k].score);
+  const overallScore = Math.round(domainScores.reduce((a, b) => a + b, 0) / domainScores.length);
+
+  return { score: overallScore, tier: scoreClass(overallScore), domains };
 }

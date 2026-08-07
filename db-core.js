@@ -3035,6 +3035,34 @@ function universalDayInsightHtml(name, personLookupValue, matchDate) {
   `;
 }
 
+// Imprint Alignment (2026-08-07) - display-only, same precedent as this
+// whole Insight tab: nothing here feeds computeFighterScore, edge tiers,
+// or any prediction. A player/manager's birthdate is exactly the "person"
+// side computeImprintAlignment (imprint-alignment.js) already expects, and
+// the match/game date is exactly its "candidate date" side - the same
+// person-vs-event-date shape the artist release-date case studies
+// validated, just with a game day standing in for a release day. Skipped
+// entirely (not guessed) when matchDate isn't confirmed yet, same as the
+// Universal Day insight above.
+function imprintInsightHtml(name, personBirthDate, matchDate) {
+  if (!matchDate) return '';
+  const result = computeImprintAlignment(personBirthDate, matchDate);
+  const rows = result.matches.length
+    ? result.matches.map((m) => `
+        <div class="pm-insight-pair">
+          <div class="pm-insight-pair-clash">🎯 ${escapeHtml(m.label)} <span class="score-inline good">+${m.points}</span></div>
+          <div class="pm-insight-pair-theme">${escapeHtml(m.text)}${m.domains && m.domains.length ? ` &middot; ${m.domains.map(escapeHtml).join(', ')}` : ''}</div>
+        </div>
+      `).join('')
+    : '<div class="pm-insight-pair"><div class="pm-insight-pair-theme">No imprint theme lines up on this date.</div></div>';
+  return `
+    <div class="pm-insight-person">
+      <div class="pm-breakdown-name">${escapeHtml(name)} &middot; Imprint <span class="score-inline ${scoreClass(result.score)}">${result.score}</span></div>
+      ${rows}
+    </div>
+  `;
+}
+
 // The pairwise "why" between two entities - runs their life paths through the same
 // numerologyCompat table as everything else, purely to label the relationship, not to
 // score it (UFC/Tennis fighters are never scored against each other for real - only
@@ -3113,16 +3141,63 @@ function insightRowHtml(row) {
   return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span>${escapeHtml(insight.theme)} ${icons}${dayPart}</span></div>`;
 }
 
-// Wraps a breakdown popup's existing content plus the new Insight tab into the
-// shared two-tab shell, identical across UFC/Tennis/MLB.
-function modalTabsHtml(breakdownHtml, insightHtml) {
+// MLB's Imprint tab mirrors teamRosterInsightRows/insightRowHtml above but
+// for computeImprintAlignment - a full roster (pitcher + ~9 batters +
+// manager) is too many people for a per-person card (UFC/Tennis's 2-person
+// treatment), so this stays a compact one-line-per-person row: overall
+// imprint score plus, if any, the single strongest match with its
+// domain tag(s). Skipped entirely when matchDate isn't confirmed yet.
+function teamRosterImprintRows(side, manager, birthdates, matchDate) {
+  if (!matchDate) return [];
+  const rows = [];
+  const pitcherBd = birthdates.get(side.startingPitcherId);
+  if (pitcherBd && pitcherBd.birthDate) {
+    const result = computeImprintAlignment(parseDateInput(pitcherBd.birthDate), matchDate);
+    rows.push({ role: `SP ${pitcherBd.name}`, result });
+  }
+  side.batters.forEach((b) => {
+    const bd = birthdates.get(b.id);
+    if (!bd || !bd.birthDate) return;
+    const result = computeImprintAlignment(parseDateInput(bd.birthDate), matchDate);
+    rows.push({ role: `${b.pos} ${bd.name}`, result });
+  });
+  if (manager) {
+    const bd = birthdates.get(manager.id);
+    if (bd && bd.birthDate) {
+      const result = computeImprintAlignment(parseDateInput(bd.birthDate), matchDate);
+      rows.push({ role: `Mgr ${bd.name}`, result });
+    }
+  }
+  return rows;
+}
+
+function imprintRowHtml(row) {
+  const top = row.result.matches[0];
+  const tag = top && top.domains && top.domains.length ? ` (${top.domains.map(escapeHtml).join(', ')})` : '';
+  const matchPart = top ? ` &middot; ${escapeHtml(top.label)}${tag}` : '';
+  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span><span class="score-inline ${scoreClass(row.result.score)}">${row.result.score}</span>${matchPart}</span></div>`;
+}
+
+// Wraps a breakdown popup's existing content plus the Insight tab (and,
+// 2026-08-07, an optional Imprint tab) into the shared tab shell, identical
+// across UFC/Tennis/MLB. imprintHtml is optional so any call site not yet
+// passing it still gets the original 2-tab shell unchanged.
+function modalTabsHtml(breakdownHtml, insightHtml, imprintHtml) {
+  const imprintTab = imprintHtml
+    ? `<button class="pm-modal-tab" data-tab="imprint" type="button">🎯 Imprint</button>`
+    : '';
+  const imprintPage = imprintHtml
+    ? `<div class="pm-modal-page" data-page="imprint" style="display:none;">${imprintHtml}</div>`
+    : '';
   return `
     <div class="pm-modal-tabs">
       <button class="pm-modal-tab active" data-tab="breakdown" type="button">📊 Breakdown</button>
       <button class="pm-modal-tab" data-tab="insight" type="button">🔮 Insight</button>
+      ${imprintTab}
     </div>
     <div class="pm-modal-page" data-page="breakdown">${breakdownHtml}</div>
     <div class="pm-modal-page" data-page="insight" style="display:none;">${insightHtml}</div>
+    ${imprintPage}
   `;
 }
 

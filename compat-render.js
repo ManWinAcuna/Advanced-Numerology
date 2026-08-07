@@ -347,9 +347,17 @@ function imprintPossessive(name) {
   return IMPRINT_POSSESSIVE[name] || `${name}'s`;
 }
 
+// m.domains (2026-08-07) is an array of "emoji Label" strings tagging which
+// life area(s) that theme number belongs to - empty for the domain-agnostic
+// bonuses (Lucky Number, Rare Coincidence), which don't get a tag.
+function imprintDomainTagsHtml(domains) {
+  if (!domains || !domains.length) return '';
+  return ` <span class="imprint-domain-tags">${domains.map((d) => `<span class="imprint-domain-tag">${escapeHtml(d)}</span>`).join('')}</span>`;
+}
+
 function imprintAlignmentResultHtml(result, personName, candidateName) {
   const rows = result.matches.length
-    ? result.matches.map((m) => `<div class="imprint-match-row"><b>${escapeHtml(m.label)}:</b> ${escapeHtml(m.text)} <span class="imprint-match-pts">+${m.points}</span></div>`).join('')
+    ? result.matches.map((m) => `<div class="imprint-match-row"><b>${escapeHtml(m.label)}:</b> ${escapeHtml(m.text)}${imprintDomainTagsHtml(m.domains)} <span class="imprint-match-pts">+${m.points}</span></div>`).join('')
     : '<div class="imprint-match-empty">No imprint themes matched this date.</div>';
   return `
     <div class="imprint-result">
@@ -377,21 +385,42 @@ function imprintPersonMatchRow(m, nameA, nameB) {
   return { label: aSide, text: `${verb} ${bSide}`, points: m.points };
 }
 
+// 2026-08-07 domain reweigh: a flat match list stopped being useful once
+// the score is genuinely 6 separate domain reads (Financial/Career/
+// Relationship/Family/Health/Spiritual) - showing one overall badge plus a
+// row of tappable domain chips, each opening its own match detail, instead
+// of a single "see what matched" dump.
+function imprintPersonMatchTagHtml(m) {
+  if (m.secondary) return ' <span class="imprint-match-tag">secondary</span>';
+  if (m.lucky) return ' <span class="imprint-match-tag">lucky boost</span>';
+  return '';
+}
+
 function imprintPersonAlignmentResultHtml(result, nameA, nameB) {
-  const rows = result.matches.length
-    ? result.matches.map((m) => {
-        const row = imprintPersonMatchRow(m, nameA, nameB);
-        return `<div class="imprint-match-row"><b>${escapeHtml(row.label)}:</b> ${escapeHtml(row.text)} <span class="imprint-match-pts">+${row.points}</span></div>`;
-      }).join('')
-    : '<div class="imprint-match-empty">No imprint resonance found between these two.</div>';
+  const domainKeys = Object.keys(result.domains);
+  const chips = domainKeys.map((key) => {
+    const dm = result.domains[key];
+    return `<button type="button" class="imprint-domain-chip ${dm.tier}" data-imprint-domain="${key}">${dm.emoji} ${escapeHtml(dm.label)} <b>${dm.score}</b></button>`;
+  }).join('');
+  const panels = domainKeys.map((key) => {
+    const dm = result.domains[key];
+    const rows = dm.matches.length
+      ? dm.matches.map((m) => {
+          const row = imprintPersonMatchRow(m, nameA, nameB);
+          return `<div class="imprint-match-row"><b>${escapeHtml(row.label)}:</b> ${escapeHtml(row.text)}${imprintPersonMatchTagHtml(m)} <span class="imprint-match-pts">+${row.points}</span></div>`;
+        }).join('')
+      : '<div class="imprint-match-empty">No resonance in this domain.</div>';
+    return `<div class="imprint-domain-panel" data-imprint-domain-panel="${key}" hidden>${rows}</div>`;
+  }).join('');
+
   return `
-    <div class="imprint-result">
+    <div class="imprint-result imprint-result-domains">
       <div class="imprint-result-head">
         <div class="imprint-result-score ${result.tier}">${result.score}</div>
         <div class="imprint-result-label">${escapeHtml(nameA)} <i>&times;</i> ${escapeHtml(nameB)} Imprints</div>
       </div>
-      <button type="button" class="imprint-reveal-btn" data-imprint-reveal>▾ See what matched</button>
-      <div class="imprint-reveal-body" data-imprint-reveal-body hidden>${rows}</div>
+      <div class="imprint-domain-grid">${chips}</div>
+      <div class="imprint-domain-panels">${panels}</div>
     </div>`;
 }
 
@@ -405,9 +434,31 @@ function imprintPillContentHtml(dateA, nameA, dateB, nameB, personMode) {
   return imprintAlignmentResultHtml(rA, nameA, nameB) + imprintAlignmentResultHtml(rB, nameB, nameA);
 }
 
+// One domain open at a time, closing on re-tap - same interaction as an
+// accordion. Wired alongside the flat-list reveal buttons below so every
+// existing call site gets both behaviors with no per-site changes.
+function wireImprintDomainChips(scopeEl) {
+  const chips = scopeEl.querySelectorAll('[data-imprint-domain]');
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const key = chip.dataset.imprintDomain;
+      const panel = scopeEl.querySelector(`[data-imprint-domain-panel="${key}"]`);
+      const wasOpen = chip.classList.contains('open');
+      scopeEl.querySelectorAll('[data-imprint-domain-panel]').forEach((p) => { p.hidden = true; });
+      chips.forEach((c) => c.classList.remove('open'));
+      if (!wasOpen && panel) {
+        panel.hidden = false;
+        chip.classList.add('open');
+      }
+    });
+  });
+}
+
 // Each imprint-pill-body can hold up to 2 result blocks (both directions),
 // each with its own independent reveal toggle - queried fresh rather than
 // relying on unique ids, since a page could have multiple compat heroes.
+// Also wires the domain-chip accordion (person-mode results) so every call
+// site gets both interactions with no per-site changes.
 function wireImprintRevealButtons(scopeEl) {
   scopeEl.querySelectorAll('[data-imprint-reveal]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -417,6 +468,7 @@ function wireImprintRevealButtons(scopeEl) {
       btn.textContent = open ? '▴ Hide what matched' : '▾ See what matched';
     });
   });
+  wireImprintDomainChips(scopeEl);
 }
 
 /* Shared shield-badge shell for cycle-based breakdowns (Energy Flow, Month

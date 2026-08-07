@@ -301,6 +301,21 @@ function tennisInsightTabHtml(p) {
   `;
 }
 
+function tennisImprintTabHtml(p) {
+  const roster = buildAllPlayers();
+  const matchedA = matchPlayer(p.playerAName, roster);
+  const matchedB = matchPlayer(p.playerBName, roster);
+  const matchDate = p.matchTime ? new Date(p.matchTime) : null;
+  if (!matchedA || !matchedB || !matchDate) return '';
+  return `
+    <div class="pm-insight-grid">
+      ${imprintInsightHtml(matchedA.name, tennisParseDateInput(matchedA.dob), matchDate)}
+      ${imprintInsightHtml(matchedB.name, tennisParseDateInput(matchedB.dob), matchDate)}
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 function tennisMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
@@ -338,7 +353,7 @@ function tennisMatchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
-  return hero + modalTabsHtml(breakdown, tennisInsightTabHtml(p));
+  return hero + modalTabsHtml(breakdown, tennisInsightTabHtml(p), tennisImprintTabHtml(p));
 }
 
 function initTennisMatchupModal(suffix = '') {

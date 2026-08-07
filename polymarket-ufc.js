@@ -450,6 +450,19 @@ function insightTabHtml(f) {
   `;
 }
 
+function imprintTabHtml(f) {
+  const matchDateISO = currentMatchDateISO(f);
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
+  if (!matchDate) return '';
+  return `
+    <div class="pm-insight-grid">
+      ${imprintInsightHtml(f.matchedA.name, parseDateInput(f.matchedA.dob), matchDate)}
+      ${imprintInsightHtml(f.matchedB.name, parseDateInput(f.matchedB.dob), matchDate)}
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the fight date &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 function breakdownModalHtml(f, scores) {
   const hero = `
     <div class="score-hero">
@@ -462,7 +475,7 @@ function breakdownModalHtml(f, scores) {
       ${breakdownColumnHtml(f.matchedB.name, scores.scoreB)}
     </div>
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(f));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(f), imprintTabHtml(f));
 }
 
 // Removes the card from view immediately and remembers it - independent of

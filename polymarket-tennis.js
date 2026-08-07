@@ -517,6 +517,19 @@ function insightTabHtml(m, region) {
   `;
 }
 
+function imprintTabHtml(m, region) {
+  const matchDateISO = region ? currentMatchDateISO(m.gameStartTime, region) : null;
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
+  if (!matchDate) return '';
+  return `
+    <div class="pm-insight-grid">
+      ${imprintInsightHtml(m.matchedA.name, parseDateInput(m.matchedA.dob), matchDate)}
+      ${imprintInsightHtml(m.matchedB.name, parseDateInput(m.matchedB.dob), matchDate)}
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 function breakdownModalHtml(m, scores, region) {
   const hero = `
     <div class="score-hero">
@@ -529,7 +542,7 @@ function breakdownModalHtml(m, scores, region) {
       ${breakdownColumnHtml(m.matchedB.name, scores.scoreB)}
     </div>
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(m, region));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(m, region), imprintTabHtml(m, region));
 }
 
 function initDismissButtons() {

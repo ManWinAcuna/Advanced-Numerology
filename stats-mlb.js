@@ -493,6 +493,8 @@ async function fetchMlbMatchupInsightRows(p) {
   return {
     rowsA: teamRosterInsightRows(a.side, a.manager, birthdates, matchDate),
     rowsB: teamRosterInsightRows(b.side, b.manager, birthdates, matchDate),
+    imprintRowsA: teamRosterImprintRows(a.side, a.manager, birthdates, matchDate),
+    imprintRowsB: teamRosterImprintRows(b.side, b.manager, birthdates, matchDate),
   };
 }
 
@@ -511,6 +513,28 @@ function mlbInsightTabHtml(p, rows, loading) {
       </div>
     </div>
     <div class="pm-insight-disclaimer">Research-based read on each life path's tendencies &mdash; informational only.</div>
+  `;
+}
+
+// Imprint tab (2026-08-07) - same async roster fetch as the Insight tab
+// above (fetchMlbMatchupInsightRows already resolves birthdates + matchDate
+// once for both), just rendered through teamRosterImprintRows/imprintRowHtml
+// instead. Display-only, doesn't touch computeFighterScore/edge tiers.
+function mlbImprintTabHtml(p, rows, loading) {
+  if (loading) return '<div class="pm-unmatched">Loading roster imprint&hellip;</div>';
+  if (!rows) return '<div class="pm-unmatched">Roster data isn\'t available for this game anymore.</div>';
+  return `
+    <div class="pm-insight-grid">
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(p.teamAName)}</div>
+        ${rows.imprintRowsA.map(imprintRowHtml).join('') || '<div class="empty-state">No roster data.</div>'}
+      </div>
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(p.teamBName)}</div>
+        ${rows.imprintRowsB.map(imprintRowHtml).join('') || '<div class="empty-state">No roster data.</div>'}
+      </div>
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the game date &mdash; informational only, not part of the numerology edge above.</div>
   `;
 }
 
@@ -551,10 +575,11 @@ function mlbMatchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
-  // Insight tab starts in its loading state - initMlbMatchupModal() fetches
-  // the real roster afterward and patches just that page's innerHTML in,
-  // so switching tabs mid-fetch doesn't get reset back to Breakdown.
-  return hero + modalTabsHtml(breakdown, mlbInsightTabHtml(p, null, true));
+  // Insight/Imprint tabs both start in their loading state -
+  // initMlbMatchupModal() fetches the real roster afterward and patches
+  // both pages' innerHTML in, so switching tabs mid-fetch doesn't get reset
+  // back to Breakdown.
+  return hero + modalTabsHtml(breakdown, mlbInsightTabHtml(p, null, true), mlbImprintTabHtml(p, null, true));
 }
 
 function initMlbMatchupModal(suffix = '') {
@@ -569,6 +594,8 @@ function initMlbMatchupModal(suffix = '') {
     const rows = await fetchMlbMatchupInsightRows(p);
     const insightPage = document.querySelector('#mlbStatsMatchupBody' + suffix + ' [data-page="insight"]');
     if (insightPage) insightPage.innerHTML = mlbInsightTabHtml(p, rows, false);
+    const imprintPage = document.querySelector('#mlbStatsMatchupBody' + suffix + ' [data-page="imprint"]');
+    if (imprintPage) imprintPage.innerHTML = mlbImprintTabHtml(p, rows, false);
   });
 
   document.getElementById('mlbStatsMatchupClose' + suffix).addEventListener('click', () => {

@@ -472,6 +472,27 @@ function insightTabHtml(g, scores) {
   `;
 }
 
+function imprintTabHtml(g) {
+  const matchDateISO = currentMlbMatchDateISO(g, () => updateGameCard(g.conditionId));
+  const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
+  if (!matchDate) return '';
+  const rowsA = teamRosterImprintRows(g.sideA, g.managerA, g.birthdates, matchDate).map(imprintRowHtml).join('');
+  const rowsB = teamRosterImprintRows(g.sideB, g.managerB, g.birthdates, matchDate).map(imprintRowHtml).join('');
+  return `
+    <div class="pm-insight-grid">
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(g.teamAName)}</div>
+        ${rowsA || '<div class="empty-state">No roster data yet.</div>'}
+      </div>
+      <div class="pm-insight-person">
+        <div class="pm-breakdown-name">${escapeHtml(g.teamBName)}</div>
+        ${rowsB || '<div class="empty-state">No roster data yet.</div>'}
+      </div>
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the game date &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 function breakdownModalHtml(g, scores) {
   const hero = `
     <div class="score-hero">
@@ -484,7 +505,7 @@ function breakdownModalHtml(g, scores) {
       ${breakdownColumnHtml(g.teamBName, scores.scoreB)}
     </div>
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(g, scores));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(g, scores), imprintTabHtml(g));
 }
 
 function feedToggleHtml(conditionId, count, open) {

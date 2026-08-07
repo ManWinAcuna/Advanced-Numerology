@@ -322,6 +322,21 @@ function insightTabHtml(p) {
   `;
 }
 
+function imprintTabHtml(p) {
+  const roster = buildAllFighters();
+  const matchedA = matchFighter(p.fighterAName, roster);
+  const matchedB = matchFighter(p.fighterBName, roster);
+  const matchDate = p.fightTime ? new Date(p.fightTime) : null;
+  if (!matchedA || !matchedB || !matchDate) return '';
+  return `
+    <div class="pm-insight-grid">
+      ${imprintInsightHtml(matchedA.name, ufcParseDateInput(matchedA.dob), matchDate)}
+      ${imprintInsightHtml(matchedB.name, ufcParseDateInput(matchedB.dob), matchDate)}
+    </div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the fight date &mdash; informational only, not part of the numerology edge above.</div>
+  `;
+}
+
 // Everything shown here was already captured either live (recordPredictionIfNew
 // in polymarket-ufc.js) or by the backfill below the moment the fight's edge
 // was first computed - this just replays it, it's not fetched fresh.
@@ -362,7 +377,7 @@ function matchupModalHtml(p) {
     <div class="pm-signal ${tier.key === 'none' ? 'neutral' : (agree ? 'agree' : 'disagree')}">${signalHtml}</div>
     ${resultRow ? `<div class="breakdown-rows">${resultRow}</div>` : ''}
   `;
-  return hero + modalTabsHtml(breakdown, insightTabHtml(p));
+  return hero + modalTabsHtml(breakdown, insightTabHtml(p), imprintTabHtml(p));
 }
 
 function initMatchupModal(suffix = '') {

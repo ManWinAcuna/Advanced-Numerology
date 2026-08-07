@@ -1104,6 +1104,38 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .imprint-match-row b { color: var(--acc-text); }
 .imprint-match-pts { color: var(--good); font-weight: 700; margin-left: 2px; }
 .imprint-match-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* Domain tags (2026-08-07) - small inline badges on an event-date match row
+   showing which life area(s) that theme belongs to. */
+.imprint-domain-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 4px; }
+.imprint-domain-tag {
+  display: inline-block; background: rgba(192, 132, 252, .12); border: 1px solid rgba(192, 132, 252, .3);
+  border-radius: 999px; padding: 1px 7px; font-size: 10px; color: #c084fc; white-space: nowrap;
+}
+
+/* Person-mode domain breakdown (2026-08-07) - the score is now 6 separate
+   domain reads, not one flat match list. A row of tappable chips (score +
+   tier color) opens that domain's own matches, one at a time. */
+.imprint-domain-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.imprint-domain-chip {
+  display: flex; align-items: center; gap: 5px; background: var(--panel-2, rgba(255,255,255,.03));
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 11px; font-family: var(--gk-ui);
+  font-size: 11px; color: var(--text); cursor: pointer;
+}
+.imprint-domain-chip b { font-family: var(--gk-display); font-weight: 700; }
+.imprint-domain-chip.good { border-color: rgba(74, 222, 128, .4); }
+.imprint-domain-chip.good b { color: var(--good); }
+.imprint-domain-chip.mid { border-color: rgba(250, 204, 21, .4); }
+.imprint-domain-chip.mid b { color: var(--gold); }
+.imprint-domain-chip.bad { border-color: rgba(248, 113, 113, .4); }
+.imprint-domain-chip.bad b { color: var(--bad); }
+.imprint-domain-chip.open { background: rgba(192, 132, 252, .12); border-color: rgba(192, 132, 252, .45); }
+.imprint-domain-panels { margin-top: 4px; }
+.imprint-domain-panel { padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--border); }
+.imprint-match-tag {
+  display: inline-block; background: rgba(255, 255, 255, .06); border-radius: 6px; padding: 1px 6px;
+  font-size: 10px; color: var(--muted); margin-left: 4px;
+}
 .compat-hero.compact .compat-badge-wrap { margin-top: 6px; }
 .compat-hero.compact .shield { width: 148px; height: 166px; }
 .compat-hero.compact .shield-score { font-size: 33px; }

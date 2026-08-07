@@ -229,6 +229,10 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   }
 
   const result = computeCompatibility(dateA, dateB);
-  renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB });
+  // 2026-08-07: these 2 modes never showed the imprint pill at all (only
+  // the dedicated Imprint Alignment mode did) - "today" compares a real
+  // birthday against a plain calendar date (event-date pill, no person
+  // mode); "date" compares two real birthdays (person-mode pill).
+  renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB, pillDateA: dateA, pillDateB: dateB, pillPersonMode: mode === 'date' });
   compatModalOverlayEl.classList.add('active');
 });
