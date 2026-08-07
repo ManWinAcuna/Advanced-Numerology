@@ -235,6 +235,11 @@ function compatMeterRow(label, score) {
 // Famous/Calculator's compare-with-me) - everywhere else (EMAX events,
 // calendar days, Today) one side is a plain date, not a person, so the
 // original date-based pill stays correct there.
+// opts.pillPersonSide (2026-08-07): when NOT pillPersonMode, only ONE
+// direction of the date-based pill renders now (a plain date has no
+// imprint history of its own to show) - this says which of A/B is the
+// real person. Defaults to 'A'; EMAX's item popup passes 'B' since there
+// A is the event/entry, not a person.
 function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   opts = opts || {};
   containerEl.classList.add('active');
@@ -321,7 +326,7 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       const body = containerEl.querySelector('[data-imprint-pill-body]');
       const open = body.hidden;
       if (open && !body.dataset.built) {
-        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB, opts.pillPersonMode);
+        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB, opts.pillPersonMode, opts.pillPersonSide);
         body.dataset.built = '1';
         wireImprintRevealButtons(body);
       }
@@ -424,14 +429,25 @@ function imprintPersonAlignmentResultHtml(result, nameA, nameB) {
     </div>`;
 }
 
-function imprintPillContentHtml(dateA, nameA, dateB, nameB, personMode) {
+// 2026-08-07 fix: showing BOTH directions only makes sense when both sides
+// are real people - once one side is a plain event/calendar date (an EMAX
+// entry, a movie, "Today"), that side has no birth-imprint-history of its
+// own, so treating it as personBirthDate produces nonsense ("American
+// Hustle's imprints" - a movie doesn't have imprints). personSide tells
+// this which of A/B is the actual person; only that one direction renders.
+// Defaults to 'A' since that's the person at every existing call site
+// except EMAX's item popup, which passes 'B' explicitly.
+function imprintPillContentHtml(dateA, nameA, dateB, nameB, personMode, personSide) {
   if (personMode) {
     const r = computeImprintPersonAlignment(dateA, dateB);
     return imprintPersonAlignmentResultHtml(r, nameA, nameB);
   }
+  if (personSide === 'B') {
+    const rB = computeImprintAlignment(dateB, dateA);
+    return imprintAlignmentResultHtml(rB, nameB, nameA);
+  }
   const rA = computeImprintAlignment(dateA, dateB);
-  const rB = computeImprintAlignment(dateB, dateA);
-  return imprintAlignmentResultHtml(rA, nameA, nameB) + imprintAlignmentResultHtml(rB, nameB, nameA);
+  return imprintAlignmentResultHtml(rA, nameA, nameB);
 }
 
 // One domain open at a time, closing on re-tap - same interaction as an

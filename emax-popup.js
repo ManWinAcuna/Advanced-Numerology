@@ -619,7 +619,7 @@ function openItemModal(entry, categoryNameOverride, backTo) {
   const compatEl = document.getElementById('itemModalCompat');
   const renderResult = { ...result, bonuses: emaxRewriteBonusNotes(result.bonuses, entry.name) };
   compatEl.classList.add('emax-breakdown-body');
-  renderCompatHero(compatEl, renderResult, entry.name, 'Me', { compact: true, pillDateA: themDate, pillDateB: meDate });
+  renderCompatHero(compatEl, renderResult, entry.name, 'Me', { compact: true, pillDateA: themDate, pillDateB: meDate, pillPersonSide: 'B' });
 
   document.getElementById('itemModalHeader').addEventListener('click', (e) => {
     const backBtn = e.target.closest('#itemModalBack');
