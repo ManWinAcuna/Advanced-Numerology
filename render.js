@@ -194,6 +194,20 @@ function openIdentityModal(label, entry, slot) {
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
+// Boost13 (2026-08-07): tap Western sign / Vietnamese year/month/day for
+// their own "who you are" popup, same visual pattern as openIdentityModal
+// above but pulling straight from the plain-voice content bank (no
+// compose/slot step needed - VIETNAMESE_IDENTITY/WESTERN_IDENTITY entries
+// are already { light, shadow }).
+function openZodiacIdentityModal(label, entry) {
+  if (!entry) return;
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>` +
+    `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
+    `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
 function renderCompoundStories(r, birthDate) {
   // isFamous (2026-08-07): weaveIdentityStory's "you" voice ("At your
   // core, you are...") is correct for Profile/Calculator (a real person's
@@ -260,6 +274,21 @@ function renderCompoundStories(r, birthDate) {
       if (!el) return;
       el.classList.add('idnum-tap');
       el.onclick = () => openIdentityModal(t.label, t.entry, t.slot);
+    });
+
+    // Western sign + Vietnamese year/month/day (natal, from the person's
+    // own birth date) - same tap pattern, plain-voice content bank.
+    const zodiacTargets = [
+      { id: 'sunSign', label: 'Western Sign', entry: WESTERN_IDENTITY[r.sunSign] },
+      { id: 'chineseYear', label: 'Vietnamese Year', entry: VIETNAMESE_IDENTITY[r.chineseYear] },
+      { id: 'chineseMonth', label: 'Vietnamese Month', entry: VIETNAMESE_IDENTITY[r.chineseMonth] },
+      { id: 'chineseDay', label: 'Vietnamese Day', entry: VIETNAMESE_IDENTITY[r.chineseDay] },
+    ];
+    zodiacTargets.forEach((t) => {
+      const el = document.getElementById(t.id);
+      if (!el || !t.entry) return;
+      el.classList.add('idnum-tap');
+      el.onclick = () => openZodiacIdentityModal(t.label, t.entry);
     });
   }
 }

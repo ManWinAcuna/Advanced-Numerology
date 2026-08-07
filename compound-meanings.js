@@ -1231,3 +1231,259 @@ function buildActionables(todayParts) {
   if (n > 1) out.push({ kind: 'dont', text: dontLine(D[0], D[1]) });
   return out;
 }
+
+/* ================= General Reading (Boost13, 2026-08-07) =================
+ * Separate content bank + weave from everything above. Source is the
+ * user's own "Master Blueprint of Identity" PDF (Numbers 1-9/11/22/33,
+ * all 12 Vietnamese animals, all 12 Western signs) - adapted into short,
+ * plain sentences, matching the user's own words: "the simplicity I added
+ * to the documents was on purpose" and "I don't like the em dash, it feels
+ * like an AI wrote it, space it out." No em-dashes anywhere in this
+ * section. Numbers and signs are never named as labels ("Life Path:",
+ * "Combo:") or as raw digits ("a nine") in the output - description only,
+ * per user correction after seeing an earlier draft.
+ *
+ * "General reading" = timeless identity only: Life Path, Day Born, Combo,
+ * Western Sign, Vietnamese Year/Month/Day (all birth-fixed). Explicitly
+ * NOT Personal Year/Month/Day - user: "stop saying what today is, this is
+ * simply a general reading, the today stuff is for the day and personal
+ * day." Vietnamese month/day animal are the person's own BIRTH month/day
+ * (their natal signature), not a transiting/current-date animal - user-
+ * confirmed.
+ *
+ * Master numbers (11/22/33) mix in their companion root's own content
+ * when impure, same "both are really you" doctrine as the original
+ * identityClauses() above, but written fresh here in the plain voice -
+ * user: "make sure you understand there's still 33/6, 22/4 meaning for
+ * those, add mix of both." 11 has no legitimate companion (see feedback-
+ * no-standalone-two memory) - its "impure" version is just a less-stable
+ * version of the same 11, never a swing into another number.
+ */
+const NUMBER_IDENTITY_V2 = {
+  1: {
+    light: "You don't wait for someone else to fix things. You jump in and go first, and that courage inspires the people around you.",
+    shadow: 'You can get bossy and stubborn without meaning to. Because you want to do everything yourself, you end up pushing people away.',
+  },
+  2: {
+    light: "You're gentle, and you're genuinely good at helping people get along. You listen well, and you make sure nobody feels left out.",
+    shadow: 'You hide your real feelings just to keep the peace. You keep score of small favors, and you let people walk over you more than you should.',
+  },
+  3: {
+    light: "You're full of joy and imagination. You color the room with your words, your art, or your jokes, and people light up around you.",
+    shadow: 'You can get scattered and dramatic. When you feel insecure, you reach for charm or sharp words instead of saying what\'s actually wrong.',
+  },
+  4: {
+    light: "You're the most reliable person in most rooms. You work hard, you follow through, and you build things that actually last.",
+    shadow: "You can get rigid and afraid of change. You hold onto rules and routines even when they've stopped helping you.",
+  },
+  5: {
+    light: "You're adventurous and adaptable. You love learning new things, meeting new people, and showing others how to break out of a boring routine.",
+    shadow: "You can get restless and reckless. The second something gets serious, you're already looking for the exit.",
+  },
+  6: {
+    light: "You're a natural protector. You create warm spaces, you take care of people who are sick or sad, and you make people feel like family.",
+    shadow: "You can get controlling and overly critical. You meddle in other people's lives trying to fix them, then get resentful when they don't thank you for it.",
+  },
+  7: {
+    light: "You're sharp and deeply thoughtful. You look past the surface, and you actually understand how things work instead of just accepting what you're told.",
+    shadow: 'You can get paranoid and cold. You overthink everything, you trust almost nobody, and you push real love away without meaning to.',
+  },
+  8: {
+    light: "You're strong and focused. You turn big plans into real results, and you use your power to protect the people around you.",
+    shadow: 'You can get obsessed with money, status, and control. You start treating people like pieces on a board instead of people.',
+  },
+  9: {
+    light: "You're the ultimate shape-shifter. You walk into any room and instantly understand the people in it, reflecting their energy back so they feel completely seen.",
+    shadow: 'You can lose your own center doing that. You blend in so much you start to lose track of who you actually are underneath it.',
+  },
+  11: {
+    light: "You're wired like an antenna. Insight hits you suddenly and clearly, and you help people see things they couldn't see on their own.",
+    shadow: "That same wiring runs hot. You can spiral into anxiety fast, because you're built to feel more than most people are built to handle.",
+  },
+  '11i': {
+    light: "That same antenna is in you too, though it doesn't always run at full strength. Some days it's raw instinct more than clear insight.",
+    shadow: 'On those days it tips faster into reactivity, mood doing the deciding instead of a clear read.',
+  },
+  22: {
+    light: 'You take a big vision and actually build it. You can organize something massive and make it real, brick by brick.',
+    shadow: 'You can get crushed by your own scale. The pressure gets so heavy you give up entirely and settle for something small out of fear.',
+  },
+  '22i': {
+    light: "Some days that shows up as the big vision. Other days you're just heads-down on the one task in front of you, practical and grounded. Both are really you.",
+    shadow: 'The switch is the trap. Reaching for the big vision with only enough in the tank for the small task, or playing small on a day that actually called for the big one.',
+  },
+  33: {
+    light: "You're a powerhouse of protective love. You heal people, you protect the weak, and you lead with real warmth.",
+    shadow: "You can slide into martyrdom. You carry the whole world's weight until you break down, and you resent that nobody's carrying yours.",
+  },
+  '33i': {
+    light: "Most of the time, anyway. Some days you're just the one who shows up with soup when someone's sick, caring for the one person in front of you instead of the whole horizon. Both are really you.",
+    shadow: 'The trap is reaching for the big rescue with only enough left for the small one, or pouring everything into one person while everything else goes untended.',
+  },
+};
+
+function numberIdentityV2(root, impure) {
+  if ((root === 11 || root === 22 || root === 33) && impure) return NUMBER_IDENTITY_V2[`${root}i`];
+  return NUMBER_IDENTITY_V2[root] || null;
+}
+
+const VIETNAMESE_IDENTITY = {
+  Rat: {
+    light: "You're smart and resourceful. You find opportunities other people miss, and you make sure the people close to you are safe and taken care of.",
+    shadow: 'You can get sneaky and anxious about resources. You calculate your exit before you\'ve even committed, and you hoard things you don\'t actually need.',
+  },
+  Ox: {
+    light: 'You have quiet, steady power. You work through anything without complaining, and you build real, deep roots.',
+    shadow: "You can get stubborn and slow to forgive. You hold onto a grudge for years, and you'd rather run yourself into the ground than admit the plan needs to change.",
+  },
+  Tiger: {
+    light: "You're brave and passionate. You fight hard for people who can't fight for themselves, and you lead with real charisma.",
+    shadow: 'You can get hot-headed and dramatic. You start big fights over small things, and your pride would rather lose a friend than admit a mistake.',
+  },
+  Cat: {
+    light: "You're elegant and deeply perceptive. You notice details other people miss, and you build a calm, beautiful life around you.",
+    shadow: "You can get cold and distant. You keep people at arm's length, and you judge people quietly instead of saying what's actually bothering you.",
+  },
+  Dragon: {
+    light: "You carry big, dynamic energy. You're destined for big things, and you inspire people just by walking into the room.",
+    shadow: 'You can get arrogant and hard to satisfy. You expect people to bow a little, and a small criticism can wound you more than it should.',
+  },
+  Snake: {
+    light: "You're wise and deeply intuitive. You understand people's psychology fast, and your advice tends to actually be right.",
+    shadow: "You can get paranoid and secretive. You keep score of every slight for years, and you'd rather manipulate a situation quietly than ask directly for what you need.",
+  },
+  Horse: {
+    light: "You're cheerful and independently powerful. You love running toward new things, and you can lift a sad friend just by showing up.",
+    shadow: "You can get impatient and selfish. You abandon things halfway through, and you trample people's feelings without noticing you did it.",
+  },
+  Goat: {
+    light: "You're deeply artistic and kind. You bring real beauty into the world, and you have a heart that genuinely loves helping people.",
+    shadow: 'You can get stuck playing the victim. You avoid blame, and small stress can paralyze you completely.',
+  },
+  Monkey: {
+    light: "You're a fast, clever problem-solver. You can fix almost anything, and you pick up hard skills faster than most people.",
+    shadow: "You can get tricky and dishonest for fun. You bend rules just to see if you can get away with it, and you look down on people you've decided are slower than you.",
+  },
+  Rooster: {
+    light: "You're organized, precise, and brave. You keep your promises, you speak the truth, and you look sharp doing it.",
+    shadow: "You can get overly critical and boastful. You pick at other people's small flaws, and you can't stand being told you're wrong.",
+  },
+  Dog: {
+    light: "You're loyal, honest, and protective. You have a sharp sense for injustice, and you keep the secrets people trust you with.",
+    shadow: 'You can get cynical and sharp-tongued. You assume people are going to betray you, and you lock your heart away before anyone gets the chance.',
+  },
+  Pig: {
+    light: "You're generous and full of real goodwill. You love feeding people, hosting people, and making sure everyone around you feels relaxed.",
+    shadow: "You can get naive and over-indulgent. You let people take advantage of you more than once, and you'd rather eat or sleep through a problem than face it.",
+  },
+};
+
+const WESTERN_IDENTITY = {
+  Aries: {
+    light: "You're full of pure energy and courage. You tackle hard things head-on, and you lead the charge for the people you care about.",
+    shadow: 'You can get impatient and hot-headed. You throw a real tantrum when you lose, and you push past people without meaning to.',
+  },
+  Taurus: {
+    light: "You're steady, calm, and deeply patient. You build a beautiful, comfortable life, and you stand by your people like a solid wall.",
+    shadow: "You can get stubborn and possessive. You refuse to budge even when you're wrong, and you block change just because it's change.",
+  },
+  Gemini: {
+    light: "You're quick, funny, and endlessly curious. You talk to anyone, and you keep the people around you entertained and connected.",
+    shadow: "You can get two-faced and scattered. You tell different versions of the truth to different people, and you can't sit with one hard thing long enough to finish it.",
+  },
+  Cancer: {
+    light: "You're loving, protective, and intuitive. You build a warm home, and you notice the second someone you love is hurting.",
+    shadow: 'You can get moody and manipulative. You go quiet to make someone feel guilty, and you hold onto an old hurt long after it should\'ve healed.',
+  },
+  Leo: {
+    light: "You're radiant and generous. You fill a room with warmth, and you make the people around you feel like stars.",
+    shadow: 'You can get vain and attention-hungry. A single cold look from a stranger can wreck your whole day, and you turn conversations back to yourself without noticing.',
+  },
+  Virgo: {
+    light: "You're helpful, efficient, and observant. You fix what's broken, and you bring order to real chaos.",
+    shadow: 'You can get hyper-critical and anxious. You pick at small mistakes, other people\'s and your own, and you forget to actually enjoy anything.',
+  },
+  Libra: {
+    light: "You're fair, artistic, and balanced. You make sure everyone's treated equally, and you build genuinely beautiful spaces.",
+    shadow: 'You can get wishy-washy and conflict-avoidant. You change your mind to keep the peace, and you lose track of what you actually think.',
+  },
+  Scorpio: {
+    light: "You're loyal, brave, and deeply transformative. You see straight through a lie, and you help people rebuild after something breaks them.",
+    shadow: "You can get jealous and vengeful. You keep an old betrayal like a weapon, and you'd rather sting back than say you're hurt.",
+  },
+  Sagittarius: {
+    light: "You're joyful, adventurous, and big-picture. You love exploring new places and ideas, and you help people think bigger than they were.",
+    shadow: 'You can get tactless and reckless. You call brutal honesty a virtue, and you bolt the second something gets emotionally heavy.',
+  },
+  Capricorn: {
+    light: "You're disciplined, ambitious, and patient. You climb toward something real step by step, and you protect your people with rock-solid duty.",
+    shadow: 'You can get cold and status-obsessed. You judge people by what they\'ve achieved, and you trap yourself in endless work.',
+  },
+  Aquarius: {
+    light: "You're original, independent, and focused on the bigger picture. You invent things nobody else thought of, and you fight for fairness.",
+    shadow: 'You can get detached and stubborn. You love humanity in the abstract more easily than the one person in front of you, and you rebel just to feel different.',
+  },
+  Pisces: {
+    light: "You're creative, spiritual, and deeply kind. You feel the world's hidden beauty, and you comfort people without being asked.",
+    shadow: 'You can get lost in avoidance. You escape into a daydream instead of a hard conversation, and you let people take advantage of your softness.',
+  },
+};
+
+// WIP (2026-08-07): confirmed NOT good enough to ship - reads as a
+// template loop (7 entries x rotating connector word), exactly what the
+// user's original Boost13 answer ruled out ("written fresh each time, no
+// fixed template phrase"). Real fix needs actual pairwise tension/
+// alignment logic between the SPECIFIC entities in play (which two
+// reinforce, which two pull against each other), not swappable connector
+// words - that's a much bigger content-generation problem than this
+// function solves. Left in place as a starting point for that later work.
+// Individual tap popups (identityTargets in render.js) are the shipped
+// path for this content bank today - see NUMBER_IDENTITY_V2/
+// VIETNAMESE_IDENTITY/WESTERN_IDENTITY above.
+const GENERAL_LIGHT_LEADS_MID = ['Underneath that,', 'Alongside that,', 'On top of that,'];
+const GENERAL_LIGHT_LEADS_NEW = ["There's also this.", 'Something else runs in you too.', 'Right next to that is something else.'];
+const GENERAL_SHADOW_LEADS = ['The flip side.', 'The catch.', 'Where it slips.', 'The trap.', 'The cost.', 'And the risk.'];
+
+function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+
+// parts: [{ kind: 'number'|'animal'|'sign', root, impure, key }] in the
+// order they should appear. Entries sharing the same root/key get a short
+// "doubled" acknowledgment instead of repeating the same text twice.
+function composeGeneralReading(parts) {
+  const sentences = [];
+  const seenNumberRoots = {};
+  const seenKeys = {};
+  let idx = 0;
+
+  (parts || []).forEach((p) => {
+    const dedupeKey = p.kind === 'number' ? `number:${p.root}` : `${p.kind}:${p.key}`;
+    if (seenKeys[dedupeKey]) {
+      sentences.push('That same current runs doubled in you.');
+      idx++;
+      return;
+    }
+    seenKeys[dedupeKey] = true;
+
+    let entry = null;
+    if (p.kind === 'number') entry = numberIdentityV2(p.root, p.impure);
+    else if (p.kind === 'animal') entry = VIETNAMESE_IDENTITY[p.key];
+    else if (p.kind === 'sign') entry = WESTERN_IDENTITY[p.key];
+    if (!entry) return;
+
+    if (idx === 0) {
+      sentences.push(entry.light);
+    } else if (idx % 2 === 0) {
+      const lead = GENERAL_LIGHT_LEADS_NEW[(idx / 2 - 1) % GENERAL_LIGHT_LEADS_NEW.length];
+      sentences.push(`${lead} ${entry.light}`);
+    } else {
+      const lead = GENERAL_LIGHT_LEADS_MID[Math.floor(idx / 2) % GENERAL_LIGHT_LEADS_MID.length];
+      sentences.push(`${lead} ${lowerFirst(entry.light)}`);
+    }
+    const shadowLead = GENERAL_SHADOW_LEADS[idx % GENERAL_SHADOW_LEADS.length];
+    sentences.push(`${shadowLead} ${lowerFirst(entry.shadow)}`);
+    idx++;
+  });
+
+  if (!sentences.length) return null;
+  return { text: sentences.join(' ') };
+}
