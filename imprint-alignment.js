@@ -179,6 +179,28 @@ function getPure33Imprint(birthDate) {
   return day === 'Not Found' ? null : { lp: 33 };
 }
 
+// Which of your OWN themed days (28th, 8th, 11th, etc.) was the FIRST
+// (chronologically, by actual date - not by which day-number is smaller)
+// to ever produce a given target Life Path. NOT the same as
+// getFirstMatchingLifepathDayNumber, which searches every single day 1-31
+// and can land on a day that isn't itself a themed number at all (e.g. the
+// 10th) - that's not what "imprint" means in this theory. User's own
+// clarification: "my first 7 lifepath day imprint is 28" means the
+// earliest THEMED day that produced LP 7, so this only searches among the
+// already-tracked theme numbers. Returns the theme's own number (e.g. 28)
+// so it domain-tags normally, or null if none of the themed days have
+// ever produced this LP.
+function firstThemedDayForLP(birthDate, targetLP) {
+  let best = null;
+  IMPRINT_TRACKED_NUMBERS.forEach((n) => {
+    const found = getFirstDayOfMonthImprint(birthDate, n);
+    if (found && found.lp === targetLP && (!best || found.date < best.date)) {
+      best = { number: n, date: found.date };
+    }
+  });
+  return best ? best.number : null;
+}
+
 // Every domain-relevant number's first-imprint LP, plus the person's own
 // core Life Path - treated as just another value in the set, domain-tagged
 // through the exact same number-based lookup as everything else (a 6 Life
@@ -191,16 +213,14 @@ function getPersonImprintValues(birthDate) {
   });
   const pure33 = getPure33Imprint(birthDate);
   if (pure33) values.push({ number: 33, label: '33-Day imprint', lp: pure33.lp });
-  // Life Path's domain comes from the person's own first-imprint day for
-  // it (the EXISTING Profile "First Imprints" mechanic,
-  // getFirstMatchingLifepathDayNumber) - NOT the raw LP number treated as
-  // if it were itself a themed day. User's own correction: a 7 Life Path
-  // whose first 7LP day was the 28th is a FINANCIAL imprint (28's domain),
-  // not Spiritual (7's domain) - the imprint lives on the day it first
-  // appeared, not on the number itself.
+  // Life Path's domain comes from the person's own first THEMED day that
+  // ever produced it - NOT the raw LP number treated as if it were itself
+  // a themed day. User's own correction: a 7 Life Path whose first 7LP
+  // day was the 28th is a FINANCIAL imprint (28's domain), not Spiritual
+  // (7's domain) - the imprint lives on the day it first appeared, not on
+  // the number itself.
   const coreLP = compatLifePathInfo(birthDate).lookupValue;
-  const ownLPDay = getFirstMatchingLifepathDayNumber(birthDate, coreLP);
-  values.push({ number: typeof ownLPDay === 'number' ? ownLPDay : null, label: 'Life Path', lp: coreLP });
+  values.push({ number: firstThemedDayForLP(birthDate, coreLP), label: 'Life Path', lp: coreLP });
   return values;
 }
 
@@ -276,22 +296,19 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
     }
   });
 
-  // Your own first-imprint day for TODAY's specific LP (2026-08-07 fix,
-  // corrected from an earlier version of this same check that compared the
-  // candidate against your fixed, permanent core Life Path - which only
-  // ever fires on the rare day that happens to equal/be compatible with
-  // your own LP). User's actual point: whatever LP the candidate date
-  // shows, look up YOUR OWN first day that ever produced that specific LP
-  // (getFirstMatchingLifepathDayNumber, the existing Profile "First
-  // Imprints" mechanic) and read ITS domain - this is always relevant, not
-  // a rare coincidence. E.g. today is a 7 Universal Day, your own first
-  // 7LP day was the 28th (Financial) - that's the match, regardless of
-  // whether 7 happens to be your permanent core Life Path at all.
-  const ownDayForTodaysLP = getFirstMatchingLifepathDayNumber(personBirthDate, candidateLP);
-  if (typeof ownDayForTodaysLP === 'number') {
-    const domains = domainTagHtml(ownDayForTodaysLP);
+  // Your own first THEMED day for TODAY's specific LP (2026-08-07 fix,
+  // corrected twice now: first from comparing against your fixed core LP
+  // only, then from using getFirstMatchingLifepathDayNumber - which
+  // searches every day 1-31 and can return a day that isn't itself a
+  // themed number, like the 10th, instead of a recognizable one like the
+  // 28th). firstThemedDayForLP only searches among the already-tracked
+  // theme days, so this always resolves to a real themed number when it
+  // fires, matching how the user actually thinks about their own imprints.
+  const ownThemeForTodaysLP = firstThemedDayForLP(personBirthDate, candidateLP);
+  if (ownThemeForTodaysLP != null) {
+    const domains = domainTagHtml(ownThemeForTodaysLP);
     score += 15;
-    matches.push({ label: `Your First ${candidateLP}LP Day (${ownDayForTodaysLP})`, text: `Today's Universal Day is the same Life Path that first imprinted you on the ${ownDayForTodaysLP}${ordinalSuffix(ownDayForTodaysLP)}`, points: 15, domains });
+    matches.push({ label: `Your First ${candidateLP}LP Day (${ownThemeForTodaysLP})`, text: `Today's Universal Day is the same Life Path that first imprinted you on your ${ownThemeForTodaysLP}${ordinalSuffix(ownThemeForTodaysLP)}`, points: 15, domains });
   }
 
   const seenLuckyText = new Set();
@@ -364,22 +381,36 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
 
   Object.keys(IMPRINT_DOMAINS).forEach((key) => {
     const domain = IMPRINT_DOMAINS[key];
+    // domainValuesA/B ("anchors") are this side's values whose OWN theme
+    // number belongs to this domain. 2026-08-07 fix: an anchor now checks
+    // against the OTHER side's FULL value set, not just their own anchors -
+    // user's own example: Tyreese's raw Life Path (7, not itself a
+    // Financial number) should still be checkable against Manuel's
+    // Financial-anchored 28-Day imprint (also 7LP), an exact match. The
+    // domain comes from whichever side is anchored, not from both sides
+    // independently belonging to it. A pairKey Set stops a pair anchored
+    // from both sides from being counted twice.
     const domainValuesA = valuesA.filter((v) => domain.numbers.includes(v.number));
     const domainValuesB = valuesB.filter((v) => domain.numbers.includes(v.number));
-    const totalPairs = domainValuesA.length * domainValuesB.length;
 
     let weightedHits = 0;
+    let totalPairs = 0;
     const matches = [];
+    const seenPairs = new Set();
 
-    domainValuesA.forEach((va) => {
-      domainValuesB.forEach((vb) => {
-        const r = imprintPairWeight(va.lp, vb.lp, IMPRINT_PAIR_EXACT, IMPRINT_PAIR_COMPAT);
-        if (r) {
-          weightedHits += r.weight;
-          matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore });
-        }
-      });
-    });
+    function tryPair(va, vb) {
+      const pairKey = va.label + '' + vb.label;
+      if (seenPairs.has(pairKey)) return;
+      seenPairs.add(pairKey);
+      totalPairs++;
+      const r = imprintPairWeight(va.lp, vb.lp, IMPRINT_PAIR_EXACT, IMPRINT_PAIR_COMPAT);
+      if (r) {
+        weightedHits += r.weight;
+        matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore });
+      }
+    }
+    domainValuesA.forEach((va) => valuesB.forEach((vb) => tryPair(va, vb)));
+    domainValuesB.forEach((vb) => valuesA.forEach((va) => tryPair(va, vb)));
 
     let score = totalPairs > 0 ? Math.round(50 + 50 * weightedHits / (totalPairs * IMPRINT_PAIR_EXACT)) : 50;
 

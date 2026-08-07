@@ -40,7 +40,16 @@ function getSourceEntries(source) {
 // actually refers to without re-running the search.
 const sourceMatches = {};
 
-function personInputHTML(label, key) {
+// personToggle (2026-08-07): only the Imprint Alignment mode's Candidate
+// Date field needs this - Database picks already imply a person, EMAX
+// picks already imply an event, but a hand-typed date is ambiguous (a
+// friend's birthday vs a release date look identical as MM/DD/YYYY). Only
+// shown while the source-picker is on "Type manually" - swapping to
+// Database/EMAX makes it moot, so it hides itself.
+function personInputHTML(label, key, personToggle) {
+  const toggle = personToggle
+    ? `<label class="imprint-person-toggle" data-person="${key}"><input type="checkbox" class="imprint-person-checkbox" data-person="${key}"> This is a person, not an event</label>`
+    : '';
   return `
     <div class="person-input box" data-person="${key}">
       <div class="box-label">${label}</div>
@@ -57,6 +66,7 @@ function personInputHTML(label, key) {
         <input type="text" class="person-name" data-person="${key}" placeholder="Name (optional)">
         <input type="text" class="person-date" data-person="${key}" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
       </div>
+      ${toggle}
     </div>
   `;
 }
@@ -108,6 +118,10 @@ function wirePersonInputs() {
       wrap.hidden = sel.value === 'manual';
       if (!wrap.hidden) { searchInput.value = ''; searchInput.focus(); }
       document.querySelector(`.source-suggestions[data-person="${key}"]`).classList.remove('open');
+      // Only meaningful for a hand-typed date - Database already implies a
+      // person, EMAX already implies an event.
+      const personToggle = document.querySelector(`.imprint-person-toggle[data-person="${key}"]`);
+      if (personToggle) personToggle.hidden = sel.value !== 'manual';
     });
   });
 
@@ -149,7 +163,7 @@ document.querySelectorAll('.mode-card').forEach((card) => {
     if (mode === 'today') {
       personInputsEl.innerHTML = personInputHTML('Birthday', 'A');
     } else if (mode === 'imprint') {
-      personInputsEl.innerHTML = personInputHTML('Person (whose imprints)', 'A') + personInputHTML('Candidate Date', 'B');
+      personInputsEl.innerHTML = personInputHTML('Person (whose imprints)', 'A') + personInputHTML('Candidate Date', 'B', true);
     } else {
       personInputsEl.innerHTML = personInputHTML('Person A', 'A') + personInputHTML('Person B', 'B');
     }
@@ -208,15 +222,18 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
   // function, not renderCompatHero. Fixed 2026-08-07: a Candidate Date
   // picked from Database is a real PERSON (their own imprint history
   // matters, not just whether their birthday lands on a themed day), so
-  // that case switches to the person-vs-person cross-comparison. EMAX
-  // picks (real events) and hand-typed dates (unknown) keep the original
-  // date-based read - the safe default for anything not confirmed to be a
-  // person's own birthday.
+  // that case switches to the person-vs-person cross-comparison. A
+  // hand-typed date defaults to the date-based read too (safe default,
+  // unknown by default) UNLESS the "This is a person" checkbox is
+  // checked - added since a friend's birthday and a release date are
+  // indistinguishable as plain MM/DD/YYYY.
   if (mode === 'imprint') {
     const sourceB = document.querySelector('.source-picker[data-person="B"]').value;
+    const manualPersonCheckbox = document.querySelector('.imprint-person-checkbox[data-person="B"]');
+    const isPerson = sourceB === 'database' || (sourceB === 'manual' && manualPersonCheckbox && manualPersonCheckbox.checked);
     compatResultsEl.classList.add('active');
     setModalWidth(compatResultsEl, false);
-    if (sourceB === 'database') {
+    if (isPerson) {
       const result = computeImprintPersonAlignment(dateA, dateB);
       compatResultsEl.innerHTML = imprintPersonAlignmentResultHtml(result, nameA, nameB);
     } else {

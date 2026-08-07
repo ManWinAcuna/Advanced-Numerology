@@ -1679,6 +1679,22 @@ body::after {
 
 .person-input .source-search-wrap { margin-bottom: 8px; }
 
+.imprint-person-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.imprint-person-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--yellow, #f5c542);
+  cursor: pointer;
+}
+
 .btn-large {
   font-size: 15px;
   padding: 10px 20px;
