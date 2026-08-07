@@ -590,30 +590,42 @@ function weaveCompoundStory(parts, opts) {
 // the individual number tap popups, IDENTITY_SLOTS) instead of the day-
 // voice compound entry copy ("Good day for X"), which read wrong for a
 // person's own static numbers (user: "it's not a day it's a person").
-// items: [{ label, entry, slot }]. Flat entries (no compound underneath -
-// a plain single digit) no longer vanish silently: the rare case where
-// most of a group is flat (e.g. an early-January birthday can leave Life
-// Path/Day Born/Day# all flat, Combo the only one with content) now gets a
-// short acknowledgment instead of reading like the feature broke.
+// items: [{ label, entry, slot }].
+//
+// 2026-08-08 fix: entry.flat ("no bigger compound hiding underneath a
+// plain single digit") used to skip the number entirely here, same as it
+// correctly does for the day-voice weave above - but that's the WRONG
+// rule for identity voice. composeIdentitySentence only ever needs the
+// ROOT (COMPOUND_ROOT_IMAGES/identityClauses, both root-keyed), which a
+// flat entry still has - flat only means "no 2-digit compound flavor to
+// layer on top," never "no identity." User's real example (01/03/2003:
+// Life Path 9, Day Born 3, Day# 3 all flat, Combo 8 the only non-flat one)
+// used to read as one lone Combo sentence plus a parenthetical listing the
+// other 3 as "nothing to add" - now every number gets woven in like the
+// user's own reference case (04/15/1994, where none happened to be flat),
+// matching the ask: "the mini reading is how all the energies play
+// together." skippedLabels is now just a defensive fallback for the
+// (should never happen in practice) case a root has no identity coverage
+// at all, not a routine path.
 function weaveIdentityStory(items, opts) {
   opts = opts || {};
   const resolved = [];
-  const flatLabels = [];
+  const skippedLabels = [];
   items.forEach(({ label, entry, slot }) => {
     if (!entry) return;
-    if (entry.flat) { flatLabels.push(label); return; }
     const sentence = composeIdentitySentence(entry, slot);
     if (sentence) resolved.push({ label, entry, sentence });
+    else skippedLabels.push(label);
   });
 
-  if (resolved.length === 0 && flatLabels.length === 0) return null;
+  if (resolved.length === 0 && skippedLabels.length === 0) return null;
 
   const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
   let text = opts.intro ? `${opts.intro} ` : '';
 
   if (resolved.length === 0) {
-    const verb = flatLabels.length === 1 ? 'is' : 'are';
-    text += `${flatLabels.join(', ')} ${verb} all plain single digits right now - nothing bigger hiding underneath to unpack.`;
+    const verb = skippedLabels.length === 1 ? 'is' : 'are';
+    text += `${skippedLabels.join(', ')} ${verb} not resolving right now - nothing to unpack there.`;
     return { text, parts: [] };
   }
 
@@ -640,9 +652,9 @@ function weaveIdentityStory(items, opts) {
     }
   }
 
-  if (flatLabels.length) {
-    const verb = flatLabels.length === 1 ? 'is' : 'are';
-    text += ` (${flatLabels.join(', ')} ${verb} plain right now - nothing else to add there.)`;
+  if (skippedLabels.length) {
+    const verb = skippedLabels.length === 1 ? 'is' : 'are';
+    text += ` (${skippedLabels.join(', ')} ${verb} not resolving right now - nothing else to add there.)`;
   }
 
   return { text, parts: resolved };
