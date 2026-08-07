@@ -92,6 +92,24 @@ function westernCompatEffective(entitySign, daySign) {
   return westernCompat(entitySign, daySign);
 }
 
+/* --------------------------------------------- compat blend overrides -- */
+// Settings-tunable overlay (2026-08-07) for computeCompatibility's WEIGHTS
+// parameter (compat-engine.js, COMPAT_DEFAULT_WEIGHTS) - how much
+// Numerology/Vietnamese/Western each count toward the overall score, plus
+// each system's own inner split (Numerology's Life Path/Day#/Day-of-Year,
+// Vietnamese's Year/Month/Day animal). A partial merge, not a full-object
+// replacement like the betting weight groups (db-core.js) - each of the up
+// to 9 keys is independently overridable via setOverrideEntry, so editing
+// one field never requires seeding the other 8 first. COMPAT_DEFAULT_
+// WEIGHTS itself is defined later, in compat-engine.js - safe to reference
+// here because this function's body only runs when actually CALLED (well
+// after every script on the page has finished loading), never at this
+// file's own load time.
+function getEffectiveCompatWeights() {
+  const overrides = getOverrideSection('compatWeights');
+  return Object.assign({}, COMPAT_DEFAULT_WEIGHTS, overrides);
+}
+
 function setCompatOverride(table, a, b, value) {
   const compat = getOverrideSection('compat');
   if (!compat[table]) compat[table] = {};

@@ -270,14 +270,19 @@ const COMPAT_DEFAULT_WEIGHTS = {
   lifePath: 0.60, dayNum: 0.35, doy: 0.05,
 };
 
-// numCompatFn defaults to numerologyCompatEffective (overrides-engine.js,
-// loaded just before this file) instead of the raw numerologyCompat - an
-// overlay lookup that falls back to the real table when nothing's been
-// manually tuned, so this stays byte-identical to the original behavior
-// until the user actually edits something in Settings. numerologyCompat
-// itself is untouched; sports callers still pass their own explicit
-// sportsNumerologyCompat and are unaffected by this default.
-function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompatEffective, weights = COMPAT_DEFAULT_WEIGHTS) {
+// numCompatFn defaults to numerologyCompatEffective, weights to
+// getEffectiveCompatWeights() (both overrides-engine.js, loaded just
+// before this file) instead of the raw numerologyCompat/COMPAT_DEFAULT_
+// WEIGHTS - overlay lookups that fall back to the real values when nothing
+// has been manually tuned, so this stays byte-identical to the original
+// behavior until the user actually edits something in Settings. Neither
+// numerologyCompat nor COMPAT_DEFAULT_WEIGHTS themselves are touched;
+// sports callers still pass their own explicit sportsNumerologyCompat (and,
+// for MLB/UFC, their own weight blend) and are unaffected by this default -
+// Tennis's 3 call sites (tennis.js) were updated to pass COMPAT_DEFAULT_
+// WEIGHTS explicitly for the same reason, since they used to rely on this
+// same default parameter and would otherwise start moving with it.
+function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompatEffective, weights = getEffectiveCompatWeights()) {
   const entityLifePathInfo = compatLifePathInfo(entityDate);
   const dayLifePathInfo = compatLifePathInfo(dayDate);
   const lifePathScore = numCompatFn(entityLifePathInfo.lookupValue, dayLifePathInfo.lookupValue);

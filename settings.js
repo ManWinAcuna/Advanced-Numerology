@@ -135,6 +135,96 @@ function renderCompatPage() {
   renderOverridesList();
 }
 
+/* ============================================================ Compatibility Weights === */
+// The overall Numerology/Vietnamese/Western blend (getEffectiveCompatWeights,
+// overrides-engine.js) plus each system's own inner split - a partial-merge
+// override (unlike the Betting Weights groups, which replace a whole set at
+// once), so each field below can be edited independently via a single
+// setOverrideEntry/clearOverrideEntry call, no seeding needed. Doesn't touch
+// MLB/UFC (their own dedicated weight sets, Betting Weights tab) or Tennis
+// (pinned to the true defaults, tennis.js) - this tab is the personal-use
+// Compatibility Calculator/Calendar/Database/EMAX/Profile/Today blend only.
+const COMPAT_WEIGHT_GROUPS = [
+  {
+    title: 'Top-level split',
+    hint: 'How much each system counts toward the overall score.',
+    keys: [
+      { key: 'numerology', label: 'Numerology', def: 0.50 },
+      { key: 'vietnamese', label: 'Vietnamese Zodiac', def: 0.40 },
+      { key: 'western', label: 'Western Zodiac', def: 0.10 },
+    ],
+  },
+  {
+    title: "Numerology's inner split",
+    hint: 'Which of Numerology\'s own signals carries the most weight.',
+    keys: [
+      { key: 'lifePath', label: 'Life Path', def: 0.60 },
+      { key: 'dayNum', label: 'Day Number', def: 0.35 },
+      { key: 'doy', label: 'Day-of-Year', def: 0.05 },
+    ],
+  },
+  {
+    title: "Vietnamese Zodiac's inner split",
+    hint: 'Which animal placement carries the most weight.',
+    keys: [
+      { key: 'zodiacYear', label: 'Year Animal', def: 0.60 },
+      { key: 'zodiacMonth', label: 'Month Animal', def: 0.30 },
+      { key: 'zodiacDay', label: 'Day Animal', def: 0.10 },
+    ],
+  },
+];
+
+function renderCompatWeightsPage() {
+  const el = document.getElementById('settingsPageCompatWeights');
+  el.innerHTML = `
+    <div class="settings-intro">How much Numerology/Vietnamese/Western each count toward the overall Compatibility score - used by the Compatibility Calculator, Calendar, Database, EMAX, Profile, and Today. Doesn't affect MLB/UFC (their own dedicated weights, Betting Weights tab) or Tennis (pinned to the true defaults) betting scores.</div>
+    ${COMPAT_WEIGHT_GROUPS.map((g) => `
+      <div class="settings-sub-label">${g.title}</div>
+      <div class="settings-intro" style="margin-bottom:6px;font-size:12px">${g.hint}</div>
+      <div id="compatWeightRows-${g.title.replace(/[^a-zA-Z]/g, '')}"></div>
+    `).join('')}
+  `;
+
+  function renderAll() {
+    const overrides = getOverrideSection('compatWeights');
+    COMPAT_WEIGHT_GROUPS.forEach((g) => {
+      const rowsEl = document.getElementById(`compatWeightRows-${g.title.replace(/[^a-zA-Z]/g, '')}`);
+      rowsEl.innerHTML = g.keys.map(({ key, label, def }) => {
+        const isOverridden = Object.prototype.hasOwnProperty.call(overrides, key);
+        const current = isOverridden ? overrides[key] : def;
+        return `
+          <div class="settings-field-row" data-cwrow="${key}">
+            <div class="settings-field-label">${label}<span class="hint">Default: ${def}</span></div>
+            <input type="number" step="0.01" min="0" max="1" class="settings-field-input${isOverridden ? ' overridden' : ''}" data-cwinput="${key}" value="${current}">
+            <button type="button" class="settings-reset-btn" data-cwreset="${key}" ${isOverridden ? '' : 'disabled'}>Reset</button>
+          </div>
+        `;
+      }).join('');
+    });
+    wireInputs();
+  }
+
+  function wireInputs() {
+    el.querySelectorAll('[data-cwinput]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const n = Number(input.value);
+        if (!Number.isFinite(n)) return;
+        setOverrideEntry('compatWeights', input.dataset.cwinput, n);
+        renderAll();
+        flashSaved(el.querySelector(`[data-cwrow="${input.dataset.cwinput}"]`));
+      });
+    });
+    el.querySelectorAll('[data-cwreset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        clearOverrideEntry('compatWeights', btn.dataset.cwreset);
+        renderAll();
+      });
+    });
+  }
+
+  renderAll();
+}
+
 /* ============================================================ Imprint Domains === */
 const SETTINGS_ALL_IMPRINT_NUMBERS = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28, 33];
 
@@ -523,6 +613,7 @@ function renderDeepPage() {
 document.addEventListener('DOMContentLoaded', () => {
   wireSettingsTabs();
   renderCompatPage();
+  renderCompatWeightsPage();
   renderDomainsPage();
   renderWeightsPage();
   renderBettingPage();

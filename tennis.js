@@ -666,16 +666,24 @@ document.getElementById('saveVenueBtn').addEventListener('click', () => {
 // Same Day 60/Venue 15/Region 25 (or Day 75/Region 25 without a venue) blend
 // as ufc.js's computeFighterScore().
 
+// weights pinned to the raw COMPAT_DEFAULT_WEIGHTS (2026-08-07): Tennis has
+// no dedicated weight set of its own (unlike MLB/UFC), so it used to rely
+// on computeCompatibility's bare default - now that default is Settings-
+// tunable (getEffectiveCompatWeights, for the Compatibility Calculator and
+// everywhere else that leaves weights unset), passing the raw constant
+// explicitly here keeps Tennis's betting scores isolated from that
+// personal-use control, same isolation MLB/UFC already have via their own
+// weight sets.
 function computeMatchScore(dobDate, matchDate, venueDate, regionDate) {
-  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat);
-  const region = computeCompatibility(dobDate, regionDate, sportsNumerologyCompat);
+  const day = computeCompatibility(dobDate, matchDate, sportsNumerologyCompat, COMPAT_DEFAULT_WEIGHTS);
+  const region = computeCompatibility(dobDate, regionDate, sportsNumerologyCompat, COMPAT_DEFAULT_WEIGHTS);
 
   if (!venueDate) {
     const combined = Math.round(0.75 * day.finalScore + 0.25 * region.finalScore);
     return { day, venue: null, region, combined };
   }
 
-  const venue = computeCompatibility(dobDate, venueDate, sportsNumerologyCompat);
+  const venue = computeCompatibility(dobDate, venueDate, sportsNumerologyCompat, COMPAT_DEFAULT_WEIGHTS);
   const combined = Math.round(0.60 * day.finalScore + 0.15 * venue.finalScore + 0.25 * region.finalScore);
   return { day, venue, region, combined };
 }
