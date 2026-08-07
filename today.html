@@ -343,7 +343,6 @@
         : '<b>' + compat + '% aligned</b> — not your day. Size down, observe.');
     }
     s.push(m.move);
-    if (rankedHours) s.push('Best window <b>' + rankedHours[0].row.label + '</b>.');
     return s.join(' ');
   }
   document.getElementById('gkVerdict').innerHTML = verdict();
