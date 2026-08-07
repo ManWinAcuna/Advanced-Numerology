@@ -38,7 +38,20 @@
   --border: rgba(255, 255, 255, .09);
   --text: #ece7dc;
   --muted: #77705f;
-  --yellow: var(--acc);            /* every accent in the app becomes reactive */
+  /* 2026-08-08 fix: --yellow used to alias --acc ("every accent in the app
+     becomes reactive"), which was the right call for decorative elements
+     (borders/glows/particles - all of which already reference --acc
+     directly throughout this file) but wrong for --yellow specifically,
+     since style.css uses it exclusively as the SEMANTIC "mid/neutral" tier
+     color - the middle third of a fixed red/gold/green status system used
+     identically everywhere (Year Roadmap, EMAX tiles, betting risk flags,
+     UFC/MLB subscores, compat cards, score badges...). A status color
+     needs to mean the same thing every day; reactive tint on the day's
+     mood color (e.g. day-energy 7's cold red) made "MID" visually
+     indistinguishable from "BAD". --gold is this file's own already-
+     established stable reference for exactly this ("the brand metal -
+     constant, ceremonial") - --yellow now points there instead. */
+  --yellow: var(--gold);
   --glow-cyan: 0 0 8px color-mix(in srgb, var(--acc) 40%, transparent),
                0 0 20px color-mix(in srgb, var(--acc) 16%, transparent);
   --glow-magenta: 0 0 8px color-mix(in srgb, var(--acc) 30%, transparent),
