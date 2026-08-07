@@ -517,7 +517,7 @@ if (compatMeBox) {
     const famousNameEl = document.getElementById('famousSearch');
     const dayName = (famousNameEl && famousNameEl.value) ? famousNameEl.value : 'This Date';
     const result = computeCompatibility(meDate, lastBirthDate);
-    renderCompatHero(document.getElementById('compatModalBody'), result, 'Me', dayName, { compact: true, pillDateA: meDate, pillDateB: lastBirthDate });
+    renderCompatHero(document.getElementById('compatModalBody'), result, 'Me', dayName, { compact: true, pillDateA: meDate, pillDateB: lastBirthDate, pillPersonMode: true });
     openModal();
   });
 }

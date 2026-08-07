@@ -193,3 +193,60 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
   score = Math.min(100, score);
   return { score, tier: scoreClass(score), matches, candidateLP };
 }
+
+/* ------------------------------------- person-vs-person alignment ------ */
+// computeImprintAlignment (above) is a PERSON-vs-EVENT-DATE read: it only
+// fires when the other side's actual day-of-month literally lands on a
+// themed day, and it checks that date's own Universal Day LP. That's right
+// for a release date (verified against the user's real artist case
+// studies) but wrong for a real PERSON, who isn't a single date - they
+// carry their own full imprint history (their own 28/8/11/lucky-day
+// imprints, plus their own core Life Path) independent of what day-of-
+// month their birthday happens to fall on. Confirmed broken live: user
+// vs "Tyreese" (7 Life Path, whose first-8-imprint is 11) - Tyreese's LP
+// exactly matches the user's own first-28-imprint (7), and his 8-imprint
+// (11) is compat-table-compatible with it (99, well past the 77 bar) -
+// neither of which the date-based function above can ever see, since it
+// never fetches the other side's Life Path or imprint history at all.
+//
+// Fix: build each person's full set of imprint VALUES (day-theme imprints
+// + their own core Life Path, via compatLifePathInfo - the same function
+// already used to read a real Life Path elsewhere in this file/app), then
+// cross-compare every value on side A against every value on side B - not
+// requiring the two themes to match (a 28-imprint can resonate with an
+// 8-imprint, exactly like the Tyreese example). Same additive-only, +15
+// exact / +8 compatible, cap-at-100 philosophy as every other score in
+// this file - user's own call when scoped: more matches should stack, not
+// get averaged down, same as the rest of the app's additive bonuses.
+function getPersonImprintValues(birthDate) {
+  const themes = getPersonDayThemeImprints(birthDate);
+  const values = themes.map((t) => ({ label: `${t.label} imprint`, lp: t.lp }));
+  values.push({ label: 'Life Path', lp: compatLifePathInfo(birthDate).lookupValue });
+  return values;
+}
+
+function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
+  const valuesA = getPersonImprintValues(personABirthDate);
+  const valuesB = getPersonImprintValues(personBBirthDate);
+
+  let score = 50;
+  const matches = [];
+
+  valuesA.forEach((va) => {
+    valuesB.forEach((vb) => {
+      if (va.lp === vb.lp) {
+        score += 15;
+        matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: 15, kind: 'exact' });
+      } else {
+        const c = numerologyCompat(va.lp, vb.lp);
+        if (c >= 77) {
+          score += 8;
+          matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: 8, kind: 'compat', compatScore: c });
+        }
+      }
+    });
+  });
+
+  score = Math.min(100, score);
+  return { score, tier: scoreClass(score), matches };
+}

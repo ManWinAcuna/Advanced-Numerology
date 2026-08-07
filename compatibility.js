@@ -205,12 +205,24 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
 
   // Imprint Alignment (2026-08-06): one-sided read (A's history vs B as
   // the candidate), not a two-equal-sides compat score - its own render
-  // function, not renderCompatHero.
+  // function, not renderCompatHero. Fixed 2026-08-07: a Candidate Date
+  // picked from Database is a real PERSON (their own imprint history
+  // matters, not just whether their birthday lands on a themed day), so
+  // that case switches to the person-vs-person cross-comparison. EMAX
+  // picks (real events) and hand-typed dates (unknown) keep the original
+  // date-based read - the safe default for anything not confirmed to be a
+  // person's own birthday.
   if (mode === 'imprint') {
-    const result = computeImprintAlignment(dateA, dateB);
+    const sourceB = document.querySelector('.source-picker[data-person="B"]').value;
     compatResultsEl.classList.add('active');
     setModalWidth(compatResultsEl, false);
-    compatResultsEl.innerHTML = imprintAlignmentResultHtml(result, nameA, nameB);
+    if (sourceB === 'database') {
+      const result = computeImprintPersonAlignment(dateA, dateB);
+      compatResultsEl.innerHTML = imprintPersonAlignmentResultHtml(result, nameA, nameB);
+    } else {
+      const result = computeImprintAlignment(dateA, dateB);
+      compatResultsEl.innerHTML = imprintAlignmentResultHtml(result, nameA, nameB);
+    }
     wireImprintRevealButtons(compatResultsEl);
     compatModalOverlayEl.classList.add('active');
     return;

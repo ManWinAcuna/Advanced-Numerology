@@ -334,7 +334,7 @@ function openCompareMini(entry, dateObj) {
   }
   const meDate = parseDateStr(profile.date);
   const result = computeCompatibility(meDate, dateObj);
-  renderCompatHero(document.getElementById('compareMiniBody'), result, 'Me', entry.name, { compact: true, pillDateA: meDate, pillDateB: dateObj });
+  renderCompatHero(document.getElementById('compareMiniBody'), result, 'Me', entry.name, { compact: true, pillDateA: meDate, pillDateB: dateObj, pillPersonMode: true });
   document.getElementById('compareMiniOverlay').classList.add('active');
 }
 

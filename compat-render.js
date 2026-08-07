@@ -227,6 +227,14 @@ function compatMeterRow(label, score) {
 // existing compact-mode call site would have started showing that header
 // everywhere unintentionally. Passing pillDateA/pillDateB shows the "Check
 // My Imprints" pill regardless of whether the header is showing.
+// opts.pillPersonMode (2026-08-07): both pillDateA/pillDateB are real
+// people's birthdates (not one side being a plain event/calendar date) -
+// switches the pill to computeImprintPersonAlignment's cross-comparison
+// instead of the one-sided date-based read. Only true at the 2 call sites
+// where both sides are genuinely people (Database's compare-with-me,
+// Famous/Calculator's compare-with-me) - everywhere else (EMAX events,
+// calendar days, Today) one side is a plain date, not a person, so the
+// original date-based pill stays correct there.
 function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   opts = opts || {};
   containerEl.classList.add('active');
@@ -313,7 +321,7 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       const body = containerEl.querySelector('[data-imprint-pill-body]');
       const open = body.hidden;
       if (open && !body.dataset.built) {
-        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB);
+        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB, opts.pillPersonMode);
         body.dataset.built = '1';
         wireImprintRevealButtons(body);
       }
@@ -354,7 +362,44 @@ function imprintAlignmentResultHtml(result, personName, candidateName) {
     </div>`;
 }
 
-function imprintPillContentHtml(dateA, nameA, dateB, nameB) {
+// Person-vs-person read (2026-08-07 fix): computeImprintAlignment above
+// treats one side as a fixed candidate DATE, which is right for an event
+// (a release date) but silently drops almost everything when the other
+// side is actually a real PERSON - their own Life Path and their own
+// day-theme imprints never get looked at unless their birthday literally
+// falls on the 28th/8th/11th. computeImprintPersonAlignment cross-compares
+// both people's full imprint sets directly instead. One result block, not
+// two - the cross-comparison is already symmetric, there's no "direction".
+function imprintPersonMatchRow(m, nameA, nameB) {
+  const aSide = `${imprintPossessive(nameA)} ${m.aLabel} (${m.aLp}LP)`;
+  const bSide = `${imprintPossessive(nameB)} ${m.bLabel} (${m.bLp}LP)`;
+  const verb = m.kind === 'exact' ? 'exactly matches' : `is compatible (${m.compatScore}) with`;
+  return { label: aSide, text: `${verb} ${bSide}`, points: m.points };
+}
+
+function imprintPersonAlignmentResultHtml(result, nameA, nameB) {
+  const rows = result.matches.length
+    ? result.matches.map((m) => {
+        const row = imprintPersonMatchRow(m, nameA, nameB);
+        return `<div class="imprint-match-row"><b>${escapeHtml(row.label)}:</b> ${escapeHtml(row.text)} <span class="imprint-match-pts">+${row.points}</span></div>`;
+      }).join('')
+    : '<div class="imprint-match-empty">No imprint resonance found between these two.</div>';
+  return `
+    <div class="imprint-result">
+      <div class="imprint-result-head">
+        <div class="imprint-result-score ${result.tier}">${result.score}</div>
+        <div class="imprint-result-label">${escapeHtml(nameA)} <i>&times;</i> ${escapeHtml(nameB)} Imprints</div>
+      </div>
+      <button type="button" class="imprint-reveal-btn" data-imprint-reveal>▾ See what matched</button>
+      <div class="imprint-reveal-body" data-imprint-reveal-body hidden>${rows}</div>
+    </div>`;
+}
+
+function imprintPillContentHtml(dateA, nameA, dateB, nameB, personMode) {
+  if (personMode) {
+    const r = computeImprintPersonAlignment(dateA, dateB);
+    return imprintPersonAlignmentResultHtml(r, nameA, nameB);
+  }
   const rA = computeImprintAlignment(dateA, dateB);
   const rB = computeImprintAlignment(dateB, dateA);
   return imprintAlignmentResultHtml(rA, nameA, nameB) + imprintAlignmentResultHtml(rB, nameB, nameA);
