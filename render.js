@@ -196,24 +196,28 @@ function openIdentityModal(label, entry, slot) {
 
 // Boost13 (2026-08-07): tap Western sign / Vietnamese year/month/day for
 // their own "who you are" popup, same visual pattern as openIdentityModal
-// above but pulling straight from the plain-voice content bank (no
-// compose/slot step needed - VIETNAMESE_IDENTITY/WESTERN_IDENTITY entries
-// are already { light, shadow }).
-// stackNote (2026-08-07): when the same Vietnamese animal lands on more
-// than one of year/month/day, tapping each one used to open the byte-
-// identical popup twice - user: "whenever there are repeat signs it's
-// giving the same popup with the same writing." The trait text itself
-// can't honestly differ (it's the same animal), so instead of inventing
-// different meanings per slot, the repeat gets acknowledged up front,
-// same doctrine as the existing "stacks the same current" pattern used
-// for repeated number roots elsewhere in this file.
-function openZodiacIdentityModal(label, entry, stackNote) {
+// above but pulling straight from the plain-voice content bank.
+//
+// cherry (2026-08-07 round 2): when the same Vietnamese animal lands on
+// more than one of year/month/day, showing the byte-identical light/
+// shadow twice read as broken - user's fix: "I gave you plenty to choose
+// from, you can just go more in depth or less, example the month go more
+// in depth the day is cherry on top." So the FIRST occurrence gets the
+// fuller read (light + shadow + deep, using the emotional-core material
+// the base light/shadow doesn't touch); a repeat occurrence gets just
+// `cherry`, one short new line, never the same two sentences again.
+function openZodiacIdentityModal(label, entry, opts) {
   if (!entry) return;
-  document.getElementById('storyModalBody').innerHTML =
-    `<div class="story-modal-title">${label}</div>` +
-    (stackNote ? `<div class="story-row">${stackNote}</div>` : '') +
-    `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
-    `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>`;
+  const o = opts || {};
+  const body = o.cherry
+    ? `<div class="story-modal-title">${label}</div>` +
+      `<div class="story-row">Same animal as your ${o.repeatOf}. The fuller read is there - here's the extra layer:</div>` +
+      `<div class="story-row">${entry.cherry}</div>`
+    : `<div class="story-modal-title">${label}</div>` +
+      `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
+      `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>` +
+      (entry.deep ? `<div class="story-row">${entry.deep}</div>` : '');
+  document.getElementById('storyModalBody').innerHTML = body;
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
@@ -287,8 +291,8 @@ function renderCompoundStories(r, birthDate) {
 
     // Western sign + Vietnamese year/month/day (natal, from the person's
     // own birth date) - same tap pattern, plain-voice content bank.
-    // animalKey marks which Vietnamese slots share an animal, so a repeat
-    // gets a stack note instead of the byte-identical popup twice.
+    // animalKey marks which Vietnamese slots share an animal - the first
+    // occurrence gets the fuller read, a repeat gets the short cherry line.
     const zodiacTargets = [
       { id: 'sunSign', label: 'Western Sign', entry: WESTERN_IDENTITY[r.sunSign] },
       { id: 'chineseYear', label: 'Vietnamese Year', entry: VIETNAMESE_IDENTITY[r.chineseYear], animalKey: r.chineseYear },
@@ -299,7 +303,7 @@ function renderCompoundStories(r, birthDate) {
     zodiacTargets.forEach((t) => {
       if (t.animalKey) {
         const prior = seenAnimalSlots[t.animalKey];
-        if (prior) t.stackNote = `Same animal as your ${prior} - this one's stacked, not a separate influence. It just runs louder in you.`;
+        if (prior) t.opts = { cherry: true, repeatOf: prior };
         else seenAnimalSlots[t.animalKey] = t.label.replace('Vietnamese ', '');
       }
     });
@@ -307,7 +311,7 @@ function renderCompoundStories(r, birthDate) {
       const el = document.getElementById(t.id);
       if (!el || !t.entry) return;
       el.classList.add('idnum-tap');
-      el.onclick = () => openZodiacIdentityModal(t.label, t.entry, t.stackNote);
+      el.onclick = () => openZodiacIdentityModal(t.label, t.entry, t.opts);
     });
   }
 }

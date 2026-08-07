@@ -1327,54 +1327,89 @@ function numberIdentityV2(root, impure) {
   return NUMBER_IDENTITY_V2[root] || null;
 }
 
+// deep/cherry (2026-08-07): the user gave far more source material per
+// animal than light/shadow alone (an emotional-core line, real-life
+// examples, five reality-check lines per entry) specifically so the app
+// never runs out of fresh things to say - "the whole reason I'm giving
+// you all of these is so we can have more than just one line so it feels
+// like a unique experience always." Used here for the repeat-animal case
+// (year/month/day sharing a sign): the first occurrence gets light+shadow
+// +deep (the fuller read, using the emotional-core material); a repeat
+// occurrence gets just `cherry`, one short new line, not the same two
+// sentences again. User: "the month go more in depth the day is cherry
+// on top."
 const VIETNAMESE_IDENTITY = {
   Rat: {
     light: "You're smart and resourceful. You find opportunities other people miss, and you make sure the people close to you are safe and taken care of.",
-    shadow: 'You can get sneaky and anxious about resources. You calculate your exit before you\'ve even committed, and you hoard things you don\'t actually need.',
+    shadow: "You can get sneaky and anxious about resources. You calculate your exit before you've even committed, and you hoard things you don't actually need.",
+    deep: 'What actually moves you is safety. A full kitchen, a safe circle, money put away. Losing that is your real fear, more than most people realize.',
+    cherry: 'You judge other people for being messy, which is really just covering for how panicked your own thoughts get.',
   },
   Ox: {
     light: 'You have quiet, steady power. You work through anything without complaining, and you build real, deep roots.',
     shadow: "You can get stubborn and slow to forgive. You hold onto a grudge for years, and you'd rather run yourself into the ground than admit the plan needs to change.",
+    deep: "What actually moves you is loyalty that matches your own, quiet and unspoken. What sets you off is watching someone lazy get away with taking you for granted.",
+    cherry: "Your refusal to change your mind isn't really strength. It's fear of the unknown wearing a strength costume.",
   },
   Tiger: {
     light: "You're brave and passionate. You fight hard for people who can't fight for themselves, and you lead with real charisma.",
     shadow: 'You can get hot-headed and dramatic. You start big fights over small things, and your pride would rather lose a friend than admit a mistake.',
+    deep: "What actually moves you is a real cause worth fighting for, something big enough for your whole passion. What guts you is feeling disrespected or boxed in.",
+    cherry: "You'd rather lose a friend than admit you made a small mistake. That pride costs you more than it protects.",
   },
   Cat: {
     light: "You're elegant and deeply perceptive. You notice details other people miss, and you build a calm, beautiful life around you.",
     shadow: "You can get cold and distant. You keep people at arm's length, and you judge people quietly instead of saying what's actually bothering you.",
+    deep: 'What actually moves you is harmony. A beautiful, quiet room, real respect, things done with care. What grates on you is anything loud, messy, or crude.',
+    cherry: "You act independent, but you're actually more dependent on people liking you than you'd ever admit.",
   },
   Dragon: {
     light: "You carry big, dynamic energy. You're destined for big things, and you inspire people just by walking into the room.",
     shadow: 'You can get arrogant and hard to satisfy. You expect people to bow a little, and a small criticism can wound you more than it should.',
+    deep: 'What actually moves you is a big vision, greatness, real loyalty around you. What burns is being criticized in public. That one goes deep.',
+    cherry: "You demand the spotlight because some part of you is scared you're empty without an audience.",
   },
   Snake: {
     light: "You're wise and deeply intuitive. You understand people's psychology fast, and your advice tends to actually be right.",
     shadow: "You can get paranoid and secretive. You keep score of every slight for years, and you'd rather manipulate a situation quietly than ask directly for what you need.",
+    deep: "What actually moves you is a rare, real connection, someone who actually gets it. What freezes you out is realizing someone lied to your face.",
+    cherry: "You'd rather manipulate a situation quietly than just ask directly for what you need.",
   },
   Horse: {
     light: "You're cheerful and independently powerful. You love running toward new things, and you can lift a sad friend just by showing up.",
     shadow: "You can get impatient and selfish. You abandon things halfway through, and you trample people's feelings without noticing you did it.",
+    deep: 'What actually moves you is a new project, a new direction, real momentum. What panics you is feeling tied down to a strict routine.',
+    cherry: "Your constant search for the next exciting thing is often just you outrunning a loneliness you don't want to sit with.",
   },
   Goat: {
     light: "You're deeply artistic and kind. You bring real beauty into the world, and you have a heart that genuinely loves helping people.",
     shadow: 'You can get stuck playing the victim. You avoid blame, and small stress can paralyze you completely.',
+    deep: 'What actually moves you is real beauty and gentle kindness. What breaks you down is aggressive demands and a harsh tone.',
+    cherry: 'You lean on other people for safety so much that it can tip into depending on them for everything.',
   },
   Monkey: {
     light: "You're a fast, clever problem-solver. You can fix almost anything, and you pick up hard skills faster than most people.",
     shadow: "You can get tricky and dishonest for fun. You bend rules just to see if you can get away with it, and you look down on people you've decided are slower than you.",
+    deep: "What actually moves you is a real puzzle, something that tests you. What insults you is being treated like you're not smart, even a little.",
+    cherry: "Deep down you worry that if you stopped being clever, people would realize there's nothing else there. There is.",
   },
   Rooster: {
     light: "You're organized, precise, and brave. You keep your promises, you speak the truth, and you look sharp doing it.",
     shadow: "You can get overly critical and boastful. You pick at other people's small flaws, and you can't stand being told you're wrong.",
+    deep: 'What actually moves you is order done right and real respect for your work. What irritates you fastest is a messy, lazy environment.',
+    cherry: "You get furious when someone criticizes you because some part of you can't survive not being right.",
   },
   Dog: {
     light: "You're loyal, honest, and protective. You have a sharp sense for injustice, and you keep the secrets people trust you with.",
     shadow: 'You can get cynical and sharp-tongued. You assume people are going to betray you, and you lock your heart away before anyone gets the chance.',
+    deep: "What actually moves you is loyalty that's been tested, people who stand with you when it counts. What devastates you is a friend's betrayal.",
+    cherry: "Your sharp, cynical edge usually isn't wisdom. It's a shield over a heart that bruises easier than you let on.",
   },
   Pig: {
     light: "You're generous and full of real goodwill. You love feeding people, hosting people, and making sure everyone around you feels relaxed.",
     shadow: "You can get naive and over-indulgent. You let people take advantage of you more than once, and you'd rather eat or sleep through a problem than face it.",
+    deep: "What actually moves you is warmth, real comfort, people you love around a table. What genuinely shocks you is cruelty and lies, since you don't expect them.",
+    cherry: "You give things away to earn friendship sometimes, worried people won't like you for just being you.",
   },
 };
 
