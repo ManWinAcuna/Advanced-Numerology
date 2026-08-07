@@ -15,6 +15,17 @@
  * getCompatLuckyNumber, luckyNumberBonus, scoreClass).
  */
 
+function ordinalSuffix(n) {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return 'th';
+  switch (n % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
 /* ------------------------------------------ day-of-month -> first LP ---- */
 // Generalizes getFirst28thDayUniversalValue (numerology.js) to any day-of-
 // month, not just 28. Same semantic: the first calendar occurrence of that
@@ -265,26 +276,22 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
     }
   });
 
-  // Own Life Path vs the candidate's Universal Day (2026-08-07) - was
-  // missing entirely: the simplest, most literal resonance (today matches
-  // YOUR own Life Path exactly) never got checked, unlike the day-themes
-  // above. No day-of-month gate - unlike a themed day, this can land on
-  // any date. Domain-tagged through the person's own first-imprint day for
-  // their Life Path (getFirstMatchingLifepathDayNumber), not the raw LP
-  // number - a 7 Life Path whose first 7LP day was the 28th reads as
-  // Financial (28's domain), not Spiritual (7's domain).
-  const personLP = compatLifePathInfo(personBirthDate).lookupValue;
-  const ownLPDay = getFirstMatchingLifepathDayNumber(personBirthDate, personLP);
-  const lpDomains = typeof ownLPDay === 'number' ? domainTagHtml(ownLPDay) : [];
-  if (personLP === candidateLP) {
+  // Your own first-imprint day for TODAY's specific LP (2026-08-07 fix,
+  // corrected from an earlier version of this same check that compared the
+  // candidate against your fixed, permanent core Life Path - which only
+  // ever fires on the rare day that happens to equal/be compatible with
+  // your own LP). User's actual point: whatever LP the candidate date
+  // shows, look up YOUR OWN first day that ever produced that specific LP
+  // (getFirstMatchingLifepathDayNumber, the existing Profile "First
+  // Imprints" mechanic) and read ITS domain - this is always relevant, not
+  // a rare coincidence. E.g. today is a 7 Universal Day, your own first
+  // 7LP day was the 28th (Financial) - that's the match, regardless of
+  // whether 7 happens to be your permanent core Life Path at all.
+  const ownDayForTodaysLP = getFirstMatchingLifepathDayNumber(personBirthDate, candidateLP);
+  if (typeof ownDayForTodaysLP === 'number') {
+    const domains = domainTagHtml(ownDayForTodaysLP);
     score += 15;
-    matches.push({ label: `Your Life Path (${personLP}LP)`, text: "Exactly matches today's Universal Day", points: 15, domains: lpDomains });
-  } else {
-    const c = numerologyCompat(personLP, candidateLP);
-    if (c >= 77) {
-      score += 8;
-      matches.push({ label: `Your Life Path (${personLP}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: 8, domains: lpDomains });
-    }
+    matches.push({ label: `Your First ${candidateLP}LP Day (${ownDayForTodaysLP})`, text: `Today's Universal Day is the same Life Path that first imprinted you on the ${ownDayForTodaysLP}${ordinalSuffix(ownDayForTodaysLP)}`, points: 15, domains });
   }
 
   const seenLuckyText = new Set();
