@@ -832,20 +832,18 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 }
 .emax-fact-tile.emax-fact-core .emax-fact-label { color: color-mix(in srgb, var(--gold) 65%, var(--muted)); }
 
-/* A second, separate numeral family missed by the --acc-text pass above:
-   these "gold pill" numbers (Lucky Number/28 Day/Missing on Profile, rank
-   badges, the Calendar page's Universal Day chip) don't go through the
-   struck-metal gradient at all - they're plain var(--yellow) text on a
-   hardcoded #241a08 pill background, which is neither near-black (the
-   panel color the earlier contrast pass was calibrated against) nor
-   theme-reactive. Same fix, same --acc-text values, applied here too -
-   they clear the same ~7:1 target against this specific background as
-   well (verified per hue, not assumed). .good/.bad variants keep their
-   own semantic green/red untouched (higher-specificity rules in
-   style.css already win over this). */
-.box-value, .box-value.mid, .rank-score, .calendar-day-universal {
-  color: var(--acc-text);
-}
+/* 2026-08-08: removed the --acc-text override that used to apply here.
+   It existed to fix contrast for these "gold pill" badges (Lucky Number/
+   28 Day/Missing on Profile, rank badges, the Calendar page's Universal
+   Day chip) against certain low-contrast energy hues - but --yellow no
+   longer points at the reactive --acc at all (see the --yellow fix
+   above), so these badges (still plain var(--yellow) text, style.css)
+   always render the one well-tested stable gold now. The contrast problem
+   this rule solved can't recur; keeping it would have just reintroduced
+   the exact bug --yellow was fixed for; one step removed (.rank-score's
+   MID case has no higher-specificity style.css rule to fall back on,
+   unlike .good/.bad, so it was the one actually showing the reactive
+   color day to day - user: "shouldn't be affected by the day colors"). */
 
 /* Tier 3: "Missing" is reference/diagnostic, not a number anyone's chart
    hinges on - but sharing .box-value with Lucky Number/28 Day gave it the
