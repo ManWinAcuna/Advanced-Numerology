@@ -199,10 +199,19 @@ function openIdentityModal(label, entry, slot) {
 // above but pulling straight from the plain-voice content bank (no
 // compose/slot step needed - VIETNAMESE_IDENTITY/WESTERN_IDENTITY entries
 // are already { light, shadow }).
-function openZodiacIdentityModal(label, entry) {
+// stackNote (2026-08-07): when the same Vietnamese animal lands on more
+// than one of year/month/day, tapping each one used to open the byte-
+// identical popup twice - user: "whenever there are repeat signs it's
+// giving the same popup with the same writing." The trait text itself
+// can't honestly differ (it's the same animal), so instead of inventing
+// different meanings per slot, the repeat gets acknowledged up front,
+// same doctrine as the existing "stacks the same current" pattern used
+// for repeated number roots elsewhere in this file.
+function openZodiacIdentityModal(label, entry, stackNote) {
   if (!entry) return;
   document.getElementById('storyModalBody').innerHTML =
     `<div class="story-modal-title">${label}</div>` +
+    (stackNote ? `<div class="story-row">${stackNote}</div>` : '') +
     `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
     `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>`;
   document.getElementById('storyModalOverlay').classList.add('active');
@@ -278,17 +287,27 @@ function renderCompoundStories(r, birthDate) {
 
     // Western sign + Vietnamese year/month/day (natal, from the person's
     // own birth date) - same tap pattern, plain-voice content bank.
+    // animalKey marks which Vietnamese slots share an animal, so a repeat
+    // gets a stack note instead of the byte-identical popup twice.
     const zodiacTargets = [
       { id: 'sunSign', label: 'Western Sign', entry: WESTERN_IDENTITY[r.sunSign] },
-      { id: 'chineseYear', label: 'Vietnamese Year', entry: VIETNAMESE_IDENTITY[r.chineseYear] },
-      { id: 'chineseMonth', label: 'Vietnamese Month', entry: VIETNAMESE_IDENTITY[r.chineseMonth] },
-      { id: 'chineseDay', label: 'Vietnamese Day', entry: VIETNAMESE_IDENTITY[r.chineseDay] },
+      { id: 'chineseYear', label: 'Vietnamese Year', entry: VIETNAMESE_IDENTITY[r.chineseYear], animalKey: r.chineseYear },
+      { id: 'chineseMonth', label: 'Vietnamese Month', entry: VIETNAMESE_IDENTITY[r.chineseMonth], animalKey: r.chineseMonth },
+      { id: 'chineseDay', label: 'Vietnamese Day', entry: VIETNAMESE_IDENTITY[r.chineseDay], animalKey: r.chineseDay },
     ];
+    const seenAnimalSlots = {};
+    zodiacTargets.forEach((t) => {
+      if (t.animalKey) {
+        const prior = seenAnimalSlots[t.animalKey];
+        if (prior) t.stackNote = `Same animal as your ${prior} - this one's stacked, not a separate influence. It just runs louder in you.`;
+        else seenAnimalSlots[t.animalKey] = t.label.replace('Vietnamese ', '');
+      }
+    });
     zodiacTargets.forEach((t) => {
       const el = document.getElementById(t.id);
       if (!el || !t.entry) return;
       el.classList.add('idnum-tap');
-      el.onclick = () => openZodiacIdentityModal(t.label, t.entry);
+      el.onclick = () => openZodiacIdentityModal(t.label, t.entry, t.stackNote);
     });
   }
 }
