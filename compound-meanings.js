@@ -585,6 +585,69 @@ function weaveCompoundStory(parts, opts) {
   return weaveResolvedStory(parts.map((p) => ({ label: p.label, entry: compoundEntry(p.raw) })), opts);
 }
 
+// The Profile/Calculator counterpart to weaveResolvedStory above (2026-08-
+// 07 fix) - weaves composeIdentitySentence's "you" voice (already used by
+// the individual number tap popups, IDENTITY_SLOTS) instead of the day-
+// voice compound entry copy ("Good day for X"), which read wrong for a
+// person's own static numbers (user: "it's not a day it's a person").
+// items: [{ label, entry, slot }]. Flat entries (no compound underneath -
+// a plain single digit) no longer vanish silently: the rare case where
+// most of a group is flat (e.g. an early-January birthday can leave Life
+// Path/Day Born/Day# all flat, Combo the only one with content) now gets a
+// short acknowledgment instead of reading like the feature broke.
+function weaveIdentityStory(items, opts) {
+  opts = opts || {};
+  const resolved = [];
+  const flatLabels = [];
+  items.forEach(({ label, entry, slot }) => {
+    if (!entry) return;
+    if (entry.flat) { flatLabels.push(label); return; }
+    const sentence = composeIdentitySentence(entry, slot);
+    if (sentence) resolved.push({ label, entry, sentence });
+  });
+
+  if (resolved.length === 0 && flatLabels.length === 0) return null;
+
+  const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+  let text = opts.intro ? `${opts.intro} ` : '';
+
+  if (resolved.length === 0) {
+    const verb = flatLabels.length === 1 ? 'is' : 'are';
+    text += `${flatLabels.join(', ')} ${verb} all plain single digits right now - nothing bigger hiding underneath to unpack.`;
+    return { text, parts: [] };
+  }
+
+  const lead = resolved[0];
+  text += `${lead.label}: ${lead.sentence.light} ${lead.sentence.shadow}`;
+  const seenRoots = { [lead.entry.root]: lead.label };
+
+  for (let i = 1; i < resolved.length; i++) {
+    const other = resolved[i];
+    const prior = seenRoots[other.entry.root];
+    // Same-root repeat (2026-08-07 fix): identityClauses() is keyed by
+    // ROOT, not by the specific compound - two different numbers sharing a
+    // root get near-identical good/bad clause text (only the rotating
+    // image differs), so weaveResolvedStory's "doubles down on the same
+    // thing: [restate the clause]" pattern read as the same sentence said
+    // twice. A short stack note (same wording buildIdentityRows already
+    // uses for this exact case) says it once instead of repeating it.
+    if (prior) {
+      const themeLower = rootThemeName(other.entry.root).toLowerCase();
+      text += ` ${other.label} stacks the same ${themeLower} current as ${prior} - not incidental, just louder for it.`;
+    } else {
+      text += ` But ${other.label} wants something else: ${lower(other.sentence.light)} ${other.sentence.shadow}`;
+      seenRoots[other.entry.root] = other.label;
+    }
+  }
+
+  if (flatLabels.length) {
+    const verb = flatLabels.length === 1 ? 'is' : 'are';
+    text += ` (${flatLabels.join(', ')} ${verb} plain right now - nothing else to add there.)`;
+  }
+
+  return { text, parts: resolved };
+}
+
 /* -------------------------------------------------- light/shadow split -- */
 // Today's redesign (round 4, 2026-08-06): instead of one woven paragraph,
 // Light and Shadow become their own separate listings (one row per
@@ -937,6 +1000,22 @@ const IDENTITY_SLOTS = {
     opener: 'Your combo runs as',
     lightTail: '',
     shadowLead: 'Its slip side:',
+  },
+  // 2026-08-07: Personal Cycles' full-story fix needed these 2 - Personal
+  // Day already had 'today' (it genuinely changes daily, so "today" framing
+  // there was always correct), but Year/Month had no "you" slot at all and
+  // fell through to the day-voice compound copy instead. Framed by the
+  // cycle's own real timescale rather than "today", since neither actually
+  // resets daily.
+  personalYear: {
+    opener: "This year, you're running on",
+    lightTail: "That's the current carrying you until your personal year turns over.",
+    shadowLead: 'Ridden too hard,',
+  },
+  personalMonth: {
+    opener: 'This month layers in',
+    lightTail: 'A shorter wave riding inside your bigger year.',
+    shadowLead: 'Off balance,',
   },
 };
 

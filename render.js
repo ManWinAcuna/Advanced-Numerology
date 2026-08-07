@@ -195,22 +195,35 @@ function openIdentityModal(label, entry, slot) {
 }
 
 function renderCompoundStories(r, birthDate) {
+  // isFamous (2026-08-07): weaveIdentityStory's "you" voice ("At your
+  // core, you are...") is correct for Profile/Calculator (a real person's
+  // own numbers) but would misdescribe a famous person's - Famous Lookup
+  // keeps the original day-voice weaveResolvedStory for its "full story"/
+  // "big picture" buttons, same reasoning as the identityTargets guard
+  // below (which already excluded Famous from the individual-number taps).
+  const isFamous = /famous/i.test(location.pathname);
+
+  // slot (2026-08-07) picks each number's IDENTITY_SLOTS entry for
+  // weaveIdentityStory's "you" voice - same slots the individual number
+  // tap popups below already use, so the aggregate story and the per-
+  // number popups never disagree on how a given number is framed.
   const coreParts = [
-    { label: 'Life Path', raw: null, entry: compoundEntryForLifePath(r.lifePath, r.lifePathCompound) },
-    { label: 'Day Born', raw: r.dayBornRaw },
-    { label: 'Day#', raw: r.dayNumRaw },
-    { label: 'Combo', raw: compoundRawCombo(birthDate) },
-  ].map((p) => ({ label: p.label, entry: p.entry || compoundEntry(p.raw) }));
-  const coreStory = weaveResolvedStory(coreParts);
+    { label: 'Life Path', slot: 'core', raw: null, entry: compoundEntryForLifePath(r.lifePath, r.lifePathCompound) },
+    { label: 'Day Born', slot: 'rhythm', raw: r.dayBornRaw },
+    { label: 'Day#', slot: 'year', raw: r.dayNumRaw },
+    { label: 'Combo', slot: 'combo', raw: compoundRawCombo(birthDate) },
+  ].map((p) => ({ label: p.label, slot: p.slot, entry: p.entry || compoundEntry(p.raw) }));
 
   const cycleParts = [
-    { label: 'Personal Year', raw: r.py.raw },
-    { label: 'Personal Month', raw: r.pm.raw },
-    { label: 'Personal Day', raw: r.pd.raw },
-  ].map((p) => ({ label: p.label, entry: compoundEntry(p.raw) }));
-  const cyclesStory = weaveResolvedStory(cycleParts);
+    { label: 'Personal Year', slot: 'personalYear', raw: r.py.raw },
+    { label: 'Personal Month', slot: 'personalMonth', raw: r.pm.raw },
+    { label: 'Personal Day', slot: 'today', raw: r.pd.raw },
+  ].map((p) => ({ label: p.label, slot: p.slot, entry: compoundEntry(p.raw) }));
 
-  const bigPictureStory = weaveResolvedStory(coreParts.concat(cycleParts));
+  const weave = isFamous ? weaveResolvedStory : weaveIdentityStory;
+  const coreStory = weave(coreParts);
+  const cyclesStory = weave(cycleParts);
+  const bigPictureStory = weave(coreParts.concat(cycleParts));
 
   const coreLink = insertStoryLink('coreNumbersStoryLink', '.grid4.subrow', '📖 the full story');
   if (coreLink) {
@@ -234,7 +247,7 @@ function renderCompoundStories(r, birthDate) {
   // own popup. Profile + Calculator only - the copy is written as "you
   // are...", which doesn't fit describing a famous person. Slots match
   // Today's old My Numbers framing exactly (core/rhythm/year/today).
-  if (!/famous/i.test(location.pathname)) {
+  if (!isFamous) {
     const identityTargets = [
       { id: 'lifePath', label: 'Lifepath', slot: 'core', entry: coreParts[0].entry },
       { id: 'dayBornReduced', label: 'Day Born', slot: 'rhythm', entry: coreParts[1].entry },
