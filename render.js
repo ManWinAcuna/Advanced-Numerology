@@ -247,51 +247,47 @@ function renderCompoundStories(r, birthDate) {
     { label: 'Personal Day', slot: 'today', raw: r.pd.raw },
   ].map((p) => ({ label: p.label, slot: p.slot, entry: compoundEntry(p.raw) }));
 
-  const weave = isFamous ? weaveResolvedStory : weaveIdentityStory;
-  const coreStory = weave(coreParts);
-  const cyclesStory = weave(cycleParts);
-  const bigPictureStory = weave(coreParts.concat(cycleParts));
-
-  const coreLink = insertStoryLink('coreNumbersStoryLink', '.grid4.subrow', '📖 the full story');
-  if (coreLink) {
-    coreLink.style.display = coreStory ? '' : 'none';
-    coreLink.onclick = () => openStoryModal('Core Numbers', coreStory);
-  }
-
-  const cyclesLink = insertStoryLink('personalCyclesStoryLink', '.grid3.subrow', '📖 the full story');
-  if (cyclesLink) {
-    cyclesLink.style.display = cyclesStory ? '' : 'none';
-    cyclesLink.onclick = () => openStoryModal('Personal Cycles', cyclesStory);
-  }
-
-  const bigLink = insertStoryLink('bigPictureStoryLink', '#personalCyclesStoryLink', '🔮 the big picture');
-  if (bigLink) {
-    bigLink.style.display = bigPictureStory ? '' : 'none';
-    bigLink.onclick = () => openStoryModal('The Big Picture', bigPictureStory);
-  }
+  // 2026-08-07 round 2: "the full story"/"the big picture"/Personal
+  // Cycles' "full story" are obsolete everywhere now that "the general
+  // reading" covers the same ground with real content - user: "get rid of
+  // it and replace it with the current general reading, same with the big
+  // picture... the full story of the personal cycles we'll work on that
+  // later so get rid of those [too]." Initially kept these for Famous
+  // Lookup only (the general reading is "you"-voice, which can't describe
+  // a famous person) - user corrected that too: "add it but don't give it
+  // you voice, just use general reading language" for Famous. So all 3
+  // old static buttons are hidden everywhere; Famous gets the general
+  // reading via composeGeneralReading's thirdPerson option instead of its
+  // own separate weave.
+  const coreLinkOld = document.getElementById('coreNumbersStoryLink');
+  if (coreLinkOld) coreLinkOld.style.display = 'none';
+  const cyclesLinkOld = document.getElementById('personalCyclesStoryLink');
+  if (cyclesLinkOld) cyclesLinkOld.style.display = 'none';
+  const bigLinkOld = document.getElementById('bigPictureStoryLink');
+  if (bigLinkOld) bigLinkOld.style.display = 'none';
 
   // Boost13 (2026-08-07): "the general reading" - timeless identity only
   // (Life Path, Day Born, Combo, Western Sign, Vietnamese Year/Month/Day),
   // explicitly NOT Personal Year/Month/Day - user: "the today stuff is
   // for the day and personal day, this is simply a general reading."
-  // Profile/Calculator only, same "you are..." voice guard as everything
-  // else on this page.
-  if (!isFamous) {
-    const generalParts = [
-      { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true },
-      { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
-      { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
-      { kind: 'sign', key: r.sunSign },
-      { kind: 'animal', key: r.chineseYear },
-      { kind: 'animal', key: r.chineseMonth },
-      { kind: 'animal', key: r.chineseDay },
-    ];
-    const generalReading = composeGeneralReading(generalParts);
-    const generalLink = insertStoryLink('generalReadingStoryLink', '#bigPictureStoryLink', '🧭 the general reading');
-    if (generalLink) {
-      generalLink.style.display = generalReading ? '' : 'none';
-      generalLink.onclick = () => openStoryModal('The General Reading', generalReading);
-    }
+  // Takes the Core Numbers "full story" link's old spot on every page.
+  // Personal Cycles' equivalent (same register approach applied to
+  // Personal Year/Month/Day) is deferred - not built yet, so nothing
+  // replaces that link yet.
+  const generalParts = [
+    { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true },
+    { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
+    { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
+    { kind: 'sign', key: r.sunSign },
+    { kind: 'animal', key: r.chineseYear },
+    { kind: 'animal', key: r.chineseMonth },
+    { kind: 'animal', key: r.chineseDay },
+  ];
+  const generalReading = composeGeneralReading(generalParts, { thirdPerson: isFamous });
+  const generalLink = insertStoryLink('generalReadingStoryLink', '.grid4.subrow', '🧭 the general reading');
+  if (generalLink) {
+    generalLink.style.display = generalReading ? '' : 'none';
+    generalLink.onclick = () => openStoryModal('The General Reading', generalReading);
   }
 
   // Round 14: the 4 identity numbers become tappable, each opening its

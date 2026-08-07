@@ -1574,6 +1574,65 @@ function resolveEntry(p) {
   return null;
 }
 
+// Famous Lookup needs the same general reading, just not addressed to
+// "you" - a real person's own numbers, but not the profile owner's. Pure
+// mechanical pronoun swap over the finished text (never touches the
+// source content bank) - preposition-object "you" (to/with/for you...)
+// becomes "them", everything else (subject "you", "you're", "your")
+// becomes "they"/"they're"/"their". User: "add it but don't give it you
+// voice, just use general reading language."
+// Verb/phrase patterns whose object is "you" in this content bank,
+// applied AFTER the generic subject pass turns them into "...they..." -
+// a plain subject/object heuristic can't tell these apart from text
+// alone, so this is a curated list built by auditing every light/shadow/
+// deep/cherry entry's actual transformed output (204 lines) rather than
+// guessed. "moves they is" alone covers all 12 animals' `deep` field,
+// which all open with the same "What actually moves you is" line.
+const THIRD_PERSON_OBJECT_FIXUPS = [
+  [/\bmoves they is\b/g, 'moves them is'], [/\bhits they\b/g, 'hits them'],
+  [/\bhelping they\b/g, 'helping them'], [/\bthank they\b/g, 'thank them'],
+  [/\bsets they off\b/g, 'sets them off'], [/\btaking they for granted\b/g, 'taking them for granted'],
+  [/\bguts they is\b/g, 'guts them is'], [/\bcosts they more\b/g, 'costs them more'],
+  [/\bbothering they\b/g, 'bothering them'], [/\bliking they than\b/g, 'liking them than'],
+  [/\bwound they more\b/g, 'wound them more'], [/\bfreezes they out\b/g, 'freezes them out'],
+  [/\bjust they outrunning\b/g, 'just them outrunning'], [/\bpanics they is\b/g, 'panics them is'],
+  [/\bparalyze they completely\b/g, 'paralyze them completely'], [/\bbreaks they down\b/g, 'breaks them down'],
+  [/\btests they\./g, 'tests them.'], [/\binsults they is\b/g, 'insults them is'],
+  [/\birritates they fastest\b/g, 'irritates them fastest'], [/\bcriticizes they\b/g, 'criticizes them'],
+  [/\btrust they with\b/g, 'trust them with'], [/\bbetray they,/g, 'betray them,'],
+  [/\bdevastates they is\b/g, 'devastates them is'], [/\bwalk over they\b/g, 'walk over them'],
+  [/\bbeing they\b/g, 'being them'], [/\breally they\./g, 'really them.'],
+  [/\bshocks they is\b/g, 'shocks them is'], [/\blike they for\b/g, 'like them for'],
+];
+
+// Famous Lookup needs the same general reading, just not addressed to
+// "you" - a real person's own numbers, but not the profile owner's. Pure
+// mechanical pronoun swap over the finished text (never touches the
+// source content bank). Order matters: contractions first (so "before
+// you've" doesn't get half-matched by the preposition pass below), then
+// preposition-object "you" (in/to/with/for you...) becomes "them",
+// everything else (subject "you", "you're", "your") becomes "they"/
+// "they're"/"their", then the curated object-verb fixups correct the
+// specific direct-object cases a preposition list can't catch (thank
+// you, trust you, wound you...). "than"/"like" are deliberately NOT
+// treated as object-triggering prepositions - "more than you should",
+// "than you were" are elliptical comparisons wanting subject case
+// ("they"), which the plain fallback already gets right. User: "add it
+// but don't give it you voice, just use general reading language."
+function toThirdPerson(text) {
+  let out = text
+    .replace(/\b(You've|you've)\b/g, (m) => (m[0] === 'Y' ? "They've" : "they've"))
+    .replace(/\b(You'd|you'd)\b/g, (m) => (m[0] === 'Y' ? "They'd" : "they'd"))
+    .replace(/\b(You're|you're)\b/g, (m) => (m[0] === 'Y' ? "They're" : "they're"))
+    .replace(/\b(Yourself|yourself)\b/g, (m) => (m[0] === 'Y' ? 'Themself' : 'themself'))
+    .replace(/\b(Yours|yours)\b/g, (m) => (m[0] === 'Y' ? 'Theirs' : 'theirs'))
+    .replace(/\b(Your|your)\b/g, (m) => (m[0] === 'Y' ? 'Their' : 'their'))
+    .replace(/\b(to|with|for|from|on|near|around|before|without|toward|of|behind|in|over)\s+(You|you)\b/g, (m, prep) => `${prep} them`)
+    .replace(/\b(You|you)\b/g, (m) => (m === 'You' ? 'They' : 'they'));
+  THIRD_PERSON_OBJECT_FIXUPS.forEach(([pattern, replacement]) => { out = out.replace(pattern, replacement); });
+  return out;
+}
+
 // parts: [{ label, kind: 'number'|'animal'|'sign', root, impure, key,
 // isLifePath }]. Groups parts by register (entities sharing a register
 // are chained together with amplify connectors, in the order they first
@@ -1584,7 +1643,8 @@ function resolveEntry(p) {
 // Life Path itself placed first within that group. Repeats of the exact
 // same entity (e.g. Day Born and Day# sharing a root) get the existing
 // "doubled" acknowledgment instead of restating the same text.
-function composeGeneralReading(parts) {
+// opts.thirdPerson: true for Famous Lookup - see toThirdPerson above.
+function composeGeneralReading(parts, opts) {
   connectUseIdx = { amplify: 0, tension: 0, neutral: 0 };
   const items = [];
   (parts || []).forEach((p) => {
@@ -1639,5 +1699,6 @@ function composeGeneralReading(parts) {
   });
 
   if (!sentences.length) return null;
-  return { text: sentences.join(' ') };
+  const text = sentences.join(' ');
+  return { text: (opts && opts.thirdPerson) ? toThirdPerson(text) : text };
 }
