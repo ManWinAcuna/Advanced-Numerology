@@ -270,6 +270,30 @@ function renderCompoundStories(r, birthDate) {
     bigLink.onclick = () => openStoryModal('The Big Picture', bigPictureStory);
   }
 
+  // Boost13 (2026-08-07): "the general reading" - timeless identity only
+  // (Life Path, Day Born, Combo, Western Sign, Vietnamese Year/Month/Day),
+  // explicitly NOT Personal Year/Month/Day - user: "the today stuff is
+  // for the day and personal day, this is simply a general reading."
+  // Profile/Calculator only, same "you are..." voice guard as everything
+  // else on this page.
+  if (!isFamous) {
+    const generalParts = [
+      { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true },
+      { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
+      { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
+      { kind: 'sign', key: r.sunSign },
+      { kind: 'animal', key: r.chineseYear },
+      { kind: 'animal', key: r.chineseMonth },
+      { kind: 'animal', key: r.chineseDay },
+    ];
+    const generalReading = composeGeneralReading(generalParts);
+    const generalLink = insertStoryLink('generalReadingStoryLink', '#bigPictureStoryLink', '🧭 the general reading');
+    if (generalLink) {
+      generalLink.style.display = generalReading ? '' : 'none';
+      generalLink.onclick = () => openStoryModal('The General Reading', generalReading);
+    }
+  }
+
   // Round 14: the 4 identity numbers become tappable, each opening its
   // own popup. Profile + Calculator only - the copy is written as "you
   // are...", which doesn't fit describing a famous person. Slots match

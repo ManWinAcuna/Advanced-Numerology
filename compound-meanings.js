@@ -1464,59 +1464,178 @@ const WESTERN_IDENTITY = {
   },
 };
 
-// WIP (2026-08-07): confirmed NOT good enough to ship - reads as a
-// template loop (7 entries x rotating connector word), exactly what the
-// user's original Boost13 answer ruled out ("written fresh each time, no
-// fixed template phrase"). Real fix needs actual pairwise tension/
-// alignment logic between the SPECIFIC entities in play (which two
-// reinforce, which two pull against each other), not swappable connector
-// words - that's a much bigger content-generation problem than this
-// function solves. Left in place as a starting point for that later work.
-// Individual tap popups (identityTargets in render.js) are the shipped
-// path for this content bank today - see NUMBER_IDENTITY_V2/
-// VIETNAMESE_IDENTITY/WESTERN_IDENTITY above.
-const GENERAL_LIGHT_LEADS_MID = ['Underneath that,', 'Alongside that,', 'On top of that,'];
-const GENERAL_LIGHT_LEADS_NEW = ["There's also this.", 'Something else runs in you too.', 'Right next to that is something else.'];
-const GENERAL_SHADOW_LEADS = ['The flip side.', 'The catch.', 'Where it slips.', 'The trap.', 'The cost.', 'And the risk.'];
+// Round 2 (2026-08-07): the connector-rotation composer above read as a
+// template loop, exactly what the user's original Boost13 answer ruled
+// out ("written fresh each time, no fixed template phrase"). Real fix:
+// tag every entity with a REGISTER (what kind of energy it runs on), so
+// the composer knows which pairs genuinely reinforce each other (same or
+// allied register - "amplify"), which pull in real opposite directions
+// ("tension" - the user's own doctrine: internal pull, never framed as an
+// external enemy), and which just sit side by side (no defined relation -
+// "neutral"). This is what made the hand-written sample readings work:
+// noticing Capricorn's discipline running right alongside Horse-year
+// restlessness, or the 33/6 caretaker sitting next to Aries/Dragon's
+// hunger for the spotlight.
+//
+// Hard constraint (user, round 2): "I don't want you to invent too much,
+// keep what I gave you, only make it flow right." So every connector
+// below is purely STRUCTURAL - it never asserts a new psychological
+// claim, only that a pattern already stated is showing up again (amplify)
+// or that something already stated runs the opposite way (tension). The
+// actual descriptive content inserted is always the entity's own
+// light/shadow text, verbatim, never reworded or expanded on.
+const REGISTER = {
+  DISCIPLINE: 'DISCIPLINE', FREEDOM: 'FREEDOM', CARETAKING: 'CARETAKING',
+  PRIVATE: 'PRIVATE', SPOTLIGHT: 'SPOTLIGHT', SOCIAL: 'SOCIAL',
+  ADAPTIVE: 'ADAPTIVE', INTUITIVE: 'INTUITIVE',
+};
 
-function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+// Every entity's primary register, tagged from its own light/shadow text
+// above (never a new judgment beyond what that text already says).
+const NUMBER_REGISTER = {
+  1: REGISTER.SPOTLIGHT, 2: REGISTER.CARETAKING, 3: REGISTER.SOCIAL,
+  4: REGISTER.DISCIPLINE, 5: REGISTER.FREEDOM, 6: REGISTER.CARETAKING,
+  7: REGISTER.PRIVATE, 8: REGISTER.DISCIPLINE, 9: REGISTER.ADAPTIVE,
+  11: REGISTER.INTUITIVE, '11i': REGISTER.INTUITIVE,
+  22: REGISTER.DISCIPLINE, '22i': REGISTER.DISCIPLINE,
+  33: REGISTER.CARETAKING, '33i': REGISTER.CARETAKING,
+};
+const VIETNAMESE_REGISTER = {
+  Rat: REGISTER.PRIVATE, Ox: REGISTER.DISCIPLINE, Tiger: REGISTER.SPOTLIGHT,
+  Cat: REGISTER.PRIVATE, Dragon: REGISTER.SPOTLIGHT, Snake: REGISTER.PRIVATE,
+  Horse: REGISTER.FREEDOM, Goat: REGISTER.CARETAKING, Monkey: REGISTER.SOCIAL,
+  Rooster: REGISTER.DISCIPLINE, Dog: REGISTER.CARETAKING, Pig: REGISTER.CARETAKING,
+};
+const WESTERN_REGISTER = {
+  Aries: REGISTER.SPOTLIGHT, Taurus: REGISTER.DISCIPLINE, Gemini: REGISTER.SOCIAL,
+  Cancer: REGISTER.CARETAKING, Leo: REGISTER.SPOTLIGHT, Virgo: REGISTER.DISCIPLINE,
+  Libra: REGISTER.ADAPTIVE, Scorpio: REGISTER.PRIVATE, Sagittarius: REGISTER.FREEDOM,
+  Capricorn: REGISTER.DISCIPLINE, Aquarius: REGISTER.FREEDOM, Pisces: REGISTER.CARETAKING,
+};
 
-// parts: [{ kind: 'number'|'animal'|'sign', root, impure, key }] in the
-// order they should appear. Entries sharing the same root/key get a short
-// "doubled" acknowledgment instead of repeating the same text twice.
+function entityRegister(p) {
+  if (p.kind === 'number') return NUMBER_REGISTER[p.impure ? `${p.root}i` : p.root] || NUMBER_REGISTER[p.root];
+  if (p.kind === 'animal') return VIETNAMESE_REGISTER[p.key];
+  if (p.kind === 'sign') return WESTERN_REGISTER[p.key];
+  return null;
+}
+
+// Natural opposite-register pairs - the only relationships treated as
+// "tension". Everything not listed here (including any register paired
+// with itself, handled separately as "amplify") is "neutral".
+const REGISTER_TENSION = [
+  [REGISTER.DISCIPLINE, REGISTER.FREEDOM],
+  [REGISTER.PRIVATE, REGISTER.SOCIAL],
+  [REGISTER.CARETAKING, REGISTER.SPOTLIGHT],
+  [REGISTER.ADAPTIVE, REGISTER.PRIVATE],
+  [REGISTER.INTUITIVE, REGISTER.DISCIPLINE],
+];
+
+function registerRelation(a, b) {
+  if (!a || !b) return 'neutral';
+  if (a === b) return 'amplify';
+  const isTension = REGISTER_TENSION.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  return isTension ? 'tension' : 'neutral';
+}
+
+// Purely connective phrase banks - no trait claims live here, only the
+// structural relationship between what was just said and what comes next.
+// 3-4 variants each so a long reading never repeats a connector.
+const CONNECT_AMPLIFY = [
+  'That same pull shows up again here.',
+  "It's not the only place that current runs.",
+  'The same energy carries into this too.',
+  "That doesn't stand alone either.",
+];
+const CONNECT_TENSION = [
+  'Right alongside that is a part of you that wants the opposite.',
+  "That's not the whole picture though. Something else in you pulls the other way.",
+  'At the same time, a different current runs right against that.',
+  "None of that matches the part of you that's about to show up.",
+];
+const CONNECT_NEUTRAL = [
+  "There's also this, a separate part of you.",
+  'On top of that is something else entirely.',
+  'Alongside all of it is one more piece.',
+];
+
+let connectUseIdx = { amplify: 0, tension: 0, neutral: 0 };
+function nextConnector(relation) {
+  const bank = relation === 'amplify' ? CONNECT_AMPLIFY : relation === 'tension' ? CONNECT_TENSION : CONNECT_NEUTRAL;
+  const i = connectUseIdx[relation] % bank.length;
+  connectUseIdx[relation]++;
+  return bank[i];
+}
+
+function resolveEntry(p) {
+  if (p.kind === 'number') return numberIdentityV2(p.root, p.impure);
+  if (p.kind === 'animal') return VIETNAMESE_IDENTITY[p.key];
+  if (p.kind === 'sign') return WESTERN_IDENTITY[p.key];
+  return null;
+}
+
+// parts: [{ label, kind: 'number'|'animal'|'sign', root, impure, key,
+// isLifePath }]. Groups parts by register (entities sharing a register
+// are chained together with amplify connectors, in the order they first
+// appear), then orders groups largest-first so the most-loaded theme
+// leads, using tension/neutral connectors between groups - EXCEPT Life
+// Path's own group, which always leads regardless of size (it's the
+// headline number in every numerology convention - user-confirmed), with
+// Life Path itself placed first within that group. Repeats of the exact
+// same entity (e.g. Day Born and Day# sharing a root) get the existing
+// "doubled" acknowledgment instead of restating the same text.
 function composeGeneralReading(parts) {
-  const sentences = [];
-  const seenNumberRoots = {};
-  const seenKeys = {};
-  let idx = 0;
-
+  connectUseIdx = { amplify: 0, tension: 0, neutral: 0 };
+  const items = [];
   (parts || []).forEach((p) => {
     const dedupeKey = p.kind === 'number' ? `number:${p.root}` : `${p.kind}:${p.key}`;
-    if (seenKeys[dedupeKey]) {
-      sentences.push('That same current runs doubled in you.');
-      idx++;
-      return;
-    }
-    seenKeys[dedupeKey] = true;
-
-    let entry = null;
-    if (p.kind === 'number') entry = numberIdentityV2(p.root, p.impure);
-    else if (p.kind === 'animal') entry = VIETNAMESE_IDENTITY[p.key];
-    else if (p.kind === 'sign') entry = WESTERN_IDENTITY[p.key];
+    const entry = resolveEntry(p);
     if (!entry) return;
+    items.push({ p, entry, dedupeKey, register: entityRegister(p) });
+  });
+  if (!items.length) return null;
 
-    if (idx === 0) {
-      sentences.push(entry.light);
-    } else if (idx % 2 === 0) {
-      const lead = GENERAL_LIGHT_LEADS_NEW[(idx / 2 - 1) % GENERAL_LIGHT_LEADS_NEW.length];
-      sentences.push(`${lead} ${entry.light}`);
-    } else {
-      const lead = GENERAL_LIGHT_LEADS_MID[Math.floor(idx / 2) % GENERAL_LIGHT_LEADS_MID.length];
-      sentences.push(`${lead} ${lowerFirst(entry.light)}`);
-    }
-    const shadowLead = GENERAL_SHADOW_LEADS[idx % GENERAL_SHADOW_LEADS.length];
-    sentences.push(`${shadowLead} ${lowerFirst(entry.shadow)}`);
-    idx++;
+  // Group by register, preserving first-seen order both across and within groups.
+  const groupOrder = [];
+  const groups = {};
+  items.forEach((it) => {
+    const key = it.register || `_solo_${it.dedupeKey}`;
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(it);
+  });
+  groupOrder.sort((a, b) => groups[b].length - groups[a].length);
+
+  const lifePathKey = groupOrder.find((key) => groups[key].some((it) => it.p.isLifePath));
+  if (lifePathKey) {
+    groupOrder.splice(groupOrder.indexOf(lifePathKey), 1);
+    groupOrder.unshift(lifePathKey);
+    const g = groups[lifePathKey];
+    const lpIndex = g.findIndex((it) => it.p.isLifePath);
+    if (lpIndex > 0) g.unshift(g.splice(lpIndex, 1)[0]);
+  }
+
+  const sentences = [];
+  const seenDedupe = {};
+  let prevRegister = null;
+  groupOrder.forEach((key) => {
+    groups[key].forEach((it, i) => {
+      if (seenDedupe[it.dedupeKey]) {
+        sentences.push('That same current runs doubled in you.');
+        return;
+      }
+      seenDedupe[it.dedupeKey] = true;
+
+      if (sentences.length === 0) {
+        sentences.push(it.entry.light);
+      } else if (i > 0) {
+        sentences.push(`${nextConnector('amplify')} ${it.entry.light}`);
+      } else {
+        const relation = registerRelation(prevRegister, it.register);
+        sentences.push(`${nextConnector(relation)} ${it.entry.light}`);
+      }
+      sentences.push(it.entry.shadow);
+      prevRegister = it.register;
+    });
   });
 
   if (!sentences.length) return null;
