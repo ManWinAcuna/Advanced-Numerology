@@ -1467,73 +1467,169 @@ const VIETNAMESE_IDENTITY = {
     light: "You're smart and resourceful. You find opportunities other people miss, and you make sure the people close to you are safe and taken care of.",
     shadow: "You can get sneaky and anxious about resources. You calculate your exit before you've even committed, and you hoard things you don't actually need.",
     deep: 'What actually moves you is safety. A full kitchen, a safe circle, money put away. Losing that is your real fear, more than most people realize.',
-    cherry: 'You judge other people for being messy, which is really just covering for how panicked your own thoughts get.',
+    characteristics: [
+      "You hoard things and secrets because you're terrified that tomorrow you'll wake up with absolutely nothing.",
+      "You charm people with quick wit so they don't look closely enough to see how much you calculate your every move.",
+      'Your anxiety is a self-made wheel. You look for problems where everything is completely peaceful.',
+    ],
+    moreCharacteristics: [
+      'You pretend to care about the group, but your mind is always secretly calculating your personal exit strategy.',
+      'You judge others for being sloppy just to cover up how messy and panicked your internal thoughts are.',
+    ],
   },
   Ox: {
     light: 'You have quiet, steady power. You work through anything without complaining, and you build real, deep roots.',
     shadow: "You can get stubborn and slow to forgive. You hold onto a grudge for years, and you'd rather run yourself into the ground than admit the plan needs to change.",
     deep: "What actually moves you is loyalty that matches your own, quiet and unspoken. What sets you off is watching someone lazy get away with taking you for granted.",
-    cherry: "Your refusal to change your mind isn't really strength. It's fear of the unknown wearing a strength costume.",
+    characteristics: [
+      "You use your silent work routine as a safe hiding spot so you don't have to talk about your painful feelings.",
+      'You hold onto old grudges like medals, letting your anger poison your own heart out of sheer stubborn pride.',
+      "Your refusal to pivot and change isn't strength. It's a deep, terrifying fear of the unknown.",
+    ],
+    moreCharacteristics: [
+      'You stay in broken arrangements because you confuse dangerous stubbornness with noble loyalty.',
+      "You act like a stoic wall, but inside you're weeping because nobody offers to help carry your heavy bags.",
+    ],
   },
   Tiger: {
     light: "You're brave and passionate. You fight hard for people who can't fight for themselves, and you lead with real charisma.",
     shadow: 'You can get hot-headed and dramatic. You start big fights over small things, and your pride would rather lose a friend than admit a mistake.',
     deep: "What actually moves you is a real cause worth fighting for, something big enough for your whole passion. What guts you is feeling disrespected or boxed in.",
-    cherry: "You'd rather lose a friend than admit you made a small mistake. That pride costs you more than it protects.",
+    characteristics: [
+      'You pick fights and create drama just to feel alive, because peace bores your restless mind.',
+      'You roar loudly to make sure nobody notices how fragile and easily hurt your heart actually is.',
+      "Your intense pride is a trap. You'd rather lose a best friend than admit you made a tiny mistake.",
+    ],
+    moreCharacteristics: [
+      "You blame others for your chaotic life, completely ignoring that you're the one who lit the match.",
+      "You chase big storms because you're terrified of the quiet truth waiting in the calm.",
+    ],
   },
   Cat: {
     light: "You're elegant and deeply perceptive. You notice details other people miss, and you build a calm, beautiful life around you.",
     shadow: "You can get cold and distant. You keep people at arm's length, and you judge people quietly instead of saying what's actually bothering you.",
     deep: 'What actually moves you is harmony. A beautiful, quiet room, real respect, things done with care. What grates on you is anything loud, messy, or crude.',
-    cherry: "You act independent, but you're actually more dependent on people liking you than you'd ever admit.",
+    characteristics: [
+      "You act detached and independent, but you're actually hyper-dependent on everyone liking you.",
+      'You use your elegant silence to make others feel small and judged, avoiding real connection.',
+      "You think your high taste makes you elite, but it's really just a screen to hide your deep insecurity.",
+    ],
+    moreCharacteristics: [
+      'You slip out the back door when conflicts arise, leaving your loved ones to clean up your mess.',
+      'You treat people like furniture, keeping them around only as long as they fit your visual aesthetic.',
+    ],
   },
   Dragon: {
     light: "You carry big, dynamic energy. You're destined for big things, and you inspire people just by walking into the room.",
     shadow: 'You can get arrogant and hard to satisfy. You expect people to bow a little, and a small criticism can wound you more than it should.',
     deep: 'What actually moves you is a big vision, greatness, real loyalty around you. What burns is being criticized in public. That one goes deep.',
-    cherry: "You demand the spotlight because some part of you is scared you're empty without an audience.",
+    characteristics: [
+      "You demand the spotlight because some part of you is terrified you're completely empty without an audience.",
+      "You burn bridges with blinding arrogance, then wonder why you're left flying alone in the cold sky.",
+      "Your biggest fear is that if people saw your flaws, the whole illusion would vanish into ash.",
+    ],
+    moreCharacteristics: [
+      "You throw tantrums over tiny things because you can't handle not being the center of the world.",
+      "You think you're destined for greatness, using that fantasy to avoid the actual hard, everyday work.",
+    ],
   },
   Snake: {
     light: "You're wise and deeply intuitive. You understand people's psychology fast, and your advice tends to actually be right.",
     shadow: "You can get paranoid and secretive. You keep score of every slight for years, and you'd rather manipulate a situation quietly than ask directly for what you need.",
     deep: "What actually moves you is a rare, real connection, someone who actually gets it. What freezes you out is realizing someone lied to your face.",
-    cherry: "You'd rather manipulate a situation quietly than just ask directly for what you need.",
+    characteristics: [
+      'You test people\'s loyalty with invisible traps, then act shocked when they eventually trip and fail.',
+      'You keep your own deck completely hidden, terrified someone will use your vulnerabilities against you.',
+      'You remember every slight from years ago, carrying a toxic bucket of old venom that ruins your own happiness.',
+    ],
+    moreCharacteristics: [
+      'Your quiet wisdom is real, but you also use it as an excuse to look down on people as basic creatures.',
+      "You manipulate things from the dark because you're too cowardly to stand up and ask for love directly.",
+    ],
   },
   Horse: {
     light: "You're cheerful and independently powerful. You love running toward new things, and you can lift a sad friend just by showing up.",
     shadow: "You can get impatient and selfish. You abandon things halfway through, and you trample people's feelings without noticing you did it.",
     deep: 'What actually moves you is a new project, a new direction, real momentum. What panics you is feeling tied down to a strict routine.',
-    cherry: "Your constant search for the next exciting thing is often just you outrunning a loneliness you don't want to sit with.",
+    characteristics: [
+      'You run away from difficult talks because you lack the emotional strength to stand and hear the truth.',
+      'You ditch projects and friends the second the shiny novelty wears off and the actual hard work begins.',
+      'Your constant search for excitement is just a desperate attempt to outrun your own loneliness.',
+    ],
+    moreCharacteristics: [
+      'You trample over everyone\'s boundaries and call it "following your wild, independent path."',
+      'You claim nobody understands your free spirit, but you use that to excuse your own thoughtless selfishness.',
+    ],
   },
   Goat: {
     light: "You're deeply artistic and kind. You bring real beauty into the world, and you have a heart that genuinely loves helping people.",
     shadow: 'You can get stuck playing the victim. You avoid blame, and small stress can paralyze you completely.',
     deep: 'What actually moves you is real beauty and gentle kindness. What breaks you down is aggressive demands and a harsh tone.',
-    cherry: 'You lean on other people for safety so much that it can tip into depending on them for everything.',
+    characteristics: [
+      'You play the helpless, crying victim so people will feel guilty and do your hard work for you.',
+      'You use your delicate sensitivity as a weapon to avoid taking any real responsibility for your mistakes.',
+      "You depend so heavily on others for safety that you've become an emotional parasite.",
+    ],
+    moreCharacteristics: [
+      'You complain the world is too harsh, but you do absolutely nothing to make yourself stronger.',
+      "Your artistic moodiness isn't deep wisdom. It's a childish tantrum because things didn't go your way.",
+    ],
   },
   Monkey: {
     light: "You're a fast, clever problem-solver. You can fix almost anything, and you pick up hard skills faster than most people.",
     shadow: "You can get tricky and dishonest for fun. You bend rules just to see if you can get away with it, and you look down on people you've decided are slower than you.",
     deep: "What actually moves you is a real puzzle, something that tests you. What insults you is being treated like you're not smart, even a little.",
-    cherry: "Deep down you worry that if you stopped being clever, people would realize there's nothing else there. There is.",
+    characteristics: [
+      'You treat relationships like chess games, then sit around wondering why nobody truly loves you.',
+      "You prank and trick people because you're terrified of having an honest, vulnerable conversation.",
+      "Deep down, you're scared that if you stop acting clever, people will realize there's no substance underneath.",
+    ],
+    moreCharacteristics: [
+      "You think you're the smartest person in the room, but your arrogance blindingly hides your own massive mistakes.",
+      'You use your fast mouth to scramble the facts whenever someone catches you red-handed in a lie.',
+    ],
   },
   Rooster: {
     light: "You're organized, precise, and brave. You keep your promises, you speak the truth, and you look sharp doing it.",
     shadow: "You can get overly critical and boastful. You pick at other people's small flaws, and you can't stand being told you're wrong.",
     deep: 'What actually moves you is order done right and real respect for your work. What irritates you fastest is a messy, lazy environment.',
-    cherry: "You get furious when someone criticizes you because some part of you can't survive not being right.",
+    characteristics: [
+      "You peck away at everyone else's tiny flaws so nobody has time to look at your own massive cracks.",
+      "You boast loudly about your achievements because you're terrified that you're actually invisible.",
+      "You get furious when criticized because your fragile ego can't survive not being right.",
+    ],
+    moreCharacteristics: [
+      'You mistake being brutally rude for "just telling the honest truth."',
+      "Your strict perfectionism is a heavy cage that's keeping you from ever enjoying your real life.",
+    ],
   },
   Dog: {
     light: "You're loyal, honest, and protective. You have a sharp sense for injustice, and you keep the secrets people trust you with.",
     shadow: 'You can get cynical and sharp-tongued. You assume people are going to betray you, and you lock your heart away before anyone gets the chance.',
     deep: "What actually moves you is loyalty that's been tested, people who stand with you when it counts. What devastates you is a friend's betrayal.",
-    cherry: "Your sharp, cynical edge usually isn't wisdom. It's a shield over a heart that bruises easier than you let on.",
+    characteristics: [
+      'You assume everyone is going to betray you, so you treat people coldly before they even have a chance.',
+      "Your sharp, cynical tongue isn't wisdom. It's a shield protecting your easily bruised heart.",
+      'You lock your heart in a safe box, then complain that the world feels cold and lonely.',
+    ],
+    moreCharacteristics: [
+      'You stay in unhappy, dying situations because you confuse self-destruction with noble loyalty.',
+      'You bark loudly at injustice outside to distract from the chaotic war waging inside your own soul.',
+    ],
   },
   Pig: {
     light: "You're generous and full of real goodwill. You love feeding people, hosting people, and making sure everyone around you feels relaxed.",
     shadow: "You can get naive and over-indulgent. You let people take advantage of you more than once, and you'd rather eat or sleep through a problem than face it.",
     deep: "What actually moves you is warmth, real comfort, people you love around a table. What genuinely shocks you is cruelty and lies, since you don't expect them.",
-    cherry: "You give things away to earn friendship sometimes, worried people won't like you for just being you.",
+    characteristics: [
+      "You play the naive sweet soul because you're too scared to stand up and fight life's real battles.",
+      'You let untrustworthy people trick you repeatedly because you\'re too cowardly to say an honest "no."',
+      "You give things away to buy friendship because you're worried people won't like you just for who you are.",
+    ],
+    moreCharacteristics: [
+      'You escape into comfort food and sleep to numb the painful problems you refuse to fix.',
+      'Your peaceful attitude is often just a lazy excuse to avoid any difficult, messy work.',
+    ],
   },
 };
 
@@ -1541,50 +1637,158 @@ const WESTERN_IDENTITY = {
   Aries: {
     light: "You're full of pure energy and courage. You tackle hard things head-on, and you lead the charge for the people you care about.",
     shadow: 'You can get impatient and hot-headed. You throw a real tantrum when you lose, and you push past people without meaning to.',
+    characteristics: [
+      "You start explosive arguments just to burn off anxious energy you don't know how to manage.",
+      "You act bulletproof because you're terrified that if you show a scratch, people will realize you're scared.",
+      "You claim you love leading, but you're actually just terrified of anyone else having control over you.",
+    ],
+    moreCharacteristics: [
+      'You run from your mistakes by racing into new projects, leaving a trail of broken things behind.',
+      "Your intense impatience is really just a fear that if you don't get it now, it'll disappear forever.",
+    ],
   },
   Taurus: {
     light: "You're steady, calm, and deeply patient. You build a beautiful, comfortable life, and you stand by your people like a solid wall.",
     shadow: "You can get stubborn and possessive. You refuse to budge even when you're wrong, and you block change just because it's change.",
+    characteristics: [
+      "You call it being steady, but everyone else knows you're just too scared to try something new.",
+      'You treat your loved ones like personal property, clamping down so hard you slowly suffocate them.',
+      "Your fierce, silent stubbornness isn't power. It's a deep fear that you can't survive in a changing world.",
+    ],
+    moreCharacteristics: [
+      "You hold onto toxic people and bad habits just because you're too lazy to handle the change.",
+      'You bury heavy sadness under shopping trips and rich food, pretending everything is fine.',
+    ],
   },
   Gemini: {
     light: "You're quick, funny, and endlessly curious. You talk to anyone, and you keep the people around you entertained and connected.",
     shadow: "You can get two-faced and scattered. You tell different versions of the truth to different people, and you can't sit with one hard thing long enough to finish it.",
+    characteristics: [
+      'You talk a mile a minute so the conversation never stays still long enough to touch your real pain.',
+      'You tell different versions of the truth to different people, leaving you confused about who you actually are.',
+      'Behind your bright, witty jokes is a kid who worries their quiet self is completely empty.',
+    ],
+    moreCharacteristics: [
+      'You change your opinions like coats just to fit in, making your real loyalty worthless.',
+      "You call yourself curious, but you're just too scared to dive deep and stick to one difficult thing.",
+    ],
   },
   Cancer: {
     light: "You're loving, protective, and intuitive. You build a warm home, and you notice the second someone you love is hurting.",
     shadow: 'You can get moody and manipulative. You go quiet to make someone feel guilty, and you hold onto an old hurt long after it should\'ve healed.',
+    characteristics: [
+      'You use tears and pouting moods to control the room and make everyone feel guilty.',
+      "You smother the people you love because you're terrified they'll grow up and leave you behind.",
+      'Your kindness is often a trap. You help people so they become permanently indebted to your care.',
+    ],
+    moreCharacteristics: [
+      'You hold onto old slights like treasures, refusing to let your heart heal just to keep an excuse to be mad.',
+      'You snap at people from inside your shell, then act shocked when they walk away from your claws.',
+    ],
   },
   Leo: {
     light: "You're radiant and generous. You fill a room with warmth, and you make the people around you feel like stars.",
     shadow: 'You can get vain and attention-hungry. A single cold look from a stranger can wreck your whole day, and you turn conversations back to yourself without noticing.',
+    characteristics: [
+      'You act like a proud king, but a single cold look from a stranger can ruin your entire day.',
+      'You fish for compliments constantly because your internal self-esteem is running completely empty.',
+      "Deep down, you're terrified that if you aren't performing, you're completely unlovable.",
+    ],
+    moreCharacteristics: [
+      "You turn every conversation into a story about yourself because you can't stand not being the main character.",
+      "Your generosity is real, but you make sure there's an audience around to watch you give it.",
+    ],
   },
   Virgo: {
     light: "You're helpful, efficient, and observant. You fix what's broken, and you bring order to real chaos.",
     shadow: 'You can get hyper-critical and anxious. You pick at small mistakes, other people\'s and your own, and you forget to actually enjoy anything.',
+    characteristics: [
+      'You focus on everyone else\'s tiny errors so nobody can see the chaotic panic inside your own mind.',
+      "You're so terrified of making a mistake that you paralyze yourself from ever trying anything great.",
+      "You complain that nobody helps you, but you push everyone away because they don't do it your exact way.",
+    ],
+    moreCharacteristics: [
+      'Your helpful advice is often just a polite weapon you use to judge and look down on people.',
+      'You treat your body and life like a machine, forgetting how to just breathe and feel joy.',
+    ],
   },
   Libra: {
     light: "You're fair, artistic, and balanced. You make sure everyone's treated equally, and you build genuinely beautiful spaces.",
     shadow: 'You can get wishy-washy and conflict-avoidant. You change your mind to keep the peace, and you lose track of what you actually think.',
+    characteristics: [
+      "You're so busy trying to please everyone that you've become a hollow echo with no real opinions.",
+      "You paralyze yourself over simple choices because you're too scared of anyone being upset with you.",
+      "You look for a perfect relationship to fix you because you can't stand the asymmetry inside your own heart.",
+    ],
+    moreCharacteristics: [
+      'You smile and act sweet to people\'s faces, then shred them to pieces with gossip the second they leave.',
+      'Your love for peace is really just a cover for your fear of honest, messy confrontation.',
+    ],
   },
   Scorpio: {
     light: "You're loyal, brave, and deeply transformative. You see straight through a lie, and you help people rebuild after something breaks them.",
     shadow: "You can get jealous and vengeful. You keep an old betrayal like a weapon, and you'd rather sting back than say you're hurt.",
+    characteristics: [
+      'You test people\'s boundaries with traps, then act vindicated when they finally stumble and fail.',
+      'You demand absolute vulnerability from others while keeping your own heart locked in a steel safe.',
+      "You hide in the shadows, terrified that if people saw your soft heart, they'd crush it instantly.",
+    ],
+    moreCharacteristics: [
+      "Your intense suspicion isn't a superpower. It's just your own fear projected onto innocent people.",
+      'You hold onto old betrayals like gold coins, letting the old poison ruin every fresh relationship you start.',
+    ],
   },
   Sagittarius: {
     light: "You're joyful, adventurous, and big-picture. You love exploring new places and ideas, and you help people think bigger than they were.",
     shadow: 'You can get tactless and reckless. You call brutal honesty a virtue, and you bolt the second something gets emotionally heavy.',
+    characteristics: [
+      'You bolt out the door the second a relationship requires actual emotional work.',
+      "You use brutal honesty like a club, hurting people's feelings just to feel powerful and smart.",
+      'You act like a happy-go-lucky clown so nobody sees how low you actually feel when the sun goes down.',
+    ],
+    moreCharacteristics: [
+      'Your constant hunting for adventure is really just an escape from the void inside your heart.',
+      "You lecture everyone on how to live their life because you can't figure out how to manage your own.",
+    ],
   },
   Capricorn: {
     light: "You're disciplined, ambitious, and patient. You climb toward something real step by step, and you protect your people with rock-solid duty.",
     shadow: 'You can get cold and status-obsessed. You judge people by what they\'ve achieved, and you trap yourself in endless work.',
+    characteristics: [
+      "You accumulate rules and work hours like armor, hoping it'll hide the vulnerable kid who felt small.",
+      'You treat your family like a business project, tracking metrics instead of giving them real love.',
+      "If you lost your status tomorrow, you'd look in the mirror and see a stranger.",
+    ],
+    moreCharacteristics: [
+      "You judge people who show their feelings because you're too scared to let yourself feel your own.",
+      "You call yourself realistic, but you're really just using pessimism to avoid dreaming big and failing.",
+    ],
   },
   Aquarius: {
     light: "You're original, independent, and focused on the bigger picture. You invent things nobody else thought of, and you fight for fairness.",
     shadow: 'You can get detached and stubborn. You love humanity in the abstract more easily than the one person in front of you, and you rebel just to feel different.',
+    characteristics: [
+      'You love "humanity" in big groups because you\'re too terrified to love a single real person up close.',
+      "You act like an eccentric outsider because you're scared that if you were normal, nobody would care about you.",
+      'You live completely inside your head, leaving the people around you feeling cold and abandoned.',
+    ],
+    moreCharacteristics: [
+      'You look down on human feelings as silly drama because you lack the courage to deal with your own.',
+      'You disagree with every rule just to feel special, trapping yourself in your own stubborn rebellion.',
+    ],
   },
   Pisces: {
     light: "You're creative, spiritual, and deeply kind. You feel the world's hidden beauty, and you comfort people without being asked.",
     shadow: 'You can get lost in avoidance. You escape into a daydream instead of a hard conversation, and you let people take advantage of your softness.',
+    characteristics: [
+      'You escape into daydream worlds because you lack the basic strength to handle real, everyday life.',
+      'You absorb everyone else\'s problems like a sponge just to avoid looking at the breakdown inside yourself.',
+      'Your beautiful sensitivity is often just a shield to escape any real, difficult accountability.',
+    ],
+    moreCharacteristics: [
+      'You play the innocent, wounded party so people stop tracking the small lies you tell.',
+      'You confuse toxic, painful relationships with "destiny," letting people hurt you over and over.',
+    ],
   },
 };
 

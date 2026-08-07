@@ -184,31 +184,25 @@ function openStoryModal(title, story) {
 // (moved here from Today's modal, where it described the profile owner
 // but lived on the wrong page).
 //
-// 2026-08-08: switched from composeIdentitySentence's old slot-framed
-// engine to the same plain-voice NUMBER_IDENTITY_V2 bank the general
-// reading and Vietnamese/Western popups already use - user: "the tap
-// popups of lifepath day etc need to be updated with the new copy as
-// well." Also adds the "characteristics" bullets the user asked for
-// (source: the PDF's own Emotional Reality Checks). Same repeat doctrine
-// as the Vietnamese popups: when a root repeats across slots (Day Born
-// and Day# sharing a root, etc.) the repeat shows one new bullet from
-// moreCharacteristics instead of the same light/shadow/bullets again.
+// 2026-08-08 round 2: light/shadow got pulled from these popups entirely
+// - the general reading already shows that exact text verbatim, so
+// leaving it in the popup meant tapping Lifepath and then reading the
+// general reading repeated the same sentence twice. User: "don't make it
+// be the same thing that's going to be shown on the general reading,
+// this is why I gave you a lot of copy so there's no repeats." Popups
+// now show ONLY the characteristics bullets (the PDF's Emotional Reality
+// Checks) - content composeGeneralReading never touches. First occurrence
+// of a root shows characteristics (3); a repeat shows moreCharacteristics
+// (2, the reserve) instead of the same bullets again.
 function openIdentityModal(label, entry, opts) {
   if (!entry) return;
   const o = opts || {};
-  let body;
-  if (o.cherry) {
-    body = `<div class="story-modal-title">${label}</div>` +
-      `<div class="story-row">Same energy as your ${o.repeatOf}. One more layer:</div>` +
-      `<div class="story-row">${o.cherry}</div>`;
-  } else {
-    const bullets = (entry.characteristics || []).map((c) => `<li>${c}</li>`).join('');
-    body = `<div class="story-modal-title">${label}</div>` +
-      `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
-      `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>` +
-      (bullets ? `<div class="story-bullets-label">Characteristics</div><ul class="story-bullets">${bullets}</ul>` : '');
-  }
-  document.getElementById('storyModalBody').innerHTML = body;
+  const list = o.cherry ? (entry.moreCharacteristics || []) : (entry.characteristics || []);
+  if (!list.length) return;
+  const bullets = list.map((c) => `<li>${c}</li>`).join('');
+  const note = o.cherry ? `<div class="story-row">Same energy as your ${o.repeatOf}. A few more angles:</div>` : '';
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>${note}<ul class="story-bullets">${bullets}</ul>`;
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
@@ -216,26 +210,23 @@ function openIdentityModal(label, entry, opts) {
 // their own "who you are" popup, same visual pattern as openIdentityModal
 // above but pulling straight from the plain-voice content bank.
 //
-// cherry (2026-08-07 round 2): when the same Vietnamese animal lands on
-// more than one of year/month/day, showing the byte-identical light/
-// shadow twice read as broken - user's fix: "I gave you plenty to choose
-// from, you can just go more in depth or less, example the month go more
-// in depth the day is cherry on top." So the FIRST occurrence gets the
-// fuller read (light + shadow + deep, using the emotional-core material
-// the base light/shadow doesn't touch); a repeat occurrence gets just
-// `cherry`, one short new line, never the same two sentences again.
+// 2026-08-08 round 2: same fix as openIdentityModal - light/shadow
+// dropped (duplicates the general reading verbatim). `deep` (the
+// emotional-core line, general reading never touches it) stays as a
+// short intro, then characteristics/moreCharacteristics bullets exactly
+// like the number popups - first occurrence gets characteristics (3), a
+// repeat animal gets moreCharacteristics (2) instead of the same content.
 function openZodiacIdentityModal(label, entry, opts) {
   if (!entry) return;
   const o = opts || {};
-  const body = o.cherry
-    ? `<div class="story-modal-title">${label}</div>` +
-      `<div class="story-row">Same animal as your ${o.repeatOf}. The fuller read is there - here's the extra layer:</div>` +
-      `<div class="story-row">${entry.cherry}</div>`
-    : `<div class="story-modal-title">${label}</div>` +
-      `<div class="story-row"><b class="idn-light">☀ Light:</b> ${entry.light}</div>` +
-      `<div class="story-row"><b class="idn-shadow">☾ Shadow:</b> ${entry.shadow}</div>` +
-      (entry.deep ? `<div class="story-row">${entry.deep}</div>` : '');
-  document.getElementById('storyModalBody').innerHTML = body;
+  const list = o.cherry ? (entry.moreCharacteristics || []) : (entry.characteristics || []);
+  if (!list.length) return;
+  const bullets = list.map((c) => `<li>${c}</li>`).join('');
+  const note = o.cherry
+    ? `<div class="story-row">Same animal as your ${o.repeatOf}. A few more angles:</div>`
+    : (entry.deep ? `<div class="story-row">${entry.deep}</div>` : '');
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>${note}<ul class="story-bullets">${bullets}</ul>`;
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 
@@ -324,23 +315,32 @@ function renderCompoundStories(r, birthDate) {
       { id: 'pdReduced', label: 'Personal Day', root: cycleParts[2].entry.root, impure: cycleParts[2].entry.impure },
     ];
     const seenNumberSlots = {};
-    const cherryIdx = {};
     identityTargets.forEach((t) => {
       t.entry = numberIdentityV2(t.root, t.impure);
       if (!t.entry) return;
       const prior = seenNumberSlots[t.root];
-      if (prior) {
-        const more = t.entry.moreCharacteristics || [];
-        const i = cherryIdx[t.root] || 0;
-        cherryIdx[t.root] = i + 1;
-        t.opts = { cherry: more[i % more.length] || 'That same current runs doubled in you.', repeatOf: prior };
-      } else {
+      // Only the FIRST repeat gets moreCharacteristics (2 fresh bullets) -
+      // a 3rd+ occurrence of the same root would have nothing left to show
+      // that isn't already used, so it falls back to a short doubled note.
+      if (prior === undefined) {
         seenNumberSlots[t.root] = t.label;
+      } else if (prior !== null) {
+        t.opts = { cherry: true, repeatOf: prior };
+        seenNumberSlots[t.root] = null;
+      } else {
+        t.entry = null;
+        t.plainDoubled = true;
       }
     });
     identityTargets.forEach((t) => {
       const el = document.getElementById(t.id);
-      if (!el || !t.entry) return;
+      if (!el) return;
+      if (t.plainDoubled) {
+        el.classList.add('idnum-tap');
+        el.onclick = () => { document.getElementById('storyModalBody').innerHTML = `<div class="story-modal-title">${t.label}</div><div class="story-row">Same current as earlier in your chart, running doubled.</div>`; document.getElementById('storyModalOverlay').classList.add('active'); };
+        return;
+      }
+      if (!t.entry) return;
       el.classList.add('idnum-tap');
       el.onclick = () => openIdentityModal(t.label, t.entry, t.opts);
     });
@@ -357,15 +357,29 @@ function renderCompoundStories(r, birthDate) {
     ];
     const seenAnimalSlots = {};
     zodiacTargets.forEach((t) => {
-      if (t.animalKey) {
-        const prior = seenAnimalSlots[t.animalKey];
-        if (prior) t.opts = { cherry: true, repeatOf: prior };
-        else seenAnimalSlots[t.animalKey] = t.label.replace('Vietnamese ', '');
+      if (!t.animalKey) return;
+      const prior = seenAnimalSlots[t.animalKey];
+      // Only the first repeat gets moreCharacteristics - a 3rd occurrence
+      // (all of year/month/day sharing an animal) has nothing fresh left.
+      if (prior === undefined) {
+        seenAnimalSlots[t.animalKey] = t.label.replace('Vietnamese ', '');
+      } else if (prior !== null) {
+        t.opts = { cherry: true, repeatOf: prior };
+        seenAnimalSlots[t.animalKey] = null;
+      } else {
+        t.entry = null;
+        t.plainDoubled = true;
       }
     });
     zodiacTargets.forEach((t) => {
       const el = document.getElementById(t.id);
-      if (!el || !t.entry) return;
+      if (!el) return;
+      if (t.plainDoubled) {
+        el.classList.add('idnum-tap');
+        el.onclick = () => { document.getElementById('storyModalBody').innerHTML = `<div class="story-modal-title">${t.label}</div><div class="story-row">Same animal as earlier in your chart, running doubled.</div>`; document.getElementById('storyModalOverlay').classList.add('active'); };
+        return;
+      }
+      if (!t.entry) return;
       el.classList.add('idnum-tap');
       el.onclick = () => openZodiacIdentityModal(t.label, t.entry, t.opts);
     });
