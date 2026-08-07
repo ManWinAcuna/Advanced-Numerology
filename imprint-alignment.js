@@ -180,8 +180,16 @@ function getPersonImprintValues(birthDate) {
   });
   const pure33 = getPure33Imprint(birthDate);
   if (pure33) values.push({ number: 33, label: '33-Day imprint', lp: pure33.lp });
+  // Life Path's domain comes from the person's own first-imprint day for
+  // it (the EXISTING Profile "First Imprints" mechanic,
+  // getFirstMatchingLifepathDayNumber) - NOT the raw LP number treated as
+  // if it were itself a themed day. User's own correction: a 7 Life Path
+  // whose first 7LP day was the 28th is a FINANCIAL imprint (28's domain),
+  // not Spiritual (7's domain) - the imprint lives on the day it first
+  // appeared, not on the number itself.
   const coreLP = compatLifePathInfo(birthDate).lookupValue;
-  values.push({ number: coreLP, label: 'Life Path', lp: coreLP });
+  const ownLPDay = getFirstMatchingLifepathDayNumber(birthDate, coreLP);
+  values.push({ number: typeof ownLPDay === 'number' ? ownLPDay : null, label: 'Life Path', lp: coreLP });
   return values;
 }
 
@@ -256,6 +264,28 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
       }
     }
   });
+
+  // Own Life Path vs the candidate's Universal Day (2026-08-07) - was
+  // missing entirely: the simplest, most literal resonance (today matches
+  // YOUR own Life Path exactly) never got checked, unlike the day-themes
+  // above. No day-of-month gate - unlike a themed day, this can land on
+  // any date. Domain-tagged through the person's own first-imprint day for
+  // their Life Path (getFirstMatchingLifepathDayNumber), not the raw LP
+  // number - a 7 Life Path whose first 7LP day was the 28th reads as
+  // Financial (28's domain), not Spiritual (7's domain).
+  const personLP = compatLifePathInfo(personBirthDate).lookupValue;
+  const ownLPDay = getFirstMatchingLifepathDayNumber(personBirthDate, personLP);
+  const lpDomains = typeof ownLPDay === 'number' ? domainTagHtml(ownLPDay) : [];
+  if (personLP === candidateLP) {
+    score += 15;
+    matches.push({ label: `Your Life Path (${personLP}LP)`, text: "Exactly matches today's Universal Day", points: 15, domains: lpDomains });
+  } else {
+    const c = numerologyCompat(personLP, candidateLP);
+    if (c >= 77) {
+      score += 8;
+      matches.push({ label: `Your Life Path (${personLP}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: 8, domains: lpDomains });
+    }
+  }
 
   const seenLuckyText = new Set();
   function addLuckyNotes(luckyNumber, luckyDigits, sourceLabel) {
