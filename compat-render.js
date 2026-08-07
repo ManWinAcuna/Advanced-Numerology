@@ -185,6 +185,35 @@ function compatVerdictCopy(r) {
   return { head: 'Workable Compatibility', body: 'Enough common ground to work with. Nothing forcing this, nothing fighting it either.' };
 }
 
+// Same flag thresholds computeCompatibility uses internally (compat-engine.
+// js, sacrosanct - not exported), duplicated here so a Deep Compatibility
+// score (deep-compat.js, blended from two different scores) can get the
+// same verdict copy treatment via a synthetic {finalScore, flags} shape.
+function flagsForScore(score) {
+  const flags = [];
+  if (score < 49) flags.push('clash');
+  else if (score >= 85) flags.push('perfect');
+  else if (score >= 77) flags.push('ideal');
+  return flags;
+}
+
+// Deep Compatibility (2026-08-07) - one line of transparent math above the
+// existing Today/Imprint call-outs: exactly what fed the blended headline
+// number, so nothing about "Deep Compatibility" is a black box. Skipped
+// entirely (not shown as "0%") when there's no imprint data to blend - the
+// headline is just today's compatibility in that case, no blend happened.
+function deepBlendStripHtml(deep) {
+  if (deep.noImprintData) {
+    return `<div class="deep-blend-strip deep-blend-note">No imprint data for this pairing — showing today's compatibility only.</div>`;
+  }
+  const imprintPct = Math.round(deep.blendWeight * 100);
+  const currentPct = 100 - imprintPct;
+  return `
+    <div class="deep-blend-strip">
+      Today <b>${deep.currentScore}</b> &times; ${currentPct}% + Imprint <b>${deep.imprintScore}</b> &times; ${imprintPct}% = <b>${deep.deepScore}</b> Deep Compatibility
+    </div>`;
+}
+
 function compatHeroDate(date) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -245,8 +274,16 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   containerEl.classList.add('active');
   setModalWidth(containerEl, false);
 
-  const tier = scoreClass(r.finalScore);
-  const verdict = compatVerdictCopy(r);
+  // opts.deep (2026-08-07, deep-compat.js): a precomputed
+  // computeDeepCompatibility() result. When present, the headline shield
+  // shows the blended Deep Compatibility score instead of r.finalScore -
+  // r itself (and everything derived from it: cards, meters, bonuses) is
+  // untouched, it's still exactly today's/this-pairing's raw compat read,
+  // just no longer the number in the badge.
+  const deep = opts.deep;
+  const headlineScore = deep ? deep.deepScore : r.finalScore;
+  const tier = deep ? deep.tier : scoreClass(r.finalScore);
+  const verdict = deep ? compatVerdictCopy({ flags: flagsForScore(headlineScore) }) : compatVerdictCopy(r);
 
   let headerHtml = '';
   if (opts.dateA && opts.dateB) {
@@ -287,6 +324,17 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       </div>
     </div>`;
 
+  // Deep mode's imprint pill already has its score in hand (opts.deep.
+  // imprint was computed up front to build the blend) - the button label
+  // shows it immediately instead of staying a mystery until tapped, and
+  // the "full breakdown" reveal gets relabeled "Today's Compatibility"
+  // since it's now one ingredient of the headline, not the headline itself.
+  const pillLabel = deep
+    ? (deep.noImprintData ? '✨ No Imprint Data' : `✨ Imprint ${deep.imprintScore} — see what matched`)
+    : '✨ Check My Imprints';
+  const revealLabelClosed = deep ? `▾ Today's Compatibility: ${r.finalScore}` : '▾ See full breakdown';
+  const revealLabelOpen = deep ? `▴ Hide Today's Compatibility` : '▴ Hide full breakdown';
+
   containerEl.innerHTML = `
     <div class="compat-hero${opts.compact ? ' compact' : ''}" style="--tier-c:${COMPAT_TIER_COLOR[tier]}; --tier-glow:${COMPAT_TIER_GLOW[tier]}">
       ${headerHtml}
@@ -294,17 +342,18 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
         <div class="compat-embers">${compatEmbersHtml()}</div>
         <div class="shield">
           <div class="shield-inner">
-            <div class="shield-score">${r.finalScore}<span>%</span></div>
-            <div class="shield-tag">Compatibility</div>
+            <div class="shield-score">${headlineScore}<span>%</span></div>
+            <div class="shield-tag">${deep ? 'Deep Compat' : 'Compatibility'}</div>
           </div>
         </div>
       </div>
       <div class="compat-verdict-head">${verdict.head}</div>
       <div class="compat-verdict-body">${verdict.body}</div>
       ${cardsHtml}
-      ${opts.pillDateA && opts.pillDateB ? '<button type="button" class="imprint-pill" data-imprint-pill>✨ Check My Imprints</button><div class="imprint-pill-body" data-imprint-pill-body hidden></div>' : ''}
+      ${deep ? deepBlendStripHtml(deep) : ''}
+      ${opts.pillDateA && opts.pillDateB ? `<button type="button" class="imprint-pill" data-imprint-pill>${pillLabel}</button><div class="imprint-pill-body" data-imprint-pill-body hidden></div>` : ''}
       ${bonusChipsHtml(r.bonuses)}
-      <button type="button" class="compat-reveal-btn" data-compat-reveal>▾ See full breakdown</button>
+      <button type="button" class="compat-reveal-btn" data-compat-reveal>${revealLabelClosed}</button>
       <div class="compat-reveal-body" data-compat-reveal-body>
         ${compatMeterRow('Numerology', r.numerology.score)}
         ${compatMeterRow('Vietnamese Zodiac', r.vietnamese.score)}
@@ -317,7 +366,7 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
   const revealBody = containerEl.querySelector('[data-compat-reveal-body]');
   revealBtn.addEventListener('click', () => {
     const open = revealBody.classList.toggle('open');
-    revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+    revealBtn.textContent = open ? revealLabelOpen : revealLabelClosed;
   });
 
   const pillBtn = containerEl.querySelector('[data-imprint-pill]');
@@ -326,7 +375,14 @@ function renderCompatHero(containerEl, r, nameA, nameB, opts) {
       const body = containerEl.querySelector('[data-imprint-pill-body]');
       const open = body.hidden;
       if (open && !body.dataset.built) {
-        body.innerHTML = imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB, opts.pillPersonMode, opts.pillPersonSide);
+        // Deep mode already computed this exact imprint result up front to
+        // build the blend - reuse it instead of running the whole
+        // computation a second time on tap.
+        body.innerHTML = deep
+          ? (deep.personMode
+              ? imprintPersonAlignmentResultHtml(deep.imprint, nameA, nameB)
+              : imprintAlignmentResultHtml(deep.imprint, nameA, nameB))
+          : imprintPillContentHtml(opts.pillDateA, nameA, opts.pillDateB, nameB, opts.pillPersonMode, opts.pillPersonSide);
         body.dataset.built = '1';
         wireImprintRevealButtons(body);
       }

@@ -4167,6 +4167,13 @@ body::after {
   color: var(--muted);
 }
 
+/* Deep Compatibility (2026-08-07) display-only line, Imprint tab. */
+.pm-insight-pair-deep {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
 .pm-insight-disclaimer {
   font-size: 11px;
   color: var(--muted);

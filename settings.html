@@ -13,8 +13,8 @@
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Settings</title>
-<link rel="stylesheet" href="style.css?v=2">
-<link rel="stylesheet" href="godlike.css?v=32">
+<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="godlike.css?v=33">
 <style>
   .settings-back { display: block; margin: 14px 0; color: var(--muted); text-decoration: none; font-size: 13px; }
   .settings-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 18px; }
@@ -105,12 +105,14 @@
       <button type="button" class="settings-tab" data-tab="domains">Imprint Domains</button>
       <button type="button" class="settings-tab" data-tab="weights">Imprint Weights</button>
       <button type="button" class="settings-tab" data-tab="betting">Betting Weights</button>
+      <button type="button" class="settings-tab" data-tab="deep">Deep Compatibility</button>
     </div>
 
     <div class="settings-page active" id="settingsPageCompat"></div>
     <div class="settings-page" id="settingsPageDomains"></div>
     <div class="settings-page" id="settingsPageWeights"></div>
     <div class="settings-page" id="settingsPageBetting"></div>
+    <div class="settings-page" id="settingsPageDeep"></div>
   </div>
 
 </div>
@@ -121,9 +123,10 @@
 <script src="overrides-engine.js?v=1"></script>
 <script src="compat-engine.js?v=3"></script>
 <script src="big-store.js"></script>
-<script src="db-core.js?v=5"></script>
+<script src="db-core.js?v=6"></script>
 <script src="firebase-loader.js"></script>
 <script src="imprint-alignment.js?v=7"></script>
-<script src="settings.js?v=1"></script>
+<script src="deep-compat.js?v=1"></script>
+<script src="settings.js?v=2"></script>
 </body>
 </html>

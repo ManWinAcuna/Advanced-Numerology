@@ -245,11 +245,15 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
     return;
   }
 
+  // Deep Compatibility (2026-08-07): the headline number on these 2 modes
+  // is now the blended fusion of today's/this-pairing's compat with first-
+  // imprint alignment (deep-compat.js), not the raw compat score alone -
+  // "today" blends current compat with the event-date imprint read,
+  // "date" blends it with the person-vs-person cross-comparison. The
+  // dedicated Imprint Alignment mode above stays pure (it never computed a
+  // current-compat score to begin with, so there's nothing to fuse there).
   const result = computeCompatibility(dateA, dateB);
-  // 2026-08-07: these 2 modes never showed the imprint pill at all (only
-  // the dedicated Imprint Alignment mode did) - "today" compares a real
-  // birthday against a plain calendar date (event-date pill, no person
-  // mode); "date" compares two real birthdays (person-mode pill).
-  renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB, pillDateA: dateA, pillDateB: dateB, pillPersonMode: mode === 'date' });
+  const deep = computeDeepCompatibility(dateA, dateB, mode === 'date');
+  renderCompatHero(compatResultsEl, result, nameA, nameB, { dateA, dateB, pillDateA: dateA, pillDateB: dateB, pillPersonMode: mode === 'date', deep });
   compatModalOverlayEl.classList.add('active');
 });

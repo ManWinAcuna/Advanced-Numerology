@@ -1042,6 +1042,15 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   font-size: 10.5px; font-weight: 700; color: var(--cc-t);
 }
 
+/* Deep Compatibility (2026-08-07) - the transparent blend-math line under
+   the cards, above the imprint pill/breakdown toggle. */
+.deep-blend-strip {
+  margin-top: 16px; text-align: center; font-size: 11.5px; color: var(--muted);
+  line-height: 1.6;
+}
+.deep-blend-strip b { color: var(--text); font-weight: 700; }
+.deep-blend-strip.deep-blend-note { font-style: italic; }
+
 .compat-bonus-row { margin-top: 16px; display: flex; flex-direction: column; gap: 7px; }
 .compat-bonus-chip {
   display: flex; align-items: center; gap: 10px;

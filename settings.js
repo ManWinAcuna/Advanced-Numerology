@@ -469,6 +469,56 @@ function renderBettingPage() {
   renderNba();
 }
 
+/* ============================================================ Deep Compatibility === */
+// deep-compat.js's single blend weight: what share of the final Deep
+// Compatibility score comes from Imprint Alignment (rest is current
+// compatibility). Stored 0-1, shown here as a 0-100 percent slider - the
+// same number, just the friendlier unit for a human to drag.
+function renderDeepPage() {
+  const el = document.getElementById('settingsPageDeep');
+  el.innerHTML = `
+    <div class="settings-intro">How much of the Deep Compatibility score (Compatibility Calculator's "Today"/"Person A vs Person B" modes) comes from first-imprint alignment vs. current compatibility. 50% is an even split; push it toward Imprint to let identity-level resonance matter more than the day's numbers, or toward Current to keep imprint as a lighter tiebreaker.</div>
+    <div class="settings-field-row" id="deepWeightRow">
+      <div class="settings-field-label">Imprint weight<span class="hint">Default: 50% Imprint / 50% Current</span></div>
+      <input type="range" min="0" max="100" step="5" id="deepWeightSlider" style="flex:1">
+      <input type="number" min="0" max="100" class="settings-field-input" id="deepWeightNumber" style="width:60px">
+      <button type="button" class="settings-reset-btn" id="deepWeightReset">Reset</button>
+    </div>
+  `;
+  const slider = document.getElementById('deepWeightSlider');
+  const number = document.getElementById('deepWeightNumber');
+  const resetBtn = document.getElementById('deepWeightReset');
+  const row = document.getElementById('deepWeightRow');
+
+  function currentPct() {
+    return Math.round(getEffectiveDeepCompatWeight() * 100);
+  }
+  function refresh() {
+    const pct = currentPct();
+    slider.value = pct;
+    number.value = pct;
+    const isOverridden = getOverrideSection('deepCompat').imprintWeight != null;
+    number.classList.toggle('overridden', isOverridden);
+    resetBtn.disabled = !isOverridden;
+  }
+  function save(pct) {
+    const clamped = Math.max(0, Math.min(100, Number(pct)));
+    if (!Number.isFinite(clamped)) return;
+    setOverrideEntry('deepCompat', 'imprintWeight', clamped / 100);
+    refresh();
+    flashSaved(row);
+  }
+  slider.addEventListener('input', () => { number.value = slider.value; });
+  slider.addEventListener('change', () => save(slider.value));
+  number.addEventListener('change', () => save(number.value));
+  resetBtn.addEventListener('click', () => {
+    clearOverrideEntry('deepCompat', 'imprintWeight');
+    refresh();
+  });
+
+  refresh();
+}
+
 /* ============================================================ init === */
 document.addEventListener('DOMContentLoaded', () => {
   wireSettingsTabs();
@@ -476,4 +526,5 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDomainsPage();
   renderWeightsPage();
   renderBettingPage();
+  renderDeepPage();
 });

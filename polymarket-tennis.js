@@ -523,10 +523,10 @@ function imprintTabHtml(m, region) {
   if (!matchDate) return '';
   return `
     <div class="pm-insight-grid">
-      ${imprintInsightHtml(m.matchedA.name, parseDateInput(m.matchedA.dob), matchDate)}
-      ${imprintInsightHtml(m.matchedB.name, parseDateInput(m.matchedB.dob), matchDate)}
+      ${imprintInsightHtml(m.matchedA.name, parseDateInput(m.matchedA.dob), matchDate, sportsNumerologyCompat)}
+      ${imprintInsightHtml(m.matchedB.name, parseDateInput(m.matchedB.dob), matchDate, sportsNumerologyCompat)}
     </div>
-    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above.</div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above. Deep Compat blends it with the match date's own numerology read - also informational only.</div>
   `;
 }
 

@@ -454,12 +454,13 @@ function imprintTabHtml(f) {
   const matchDateISO = currentMatchDateISO(f);
   const matchDate = matchDateISO ? parseDateInput(matchDateISO) : null;
   if (!matchDate) return '';
+  const ufcWeights = getEffectiveUfcCompatWeights();
   return `
     <div class="pm-insight-grid">
-      ${imprintInsightHtml(f.matchedA.name, parseDateInput(f.matchedA.dob), matchDate)}
-      ${imprintInsightHtml(f.matchedB.name, parseDateInput(f.matchedB.dob), matchDate)}
+      ${imprintInsightHtml(f.matchedA.name, parseDateInput(f.matchedA.dob), matchDate, sportsNumerologyCompat, ufcWeights)}
+      ${imprintInsightHtml(f.matchedB.name, parseDateInput(f.matchedB.dob), matchDate, sportsNumerologyCompat, ufcWeights)}
     </div>
-    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the fight date &mdash; informational only, not part of the numerology edge above.</div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the fight date &mdash; informational only, not part of the numerology edge above. Deep Compat blends it with the fight date's own numerology read - also informational only.</div>
   `;
 }
 

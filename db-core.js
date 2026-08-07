@@ -3044,7 +3044,15 @@ function universalDayInsightHtml(name, personLookupValue, matchDate) {
 // validated, just with a game day standing in for a release day. Skipped
 // entirely (not guessed) when matchDate isn't confirmed yet, same as the
 // Universal Day insight above.
-function imprintInsightHtml(name, personBirthDate, matchDate) {
+// numCompatFn/weights (2026-08-07, Deep Compatibility display-only hook):
+// optional - when a caller passes its sport's own sportsNumerologyCompat +
+// measured weight blend (the same pair that sport's Universal Day insight
+// above already scores with), this also shows the blended Deep Compat
+// number (deep-compat.js) next to the raw Imprint score. Omitted entirely
+// when not passed, so any call site not yet updated keeps the original
+// Imprint-only line. Nothing here feeds computeFighterScore, edge tiers, or
+// any prediction - same precedent as the rest of this Insight tab.
+function imprintInsightHtml(name, personBirthDate, matchDate, numCompatFn, weights) {
   if (!matchDate) return '';
   const result = computeImprintAlignment(personBirthDate, matchDate);
   const rows = result.matches.length
@@ -3055,9 +3063,15 @@ function imprintInsightHtml(name, personBirthDate, matchDate) {
         </div>
       `).join('')
     : '<div class="pm-insight-pair"><div class="pm-insight-pair-theme">No imprint theme lines up on this date.</div></div>';
+  let deepLine = '';
+  if (numCompatFn) {
+    const deep = computeDeepCompatibility(personBirthDate, matchDate, false, numCompatFn, weights);
+    deepLine = `<div class="pm-insight-pair-deep">Deep Compat <span class="score-inline ${scoreClass(deep.deepScore)}">${deep.deepScore}</span></div>`;
+  }
   return `
     <div class="pm-insight-person">
       <div class="pm-breakdown-name">${escapeHtml(name)} &middot; Imprint <span class="score-inline ${scoreClass(result.score)}">${result.score}</span></div>
+      ${deepLine}
       ${rows}
     </div>
   `;
@@ -3147,25 +3161,37 @@ function insightRowHtml(row) {
 // treatment), so this stays a compact one-line-per-person row: overall
 // imprint score plus, if any, the single strongest match with its
 // domain tag(s). Skipped entirely when matchDate isn't confirmed yet.
+// deep (2026-08-07, Deep Compatibility display-only hook): each row also
+// carries the blended Deep Compat score, computed with MLB's own
+// sportsNumerologyCompat + measured weight blend - the same pair
+// universalDayInsight above already scores this same pitcher/batter/manager
+// with, so "current" here means the same thing the rest of this popup does.
 function teamRosterImprintRows(side, manager, birthdates, matchDate) {
   if (!matchDate) return [];
+  const compatWeights = getEffectiveMlbCompatWeights();
   const rows = [];
   const pitcherBd = birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    const result = computeImprintAlignment(parseDateInput(pitcherBd.birthDate), matchDate);
-    rows.push({ role: `SP ${pitcherBd.name}`, result });
+    const dob = parseDateInput(pitcherBd.birthDate);
+    const result = computeImprintAlignment(dob, matchDate);
+    const deep = computeDeepCompatibility(dob, matchDate, false, sportsNumerologyCompat, compatWeights);
+    rows.push({ role: `SP ${pitcherBd.name}`, result, deep });
   }
   side.batters.forEach((b) => {
     const bd = birthdates.get(b.id);
     if (!bd || !bd.birthDate) return;
-    const result = computeImprintAlignment(parseDateInput(bd.birthDate), matchDate);
-    rows.push({ role: `${b.pos} ${bd.name}`, result });
+    const dob = parseDateInput(bd.birthDate);
+    const result = computeImprintAlignment(dob, matchDate);
+    const deep = computeDeepCompatibility(dob, matchDate, false, sportsNumerologyCompat, compatWeights);
+    rows.push({ role: `${b.pos} ${bd.name}`, result, deep });
   });
   if (manager) {
     const bd = birthdates.get(manager.id);
     if (bd && bd.birthDate) {
-      const result = computeImprintAlignment(parseDateInput(bd.birthDate), matchDate);
-      rows.push({ role: `Mgr ${bd.name}`, result });
+      const dob = parseDateInput(bd.birthDate);
+      const result = computeImprintAlignment(dob, matchDate);
+      const deep = computeDeepCompatibility(dob, matchDate, false, sportsNumerologyCompat, compatWeights);
+      rows.push({ role: `Mgr ${bd.name}`, result, deep });
     }
   }
   return rows;
@@ -3175,7 +3201,8 @@ function imprintRowHtml(row) {
   const top = row.result.matches[0];
   const tag = top && top.domains && top.domains.length ? ` (${top.domains.map(escapeHtml).join(', ')})` : '';
   const matchPart = top ? ` &middot; ${escapeHtml(top.label)}${tag}` : '';
-  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span><span class="score-inline ${scoreClass(row.result.score)}">${row.result.score}</span>${matchPart}</span></div>`;
+  const deepPart = row.deep ? ` &middot; Deep <span class="score-inline ${scoreClass(row.deep.deepScore)}">${row.deep.deepScore}</span>` : '';
+  return `<div class="pm-breakdown-row"><span>${escapeHtml(row.role)}</span><span><span class="score-inline ${scoreClass(row.result.score)}">${row.result.score}</span>${matchPart}${deepPart}</span></div>`;
 }
 
 // Wraps a breakdown popup's existing content plus the Insight tab (and,

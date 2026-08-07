@@ -309,10 +309,10 @@ function tennisImprintTabHtml(p) {
   if (!matchedA || !matchedB || !matchDate) return '';
   return `
     <div class="pm-insight-grid">
-      ${imprintInsightHtml(matchedA.name, tennisParseDateInput(matchedA.dob), matchDate)}
-      ${imprintInsightHtml(matchedB.name, tennisParseDateInput(matchedB.dob), matchDate)}
+      ${imprintInsightHtml(matchedA.name, tennisParseDateInput(matchedA.dob), matchDate, sportsNumerologyCompat)}
+      ${imprintInsightHtml(matchedB.name, tennisParseDateInput(matchedB.dob), matchDate, sportsNumerologyCompat)}
     </div>
-    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above.</div>
+    <div class="pm-insight-disclaimer">Financial/relationship/career/etc. imprint read for the match date &mdash; informational only, not part of the numerology edge above. Deep Compat blends it with the match date's own numerology read - also informational only.</div>
   `;
 }
 
