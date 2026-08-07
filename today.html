@@ -32,7 +32,6 @@
       <div class="gk-altar-label" id="gkDate"></div>
       <button class="gk-altar-num gk-amped" id="gkNum" type="button">·</button>
       <div class="gk-altar-sub" id="gkSub">Universal Day</div>
-      <div class="gk-faces" id="gkFaces"></div>
     </div>
     <div class="gk-orbits" id="gkOrbits"></div>
     <div class="gk-verdict" id="gkVerdict"></div>
@@ -94,7 +93,7 @@
     4:  { kw: ['structure', 'work', 'slow'],      move: 'Build. No shortcuts today.' },
     5:  { kw: ['restless', 'motion', 'risk'],     move: 'Move fast, commit to nothing long.' },
     6:  { kw: ['duty', 'home', 'balance'],        move: 'Handle the obligations first.' },
-    7:  { kw: ['depth', 'caution', 'knives'],     move: 'Bearish tape. Observe more than you act.' },
+    7:  { kw: ['depth', 'caution', 'learning'],   move: 'Bearish tape. Observe more than you act.' },
     8:  { kw: ['power', 'execution', 'yield'],    move: 'Bullish. Execute — this is your kind of tape.' },
     9:  { kw: ['closure', 'release', 'flow'],     move: 'Finish cycles. Let things end.' },
     11: { kw: ['intuition', 'static', 'waves'],   move: 'Emotional and sporadic — leans down. Trade small.' },
@@ -279,16 +278,7 @@
     numEl.textContent = v;
     numEl.className = 'gk-altar-num gk-amped' + (f.glyph && MEAN[v] ? ' gk-glyph gk-n' + v : '') + (f.glyph ? '' : ' gk-face-emoji');
     subEl.textContent = f.label;
-    var dots = document.querySelectorAll('.gk-face-dot');
-    for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('on', d === i);
   }
-  document.getElementById('gkFaces').innerHTML = FACES.map(function (f, i) {
-    return '<button class="gk-face-dot' + (i === 0 ? ' on' : '') + '" data-i="' + i + '" type="button" aria-label="' + f.label + '"></button>';
-  }).join('');
-  document.getElementById('gkFaces').addEventListener('click', function (e) {
-    var b = e.target.closest('.gk-face-dot');
-    if (b) showFace(parseInt(b.dataset.i, 10));
-  });
   showFace(0);
 
   // Imprint boost (2026-08-07) - was previously only visible by tapping
