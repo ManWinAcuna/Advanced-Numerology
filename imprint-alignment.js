@@ -150,19 +150,54 @@ const IMPRINT_DOMAINS = {
 // (getPure33Imprint) instead of a literal day-of-month search.
 const IMPRINT_TRACKED_NUMBERS = [1, 3, 4, 5, 6, 7, 8, 9, 11, 22, 28];
 
+// Settings-tunable overlay (2026-08-08) - IMPRINT_DOMAINS above stays the
+// real default, untouched. getOverrideSection('imprintDomains') holds only
+// the domains the user has actually edited from Settings, each a full
+// {numbers, secondaryNumbers} replacement for that one domain; anything not
+// in there falls through to the default. domainsForNumber/domainTagHtml and
+// the person-mode scoring loop are the only two choke points that read
+// domain membership, so routing both through this one function is enough to
+// make every domain-aware feature in the app override-aware for free.
+function getEffectiveImprintDomains() {
+  const overrides = (typeof getOverrideSection === 'function') ? getOverrideSection('imprintDomains') : {};
+  const merged = {};
+  Object.keys(IMPRINT_DOMAINS).forEach((key) => {
+    merged[key] = overrides[key]
+      ? Object.assign({}, IMPRINT_DOMAINS[key], overrides[key])
+      : IMPRINT_DOMAINS[key];
+  });
+  return merged;
+}
+
 function domainsForNumber(n) {
-  return Object.keys(IMPRINT_DOMAINS).filter((key) => {
-    const d = IMPRINT_DOMAINS[key];
+  const domains = getEffectiveImprintDomains();
+  return Object.keys(domains).filter((key) => {
+    const d = domains[key];
     return d.numbers.includes(n) || (d.secondaryNumbers && d.secondaryNumbers.includes(n));
   });
 }
 
 function domainTagHtml(numbers) {
+  const domains = getEffectiveImprintDomains();
   const keys = [];
   (Array.isArray(numbers) ? numbers : [numbers]).forEach((n) => {
     domainsForNumber(n).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
   });
-  return keys.map((k) => `${IMPRINT_DOMAINS[k].emoji} ${IMPRINT_DOMAINS[k].label}`);
+  return keys.map((k) => `${domains[k].emoji} ${domains[k].label}`);
+}
+
+// Named scoring weights, same Settings-tunable overlay pattern. Defaults
+// are the exact values this file has always used - only diverges once the
+// user actually edits one from Settings.
+const IMPRINT_WEIGHT_DEFAULTS = {
+  themeExact: 15, themeCompat: 8, ownFirstImprintDay: 15, rareCoincidence: 10,
+  pairExact: 15, pairCompat: 8, secondaryExact: 6, secondaryCompat: 3,
+  luckyExact: 20, luckyCompat: 12,
+};
+
+function getImprintWeight(name) {
+  const overrides = (typeof getOverrideSection === 'function') ? getOverrideSection('imprintWeights') : {};
+  return Object.prototype.hasOwnProperty.call(overrides, name) ? overrides[name] : IMPRINT_WEIGHT_DEFAULTS[name];
 }
 
 /* ------------------------------------------------- day-theme imprints -- */
@@ -241,7 +276,7 @@ function getPersonImprintDayThemes(birthDate) {
 // so rather than locking it to one domain it gets checked against whatever
 // domain the thing it resonates with belongs to - at boosted weight, since
 // a first-imprint lucky number is a stronger signal than an ordinary theme
-// (see IMPRINT_LUCKY_EXACT/COMPAT below).
+// (see getImprintWeight('luckyExact'/'luckyCompat') below).
 function getPersonLuckyImprintValues(birthDate) {
   const lucky = getImprintLuckyNumbers(birthDate);
   const values = [];
@@ -285,13 +320,15 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
     if (candidateDay !== theme.day) return;
     const domains = domainTagHtml(theme.number);
     if (theme.lp === candidateLP) {
-      score += 15;
-      matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: 'Exact Life Path match', points: 15, domains });
+      const pts = getImprintWeight('themeExact');
+      score += pts;
+      matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: 'Exact Life Path match', points: pts, domains });
     } else {
-      const c = numerologyCompat(theme.lp, candidateLP);
+      const c = numerologyCompatEffective(theme.lp, candidateLP);
       if (c >= 77) {
-        score += 8;
-        matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: 8, domains });
+        const pts = getImprintWeight('themeCompat');
+        score += pts;
+        matches.push({ label: `${theme.label} imprint (${theme.lp}LP)`, text: `Compatible with today's ${candidateLP}LP (${c})`, points: pts, domains });
       }
     }
   });
@@ -307,8 +344,9 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
   const ownThemeForTodaysLP = firstThemedDayForLP(personBirthDate, candidateLP);
   if (ownThemeForTodaysLP != null) {
     const domains = domainTagHtml(ownThemeForTodaysLP);
-    score += 15;
-    matches.push({ label: `Your First ${candidateLP}LP Day (${ownThemeForTodaysLP})`, text: `Today's Universal Day is the same Life Path that first imprinted you on your ${ownThemeForTodaysLP}${ordinalSuffix(ownThemeForTodaysLP)}`, points: 15, domains });
+    const pts = getImprintWeight('ownFirstImprintDay');
+    score += pts;
+    matches.push({ label: `Your First ${candidateLP}LP Day (${ownThemeForTodaysLP})`, text: `Today's Universal Day is the same Life Path that first imprinted you on your ${ownThemeForTodaysLP}${ordinalSuffix(ownThemeForTodaysLP)}`, points: pts, domains });
   }
 
   const seenLuckyText = new Set();
@@ -327,8 +365,9 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
 
   const ownImprintDay = getFirstMatchingLifepathDayNumber(personBirthDate, candidateLP);
   if (ownImprintDay === candidateDay) {
-    score += 10;
-    matches.push({ label: 'Rare Coincidence', text: `Today's day-of-month matches your own first ${candidateLP}LP imprint day`, points: 10, domains: [] });
+    const pts = getImprintWeight('rareCoincidence');
+    score += pts;
+    matches.push({ label: 'Rare Coincidence', text: `Today's day-of-month matches your own first ${candidateLP}LP imprint day`, points: pts, domains: [] });
   }
 
   score = Math.min(100, score);
@@ -357,16 +396,13 @@ function computeImprintAlignment(personBirthDate, candidateDate) {
 // other person's ENTIRE imprint set, and (2) each domain scores by DENSITY
 // (weighted hits / max possible for that many pairs), not raw stacking -
 // 1 hit out of 6 possible pairs reads very differently than 5 out of 6.
-const IMPRINT_PAIR_EXACT = 15;
-const IMPRINT_PAIR_COMPAT = 8;
-const IMPRINT_SECONDARY_EXACT = 6;
-const IMPRINT_SECONDARY_COMPAT = 3;
-const IMPRINT_LUCKY_EXACT = 20;
-const IMPRINT_LUCKY_COMPAT = 12;
-
+// Point values now come from getImprintWeight() (Settings-tunable overlay,
+// defaults in IMPRINT_WEIGHT_DEFAULTS above) - kept as plain numbers only at
+// the call sites below, resolved fresh on every call so a Settings edit
+// takes effect immediately without needing a page reload.
 function imprintPairWeight(lpA, lpB, exactPts, compatPts) {
   if (lpA === lpB) return { weight: exactPts, kind: 'exact' };
-  const c = numerologyCompat(lpA, lpB);
+  const c = numerologyCompatEffective(lpA, lpB);
   if (c >= 77) return { weight: compatPts, kind: 'compat', compatScore: c };
   return null;
 }
@@ -378,9 +414,10 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
   const luckyB = getPersonLuckyImprintValues(personBBirthDate);
 
   const domains = {};
+  const effectiveDomains = getEffectiveImprintDomains();
 
-  Object.keys(IMPRINT_DOMAINS).forEach((key) => {
-    const domain = IMPRINT_DOMAINS[key];
+  Object.keys(effectiveDomains).forEach((key) => {
+    const domain = effectiveDomains[key];
     // domainValuesA/B ("anchors") are this side's values whose OWN theme
     // number belongs to this domain. 2026-08-07 fix: an anchor now checks
     // against the OTHER side's FULL value set, not just their own anchors -
@@ -403,7 +440,7 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
       if (seenPairs.has(pairKey)) return;
       seenPairs.add(pairKey);
       totalPairs++;
-      const r = imprintPairWeight(va.lp, vb.lp, IMPRINT_PAIR_EXACT, IMPRINT_PAIR_COMPAT);
+      const r = imprintPairWeight(va.lp, vb.lp, getImprintWeight('pairExact'), getImprintWeight('pairCompat'));
       if (r) {
         weightedHits += r.weight;
         matches.push({ aLabel: va.label, aLp: va.lp, bLabel: vb.label, bLp: vb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore });
@@ -412,7 +449,7 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
     domainValuesA.forEach((va) => valuesB.forEach((vb) => tryPair(va, vb)));
     domainValuesB.forEach((vb) => valuesA.forEach((va) => tryPair(va, vb)));
 
-    let score = totalPairs > 0 ? Math.round(50 + 50 * weightedHits / (totalPairs * IMPRINT_PAIR_EXACT)) : 50;
+    let score = totalPairs > 0 ? Math.round(50 + 50 * weightedHits / (totalPairs * getImprintWeight('pairExact'))) : 50;
 
     // Secondary numbers (Relationship's 3/9) only reinforce an already-hit
     // primary pair - they can't put the domain in play on their own.
@@ -421,7 +458,7 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
       const secB = valuesB.filter((v) => domain.secondaryNumbers.includes(v.number));
       secA.forEach((sa) => {
         secB.forEach((sb) => {
-          const r = imprintPairWeight(sa.lp, sb.lp, IMPRINT_SECONDARY_EXACT, IMPRINT_SECONDARY_COMPAT);
+          const r = imprintPairWeight(sa.lp, sb.lp, getImprintWeight('secondaryExact'), getImprintWeight('secondaryCompat'));
           if (r) {
             score += r.weight;
             matches.push({ aLabel: sa.label, aLp: sa.lp, bLabel: sb.label, bLp: sb.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, secondary: true });
@@ -435,7 +472,7 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
     // density score above rather than folded into its denominator.
     luckyA.forEach((lv) => {
       domainValuesB.forEach((ov) => {
-        const r = imprintPairWeight(lv.lp, ov.lp, IMPRINT_LUCKY_EXACT, IMPRINT_LUCKY_COMPAT);
+        const r = imprintPairWeight(lv.lp, ov.lp, getImprintWeight('luckyExact'), getImprintWeight('luckyCompat'));
         if (r) {
           score += r.weight;
           matches.push({ aLabel: lv.label, aLp: lv.lp, bLabel: ov.label, bLp: ov.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, lucky: true });
@@ -444,7 +481,7 @@ function computeImprintPersonAlignment(personABirthDate, personBBirthDate) {
     });
     luckyB.forEach((lv) => {
       domainValuesA.forEach((ov) => {
-        const r = imprintPairWeight(lv.lp, ov.lp, IMPRINT_LUCKY_EXACT, IMPRINT_LUCKY_COMPAT);
+        const r = imprintPairWeight(lv.lp, ov.lp, getImprintWeight('luckyExact'), getImprintWeight('luckyCompat'));
         if (r) {
           score += r.weight;
           matches.push({ aLabel: ov.label, aLp: ov.lp, bLabel: lv.label, bLp: lv.lp, points: r.weight, kind: r.kind, compatScore: r.compatScore, lucky: true });

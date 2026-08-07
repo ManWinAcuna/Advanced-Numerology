@@ -944,7 +944,7 @@ function computeComponentSignalStats(predictions) {
   // into the next UTC day - no MLB game starts between ~04:00 and ~17:00 UTC,
   // so noon cleanly separates one day's night games from the next day's,
   // keeping yesterday's late games in-sample where they belong.
-  const oosCutoff = MLB_WEIGHTS_SINCE + 'T12:00:00.000Z';
+  const oosCutoff = getEffectiveMlbWeightsSince() + 'T12:00:00.000Z';
   const oosList = resolved.filter((p) => p.gameTime >= oosCutoff);
   // Out-of-sample is measured on the LIVE model (the composite actually
   // placing bets), not on a candidate weighting.
@@ -988,8 +988,8 @@ function renderMlbComponentSignal(predictions, suffix = '') {
   // matters - V2 measured only on games played since the weights were fixed.
   const oos = v2OutOfSample;
   const oosLine = oos.count >= MIN_BUCKET_SAMPLE
-    ? `🎯 <b>Live model (v4), out-of-sample</b> (games since ${MLB_WEIGHTS_SINCE}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the Full Composite edge above was fit to these same games.`
-    : `🎯 <b>Live model (v4)</b> weights Pitcher 50 / Manager 25 / Franchise 25, fitted from the three-layer Weights Lab over ~3,700 games: the Starting Pitcher was the only role beating the market on its own, every top sweep blend was pitcher-heavy, and Catcher, Batters and Pitcher-vs-Lineup measured as noise or worse (they now score at zero but stay tracked here). The Full Composite edge in the table is <b>in-sample</b> (these weights were chosen from these games), so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> since ${MLB_WEIGHTS_SINCE}. Watch that number as new games resolve.`;
+    ? `🎯 <b>Live model (v4), out-of-sample</b> (games since ${getEffectiveMlbWeightsSince()}): <span class="score-inline ${oos.edge > 0 ? 'good' : (oos.edge < 0 ? 'bad' : '')}">${oos.winPct}% vs ${oos.marketPct}% market (${oos.edge > 0 ? '+' : ''}${oos.edge})</span> over ${oos.count} games. This is the real test &mdash; the Full Composite edge above was fit to these same games.`
+    : `🎯 <b>Live model (v4)</b> weights Pitcher 50 / Manager 25 / Franchise 25, fitted from the three-layer Weights Lab over ~3,700 games: the Starting Pitcher was the only role beating the market on its own, every top sweep blend was pitcher-heavy, and Catcher, Batters and Pitcher-vs-Lineup measured as noise or worse (they now score at zero but stay tracked here). The Full Composite edge in the table is <b>in-sample</b> (these weights were chosen from these games), so treat it as optimistic. The honest test is out-of-sample: <b>${oos.count} games</b> since ${getEffectiveMlbWeightsSince()}. Watch that number as new games resolve.`;
 
   el.innerHTML = `
     <div class="pm-table-total">Total picks: ${total}</div>

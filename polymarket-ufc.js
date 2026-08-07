@@ -141,8 +141,8 @@ function scoresForFight(f) {
   // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js) - identical
   // to what the backfill and today-tracker record.
   return {
-    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS),
-    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS),
+    scoreA: computeFighterScore(parseDateInput(f.matchedA.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights()),
+    scoreB: computeFighterScore(parseDateInput(f.matchedB.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights()),
   };
 }
 
@@ -384,7 +384,7 @@ function numerologyBlockHtml(f) {
   // either way - the Stats page tracks tossups separately as a sanity
   // check that they really do land ~50/50.)
   const gap = Math.abs(scoreA.combined - scoreB.combined);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapUfc(gap);
   const pickPrice = scoreA.combined >= scoreB.combined ? f.priceA : f.priceB;
 
   const signalHtml = tier.key === 'none'
@@ -542,7 +542,7 @@ function fullMatchupHtml(f) {
 function cardTierKey(f) {
   const scores = scoresForFight(f);
   if (!scores) return '';
-  return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
+  return edgeTierForGapUfc(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
 
 function renderFightCards() {

@@ -84,7 +84,7 @@ async function checkResults() {
 // were excluded, and the edge-tier table below tracks their ~50/50-ness.
 function computeStats(predictions) {
   const resolvedAll = predictions.filter((p) => p.result && !p.result.draw);
-  const resolved = resolvedAll.filter(hasRealEdge);
+  const resolved = resolvedAll.filter(hasRealEdgeUfc);
   const wins = resolved.filter(isCorrectPick);
   const favoritePicks = resolved.filter((p) => p.pickType === 'favorite');
   const underdogPicks = resolved.filter((p) => p.pickType === 'underdog');
@@ -168,7 +168,7 @@ function renderBreakdown(stats, suffix = '') {
 // should sit near 50%, which is its own sanity check. computeEdgeTierStats
 // lives in db-core.js, shared with stats-tennis.js.
 function renderEdgeTiers(predictions, suffix = '') {
-  const tiers = computeEdgeTierStats(predictions);
+  const tiers = computeEdgeTierStatsUfc(predictions);
   const total = tiers.reduce((s, t) => s + t.count, 0);
   document.getElementById('statsEdgeTiers' + suffix).innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
@@ -212,7 +212,7 @@ function formatFightDate(iso) {
 
 function edgeCell(p) {
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapUfc(gap);
   if (tier.key === 'none') return `<span class="empty-state">⚖️ Tossup (+${gap})</span>`;
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
@@ -343,7 +343,7 @@ function imprintTabHtml(p) {
 function matchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapUfc(gap);
 
   const signalHtml = tier.key === 'none'
     ? `⚖️ Tossup (${p.numerologyScoreA} vs ${p.numerologyScoreB}) &mdash; no real numerology edge, excluded from the headline win rate`
@@ -642,8 +642,8 @@ async function processUfcBackfillEvent(event, existingByConditionId, rosterCache
   // filter in fetchClosedUfcEventsInWindow already guarantees eventDate.
   // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js, v6 note).
   const fightDay = ufcParseDateInput(event.eventDate);
-  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
-  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
+  const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights());
+  const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights());
 
   const favA = priceA >= priceB;
   const marketFavName = favA ? side.nameA : side.nameB;
@@ -798,8 +798,8 @@ async function recordTodaysUfcFights() {
     // never the timestamp's browser-local date, which flips with the device.
     // UFC_COMPAT_WEIGHTS: year-animal-only scoring (db-core.js, v6 note).
     const fightDay = ufcParseDateInput(f.eventDate);
-    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
-    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, UFC_COMPAT_WEIGHTS);
+    const scoreA = computeFighterScore(ufcParseDateInput(matchedA.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights());
+    const scoreB = computeFighterScore(ufcParseDateInput(matchedB.dob), fightDay, null, null, false, getEffectiveUfcCompatWeights());
 
     const marketFavName = f.priceA >= f.priceB ? f.fighterAName : f.fighterBName;
     const numFavName = scoreA.combined >= scoreB.combined ? f.fighterAName : f.fighterBName;

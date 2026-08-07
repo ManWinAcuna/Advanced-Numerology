@@ -450,7 +450,7 @@ function numerologyBlockHtml(m) {
   // strength labeled. Still recorded above either way - the Stats page
   // tracks tossups separately as a ~50/50 sanity check.
   const gap = Math.abs(scoreA.combined - scoreB.combined);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapTennis(gap);
   const pickPrice = scoreA.combined >= scoreB.combined ? m.priceA : m.priceB;
 
   const signalHtml = tier.key === 'none'
@@ -597,7 +597,7 @@ function fullMatchupHtml(m) {
 function cardTierKey(m) {
   const scores = scoresForMatch(m, tournamentRegionFor(m.tournament));
   if (!scores) return '';
-  return edgeTierForGap(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
+  return edgeTierForGapTennis(Math.abs(scores.scoreA.combined - scores.scoreB.combined)).key;
 }
 
 function matchCardHtml(m) {

@@ -75,7 +75,7 @@ async function checkTennisResults() {
 // excluded, tracked separately in the edge-tier table.
 function computeTennisStats(predictions) {
   const resolvedAll = predictions.filter((p) => p.result && !p.result.draw);
-  const resolved = resolvedAll.filter(hasRealEdge);
+  const resolved = resolvedAll.filter(hasRealEdgeTennis);
   const wins = resolved.filter(isCorrectPick);
   const favoritePicks = resolved.filter((p) => p.pickType === 'favorite');
   const underdogPicks = resolved.filter((p) => p.pickType === 'underdog');
@@ -150,7 +150,7 @@ function renderTennisBreakdown(stats, suffix = '') {
 }
 
 function renderTennisEdgeTiers(predictions, suffix = '') {
-  const tiers = computeEdgeTierStats(predictions);
+  const tiers = computeEdgeTierStatsTennis(predictions);
   const total = tiers.reduce((s, t) => s + t.count, 0);
   document.getElementById('tennisStatsEdgeTiers' + suffix).innerHTML = pmTableTotalRow(total, 3) + tiers.map((t) => `
     <tr>
@@ -190,7 +190,7 @@ function formatTennisMatchDate(iso) {
 
 function tennisEdgeCell(p) {
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapTennis(gap);
   if (tier.key === 'none') return `<span class="empty-state">⚖️ Tossup (+${gap})</span>`;
   return `${tier.icon} ${tier.label.replace(' Edge', '')} (+${gap})`;
 }
@@ -319,7 +319,7 @@ function tennisImprintTabHtml(p) {
 function tennisMatchupModalHtml(p) {
   const agree = p.pickType === 'favorite';
   const gap = edgeGap(p);
-  const tier = edgeTierForGap(gap);
+  const tier = edgeTierForGapTennis(gap);
 
   const signalHtml = tier.key === 'none'
     ? `⚖️ Tossup (${p.numerologyScoreA} vs ${p.numerologyScoreB}) &mdash; no real numerology edge, excluded from the headline win rate`

@@ -1,9 +1,11 @@
 /*
  * Compatibility scoring engine, per the user's "how to compare numbers" spec.
  * Requires numerology.js (digitSum, getReducedDay, getReducedDayOfYear,
- * getChineseZodiacYear, getChineseMonth, getChineseDaySign, getSunSign) and
- * compat-data.js (numerologyCompat, vietnameseCompat, westernCompat) to be
- * loaded first.
+ * getChineseZodiacYear, getChineseMonth, getChineseDaySign, getSunSign),
+ * compat-data.js (numerologyCompat, vietnameseCompat, westernCompat), and
+ * overrides-engine.js (numerologyCompatEffective/vietnameseCompatEffective/
+ * westernCompatEffective - the Settings-tunable overlay this file's own
+ * table lookups now go through) to be loaded first, in that order.
  */
 
 /* ---------- Compatibility Life Path (does not freeze at 28/13, unlike the rest of the app) ---------- */
@@ -268,7 +270,14 @@ const COMPAT_DEFAULT_WEIGHTS = {
   lifePath: 0.60, dayNum: 0.35, doy: 0.05,
 };
 
-function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompat, weights = COMPAT_DEFAULT_WEIGHTS) {
+// numCompatFn defaults to numerologyCompatEffective (overrides-engine.js,
+// loaded just before this file) instead of the raw numerologyCompat - an
+// overlay lookup that falls back to the real table when nothing's been
+// manually tuned, so this stays byte-identical to the original behavior
+// until the user actually edits something in Settings. numerologyCompat
+// itself is untouched; sports callers still pass their own explicit
+// sportsNumerologyCompat and are unaffected by this default.
+function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompatEffective, weights = COMPAT_DEFAULT_WEIGHTS) {
   const entityLifePathInfo = compatLifePathInfo(entityDate);
   const dayLifePathInfo = compatLifePathInfo(dayDate);
   const lifePathScore = numCompatFn(entityLifePathInfo.lookupValue, dayLifePathInfo.lookupValue);
@@ -285,15 +294,15 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
 
   const entityYearSign = getChineseZodiacYear(entityDate);
   const dayYearSign = getChineseZodiacYear(dayDate);
-  const yearScore = vietnameseCompat(entityYearSign, dayYearSign);
+  const yearScore = vietnameseCompatEffective(entityYearSign, dayYearSign);
 
   const entityMonthSign = getChineseMonth(entityDate);
   const dayMonthSign = getChineseMonth(dayDate);
-  const monthScore = vietnameseCompat(entityMonthSign, dayMonthSign);
+  const monthScore = vietnameseCompatEffective(entityMonthSign, dayMonthSign);
 
   const entityDaySign = getChineseDaySign(entityDate);
   const dayDaySign = getChineseDaySign(dayDate);
-  const daySignScore = vietnameseCompat(entityDaySign, dayDaySign);
+  const daySignScore = vietnameseCompatEffective(entityDaySign, dayDaySign);
 
   // The zodiac's inner year/month/day split is itself weight-able (UFC's
   // measured edge lives entirely in the year animal - UFC_COMPAT_WEIGHTS,
@@ -306,7 +315,7 @@ function computeCompatibility(entityDate, dayDate, numCompatFn = numerologyCompa
 
   const entitySunSign = getSunSign(entityDate);
   const daySunSign = getSunSign(dayDate);
-  const westernScore = westernCompat(entitySunSign, daySunSign);
+  const westernScore = westernCompatEffective(entitySunSign, daySunSign);
 
   const baseScore = weights.numerology * numerologyScore + weights.vietnamese * vietnameseScore + weights.western * westernScore;
 
@@ -361,22 +370,22 @@ function computeEnergyFlow(birthDate, today) {
   const universalDay = universalDayInfo.lookupValue;
   const universalDayDisplay = universalDayInfo.display;
 
-  const yearScore = numerologyCompat(personalYear, universalYear);
-  const monthScore = numerologyCompat(personalMonth, universalMonth);
-  const dayScore = numerologyCompat(personalDay, universalDay);
+  const yearScore = numerologyCompatEffective(personalYear, universalYear);
+  const monthScore = numerologyCompatEffective(personalMonth, universalMonth);
+  const dayScore = numerologyCompatEffective(personalDay, universalDay);
   const numerologyScore = 0.65 * yearScore + 0.25 * monthScore + 0.10 * dayScore;
 
   const personalYearSign = getChineseZodiacYear(birthDate);
   const universalYearSign = getChineseZodiacYear(today);
-  const yearSignScore = vietnameseCompat(personalYearSign, universalYearSign);
+  const yearSignScore = vietnameseCompatEffective(personalYearSign, universalYearSign);
 
   const personalMonthSign = getChineseMonth(birthDate);
   const universalMonthSign = getChineseMonth(today);
-  const monthSignScore = vietnameseCompat(personalMonthSign, universalMonthSign);
+  const monthSignScore = vietnameseCompatEffective(personalMonthSign, universalMonthSign);
 
   const personalDaySign = getChineseDaySign(birthDate);
   const universalDaySign = getChineseDaySign(today);
-  const daySignScore = vietnameseCompat(personalDaySign, universalDaySign);
+  const daySignScore = vietnameseCompatEffective(personalDaySign, universalDaySign);
 
   const vietnameseScore = 0.65 * yearSignScore + 0.25 * monthSignScore + 0.10 * daySignScore;
 
@@ -422,14 +431,14 @@ function computeMonthOutlook(birthDate, monthsTable) {
   const personLucky = getCompatLuckyNumber(birthDate);
 
   const months = monthsTable.map((row) => {
-    const personalMonthScore = numerologyCompat(lifePathNum, row.reduced);
-    const universalMonthScore = numerologyCompat(lifePathNum, row.universalMonth);
+    const personalMonthScore = numerologyCompatEffective(lifePathNum, row.reduced);
+    const universalMonthScore = numerologyCompatEffective(lifePathNum, row.universalMonth);
     const numerologyScore = Math.round(0.5 * personalMonthScore + 0.5 * universalMonthScore);
 
-    const vietnameseScore = vietnameseCompat(personMonthSign, row.animal);
+    const vietnameseScore = vietnameseCompatEffective(personMonthSign, row.animal);
 
     const westernRepSign = getSunSign(new Date(row.cycleYear, row.index - 1, 15));
-    const westernScore = westernCompat(personSunSign, westernRepSign);
+    const westernScore = westernCompatEffective(personSunSign, westernRepSign);
 
     const monthDigits = monthYearLuckyDigits(row.index, row.cycleYear);
     const digitMatch = sameDigitSet(monthDigits, personLucky.digits);

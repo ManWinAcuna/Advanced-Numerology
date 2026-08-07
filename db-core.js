@@ -3324,6 +3324,16 @@ const MLB_ROLE_WEIGHTS = {
   franchiseZodiacOnly: 0.075, // same 30% haircut vs full franchise as v3 (0.03/0.10)
 };
 
+// Settings-tunable overlay (2026-08-08) - same overrides-engine.js pattern
+// as Imprint Alignment's domains/weights. MLB_ROLE_WEIGHTS/MLB_COMPAT_WEIGHTS
+// stay the real, measured defaults; an override is a FULL replacement object
+// for that one weight set, only present once the user actually edits it from
+// Settings. computeTeamComposite below is the one place either gets read.
+function getEffectiveMlbRoleWeights() {
+  const o = getOverrideSection('betting').mlb;
+  return (o && o.roleWeights) ? o.roleWeights : MLB_ROLE_WEIGHTS;
+}
+
 // The calendar date a game falls on at the venue - same pattern as
 // currentMatchDateISO in polymarket-ufc.js/polymarket-tennis.js (kept as a
 // separate, differently-shaped function per sport rather than forcing one
@@ -3416,6 +3426,11 @@ const MLB_COMPAT_WEIGHTS = {
   lifePath: 0.30, dayNum: 0.45, doy: 0.25,
 };
 
+function getEffectiveMlbCompatWeights() {
+  const o = getOverrideSection('betting').mlb;
+  return (o && o.compatWeights) ? o.compatWeights : MLB_COMPAT_WEIGHTS;
+}
+
 // UFC blend, fitted 2026-07-28 on the rebuilt 141-resolved-pick record via
 // the Weights Lab (stats-ufc.js). The zodiac YEAR ANIMAL alone measured
 // +10 edge on 98 picks (~2 standard errors, the strongest clean reading in
@@ -3437,11 +3452,18 @@ const UFC_COMPAT_WEIGHTS = {
   zodiacYear: 1, zodiacMonth: 0, zodiacDay: 0,
 };
 
+function getEffectiveUfcCompatWeights() {
+  const o = getOverrideSection('betting').ufc;
+  return (o && o.compatWeights) ? o.compatWeights : UFC_COMPAT_WEIGHTS;
+}
+
 function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const side = sideLetter === 'A' ? g.sideA : g.sideB;
   const opposingSide = sideLetter === 'A' ? g.sideB : g.sideA;
   const teamInfo = sideLetter === 'A' ? g.teamInfoA : g.teamInfoB;
   const manager = sideLetter === 'A' ? g.managerA : g.managerB;
+  const roleWeights = getEffectiveMlbRoleWeights();
+  const compatWeights = getEffectiveMlbCompatWeights();
 
   const matchDateISO = currentMlbMatchDateISO(g, onTimezoneResolved);
   if (!matchDateISO) return null; // timezone not confirmed yet - don't guess
@@ -3457,19 +3479,19 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
   const parts = [];
   const pitcherBd = g.birthdates.get(side.startingPitcherId);
   if (pitcherBd && pitcherBd.birthDate) {
-    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: MLB_ROLE_WEIGHTS.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
+    parts.push({ key: 'pitcher', role: `SP ${pitcherBd.name}`, weight: roleWeights.pitcher, score: computeFighterScore(parseDateInput(pitcherBd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, compatWeights) });
 
     const matchupScore = pitcherVsLineupScore(parseDateInput(pitcherBd.birthDate), opposingSide.batters, g.birthdates);
     if (matchupScore != null) {
-      parts.push({ key: 'pitcherMatchup', role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: MLB_ROLE_WEIGHTS.pitcherMatchup, score: { combined: matchupScore } });
+      parts.push({ key: 'pitcherMatchup', role: `SP ${pitcherBd.name} vs ${opposingSide.teamName} lineup`, weight: roleWeights.pitcherMatchup, score: { combined: matchupScore } });
     }
   }
   side.batters.forEach((b) => {
     const bd = g.birthdates.get(b.id);
     if (!bd || !bd.birthDate) return;
     const isCatcher = b.pos === 'C';
-    const weight = isCatcher ? MLB_ROLE_WEIGHTS.catcher : MLB_ROLE_WEIGHTS.batter;
-    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
+    const weight = isCatcher ? roleWeights.catcher : roleWeights.batter;
+    parts.push({ key: isCatcher ? 'catcher' : 'batter', role: `${b.pos} ${bd.name}`, weight, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, compatWeights) });
   });
   if (teamInfo) {
     const foundingISO = MLB_TEAM_FOUNDING_DATES[teamInfo.id];
@@ -3478,7 +3500,7 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       // exactly like any other entity through computeFighterScore, at full
       // weight, instead of the thinner zodiac-only fallback below.
       const foundingDate = parseDateInput(foundingISO);
-      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: MLB_ROLE_WEIGHTS.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
+      parts.push({ key: 'franchise', role: `Franchise (est. ${foundingISO})`, weight: roleWeights.franchise, score: computeFighterScore(foundingDate, matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, compatWeights) });
     } else if (teamInfo.firstYearOfPlay) {
       // No real date for this team - MLB's own API only gives a founding
       // YEAR, never a month/day, and (per explicit instruction) no
@@ -3492,12 +3514,12 @@ function computeTeamComposite(g, sideLetter, onTimezoneResolved) {
       const franchiseSign = getChineseZodiacYear(franchiseYearAnchor);
       const todaySign = getChineseZodiacYear(matchDate);
       const zodiacScore = vietnameseCompat(franchiseSign, todaySign);
-      parts.push({ key: 'franchise', role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: MLB_ROLE_WEIGHTS.franchiseZodiacOnly, score: { combined: zodiacScore } });
+      parts.push({ key: 'franchise', role: `Franchise (${teamInfo.firstYearOfPlay}, ${franchiseSign} year)`, weight: roleWeights.franchiseZodiacOnly, score: { combined: zodiacScore } });
     }
   }
   if (manager) {
     const bd = g.birthdates.get(manager.id);
-    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: MLB_ROLE_WEIGHTS.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, MLB_COMPAT_WEIGHTS) });
+    if (bd && bd.birthDate) parts.push({ key: 'manager', role: `Mgr ${bd.name}`, weight: roleWeights.manager, score: computeFighterScore(parseDateInput(bd.birthDate), matchDate, stadiumDate, stateDate, MLB_DAY_ANCHOR_ONLY, compatWeights) });
   }
 
   if (!parts.length) return null;
@@ -3598,6 +3620,17 @@ const MLB_ROLE_WEIGHTS_V2 = {
 // 2026-07-26..28 - two days, far too short to have said anything.)
 const MLB_WEIGHTS_SINCE = '2026-07-28';
 
+// Settings-tunable overlay (2026-08-08): editing MLB_ROLE_WEIGHTS or
+// MLB_COMPAT_WEIGHTS from Settings auto-stamps betting.mlb.sinceDate to
+// today (user-confirmed) - otherwise picks made under the OLD weights would
+// keep counting toward the "out-of-sample" test of the NEW ones, the exact
+// trap that made v3's window meaningless. Falls back to the real
+// MLB_WEIGHTS_SINCE default until a Settings edit actually happens.
+function getEffectiveMlbWeightsSince() {
+  const o = getOverrideSection('betting').mlb;
+  return (o && o.sinceDate) ? o.sinceDate : MLB_WEIGHTS_SINCE;
+}
+
 // Superseded by MLB_WEIGHTS_SINCE - kept because older stored state and the
 // component table's history still reference the v2 cutoff.
 const MLB_V2_SINCE = '2026-07-19';
@@ -3667,8 +3700,9 @@ function rescoreUfcPredictionsForWeights() {
 
   predictions.forEach((p) => {
     if (!p.dims || !p.dims.A || !p.dims.B) { skipped += 1; return; }
-    const a = ufcCompositeFromDims(p.dims.A, UFC_COMPAT_WEIGHTS);
-    const b = ufcCompositeFromDims(p.dims.B, UFC_COMPAT_WEIGHTS);
+    const ufcWeights = getEffectiveUfcCompatWeights();
+    const a = ufcCompositeFromDims(p.dims.A, ufcWeights);
+    const b = ufcCompositeFromDims(p.dims.B, ufcWeights);
     if (a == null || b == null) { skipped += 1; return; }
 
     const wasFavorite = p.numerologyFavorite;
@@ -4352,15 +4386,67 @@ function edgeGap(p) {
   return (Number.isFinite(a) && Number.isFinite(b)) ? Math.abs(a - b) : 0;
 }
 
-// tiers/minGap default to the UFC/Tennis one-on-one set; MLB passes its own
-// (via the edgeTierForGapMlb/hasRealEdgeMlb wrappers below) so the three
-// sports share one implementation but not one calibration.
+// Settings-tunable overlay (2026-08-08): sport is 'mlb'/'ufc'/'tennis'/'nba'.
+// UFC and Tennis share one undifferentiated default today (EDGE_TIERS/
+// REAL_EDGE_MIN_GAP - same as before this override system existed), but get
+// independently-editable override slots so a Settings edit to one doesn't
+// silently also change the other just because they started identical.
+// Resolved lazily (a function, not a precomputed object) - NBA_EDGE_TIERS/
+// NBA_REAL_EDGE_MIN_GAP aren't declared until further down this same file,
+// so looking them up only when actually called (well after every const in
+// the file has initialized) avoids a temporal-dead-zone crash on load.
+function edgeTierDefault(sport) {
+  if (sport === 'mlb') return MLB_EDGE_TIERS;
+  if (sport === 'nba') return NBA_EDGE_TIERS;
+  return EDGE_TIERS;
+}
+function realEdgeMinGapDefault(sport) {
+  if (sport === 'mlb') return MLB_REAL_EDGE_MIN_GAP;
+  if (sport === 'nba') return NBA_REAL_EDGE_MIN_GAP;
+  return REAL_EDGE_MIN_GAP;
+}
+
+function getEffectiveEdgeTiers(sport) {
+  const o = getOverrideSection('betting')[sport];
+  return (o && o.edgeTiers) ? o.edgeTiers : edgeTierDefault(sport);
+}
+
+function getEffectiveRealEdgeMinGap(sport) {
+  const o = getOverrideSection('betting')[sport];
+  return (o && o.realEdgeMinGap != null) ? o.realEdgeMinGap : realEdgeMinGapDefault(sport);
+}
+
+// Generic - tiers/minGap default to the raw, un-overridden constants. Kept
+// as plain fallbacks (not override-aware themselves) because a shared
+// default parameter can't tell whether it's UFC or Tennis calling - each
+// sport gets its own explicit wrapper below instead, same pattern as the
+// existing Mlb/Nba wrappers.
 function edgeTierForGap(gap, tiers = EDGE_TIERS) {
   return tiers.find((t) => gap >= t.min && gap < t.max) || tiers[tiers.length - 1];
 }
 
 function hasRealEdge(p, minGap = REAL_EDGE_MIN_GAP) {
   return edgeGap(p) >= minGap;
+}
+
+function edgeTierForGapUfc(gap) {
+  return edgeTierForGap(gap, getEffectiveEdgeTiers('ufc'));
+}
+function hasRealEdgeUfc(p) {
+  return edgeGap(p) >= getEffectiveRealEdgeMinGap('ufc');
+}
+function computeEdgeTierStatsUfc(predictions) {
+  return computeEdgeTierStats(predictions, getEffectiveEdgeTiers('ufc'));
+}
+
+function edgeTierForGapTennis(gap) {
+  return edgeTierForGap(gap, getEffectiveEdgeTiers('tennis'));
+}
+function hasRealEdgeTennis(p) {
+  return edgeGap(p) >= getEffectiveRealEdgeMinGap('tennis');
+}
+function computeEdgeTierStatsTennis(predictions) {
+  return computeEdgeTierStats(predictions, getEffectiveEdgeTiers('tennis'));
 }
 
 // Per-tier win rates - the direct empirical test of the core hypothesis: if
@@ -4391,15 +4477,15 @@ function computeEdgeTierStats(predictions, tiers = EDGE_TIERS) {
 // safe to hand straight to Array.filter, whose index argument would otherwise
 // land in hasRealEdge's minGap parameter.
 function edgeTierForGapMlb(gap) {
-  return edgeTierForGap(gap, MLB_EDGE_TIERS);
+  return edgeTierForGap(gap, getEffectiveEdgeTiers('mlb'));
 }
 
 function hasRealEdgeMlb(p) {
-  return edgeGap(p) >= MLB_REAL_EDGE_MIN_GAP;
+  return edgeGap(p) >= getEffectiveRealEdgeMinGap('mlb');
 }
 
 function computeEdgeTierStatsMlb(predictions) {
-  return computeEdgeTierStats(predictions, MLB_EDGE_TIERS);
+  return computeEdgeTierStats(predictions, getEffectiveEdgeTiers('mlb'));
 }
 
 // Strength tiers for the pitcher strikeout signal. The signal already calls a
@@ -5200,6 +5286,11 @@ const NBA_TEAM_FOUNDING_DATES = {
 // manager weight was moved by measurement rather than by intuition.
 const NBA_FRANCHISE_WEIGHT = 0.10;
 
+function getEffectiveNbaFranchiseWeight() {
+  const o = getOverrideSection('betting').nba;
+  return (o && o.franchiseWeight != null) ? o.franchiseWeight : NBA_FRANCHISE_WEIGHT;
+}
+
 function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, teamAbbr) {
   const players = (rotation || [])
     .filter((p) => p.birthDate && Number.isFinite(p.expectedMinutes) && p.expectedMinutes > 0);
@@ -5207,11 +5298,12 @@ function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, te
   const minutesTotal = players.reduce((s, p) => s + p.expectedMinutes, 0);
   if (!minutesTotal) return null;
 
+  const franchiseWeight = getEffectiveNbaFranchiseWeight();
   const foundingISO = teamAbbr ? NBA_TEAM_FOUNDING_DATES[teamAbbr] : null;
   // With a founding date the players share 90%; without one they take the whole
   // 100%, so a team missing from the map is still scored normally instead of
   // quietly carrying a 10% hole that would drag its composite toward zero.
-  const playerShare = foundingISO ? 1 - NBA_FRANCHISE_WEIGHT : 1;
+  const playerShare = foundingISO ? 1 - franchiseWeight : 1;
 
   const parts = players.map((p, index) => ({
     // Grouped by ROLE, not by minutes rank. Roles are what made the MLB
@@ -5239,7 +5331,7 @@ function computeNbaSideComposite(rotation, matchDate, stadiumDate, stateDate, te
     parts.push({
       key: 'franchise',
       role: `Franchise (est. ${foundingISO})`,
-      weight: NBA_FRANCHISE_WEIGHT,
+      weight: franchiseWeight,
       score: computeFighterScore(parseDateInput(foundingISO), matchDate, stadiumDate, stateDate),
     });
   }
@@ -5313,15 +5405,15 @@ const NBA_EDGE_TIERS = [
 ];
 
 function edgeTierForGapNba(gap) {
-  return edgeTierForGap(gap, NBA_EDGE_TIERS);
+  return edgeTierForGap(gap, getEffectiveEdgeTiers('nba'));
 }
 
 function hasRealEdgeNba(p) {
-  return edgeGap(p) >= NBA_REAL_EDGE_MIN_GAP;
+  return edgeGap(p) >= getEffectiveRealEdgeMinGap('nba');
 }
 
 function computeEdgeTierStatsNba(predictions) {
-  return computeEdgeTierStats(predictions, NBA_EDGE_TIERS);
+  return computeEdgeTierStats(predictions, getEffectiveEdgeTiers('nba'));
 }
 
 /* ---------- Totals (game pace) ---------- */

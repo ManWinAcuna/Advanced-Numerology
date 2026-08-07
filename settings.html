@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<style>html{background:#000}</style>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Settings</title>
+<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="godlike.css?v=32">
+<style>
+  .settings-back { display: block; margin: 14px 0; color: var(--muted); text-decoration: none; font-size: 13px; }
+  .settings-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 18px; }
+  .settings-tab {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+    padding: 8px 14px; font-size: 12.5px; color: var(--muted); cursor: pointer;
+  }
+  .settings-tab.active { color: var(--yellow); border-color: var(--yellow); }
+  .settings-page { display: none; }
+  .settings-page.active { display: block; }
+  .settings-intro { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+  .settings-field-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .settings-field-label { flex: 1; font-size: 13px; }
+  .settings-field-label .hint { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .settings-field-input {
+    width: 76px; background: #fff; color: #111; border: none; border-radius: 4px;
+    padding: 6px 8px; font-size: 13px; text-align: center;
+  }
+  .settings-field-input.overridden { background: #fff3cd; }
+  .settings-reset-btn {
+    background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+    font-size: 11px; padding: 5px 8px; cursor: pointer; flex: none;
+  }
+  .settings-reset-btn:disabled { opacity: .35; cursor: default; }
+  .settings-sport-block { margin-bottom: 26px; }
+  .settings-sport-title { font-size: 15px; font-weight: 700; color: var(--yellow); margin-bottom: 4px; }
+  .settings-domain-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+  }
+  .settings-domain-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .settings-domain-name { font-size: 14px; font-weight: 700; }
+  .settings-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .settings-num-toggle {
+    background: var(--panel-2, #1b1b21); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 12px; font-size: 12.5px; color: var(--muted); cursor: pointer;
+  }
+  .settings-num-toggle.on { color: #111; background: var(--yellow); border-color: var(--yellow); font-weight: 700; }
+  .settings-sub-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 4px; }
+  .settings-compat-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .settings-compat-picker select {
+    background: #fff; color: #111; border: none; border-radius: 4px; padding: 7px 10px; font-size: 13px;
+  }
+  .settings-compat-result {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 18px;
+  }
+  .settings-overrides-list { font-size: 12.5px; }
+  .settings-override-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .settings-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  .settings-save-note { font-size: 11.5px; color: var(--good); margin-left: 6px; opacity: 0; transition: opacity .3s; }
+  .settings-save-note.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <nav class="topnav">
+    <a href="stable.html" class="nav-link">🐎 Stable</a>
+    <a href="profile.html" class="nav-link">My Profile</a>
+    <a href="sports-betting.html" class="nav-link">Sports Betting</a>
+    <a href="stocks.html" class="nav-link">Stocks</a>
+    <a href="emax.html" class="nav-link">EMAX</a>
+    <a href="calculator.html" class="nav-link">Calculator</a>
+    <a href="famous.html" class="nav-link">Famous Lookup</a>
+    <a href="calendar.html" class="nav-link">Calendar</a>
+    <a href="astrology.html" class="nav-link">Astrology</a>
+    <a href="database.html" class="nav-link">Database</a>
+    <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
+  </nav>
+  <script src="nav-scroll.js"></script>
+  <script src="bottombar.js?v=8"></script>
+  <script src="update-check.js?v=4"></script>
+
+  <a href="profile.html" class="settings-back">&larr; Back to Profile</a>
+
+  <div class="profile-section">
+    <div class="profile-section-title">⚙️ Settings</div>
+    <div class="settings-intro">
+      Every value here is an overlay on top of the app's real defaults - nothing is permanently changed, and anything can be reset back to exactly what shipped. Edits apply immediately and sync across your devices.
+    </div>
+
+    <div class="settings-tabs" id="settingsTabs">
+      <button type="button" class="settings-tab active" data-tab="compat">Compat Tables</button>
+      <button type="button" class="settings-tab" data-tab="domains">Imprint Domains</button>
+      <button type="button" class="settings-tab" data-tab="weights">Imprint Weights</button>
+      <button type="button" class="settings-tab" data-tab="betting">Betting Weights</button>
+    </div>
+
+    <div class="settings-page active" id="settingsPageCompat"></div>
+    <div class="settings-page" id="settingsPageDomains"></div>
+    <div class="settings-page" id="settingsPageWeights"></div>
+    <div class="settings-page" id="settingsPageBetting"></div>
+  </div>
+
+</div>
+
+<script src="scroll-viewport.js"></script>
+<script src="numerology.js"></script>
+<script src="compat-data.js"></script>
+<script src="overrides-engine.js?v=1"></script>
+<script src="compat-engine.js?v=3"></script>
+<script src="big-store.js"></script>
+<script src="db-core.js?v=5"></script>
+<script src="firebase-loader.js"></script>
+<script src="imprint-alignment.js?v=7"></script>
+<script src="settings.js?v=1"></script>
+</body>
+</html>
