@@ -785,3 +785,238 @@ function renderYearRoadmapDetail(containerEl, roadmap, y) {
   );
   wireCompatReveal(containerEl);
 }
+
+/* =========================== General Reading + identity popups ==========
+   Moved here from render.js (2026-08-08) so any page that already loads
+   compat-render.js - not just Profile/Calculator/Famous, which load all of
+   render.js's page-specific #bday wiring too - can show the same "the
+   general reading" link and tappable Lifepath/Day Born/Day#/PD/sign/animal
+   popups. First consumer: category.js (the Database entry popup) - user:
+   "the database isn't showing the general reading and I also can't click
+   the lifepath and stuff like I can in the profile." Every page that calls
+   renderCompoundStories() needs a #storyModalOverlay/#storyModalBody pair
+   in its HTML (same markup as profile.html) and compound-meanings.js
+   loaded before this file runs. ========================================== */
+
+// Boost13, 2026-08-06: Core Numbers and Personal Cycles each get their own
+// tap-to-reveal "whole story" (the specific compound behind each number,
+// not just its reduced root), plus one page-wide "big picture" combining
+// both. Purely the person's own numbers - today's date never enters this
+// (that's Today page's job alone). Idempotent: inserts each tap target
+// once, then just re-wires its click handler on every render() call so a
+// changed birthdate always reopens with fresh content.
+function insertStoryLink(id, afterSelector, label) {
+  let el = document.getElementById(id);
+  if (el) return el;
+  const anchor = document.querySelector(afterSelector);
+  if (!anchor) return null;
+  el = document.createElement('button');
+  el.type = 'button';
+  el.id = id;
+  el.className = 'story-link';
+  el.textContent = label;
+  anchor.insertAdjacentElement('afterend', el);
+  return el;
+}
+
+// Boost13 OVERDRIVE (2026-08-08): one visual paragraph per trait cluster
+// instead of one giant joined string - user: "supper crammed... no one is
+// going to read that." Each cluster renders as a light half (gold left
+// border) flush against a shadow half (red left border) - together they
+// read as one paragraph block, but the border still shows where the light
+// sentence ends and the shadow sentence begins. The connector that opens a
+// paragraph ("There's also this...") gets its own muted, smaller styling
+// so the eye lands on the actual trait sentence, not the transition text.
+function openStoryModal(title, story) {
+  if (!story) return;
+  const body = (story.paragraphs && story.paragraphs.length)
+    ? story.paragraphs.map((pp) => {
+      const connectorHtml = pp.connector ? `<span class="reading-connector">${pp.connector}</span> ` : '';
+      const shadowExtra = [pp.extra, pp.detail].filter(Boolean).map((s) => ` ${s}`).join('');
+      return `<div class="reading-para">` +
+        `<div class="reading-half reading-half-light">${connectorHtml}${pp.light}</div>` +
+        `<div class="reading-half reading-half-shadow">${pp.shadow}${shadowExtra}</div>` +
+        `</div>`;
+    }).join('')
+    : `<div class="story-modal-text">${story.text}</div>`;
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${title}</div>${body}`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
+// Round 14 (2026-08-06): per-number identity popups - tap Lifepath/Day
+// Born/Day#/PD to get just that number's own "who you are" section
+// (moved here from Today's modal, where it described the profile owner
+// but lived on the wrong page).
+//
+// 2026-08-08 round 2: light/shadow got pulled from these popups entirely
+// - the general reading already shows that exact text verbatim, so
+// leaving it in the popup meant tapping Lifepath and then reading the
+// general reading repeated the same sentence twice. User: "don't make it
+// be the same thing that's going to be shown on the general reading,
+// this is why I gave you a lot of copy so there's no repeats." Popups
+// now show ONLY the characteristics bullets (the PDF's Emotional Reality
+// Checks) - content composeGeneralReading never touches. First occurrence
+// of a root shows characteristics (3); a repeat shows moreCharacteristics
+// (2, the reserve) instead of the same bullets again.
+function openIdentityModal(label, entry, opts) {
+  if (!entry) return;
+  const o = opts || {};
+  const list = o.cherry ? (entry.moreCharacteristics || []) : (entry.characteristics || []);
+  if (!list.length) return;
+  const bullets = list.map((c) => `<li>${c}</li>`).join('');
+  const note = o.cherry ? `<div class="story-row">Same energy as your ${o.repeatOf}. A few more angles:</div>` : '';
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>${note}<ul class="story-bullets">${bullets}</ul>`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
+// Boost13 (2026-08-07): tap Western sign / Vietnamese year/month/day for
+// their own "who you are" popup, same visual pattern as openIdentityModal
+// above but pulling straight from the plain-voice content bank.
+//
+// 2026-08-08 round 2: same fix as openIdentityModal - light/shadow
+// dropped (duplicates the general reading verbatim). `deep` (the
+// emotional-core line, general reading never touches it) stays as a
+// short intro, then characteristics/moreCharacteristics bullets exactly
+// like the number popups - first occurrence gets characteristics (3), a
+// repeat animal gets moreCharacteristics (2) instead of the same content.
+function openZodiacIdentityModal(label, entry, opts) {
+  if (!entry) return;
+  const o = opts || {};
+  const list = o.cherry ? (entry.moreCharacteristics || []) : (entry.characteristics || []);
+  if (!list.length) return;
+  const bullets = list.map((c) => `<li>${c}</li>`).join('');
+  const note = o.cherry
+    ? `<div class="story-row">Same animal as your ${o.repeatOf}. A few more angles:</div>`
+    : (entry.deep ? `<div class="story-row">${entry.deep}</div>` : '');
+  document.getElementById('storyModalBody').innerHTML =
+    `<div class="story-modal-title">${label}</div>${note}<ul class="story-bullets">${bullets}</ul>`;
+  document.getElementById('storyModalOverlay').classList.add('active');
+}
+
+// isFamous is path-based ("/famous/i.test(location.pathname)") - any page
+// other than famous.html naturally gets Profile's second-person "you"
+// voice + tappable identity popups, with zero extra wiring needed. That's
+// exactly why calling this from category.js "just works" the same way
+// Profile does - category.html's pathname doesn't match /famous/.
+function renderCompoundStories(r, birthDate) {
+  const isFamous = /famous/i.test(location.pathname);
+
+  const coreParts = [
+    { label: 'Life Path', slot: 'core', raw: null, entry: compoundEntryForLifePath(r.lifePath, r.lifePathCompound) },
+    { label: 'Day Born', slot: 'rhythm', raw: r.dayBornRaw },
+    { label: 'Day#', slot: 'year', raw: r.dayNumRaw },
+    { label: 'Combo', slot: 'combo', raw: compoundRawCombo(birthDate) },
+  ].map((p) => ({ label: p.label, slot: p.slot, entry: p.entry || compoundEntry(p.raw) }));
+
+  const cycleParts = [
+    { label: 'Personal Year', slot: 'personalYear', raw: r.py.raw },
+    { label: 'Personal Month', slot: 'personalMonth', raw: r.pm.raw },
+    { label: 'Personal Day', slot: 'today', raw: r.pd.raw },
+  ].map((p) => ({ label: p.label, slot: p.slot, entry: compoundEntry(p.raw) }));
+
+  const coreLinkOld = document.getElementById('coreNumbersStoryLink');
+  if (coreLinkOld) coreLinkOld.style.display = 'none';
+  const cyclesLinkOld = document.getElementById('personalCyclesStoryLink');
+  if (cyclesLinkOld) cyclesLinkOld.style.display = 'none';
+  const bigLinkOld = document.getElementById('bigPictureStoryLink');
+  if (bigLinkOld) bigLinkOld.style.display = 'none';
+
+  const generalParts = [
+    { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true },
+    { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
+    { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
+    { kind: 'sign', key: r.sunSign },
+    { kind: 'animal', key: r.chineseYear },
+    { kind: 'animal', key: r.chineseMonth },
+    { kind: 'animal', key: r.chineseDay },
+  ];
+  const generalReading = composeGeneralReading(generalParts, { thirdPerson: isFamous });
+  const generalLink = insertStoryLink('generalReadingStoryLink', '.grid4.subrow', '🧭 the general reading');
+  if (generalLink) {
+    generalLink.style.display = generalReading ? '' : 'none';
+    generalLink.onclick = () => openStoryModal('The General Reading', generalReading);
+  }
+
+  if (!isFamous) {
+    const identityTargets = [
+      { id: 'lifePath', label: 'Lifepath', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure },
+      { id: 'dayBornReduced', label: 'Day Born', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
+      { id: 'dayNumReduced', label: 'Day#', root: coreParts[2].entry.root, impure: coreParts[2].entry.impure },
+      { id: 'combo', label: 'Combo', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
+      { id: 'pdReduced', label: 'Personal Day', root: cycleParts[2].entry.root, impure: cycleParts[2].entry.impure },
+    ];
+    const seenNumberSlots = {};
+    identityTargets.forEach((t) => {
+      t.entry = numberIdentityV2(t.root, t.impure);
+      if (!t.entry) return;
+      const prior = seenNumberSlots[t.root];
+      if (prior === undefined) {
+        seenNumberSlots[t.root] = t.label;
+      } else if (prior !== null) {
+        t.opts = { cherry: true, repeatOf: prior };
+        seenNumberSlots[t.root] = null;
+      } else {
+        t.entry = null;
+        t.plainDoubled = true;
+      }
+    });
+    identityTargets.forEach((t) => {
+      const el = document.getElementById(t.id);
+      if (!el) return;
+      if (t.plainDoubled) {
+        el.classList.add('idnum-tap');
+        el.onclick = () => { document.getElementById('storyModalBody').innerHTML = `<div class="story-modal-title">${t.label}</div><div class="story-row">Same current as earlier in your chart, running doubled.</div>`; document.getElementById('storyModalOverlay').classList.add('active'); };
+        return;
+      }
+      if (!t.entry) return;
+      el.classList.add('idnum-tap');
+      el.onclick = () => openIdentityModal(t.label, t.entry, t.opts);
+    });
+
+    const zodiacTargets = [
+      { id: 'sunSign', label: 'Western Sign', entry: WESTERN_IDENTITY[r.sunSign] },
+      { id: 'chineseYear', label: 'Vietnamese Year', entry: VIETNAMESE_IDENTITY[r.chineseYear], animalKey: r.chineseYear },
+      { id: 'chineseMonth', label: 'Vietnamese Month', entry: VIETNAMESE_IDENTITY[r.chineseMonth], animalKey: r.chineseMonth },
+      { id: 'chineseDay', label: 'Vietnamese Day', entry: VIETNAMESE_IDENTITY[r.chineseDay], animalKey: r.chineseDay },
+    ];
+    const seenAnimalSlots = {};
+    zodiacTargets.forEach((t) => {
+      if (!t.animalKey) return;
+      const prior = seenAnimalSlots[t.animalKey];
+      if (prior === undefined) {
+        seenAnimalSlots[t.animalKey] = t.label.replace('Vietnamese ', '');
+      } else if (prior !== null) {
+        t.opts = { cherry: true, repeatOf: prior };
+        seenAnimalSlots[t.animalKey] = null;
+      } else {
+        t.entry = null;
+        t.plainDoubled = true;
+      }
+    });
+    zodiacTargets.forEach((t) => {
+      const el = document.getElementById(t.id);
+      if (!el) return;
+      if (t.plainDoubled) {
+        el.classList.add('idnum-tap');
+        el.onclick = () => { document.getElementById('storyModalBody').innerHTML = `<div class="story-modal-title">${t.label}</div><div class="story-row">Same animal as earlier in your chart, running doubled.</div>`; document.getElementById('storyModalOverlay').classList.add('active'); };
+        return;
+      }
+      if (!t.entry) return;
+      el.classList.add('idnum-tap');
+      el.onclick = () => openZodiacIdentityModal(t.label, t.entry, t.opts);
+    });
+  }
+}
+
+// The close-button/backdrop-click wiring for #storyModalOverlay - every
+// page that includes the modal markup gets this for free just by loading
+// compat-render.js (already loaded everywhere renderCompoundStories is
+// needed).
+const storyModalOverlayEl = document.getElementById('storyModalOverlay');
+if (storyModalOverlayEl) {
+  const storyModalCloseEl = document.getElementById('storyModalClose');
+  if (storyModalCloseEl) storyModalCloseEl.addEventListener('click', () => storyModalOverlayEl.classList.remove('active'));
+  storyModalOverlayEl.addEventListener('click', (e) => { if (e.target === storyModalOverlayEl) storyModalOverlayEl.classList.remove('active'); });
+}

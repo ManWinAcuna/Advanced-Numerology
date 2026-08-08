@@ -211,10 +211,10 @@ function openEntryModal(entry) {
       <div class="cell head">Day#</div><div class="cell head">Combo</div>
     </div>
     <div class="grid4">
-      <div class="cell highlight">${lifePathDisplayText(r.lifePath)}</div>
-      <div class="cell highlight">${r.dayBornReduced}</div>
-      <div class="cell highlight">${r.dayNumReduced}</div>
-      <div class="cell highlight">${r.combo}</div>
+      <div class="cell highlight" id="lifePath">${lifePathDisplayText(r.lifePath)}</div>
+      <div class="cell highlight" id="dayBornReduced">${r.dayBornReduced}</div>
+      <div class="cell highlight" id="dayNumReduced">${r.dayNumReduced}</div>
+      <div class="cell highlight" id="combo">${r.combo}</div>
     </div>
     <div class="grid4 subrow">
       <div class="cell small">${r.lifePathCompound}</div>
@@ -243,9 +243,9 @@ function openEntryModal(entry) {
       <div class="cell head">Year</div><div class="cell head">Month</div><div class="cell head">Day</div>
     </div>
     <div class="grid3">
-      <div class="cell sign">${r.chineseYear}</div>
-      <div class="cell sign">${r.chineseMonth}</div>
-      <div class="cell sign">${r.chineseDay}</div>
+      <div class="cell sign" id="chineseYear">${r.chineseYear}</div>
+      <div class="cell sign" id="chineseMonth">${r.chineseMonth}</div>
+      <div class="cell sign" id="chineseDay">${r.chineseDay}</div>
     </div>
 
     <div class="section-label">Western Signs</div>
@@ -254,7 +254,7 @@ function openEntryModal(entry) {
       <div class="cell head">Jupiter</div><div class="cell head">Venus</div>
     </div>
     <div class="grid4">
-      <div class="cell sign">${r.sunSign}</div>
+      <div class="cell sign" id="sunSign">${r.sunSign}</div>
       <div class="cell sign">${r.saturnSign}${retroSpan(r.saturnRetro)}</div>
       <div class="cell sign">${r.jupiterSign}${retroSpan(r.jupiterRetro)}</div>
       <div class="cell sign">${r.venusSign}${retroSpan(r.venusRetro)}</div>
@@ -267,7 +267,7 @@ function openEntryModal(entry) {
     <div class="grid3">
       <div class="cell highlight">${r.py.reduced}</div>
       <div class="cell highlight">${r.pm.reduced}</div>
-      <div class="cell highlight">${r.pd.reduced}</div>
+      <div class="cell highlight" id="pdReduced">${r.pd.reduced}</div>
     </div>
     <div class="grid3 subrow">
       <div class="cell small">${r.py.raw}</div>
@@ -319,6 +319,14 @@ function openEntryModal(entry) {
     deleteEntry(entry.id);
   });
   document.getElementById('compareToggleBtn').addEventListener('click', () => openCompareMini(entry, dateObj));
+
+  // "The general reading" link + tappable Lifepath/Day Born/Day#/Combo/
+  // Personal Day/sign/animal popups - same feature Profile/Calculator
+  // already have, wired here now too (2026-08-08). renderCompoundStories
+  // (compat-render.js) is path-based for its "you"-voice vs third-person
+  // choice; category.html isn't famous.html, so this naturally renders in
+  // the same second-person voice as Profile, tap popups included.
+  renderCompoundStories(r, dateObj);
 
   document.getElementById('entryModalOverlay').classList.add('active');
 }

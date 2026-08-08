@@ -88,6 +88,17 @@
   </div>
 </div>
 
+<!-- General Reading + identity popups (2026-08-08) - same modal markup as
+     profile.html, needed by renderCompoundStories() in compat-render.js.
+     Stacks above entryModalOverlay (a story link is tapped from inside the
+     entry detail popup), same z-index tier as compareMiniOverlay above. -->
+<div class="modal-overlay" id="storyModalOverlay" style="z-index:700">
+  <div class="modal-box modal-box-narrow">
+    <button class="modal-close" id="storyModalClose" title="Close">&times;</button>
+    <div id="storyModalBody"></div>
+  </div>
+</div>
+
 <script src="scroll-viewport.js"></script>
 <script src="astronomy.browser.min.js"></script>
 <script src="astro-engine.js"></script>
@@ -95,13 +106,14 @@
 <script src="compat-data.js"></script>
 <script src="overrides-engine.js?v=2"></script>
 <script src="compat-engine.js?v=4"></script>
+<script src="compound-meanings.js?v=16"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js?v=6"></script>
 <script src="firebase-loader.js"></script>
 <script src="imprint-alignment.js?v=7"></script>
-<script src="compat-render.js?v=10"></script>
+<script src="compat-render.js?v=11"></script>
 <script src="bulk-upload.js"></script>
-<script src="category.js?v=4"></script>
+<script src="category.js?v=5"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
