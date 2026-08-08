@@ -2502,31 +2502,45 @@ function composeGeneralReading(parts, opts) {
     if (lpIndex > 0) g.unshift(g.splice(lpIndex, 1)[0]);
   }
 
-  const sentences = [];
+  // Boost13 OVERDRIVE (2026-08-08): one paragraph per cluster instead of one
+  // giant joined string - user: "supper crammed... no one is going to read
+  // that." Each paragraph keeps its light + shadow sentence together (user-
+  // confirmed), with the connector that opens it kept as its own field so
+  // the renderer can style it separately (muted, de-emphasized). A repeat of
+  // the same entity (Day Born and Day# sharing a root, etc.) folds its
+  // "doubled" line onto the END of the paragraph already open, rather than
+  // starting a new one - user: "leave it folded in with the connector text."
+  const paragraphs = [];
   const seenDedupe = {};
   let prevRegister = null;
   groupOrder.forEach((key) => {
     groups[key].forEach((it, i) => {
       if (seenDedupe[it.dedupeKey]) {
-        sentences.push('That same current runs doubled in you.');
+        if (paragraphs.length) {
+          const last = paragraphs[paragraphs.length - 1];
+          last.extra = last.extra ? `${last.extra} That same current runs doubled in you.` : 'That same current runs doubled in you.';
+        }
         return;
       }
       seenDedupe[it.dedupeKey] = true;
 
-      if (sentences.length === 0) {
-        sentences.push(it.entry.light);
-      } else if (i > 0) {
-        sentences.push(`${nextConnector('amplify')} ${it.entry.light}`);
-      } else {
-        const relation = registerRelation(prevRegister, it.register);
-        sentences.push(`${nextConnector(relation)} ${it.entry.light}`);
+      let connector = null;
+      if (paragraphs.length > 0) {
+        connector = i > 0 ? nextConnector('amplify') : nextConnector(registerRelation(prevRegister, it.register));
       }
-      sentences.push(it.entry.shadow);
+      paragraphs.push({ connector, light: it.entry.light, shadow: it.entry.shadow, extra: null });
       prevRegister = it.register;
     });
   });
 
-  if (!sentences.length) return null;
-  const text = sentences.join(' ');
-  return { text: (opts && opts.thirdPerson) ? toThirdPerson(text) : text };
+  if (!paragraphs.length) return null;
+  const thirdPerson = !!(opts && opts.thirdPerson);
+  const tp = (s) => (s && thirdPerson ? toThirdPerson(s) : s);
+  const finalParagraphs = paragraphs.map((pp) => ({
+    connector: tp(pp.connector), light: tp(pp.light), shadow: tp(pp.shadow), extra: tp(pp.extra),
+  }));
+  const text = finalParagraphs
+    .map((pp) => [pp.connector, pp.light, pp.shadow, pp.extra].filter(Boolean).join(' '))
+    .join(' ');
+  return { text, paragraphs: finalParagraphs };
 }

@@ -172,10 +172,28 @@ function insertStoryLink(id, afterSelector, label) {
   return el;
 }
 
+// Boost13 OVERDRIVE (2026-08-08): one visual paragraph per trait cluster
+// instead of one giant joined string - user: "supper crammed... no one is
+// going to read that." Each cluster renders as a light half (gold left
+// border) flush against a shadow half (red left border) - together they
+// read as one paragraph block, but the border still shows where the light
+// sentence ends and the shadow sentence begins. The connector that opens a
+// paragraph ("There's also this...") gets its own muted, smaller styling
+// so the eye lands on the actual trait sentence, not the transition text.
 function openStoryModal(title, story) {
   if (!story) return;
+  const body = (story.paragraphs && story.paragraphs.length)
+    ? story.paragraphs.map((pp) => {
+      const connectorHtml = pp.connector ? `<span class="reading-connector">${pp.connector}</span> ` : '';
+      const shadowExtra = pp.extra ? ` ${pp.extra}` : '';
+      return `<div class="reading-para">` +
+        `<div class="reading-half reading-half-light">${connectorHtml}${pp.light}</div>` +
+        `<div class="reading-half reading-half-shadow">${pp.shadow}${shadowExtra}</div>` +
+        `</div>`;
+    }).join('')
+    : `<div class="story-modal-text">${story.text}</div>`;
   document.getElementById('storyModalBody').innerHTML =
-    `<div class="story-modal-title">${title}</div><div class="story-modal-text">${story.text}</div>`;
+    `<div class="story-modal-title">${title}</div>${body}`;
   document.getElementById('storyModalOverlay').classList.add('active');
 }
 

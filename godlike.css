@@ -677,9 +677,24 @@ button.gk-altar-num {
 }
 .story-modal-title {
   font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .14em;
-  font-size: 13px; color: var(--acc-text); margin-bottom: 10px;
+  font-size: 13px; color: var(--acc-text); margin-bottom: 14px;
 }
 .story-modal-text { font-size: 13.5px; line-height: 1.7; color: var(--text); }
+
+/* The General Reading - one paragraph per trait cluster instead of one
+   giant block (Boost13 OVERDRIVE, 2026-08-08). Wider modal just for this
+   reading (ID-scoped so the shared .modal-box-narrow class other small
+   popups use elsewhere stays untouched). */
+#storyModalOverlay .modal-box.modal-box-narrow { max-width: 460px; }
+.reading-para { margin-bottom: 20px; }
+.reading-para:last-child { margin-bottom: 0; }
+.reading-half {
+  padding: 1px 0 1px 12px; border-left: 3px solid; font-size: 15px;
+  line-height: 1.7; color: var(--text);
+}
+.reading-half-light { border-left-color: var(--gold); }
+.reading-half-shadow { border-left-color: var(--bad); margin-top: 3px; }
+.reading-connector { color: var(--muted); font-size: 12.5px; }
 
 /* whole-page aura: warmth scales with alignment only — never a warning */
 .gk-aura {
