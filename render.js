@@ -185,7 +185,7 @@ function openStoryModal(title, story) {
   const body = (story.paragraphs && story.paragraphs.length)
     ? story.paragraphs.map((pp) => {
       const connectorHtml = pp.connector ? `<span class="reading-connector">${pp.connector}</span> ` : '';
-      const shadowExtra = pp.extra ? ` ${pp.extra}` : '';
+      const shadowExtra = [pp.extra, pp.detail].filter(Boolean).map((s) => ` ${s}`).join('');
       return `<div class="reading-para">` +
         `<div class="reading-half reading-half-light">${connectorHtml}${pp.light}</div>` +
         `<div class="reading-half reading-half-shadow">${pp.shadow}${shadowExtra}</div>` +

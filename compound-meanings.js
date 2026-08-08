@@ -1038,6 +1038,103 @@ function buildIdentityRows(items) {
 // Reframed as "today runs on ___ energy, it can pull you toward ___" /
 // "that same energy can also tip into ___" - the day drawing something out
 // of whoever it lands on, not a claim about who the person fixedly is.
+// General Reading rotation pool (Boost13 OVERDRIVE, 2026-08-08) - user
+// caught 3 back-to-back readings all containing an 11, and every one read
+// byte-for-byte identical: "I gave you a lot to work with... it shouldn't
+// give the same all the time." NUMBER_IDENTITY_V2's light/shadow stays the
+// fixed core (that's the actual identity claim), but each paragraph now
+// also appends one real, rotating extra line so two different people
+// sharing a root don't read as clones of each other. Source: the same
+// aa95df9a-The13G.pdf ("Ultimate Cosmic Blueprint") that PDF_ACTION_PLAN
+// and DAY_ENERGY came from - its "5 Sharp One-Liners" per number, never
+// used anywhere else in the app (verbatim, no reframing needed).
+const NUMBER_SHARP_LINES = {
+  1: [
+    "You act like you don't need anyone, but you secretly wish someone would notice how heavy it is to always be first.",
+    'You hide your self-doubt behind a shield of perfect confidence.',
+    'Being surrounded by slow thinkers makes you feel utterly marooned.',
+    'You would rather fail spectacularly on your own terms than win by following someone else\'s rules.',
+    "Your fiercest battle isn't with rivals; it's with your own intense fear of being average.",
+  ],
+  2: [
+    'You absorb other people\'s sadness like a sponge, then wonder why you feel so heavy.',
+    'Your "yes" often means "I am terrified you will leave me if I say no".',
+    "You see right through people's fake smiles, and it hurts you that they think you're blind.",
+    "You play the quiet helper, but you silently keep score of every favor that isn't returned.",
+    "You fear being alone so much that you stay in rooms where you aren't even respected.",
+  ],
+  3: [
+    "You make everyone laugh so they don't see your eyes searching for approval.",
+    'You speak a thousand words a minute to keep people from asking how you actually feel.',
+    'Boredom feels like actual, physical torture to your hyperactive brain.',
+    'You change your stories slightly every time just to ensure they sound spectacular.',
+    'Your biggest fear is waking up one day and realizing you are completely ordinary.',
+  ],
+  4: [
+    'You hold onto old rules so tightly that you miss out on new magic.',
+    'Your need to control every single plan shows how much you fear the unknown.',
+    'You show love by fixing things, but sometimes people just want you to listen.',
+    "When life changes unexpectedly, you freeze up and pretend you don't care.",
+    'You work yourself to the bone because you think your worth equals your productivity.',
+  ],
+  5: [
+    'You chase new thrills because you are terrified of standing still with your own thoughts.',
+    'You leave people behind before they have the chance to leave you.',
+    "Commitment feels like a cage to you, even when it's a cage made of love.",
+    'You have a million friends but secretly wonder if anyone truly knows the real you.',
+    'You mistake constant movement for actual personal growth.',
+  ],
+  6: [
+    "You fix everyone else's lives so you don't have to look at your own broken pieces.",
+    'Your advice can feel like a heavy cage of expectations to the people you love.',
+    'You secretly want a medal for all the sacrifices you force yourself to make.',
+    "When people don't take your help, you take it as a deep, personal insult.",
+    'You love the idea of perfection so much that reality constantly disappoints you.',
+  ],
+  7: [
+    'You use your huge brain as a shield to keep people away from your fragile heart.',
+    "You analyze every text message like a puzzle because you don't trust anyone's real intentions.",
+    'You would rather stay isolated and lonely than risk being misunderstood by common people.',
+    "Your mind is a brilliant place, but it's also a trap that keeps you from actually living.",
+    'You look down on shallow things, yet you secretly wish you could fit in easily like they do.',
+  ],
+  8: [
+    'You try to buy love and security because you are terrified that you aren\'t enough without your money.',
+    'You treat your personal relationships like business deals where you must always win.',
+    'Behind your tough, powerful armor sits a kid who felt helpless long ago.',
+    'You think showing any vulnerability makes you weak, so you suffer completely alone.',
+    'You are so busy building your empire that you forget to actually live inside it.',
+  ],
+  9: [
+    "You change your personality for everyone you meet, leaving you wondering who you are when you're alone.",
+    'You act like a mirror, so when people hate you, they are really just hating their own reflection in you.',
+    'You hold onto old memories and dead relationships like they are still breathing.',
+    "You are so good at adapting that you've become a stranger to your own true desires.",
+    'You want to finish everything perfectly, yet you are terrified of final endings.',
+  ],
+  11: [
+    "Your body is constantly buzzing with nervous energy because you're carrying cosmic voltage.",
+    'You look for deep spiritual magic in a world that is often happy being shallow.',
+    'You are so sensitive that a single harsh glance can ruin your entire afternoon.',
+    'You talk about high ideals but often struggle with the messy reality of being human.',
+    'You are terrified of going crazy because your mind hears things others miss completely.',
+  ],
+  22: [
+    'You carry such a giant vision that you feel constantly crushed by your own high expectations.',
+    'You are so focused on building the future that you forget to enjoy the present moment.',
+    'You treat your body like a machine until it breaks down completely to stop you.',
+    "You secretly fear that if you don't build something massive, your whole life is a failure.",
+    'You hide your deep, fragile sensitivity behind a wall of absolute practical work.',
+  ],
+  33: [
+    "You try to carry the entire weight of the world's suffering on your single pair of shoulders.",
+    'You preach love to everyone else, but you treat yourself with absolute, harsh cruelty.',
+    "You get deeply disappointed because people can't match your endless capacity to care.",
+    'You treat your life like a non-stop emergency room where you are the only doctor.',
+    'Your high ideals can secretly turn into judgment against those who are still struggling.',
+  ],
+};
+
 const DAY_ENERGY = {
   1: {
     light: "Today runs on pioneer energy - the spark that stands alone and clears a path where no one else has walked. It can pull you toward being brave, confident, and full of brilliant ideas, standing tall like a captain leading a ship.",
@@ -2510,6 +2607,22 @@ function composeGeneralReading(parts, opts) {
   // the same entity (Day Born and Day# sharing a root, etc.) folds its
   // "doubled" line onto the END of the paragraph already open, rather than
   // starting a new one - user: "leave it folded in with the connector text."
+  //
+  // `detail`: one real, rotating line appended per paragraph so two people
+  // sharing a root don't read as clones of each other (see NUMBER_SHARP_LINES
+  // comment above). Pulls from the entity's own characteristics/
+  // moreCharacteristics (already real content, sourced for exactly this
+  // "never run out of fresh things to say" purpose) plus, for numbers, the
+  // dedicated one-liner bank. Random per render - not seeded to the person,
+  // so even the same reading looks slightly different on a repeat view.
+  const f_extraDetail = (p, entry) => {
+    const pool = []
+      .concat(p.kind === 'number' ? (NUMBER_SHARP_LINES[p.root] || []) : [])
+      .concat(entry.characteristics || [])
+      .concat(entry.moreCharacteristics || []);
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  };
+
   const paragraphs = [];
   const seenDedupe = {};
   let prevRegister = null;
@@ -2528,7 +2641,10 @@ function composeGeneralReading(parts, opts) {
       if (paragraphs.length > 0) {
         connector = i > 0 ? nextConnector('amplify') : nextConnector(registerRelation(prevRegister, it.register));
       }
-      paragraphs.push({ connector, light: it.entry.light, shadow: it.entry.shadow, extra: null });
+      paragraphs.push({
+        connector, light: it.entry.light, shadow: it.entry.shadow, extra: null,
+        detail: f_extraDetail(it.p, it.entry),
+      });
       prevRegister = it.register;
     });
   });
@@ -2537,10 +2653,10 @@ function composeGeneralReading(parts, opts) {
   const thirdPerson = !!(opts && opts.thirdPerson);
   const tp = (s) => (s && thirdPerson ? toThirdPerson(s) : s);
   const finalParagraphs = paragraphs.map((pp) => ({
-    connector: tp(pp.connector), light: tp(pp.light), shadow: tp(pp.shadow), extra: tp(pp.extra),
+    connector: tp(pp.connector), light: tp(pp.light), shadow: tp(pp.shadow), extra: tp(pp.extra), detail: tp(pp.detail),
   }));
   const text = finalParagraphs
-    .map((pp) => [pp.connector, pp.light, pp.shadow, pp.extra].filter(Boolean).join(' '))
+    .map((pp) => [pp.connector, pp.light, pp.shadow, pp.extra, pp.detail].filter(Boolean).join(' '))
     .join(' ');
   return { text, paragraphs: finalParagraphs };
 }
