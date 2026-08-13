@@ -348,8 +348,16 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
   position: relative; z-index: 1;
 }
 /* Impure-master days ("22/4", "13/4", "33/6"): four glyphs have to fit the
-   same ring one digit used to own. */
-.gk-altar-num.gk-num-compound { font-size: clamp(56px, 19vw, 108px); }
+   same ring one digit used to own. Only the FONT shrinks - the line box
+   keeps the exact one-digit height, because the whole altar geometry
+   hangs off the ringzone's content height (the ring centers on it, and
+   .gk-orbits' clearance margin is tuned to it). Shrinking the box slid
+   the ring down into the chips; pinning line-height keeps every other
+   element exactly where a normal day puts it. */
+.gk-altar-num.gk-num-compound {
+  font-size: clamp(48px, 15vw, 84px);
+  line-height: clamp(96px, 34vw, 190px);
+}
 .gk-altar-sub {
   font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .3em;
   font-size: 11px; color: var(--acc-dim); margin-top: 4px;
