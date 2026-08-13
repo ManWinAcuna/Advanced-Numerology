@@ -2449,7 +2449,7 @@ const WESTERN_REGISTER = {
 function entityRegister(p) {
   if (p.kind === 'number') return NUMBER_REGISTER[p.impure ? `${p.root}i` : p.root] || NUMBER_REGISTER[p.root];
   if (p.kind === 'animal') return VIETNAMESE_REGISTER[p.key];
-  if (p.kind === 'sign') return WESTERN_REGISTER[p.key];
+  if (p.kind === 'sign' || p.kind === 'planet') return WESTERN_REGISTER[p.key];
   return null;
 }
 
@@ -2503,7 +2503,10 @@ function nextConnector(relation) {
 function resolveEntry(p) {
   if (p.kind === 'number') return numberIdentityV2(p.root, p.impure);
   if (p.kind === 'animal') return VIETNAMESE_IDENTITY[p.key];
-  if (p.kind === 'sign') return WESTERN_IDENTITY[p.key];
+  // A planet part reads as its SIGN's identity (the blend pairs the
+  // planet's role line with the sign content the person actually has
+  // there - user's call, 2026-08-13).
+  if (p.kind === 'sign' || p.kind === 'planet') return WESTERN_IDENTITY[p.key];
   return null;
 }
 
@@ -2581,80 +2584,103 @@ function composeGeneralReading(parts, opts) {
   connectUseIdx = { amplify: 0, tension: 0, neutral: 0 };
   const items = [];
   (parts || []).forEach((p) => {
-    const dedupeKey = p.kind === 'number' ? `number:${p.root}` : `${p.kind}:${p.key}`;
+    const dedupeKey = p.kind === 'number' ? `number:${p.root}`
+      : p.kind === 'planet' ? `planet:${p.planet}`
+      : `${p.kind}:${p.key}`;
     const entry = resolveEntry(p);
     if (!entry) return;
     items.push({ p, entry, dedupeKey, register: entityRegister(p) });
   });
   if (!items.length) return null;
 
-  // Group by register, preserving first-seen order both across and within groups.
-  const groupOrder = [];
-  const groups = {};
-  items.forEach((it) => {
-    const key = it.register || `_solo_${it.dedupeKey}`;
-    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
-    groups[key].push(it);
-  });
-  groupOrder.sort((a, b) => groups[b].length - groups[a].length);
-
-  const lifePathKey = groupOrder.find((key) => groups[key].some((it) => it.p.isLifePath));
-  if (lifePathKey) {
-    groupOrder.splice(groupOrder.indexOf(lifePathKey), 1);
-    groupOrder.unshift(lifePathKey);
-    const g = groups[lifePathKey];
-    const lpIndex = g.findIndex((it) => it.p.isLifePath);
-    if (lpIndex > 0) g.unshift(g.splice(lpIndex, 1)[0]);
-  }
-
-  // Boost13 OVERDRIVE (2026-08-08): one paragraph per cluster instead of one
-  // giant joined string - user: "supper crammed... no one is going to read
-  // that." Each paragraph keeps its light + shadow sentence together (user-
-  // confirmed), with the connector that opens it kept as its own field so
-  // the renderer can style it separately (muted, de-emphasized). A repeat of
-  // the same entity (Day Born and Day# sharing a root, etc.) folds its
-  // "doubled" line onto the END of the paragraph already open, rather than
-  // starting a new one - user: "leave it folded in with the connector text."
+  // Weight-order rewrite (2026-08-13, user's doctrine): the reading walks
+  // the caller's EXACT order - Lifepath heaviest, then Day Born, Combo,
+  // Day#, then Vietnamese Year > Month > Day, astrology last - instead of
+  // the old register-cluster sort. Registers still drive the connector
+  // voice between paragraphs, they just no longer reorder anything.
   //
-  // `detail`: one real, rotating line appended per paragraph so two people
-  // sharing a root don't read as clones of each other (see NUMBER_SHARP_LINES
-  // comment above). Pulls from the entity's own characteristics/
-  // moreCharacteristics (already real content, sourced for exactly this
-  // "never run out of fresh things to say" purpose) plus, for numbers, the
-  // dedicated one-liner bank. Random per render - not seeded to the person,
-  // so even the same reading looks slightly different on a repeat view.
+  // Weight also shows as INK (user: "more ink for heavier items"), via
+  // p.depth: 'full' (light+shadow+two rotating details - Lifepath),
+  // 'std' (light+shadow+one detail), 'lean' (light+shadow), 'micro'
+  // (light only), 'planet-full' (role line + sign light + shadow - Sun),
+  // 'planet-lean' (role line + sign light - Saturn/Jupiter/Venus).
+  //
+  // Planet paragraphs blend the PDF role (PLANET_GUIDE) with the sign
+  // content the person actually has there (user's call over my
+  // recommendation - the sign identity text was written for Sun-sign
+  // personality, reused knowingly). A later planet sharing an
+  // already-read sign names the shared current instead of repeating the
+  // identity text verbatim.
+  const f_detailPool = (p, entry) => []
+    .concat(p.kind === 'number' ? (NUMBER_SHARP_LINES[p.root] || []) : [])
+    .concat(p.kind === 'animal' && entry.deep ? [entry.deep] : [])
+    .concat(entry.characteristics || [])
+    .concat(entry.moreCharacteristics || []);
   const f_extraDetail = (p, entry) => {
-    const pool = []
-      .concat(p.kind === 'number' ? (NUMBER_SHARP_LINES[p.root] || []) : [])
-      .concat(entry.characteristics || [])
-      .concat(entry.moreCharacteristics || []);
+    const pool = f_detailPool(p, entry);
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  };
+  const f_twoDetails = (p, entry) => {
+    const pool = f_detailPool(p, entry);
+    if (!pool.length) return [null, null];
+    const first = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    const second = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    return [first, second];
+  };
+
+  const f_planetRoleLine = (p) => {
+    const guide = (typeof PLANET_GUIDE !== 'undefined') ? PLANET_GUIDE[p.planet] : null;
+    if (!guide) return `${p.planet} sits in ${p.key} for you.`;
+    return `${p.planet} is “${guide.nickname}” of your chart: ${guide.domain.toLowerCase()}. Yours runs through ${p.key}.`;
   };
 
   const paragraphs = [];
   const seenDedupe = {};
+  const seenPlanetSigns = {};
   let prevRegister = null;
-  groupOrder.forEach((key) => {
-    groups[key].forEach((it, i) => {
-      if (seenDedupe[it.dedupeKey]) {
-        if (paragraphs.length) {
-          const last = paragraphs[paragraphs.length - 1];
-          last.extra = last.extra ? `${last.extra} That same current runs doubled in you.` : 'That same current runs doubled in you.';
-        }
-        return;
+  items.forEach((it) => {
+    // A repeat folds its "doubled" line onto the ORIGINAL entity's own
+    // paragraph (strict weight order can separate the two - Day Born and
+    // Day# sharing a root now have Combo between them, and the line would
+    // land on the wrong number if it just went to whatever was last).
+    if (seenDedupe[it.dedupeKey] !== undefined) {
+      const orig = paragraphs[seenDedupe[it.dedupeKey]];
+      if (orig) {
+        orig.extra = orig.extra ? `${orig.extra} That same current runs doubled in you.` : 'That same current runs doubled in you.';
       }
-      seenDedupe[it.dedupeKey] = true;
+      return;
+    }
+    seenDedupe[it.dedupeKey] = paragraphs.length;
 
-      let connector = null;
-      if (paragraphs.length > 0) {
-        connector = i > 0 ? nextConnector('amplify') : nextConnector(registerRelation(prevRegister, it.register));
+    const connector = paragraphs.length > 0
+      ? nextConnector(registerRelation(prevRegister, it.register))
+      : null;
+
+    const depth = it.p.depth || (it.p.kind === 'planet' ? 'planet-lean' : 'std');
+    let para = null;
+    if (it.p.kind === 'planet') {
+      const roleLine = f_planetRoleLine(it.p);
+      const priorPlanet = seenPlanetSigns[it.p.key];
+      if (priorPlanet) {
+        para = { connector, light: `${roleLine} The same ${it.p.key} current your ${priorPlanet} already carries.`, shadow: null, extra: null, detail: null };
+      } else if (depth === 'planet-full') {
+        para = { connector, light: `${roleLine} ${it.entry.light}`, shadow: it.entry.shadow, extra: null, detail: null };
+      } else {
+        para = { connector, light: `${roleLine} ${it.entry.light}`, shadow: null, extra: null, detail: null };
       }
-      paragraphs.push({
-        connector, light: it.entry.light, shadow: it.entry.shadow, extra: null,
-        detail: f_extraDetail(it.p, it.entry),
-      });
-      prevRegister = it.register;
-    });
+      if (!priorPlanet) seenPlanetSigns[it.p.key] = it.p.planet;
+    } else if (depth === 'full') {
+      const [d1, d2] = f_twoDetails(it.p, it.entry);
+      para = { connector, light: it.entry.light, shadow: it.entry.shadow, extra: null, detail: [d1, d2].filter(Boolean).join(' ') || null };
+    } else if (depth === 'lean') {
+      para = { connector, light: it.entry.light, shadow: it.entry.shadow, extra: null, detail: null };
+    } else if (depth === 'micro') {
+      para = { connector, light: it.entry.light, shadow: null, extra: null, detail: null };
+    } else {
+      para = { connector, light: it.entry.light, shadow: it.entry.shadow, extra: null, detail: f_extraDetail(it.p, it.entry) };
+    }
+    paragraphs.push(para);
+    prevRegister = it.register;
   });
 
   if (!paragraphs.length) return null;

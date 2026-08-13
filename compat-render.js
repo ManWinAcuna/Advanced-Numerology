@@ -923,14 +923,23 @@ function renderCompoundStories(r, birthDate) {
   const bigLinkOld = document.getElementById('bigPictureStoryLink');
   if (bigLinkOld) bigLinkOld.style.display = 'none';
 
+  // Weight-ordered (2026-08-13, user's doctrine): Lifepath heaviest, then
+  // Day Born, Combo, Day#, then Vietnamese Year > Month > Day, astrology
+  // last - and depth scales with weight ("more ink for heavier items").
+  // All four natal placements ride in as planet parts (role + their sign,
+  // blended by the composer); Day# joins the reading for the first time.
   const generalParts = [
-    { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true },
-    { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure },
-    { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure },
-    { kind: 'sign', key: r.sunSign },
-    { kind: 'animal', key: r.chineseYear },
-    { kind: 'animal', key: r.chineseMonth },
-    { kind: 'animal', key: r.chineseDay },
+    { kind: 'number', root: coreParts[0].entry.root, impure: coreParts[0].entry.impure, isLifePath: true, depth: 'full' },
+    { kind: 'number', root: coreParts[1].entry.root, impure: coreParts[1].entry.impure, depth: 'std' },
+    { kind: 'number', root: coreParts[3].entry.root, impure: coreParts[3].entry.impure, depth: 'lean' },
+    { kind: 'number', root: coreParts[2].entry.root, impure: coreParts[2].entry.impure, depth: 'lean' },
+    { kind: 'animal', key: r.chineseYear, depth: 'std' },
+    { kind: 'animal', key: r.chineseMonth, depth: 'lean' },
+    { kind: 'animal', key: r.chineseDay, depth: 'micro' },
+    { kind: 'planet', planet: 'Sun', key: r.sunSign, depth: 'planet-full' },
+    { kind: 'planet', planet: 'Saturn', key: r.saturnSign, depth: 'planet-lean' },
+    { kind: 'planet', planet: 'Jupiter', key: r.jupiterSign, depth: 'planet-lean' },
+    { kind: 'planet', planet: 'Venus', key: r.venusSign, depth: 'planet-lean' },
   ];
   const generalReading = composeGeneralReading(generalParts, { thirdPerson: isFamous });
   const generalLink = insertStoryLink('generalReadingStoryLink', '.grid4.subrow', '🧭 the general reading');
