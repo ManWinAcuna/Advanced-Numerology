@@ -27,6 +27,26 @@ function loadOverrides() {
 function saveOverrides(overrides) {
   localStorage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
   if (typeof cloudPushKey === 'function') cloudPushKey(OVERRIDES_KEY);
+  publishOverridesToCode13(overrides);
+}
+
+// Code13 settings link (2026-08-13): every save here ALSO publishes the
+// full overrides object to a world-readable publicConfig/overrides doc in
+// this app's own Firebase, which Code13 fetches read-only on load - so a
+// value tuned in this app's Settings page automatically becomes Code13's
+// value too, and Code13 itself has no editing UI at all. Fire-and-forget:
+// needs the lazy Firebase SDK to be up and the owner signed in (true on
+// the owner's own device, the only place Settings gets used), and needs
+// the publicConfig rules block from FIREBASE_RULES.md applied once in the
+// console - until then the write is denied and silently skipped.
+function publishOverridesToCode13(overrides) {
+  try {
+    if (typeof firebase === 'undefined' || !firebase.auth || !firebase.auth().currentUser) return;
+    firebase.firestore().collection('publicConfig').doc('overrides').set({
+      json: JSON.stringify(overrides),
+      updated: Date.now(),
+    }).catch(() => {});
+  } catch (e) {}
 }
 
 // Generic section reader - "compat", "imprintDomains", "imprintWeights",

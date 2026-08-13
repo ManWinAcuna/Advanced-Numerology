@@ -60,3 +60,22 @@ service cloud.firestore {
 > Note: I can't publish these from here — they live in your Firebase project,
 > not this repo. Paste whichever block fits, hit Publish, and the data lock is
 > live immediately (no redeploy of the site needed).
+
+
+## Code13 settings sync (publicConfig) - added 2026-08-13
+
+The Settings page now publishes every override save to a world-readable
+`publicConfig/overrides` doc, which Code13 fetches read-only on load.
+For that to work, add this block inside `match /databases/{database}/documents`
+in the Firebase console rules (Firestore Database -> Rules):
+
+```
+    match /publicConfig/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email == 'horseyear2026manuel@gmail.com';
+    }
+```
+
+Until this is applied, the publish write is denied and silently skipped,
+and Code13 keeps using its baked default values.
