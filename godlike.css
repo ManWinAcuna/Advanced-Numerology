@@ -347,6 +347,9 @@ button:active, .btn:active, .chip:active, .bb-tab:active, .bb-item:active {
   line-height: 1;
   position: relative; z-index: 1;
 }
+/* Impure-master days ("22/4", "13/4", "33/6"): four glyphs have to fit the
+   same ring one digit used to own. */
+.gk-altar-num.gk-num-compound { font-size: clamp(56px, 19vw, 108px); }
 .gk-altar-sub {
   font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .3em;
   font-size: 11px; color: var(--acc-dim); margin-top: 4px;

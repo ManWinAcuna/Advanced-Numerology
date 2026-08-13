@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Today</title>
 <link rel="stylesheet" href="style.css?v=3">
-<link rel="stylesheet" href="godlike.css?v=39">
+<link rel="stylesheet" href="godlike.css?v=40">
 </head>
 <body>
 <div class="gk-aura" id="gkAura"></div>
@@ -82,6 +82,20 @@
   var day0 = new Date(); day0.setHours(0, 0, 0, 0);
   var ud = universalDayNumber(now);
   var de = reduceNumber(now.getDate());
+  // Impure-master display (2026-08-13): the engine already computes e.g.
+  // Aug 13 2026 as compound 22 on a double-digit day -> impure, display
+  // "22/4", lookup 4 - but the altar only ever showed the lookup value,
+  // so a 22/4 day read as a plain 4 (user: "Today's a 22/4 day I don't
+  // think it's cross checking"). Show the full compound display; every
+  // LOOKUP stays on ud, same as impure Life Paths everywhere else. The
+  // masterResult 11 case is skipped on purpose: its display would be
+  // "11/2", and 11/2 doesn't exist (no-standalone-2 doctrine) - ud is
+  // already 11 there and shows plain.
+  var udDisplay = String(ud);
+  try {
+    var udInfo = compatLifePathInfo(day0);
+    if (udInfo.impure && udInfo.masterResult !== 11) udDisplay = udInfo.masterResult + '/' + ud;
+  } catch (e) {}
   document.documentElement.setAttribute('data-energy', String(ud));
   try { localStorage.setItem('gk_ud_' + now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()), String(ud)); } catch (e) {}
 
@@ -205,8 +219,11 @@
     '<span class="gk-kw gk-kw3">' + kws[2] + '</span>';
 
   // hero faces: Universal rules the color always; cycling is inspection
+  // The ud face SHOWS the compound display ("22/4") but keeps its glyph/
+  // energy classes keyed to the plain lookup value - behavior is the
+  // reduced number, the display is the whole truth.
   var FACES = [
-    { key: 'ud', label: 'Universal Day', val: function () { return ud; }, glyph: true },
+    { key: 'ud', label: 'Universal Day', val: function () { return udDisplay; }, classVal: function () { return ud; }, glyph: true },
     { key: 'de', label: 'Day Energy', val: function () { return de; }, glyph: true },
     { key: 'an', label: (animal || '') + ' Day', val: function () { return animalEmoji || '·'; }, glyph: false },
     { key: 'pd', label: 'Personal Day', val: function () { return pd != null ? pd : '·'; }, glyph: true }
@@ -218,8 +235,10 @@
     faceIdx = i;
     var f = FACES[i];
     var v = f.val();
+    var cv = f.classVal ? f.classVal() : v;
     numEl.textContent = v;
-    numEl.className = 'gk-altar-num gk-amped' + (f.glyph && MEAN[v] ? ' gk-glyph gk-n' + v : '') + (f.glyph ? '' : ' gk-face-emoji');
+    numEl.className = 'gk-altar-num gk-amped' + (f.glyph && MEAN[cv] ? ' gk-glyph gk-n' + cv : '') + (f.glyph ? '' : ' gk-face-emoji')
+      + (String(v).indexOf('/') >= 0 ? ' gk-num-compound' : '');
     subEl.textContent = f.label;
   }
   showFace(0);
