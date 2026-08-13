@@ -60,7 +60,7 @@
 <script src="compat-data.js"></script>
 <script src="overrides-engine.js?v=2"></script>
 <script src="compat-engine.js?v=4"></script>
-<script src="compound-meanings.js?v=16"></script>
+<script src="compound-meanings.js?v=17"></script>
 <script src="big-store.js"></script>
 <script src="db-core.js?v=6"></script>
 <script src="firebase-loader.js"></script>
@@ -361,7 +361,7 @@
       // layout: practical content stays visible up top, the deeper
       // personal comparison and zodiac context are one tap away). Good
       // always renders before Could improve on a mixed day, fixed order.
-      var hasMore = wholeStory.goodText || wholeStory.badText || wholeStory.backgroundText;
+      var hasMore = wholeStory.goodText || wholeStory.badText || wholeStory.watchText || wholeStory.backgroundText;
       if (hasMore) {
         h += '<button type="button" class="story-col-toggle story-more-toggle" data-col="more">See more</button>';
         h += '<div class="story-col-body" data-col-body="more" hidden>';
@@ -374,6 +374,13 @@
           h += '<div class="story-section"><div class="story-section-label bad">' +
             '<span class="story-glyph bad">▼</span>What could improve</div>' +
             '<div class="story-section-body">' + wholeStory.badText + '</div></div>';
+        }
+        // Always present (2026-08-12): the day-energy's shadow side, split
+        // out of the opener - a good day's popup was all-positive before.
+        if (wholeStory.watchText) {
+          h += '<div class="story-section"><div class="story-section-label bad">' +
+            '<span class="story-glyph bad">▼</span>What to watch for</div>' +
+            '<div class="story-section-body">' + wholeStory.watchText + '</div></div>';
         }
         if (wholeStory.backgroundText) {
           h += '<div class="story-section"><div class="story-section-label">Background</div>' +

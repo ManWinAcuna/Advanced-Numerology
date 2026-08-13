@@ -2272,10 +2272,17 @@ function composeDayReading(birth, target) {
   // all). Root 28 isn't in DAY_ENERGY's source PDF, but COMPOUND_FIXED_STOP
   // was already written in this same day-energy voice, so it needs no
   // separate handling here.
+  // Split light/shadow (2026-08-12): the shadow used to ride at the end of
+  // openText, which left the "See more" popup all-positive on good days -
+  // user: "it's only saying what's good but not what to watch out for."
+  // openText now carries just the light; the shadow becomes its own
+  // always-present watchText section so every day type names its risk.
   const uDayEnergy = DAY_ENERGY[findings.uDayRoot] || COMPOUND_FIXED_STOP[findings.uDayRoot];
   let openText = '';
+  let watchText = '';
   if (uDayEnergy) {
-    openText = `${uDayEnergy.light} ${uDayEnergy.shadow}`;
+    openText = uDayEnergy.light;
+    watchText = uDayEnergy.shadow;
   }
 
   let goodText = '';
@@ -2383,6 +2390,7 @@ function composeDayReading(birth, target) {
     watchItems: watchItems,
     actionables: actionables,
     openText: openText,
+    watchText: watchText,
     goodText: goodText,
     badText: badText,
     backgroundText: backgroundText,
