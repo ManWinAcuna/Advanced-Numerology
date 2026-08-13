@@ -250,8 +250,8 @@ function openEntryModal(entry) {
 
     <div class="section-label">Western Signs</div>
     <div class="grid4 headerrow">
-      <div class="cell head">Sun Sign</div><div class="cell head">Saturn</div>
-      <div class="cell head">Jupiter</div><div class="cell head">Venus</div>
+      <div class="cell head planet-tap" data-planet-tap="Sun" data-sign-cell="sunSign">Sun Sign</div><div class="cell head planet-tap" data-planet-tap="Saturn" data-sign-cell="saturnSign">Saturn</div>
+      <div class="cell head planet-tap" data-planet-tap="Jupiter" data-sign-cell="jupiterSign">Jupiter</div><div class="cell head planet-tap" data-planet-tap="Venus" data-sign-cell="venusSign">Venus</div>
     </div>
     <div class="grid4">
       <div class="cell sign" id="sunSign">${r.sunSign}</div>

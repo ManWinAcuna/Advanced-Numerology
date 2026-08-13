@@ -152,6 +152,9 @@ function showAstroTooltip(clientX, clientY, bodyKey) {
     <div class="astro-tooltip-row"><span>Entered</span><span>${enteredText}</span></div>
     <div class="astro-tooltip-row"><span>Leaves</span><span>${leavesText}</span></div>
     <div class="astro-tooltip-aspects">${aspectsHtml}</div>
+    ${typeof PLANET_GUIDE !== 'undefined' && PLANET_GUIDE[bodyKey]
+      ? `<button type="button" class="astro-tooltip-guide" data-planet-tap="${bodyKey}" data-planet-sign="${info.sign}">${PLANET_GUIDE[bodyKey].nickname} · ${PLANET_GUIDE[bodyKey].domain} · tap for the guide</button>`
+      : ''}
   `;
   tip.style.left = `${clientX + 14}px`;
   tip.style.top = `${clientY + 14}px`;

@@ -1308,3 +1308,22 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 }
 .emax-search-row-name { color: var(--text); font-size: 14px; }
 .emax-search-row-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* ---- The Cosmic Guide: planet popups (2026-08-13) ---- */
+.planet-tap { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.planet-guide-head { display: flex; align-items: center; gap: 12px; }
+.planet-guide-symbol { font-size: 34px; color: var(--gold, #f5c542); line-height: 1; }
+.planet-guide-name { font-family: var(--gk-display, inherit); font-size: 19px; font-weight: 700; }
+.planet-guide-domain { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #5b6a80); }
+.planet-guide-nickname { margin-top: 9px; font-style: italic; font-size: 13px; color: var(--acc-text, #e8b04b); }
+.planet-guide-yours { margin-top: 7px; font-size: 12.5px; }
+.planet-guide-yours b { color: var(--gold, #f5c542); }
+.planet-guide-desc { margin-top: 9px; font-size: 13.5px; line-height: 1.55; }
+.planet-guide-examples-label { margin: 13px 0 6px; font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted, #5b6a80); border-bottom: 1px solid var(--border, #223048);
+  padding-bottom: 4px; }
+.planet-guide-example { font-size: 12.5px; line-height: 1.5; padding: 5px 0 5px 14px; position: relative; }
+.planet-guide-example::before { content: 'º6'; position: absolute; left: 0; color: var(--acc-text, #e8b04b); font-size: 9px; top: 8px; }
+.astro-tooltip-guide { display: block; width: 100%; margin-top: 8px; padding: 7px 9px; border-radius: 8px;
+  border: 1px solid var(--border, #223048); background: rgba(255,255,255,.03); color: var(--acc-text, #e8b04b);
+  font-family: inherit; font-size: 11px; text-align: left; cursor: pointer; }
