@@ -831,12 +831,16 @@ function openStoryModal(title, story) {
   if (!story) return;
   const body = (story.paragraphs && story.paragraphs.length)
     ? story.paragraphs.map((pp) => {
+      // Every piece renders only if it exists - depth tiers mean plenty of
+      // paragraphs carry no shadow/extra/detail now, and interpolating a
+      // missing one printed a literal "null" in the shadow box (user:
+      // "none of that null stuff"). The extra/detail lines are the cherry
+      // on top of whichever half the paragraph actually has.
       const connectorHtml = pp.connector ? `<span class="reading-connector">${pp.connector}</span> ` : '';
-      const shadowExtra = [pp.extra, pp.detail].filter(Boolean).map((s) => ` ${s}`).join('');
-      return `<div class="reading-para">` +
-        `<div class="reading-half reading-half-light">${connectorHtml}${pp.light}</div>` +
-        `<div class="reading-half reading-half-shadow">${pp.shadow}${shadowExtra}</div>` +
-        `</div>`;
+      const extras = [pp.extra, pp.detail].filter(Boolean).map((s) => ` ${s}`).join('');
+      const lightHtml = `<div class="reading-half reading-half-light">${connectorHtml}${pp.light || ''}${pp.shadow ? '' : extras}</div>`;
+      const shadowHtml = pp.shadow ? `<div class="reading-half reading-half-shadow">${pp.shadow}${extras}</div>` : '';
+      return `<div class="reading-para">${lightHtml}${shadowHtml}</div>`;
     }).join('')
     : `<div class="story-modal-text">${story.text}</div>`;
   document.getElementById('storyModalBody').innerHTML =
