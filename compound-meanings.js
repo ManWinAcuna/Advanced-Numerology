@@ -2628,11 +2628,10 @@ function composeGeneralReading(parts, opts) {
     return [first, second];
   };
 
-  const f_planetRoleLine = (p) => {
-    const guide = (typeof PLANET_GUIDE !== 'undefined') ? PLANET_GUIDE[p.planet] : null;
-    if (!guide) return `${p.planet} sits in ${p.key} for you.`;
-    return `${p.planet} is “${guide.nickname}” of your chart: ${guide.domain.toLowerCase()}. Yours runs through ${p.key}.`;
-  };
+  // No explainers (user, 2026-08-13: "don't actually explain the planets
+  // and stuff") - the reading names the placement and speaks its sign's
+  // content; the tap popups carry what each planet IS.
+  const f_planetRoleLine = (p) => `Your ${p.planet} sits in ${p.key}.`;
 
   const paragraphs = [];
   const seenDedupe = {};
