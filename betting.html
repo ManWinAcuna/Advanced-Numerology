@@ -70,7 +70,59 @@
       <div class="mode-title">UFC</div>
       <div class="mode-desc">Singles and parlays built from the UFC numerology edge.</div>
     </a>
+    <a class="mode-card" href="#" data-scout="1">
+      <div class="mode-icon">🔭</div>
+      <div class="mode-title">Scout</div>
+      <div class="mode-desc">The widest-gap 1v1 markets on Polymarket right now (+5000 vs -3000 territory), ranked biggest first, with each side scored against today.</div>
+    </a>
+    <a class="mode-card" href="versus.html">
+      <div class="mode-icon">⚔️</div>
+      <div class="mode-title">Versus</div>
+      <div class="mode-desc">Two full charts side by side under today's numbers - who does the day actually favor.</div>
+    </a>
   </div>
+
+  <div id="bettingScoutSection" style="display:none;">
+    <div class="topbar">
+      <a href="#" class="back-link" id="scoutBackLink">&larr; Back to Bet Builder</a>
+    </div>
+    <h2 class="section-title">🔭 Discrepancy Scout</h2>
+    <div class="box">
+      <div class="box-label">Widest two-sided markets · next 7 days
+        <button class="bet-chart-expand" type="button" id="scoutRefreshBtn">↻ Refresh</button>
+      </div>
+      <div class="scout-status" id="scoutStatus"></div>
+      <div id="scoutList"></div>
+    </div>
+  </div>
+  <style>
+    .scout-status { font-size: 12px; color: var(--muted); margin: 4px 0 10px; }
+    .scout-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 8px;
+      border-top: 1px solid var(--border); }
+    .scout-row.scout-openable { cursor: pointer; }
+    .scout-row.scout-openable:hover { background: rgba(255,255,255,.03); }
+    .scout-rank { font-size: 11px; color: var(--muted); min-width: 26px; padding-top: 3px; }
+    .scout-body { flex: 1; min-width: 0; }
+    .scout-q { font-size: 12.5px; color: var(--text); margin-bottom: 6px; }
+    .scout-sides { display: flex; align-items: center; gap: 8px; }
+    .scout-side { flex: 1; min-width: 0; }
+    .scout-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; }
+    .scout-odds { font-size: 15px; font-weight: 700; }
+    .scout-odds.fav { color: var(--good, #8bc34a); }
+    .scout-odds.dog { color: var(--gold, #f5c542); }
+    .scout-vs { display: inline-block; margin-top: 2px; font-size: 11px; padding: 1px 7px;
+      border-radius: 9px; border: 1px solid var(--border); }
+    .scout-vs.good { color: var(--good, #8bc34a); border-color: var(--good, #8bc34a); }
+    .scout-vs.mid { color: var(--gold, #f5c542); border-color: var(--gold, #f5c542); }
+    .scout-vs.bad { color: var(--bad, #e5393f); border-color: var(--bad, #e5393f); }
+    .scout-vs.none { color: var(--muted); }
+    .scout-gapchip { text-align: center; font-size: 15px; font-weight: 700; color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px; padding: 4px 9px; }
+    .scout-gapchip span { display: block; font-size: 9px; font-weight: 400; color: var(--muted);
+      letter-spacing: .08em; text-transform: uppercase; }
+    .scout-meta { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+  </style>
 
   <div id="bettingSportContent" style="display:none;">
     <div class="topbar">
@@ -219,6 +271,7 @@
 <script src="betting-core.js"></script>
 <script src="betting-render.js"></script>
 <script src="betting.js"></script>
+<script src="scout.js?v=2"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
