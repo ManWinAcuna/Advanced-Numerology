@@ -134,7 +134,193 @@
     const b = document.getElementById('vsBandNameB');
     if (a) a.textContent = nameOf('A');
     if (b) b.textContent = nameOf('B');
+    updateBars();
   }
+
+  /* ---------------- name lookup ----------------
+     Same instrument as Famous Lookup: Wikipedia opensearch suggestions
+     under the name field, and picking one runs the full Wikidata-then-
+     infobox cascade (lookupKeyDateByName, db-core.js) to fill the
+     birthdate. The resolved KIND is always shown ("born 1993-07-13" vs
+     "founded ...") so a non-person match can never silently pass as a
+     birthday; partial dates are rejected outright (never fabricate). */
+  const KIND_VERB = { born: 'born', founded: 'founded', opened: 'opened', released: 'released' };
+  function wireLookup(nameEl, dateEl, sugId, lkId) {
+    const sug = document.getElementById(sugId);
+    const lk = document.getElementById(lkId);
+    let matches = [];
+    let timer = null;
+    let seq = 0;
+
+    function close() { sug.classList.remove('open'); sug.innerHTML = ''; }
+    function status(text, cls) { lk.textContent = text; lk.className = 'vs-lk' + (cls ? ' ' + cls : ''); }
+
+    function showMatches() {
+      sug.innerHTML = matches.length
+        ? matches.map((m, i) => `
+          <div class="suggestion-item" data-index="${i}">
+            <span class="suggestion-name">${escapeHtml(m.title)}</span>
+            ${m.description ? `<span class="suggestion-meta">${escapeHtml(m.description).slice(0, 46)}</span>` : ''}
+          </div>`).join('')
+        : '<div class="suggestion-empty">No matches found</div>';
+      sug.classList.add('open');
+    }
+
+    function search(q) {
+      const url = 'https://en.wikipedia.org/w/api.php?action=opensearch&search='
+        + encodeURIComponent(q) + '&limit=8&namespace=0&format=json&origin=*';
+      fetch(url)
+        .then((res) => res.json())
+        .then(([, titles, descriptions]) => {
+          matches = (titles || []).map((title, i) => ({ title, description: (descriptions || [])[i] || '' }));
+          showMatches();
+        })
+        .catch(() => {
+          matches = [];
+          sug.innerHTML = '<div class="suggestion-empty">Search failed - check your connection</div>';
+          sug.classList.add('open');
+        });
+    }
+
+    function pick(title) {
+      const my = ++seq;
+      nameEl.value = title;
+      refreshNames();
+      close();
+      status('Looking up date…');
+      lookupKeyDateByName(title)
+        .then((hit) => {
+          if (my !== seq) return;
+          if (hit && hit.date && /^\d{4}-\d{2}-\d{2}$/.test(hit.date)) {
+            dateEl.value = hit.date;
+            status('✓ ' + (KIND_VERB[hit.kind] || 'born') + ' ' + hit.date, 'ok');
+            render();
+          } else {
+            status('No exact date found', 'err');
+          }
+        })
+        .catch(() => {
+          if (my !== seq) return;
+          status('Lookup failed. Try again.', 'err');
+        });
+    }
+
+    nameEl.addEventListener('input', () => {
+      status('');
+      const q = nameEl.value.trim();
+      clearTimeout(timer);
+      if (!q) { close(); return; }
+      timer = setTimeout(() => search(q), 300);
+    });
+    // A hand-typed date replaces whatever a lookup found - drop its label.
+    dateEl.addEventListener('input', () => status(''));
+
+    sug.addEventListener('click', (e) => {
+      const item = e.target.closest('.suggestion-item');
+      if (!item) return;
+      const m = matches[Number(item.dataset.index)];
+      if (m) pick(m.title);
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target !== nameEl && !sug.contains(e.target)) sug.classList.remove('open');
+    });
+  }
+  wireLookup(els.nameA, els.dateA, 'vsSugA', 'vsLkA');
+  wireLookup(els.nameB, els.dateB, 'vsSugB', 'vsLkB');
+
+  /* ---------------- saved matchups (this device) ----------------
+     A save is the two sides plus the chosen day IF one is pinned (off
+     today) - same pair on a different fight day is its own save. Chips
+     restore everything in one tap; ✕ forgets one. */
+  const SAVE_KEY = 'numerology_versus_saved_v1';
+  function loadSaved() {
+    try {
+      const a = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+  function storeSaved(list) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function currentMatch() {
+    if (!parseIso(els.dateA.value) || !parseIso(els.dateB.value)) return null;
+    const m = { an: nameOf('A'), a: els.dateA.value, bn: nameOf('B'), b: els.dateB.value };
+    if (!isFocusToday()) m.d = isoOf(focus);
+    return m;
+  }
+  function matchKey(m) { return m.a + '|' + m.b + '|' + (m.d || ''); }
+
+  function updateBars() {
+    const saveBtn = document.getElementById('vsSaveBtn');
+    const clearBtn = document.getElementById('vsClearBtn');
+    const m = currentMatch();
+    if (m) {
+      saveBtn.hidden = false;
+      const exists = loadSaved().some((s) => matchKey(s) === matchKey(m));
+      saveBtn.textContent = exists ? '✓ Saved' : '☆ Save matchup';
+      saveBtn.classList.toggle('saved', exists);
+      saveBtn.disabled = exists;
+    } else {
+      saveBtn.hidden = true;
+    }
+    clearBtn.hidden = !(els.nameA.value || els.nameB.value || els.dateA.value || els.dateB.value);
+  }
+
+  function renderSaved() {
+    const list = loadSaved();
+    document.getElementById('vsSaved').innerHTML = list.map((m, i) => {
+      const pdDate = m.d ? parseIso(m.d) : null;
+      const day = pdDate
+        ? `<span class="d"> · ${pdDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>`
+        : '';
+      return `<span class="vs-chip" data-i="${i}"><b>${escapeHtml(m.an)} vs ${escapeHtml(m.bn)}</b>${day}<span class="x" data-x="${i}">✕</span></span>`;
+    }).join('');
+    updateBars();
+  }
+
+  document.getElementById('vsSaveBtn').addEventListener('click', () => {
+    const m = currentMatch();
+    if (!m) return;
+    const list = loadSaved();
+    if (!list.some((s) => matchKey(s) === matchKey(m))) {
+      list.unshift(m);
+      storeSaved(list);
+    }
+    renderSaved();
+  });
+
+  document.getElementById('vsClearBtn').addEventListener('click', () => {
+    els.nameA.value = ''; els.nameB.value = '';
+    els.dateA.value = ''; els.dateB.value = '';
+    ['vsLkA', 'vsLkB'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.textContent = ''; el.className = 'vs-lk';
+    });
+    ['vsSugA', 'vsSugB'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.innerHTML = ''; el.classList.remove('open');
+    });
+    render();
+  });
+
+  document.getElementById('vsSaved').addEventListener('click', (e) => {
+    const x = e.target.closest('.x');
+    if (x) {
+      const list = loadSaved();
+      list.splice(Number(x.dataset.x), 1);
+      storeSaved(list);
+      renderSaved();
+      return;
+    }
+    const chip = e.target.closest('.vs-chip');
+    if (!chip) return;
+    const m = loadSaved()[Number(chip.dataset.i)];
+    if (!m) return;
+    els.nameA.value = m.an; els.dateA.value = m.a;
+    els.nameB.value = m.bn; els.dateB.value = m.b;
+    focus = (m.d && parseIso(m.d)) || dayStart(new Date());
+    render();
+  });
 
   /* ---------------- the matchup ---------------- */
   function sideData(birth, t) {
@@ -152,6 +338,7 @@
     const t = dayCtx(focus);
     renderDayHead();
     renderStrip(t);
+    updateBars();
 
     const a = parseIso(els.dateA.value);
     const b = parseIso(els.dateB.value);
@@ -222,9 +409,12 @@
     row('Viet Year', anCell(t.yearAn), anCell(A.r.chineseYear), anCell(B.r.chineseYear), v(A.r.chineseYear, t.yearAn), v(B.r.chineseYear, t.yearAn));
     row('Viet Month', anCell(t.monthAn), anCell(A.r.chineseMonth), anCell(B.r.chineseMonth), v(A.r.chineseMonth, t.monthAn), v(B.r.chineseMonth, t.monthAn));
     row('Viet Day', anCell(t.dayAn), anCell(A.r.chineseDay), anCell(B.r.chineseDay), v(A.r.chineseDay, t.dayAn), v(B.r.chineseDay, t.dayAn));
-    row('Pers. Year', t.uy, A.r.py.reduced, B.r.py.reduced, n(A.r.py.reduced, t.uy), n(B.r.py.reduced, t.uy));
-    row('Pers. Month', t.um, A.r.pm.reduced, B.r.pm.reduced, n(A.r.pm.reduced, t.um), n(B.r.pm.reduced, t.um));
-    row('Pers. Day', t.udDisplay, A.r.pd.reduced, B.r.pd.reduced, n(A.r.pd.reduced, t.ud), n(B.r.pd.reduced, t.ud));
+    // Spine labels name the DAY's value in the middle (owner's call
+    // 2026-08-22): sides bring their personal cycles, the center is the
+    // universal year/month/day they are scored against.
+    row('Universal Year', t.uy, A.r.py.reduced, B.r.py.reduced, n(A.r.py.reduced, t.uy), n(B.r.py.reduced, t.uy));
+    row('Universal Month', t.um, A.r.pm.reduced, B.r.pm.reduced, n(A.r.pm.reduced, t.um), n(B.r.pm.reduced, t.um));
+    row('Universal Day', t.udDisplay, A.r.pd.reduced, B.r.pd.reduced, n(A.r.pd.reduced, t.ud), n(B.r.pd.reduced, t.ud));
     row('Sun', t.sun, A.sun, B.sun, westernCompatEffective(A.sun, t.sun), westernCompatEffective(B.sun, t.sun));
 
     document.getElementById('vsGrid').innerHTML = cells.join('');
@@ -237,4 +427,5 @@
   }
 
   render();
+  renderSaved();
 })();

@@ -57,15 +57,16 @@
   /* ---- fighters ---- */
   .vs-setup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px;
     align-items: stretch; margin-bottom: 12px; }
-  .vs-fighter { position: relative; overflow: hidden; background: var(--panel);
-    border: 1px solid var(--border); border-radius: 13px; padding: 12px 10px 10px;
+  /* No overflow:hidden here - the name-lookup dropdown must escape the card. */
+  .vs-fighter { position: relative; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 13px; padding: 12px 10px 8px;
     display: flex; flex-direction: column; gap: 7px; min-width: 0; }
   .vs-fighter::before { content: ''; position: absolute; top: 0; left: 14%; right: 14%;
     height: 2px; border-radius: 2px; }
   .vs-fighter.a::before { background: linear-gradient(90deg, transparent, var(--vsA), transparent); }
   .vs-fighter.b::before { background: linear-gradient(90deg, transparent, var(--vsB), transparent); }
-  .vs-corner { position: absolute; right: 6px; bottom: -8px; font-family: var(--gk-display);
-    font-weight: 700; font-size: 52px; line-height: 1; pointer-events: none; opacity: .09; }
+  .vs-corner { position: absolute; right: 6px; bottom: 0; font-family: var(--gk-display);
+    font-weight: 700; font-size: 44px; line-height: 1; pointer-events: none; opacity: .09; }
   .vs-fighter.a .vs-corner { color: var(--vsA); }
   .vs-fighter.b .vs-corner { color: var(--vsB); }
   .vs-fighter input { width: 100%; box-sizing: border-box; min-width: 0;
@@ -75,6 +76,20 @@
   .vs-fighter input::placeholder { color: var(--muted); }
   .vs-fighter.a input:focus { border-color: color-mix(in srgb, var(--vsA) 55%, transparent); }
   .vs-fighter.b input:focus { border-color: color-mix(in srgb, var(--vsB) 55%, transparent); }
+  /* Name lookup: same .player-suggestions dropdown as Famous/Compatibility,
+     restyled for the godlike panel and the narrow half-width cards. */
+  .vs-namewrap { position: relative; }
+  .vs-fighter .player-suggestions { z-index: 60; background: var(--panel);
+    border-radius: 10px; box-shadow: 0 12px 30px rgba(0, 0, 0, .65); }
+  .vs-fighter .suggestion-item { flex-direction: column; align-items: flex-start;
+    gap: 1px; padding: 7px 9px; }
+  .vs-fighter .suggestion-name { font-size: 12.5px; }
+  .vs-fighter .suggestion-meta { max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; font-size: 10px; }
+  .vs-lk { min-height: 12px; font-family: var(--gk-ui); font-size: 9px;
+    letter-spacing: .05em; color: var(--muted); text-align: center; }
+  .vs-lk.ok { color: var(--good, #8bc34a); }
+  .vs-lk.err { color: var(--bad, #e5393f); }
   .vs-mark { display: flex; align-items: center; justify-content: center;
     font-family: var(--gk-display); font-weight: 600; font-size: 12px;
     letter-spacing: .2em; color: var(--muted); padding: 0 1px; }
@@ -152,6 +167,31 @@
   .vs-spine b { display: block; margin-top: 1px; font-family: var(--gk-display);
     font-weight: 600; font-size: 12px; color: var(--acc-text); }
 
+  /* ---- saved matchups ---- */
+  .vs-savedrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    margin-bottom: 12px; }
+  .vs-savedrow:empty { display: none; }
+  .vs-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 7px 5px 12px;
+    font-family: var(--gk-ui); font-size: 10.5px; letter-spacing: .04em;
+    color: var(--text); cursor: pointer; max-width: 100%;
+    -webkit-tap-highlight-color: transparent; }
+  .vs-chip b { font-weight: 600; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 62vw; }
+  .vs-chip .d { color: var(--acc-text); }
+  .vs-chip .x { width: 17px; height: 17px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; color: var(--muted);
+    font-size: 10px; flex: none; }
+  .vs-chip .x:active { color: var(--bad, #e5393f); }
+  .vs-savebar { display: flex; justify-content: center; gap: 8px; margin: 0 0 12px; }
+  .vs-save { background: none; border: 1px solid var(--border); border-radius: 999px;
+    color: var(--muted); font-family: var(--gk-ui); font-size: 9px; font-weight: 600;
+    letter-spacing: .22em; text-transform: uppercase; padding: 6px 16px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .vs-save.saved { color: var(--gold, #f5c542); border-color: rgba(245, 197, 66, .38);
+    cursor: default; }
+  .vs-save[hidden] { display: none; }
+
   .vs-empty { text-align: center; color: var(--muted); font-size: 12.5px;
     padding: 20px 8px; font-style: italic; }
 
@@ -206,18 +246,33 @@
     <div class="vs-today" id="vsToday"></div>
   </div>
 
+  <div class="vs-savedrow" id="vsSaved"></div>
+
   <div class="vs-setup">
     <div class="vs-fighter a">
       <span class="vs-corner">A</span>
-      <input type="text" id="vsNameA" placeholder="Name" autocomplete="off">
+      <div class="vs-namewrap">
+        <input type="text" id="vsNameA" placeholder="Name" autocomplete="off">
+        <div class="player-suggestions" id="vsSugA"></div>
+      </div>
       <input type="date" id="vsDateA" aria-label="Side A birthdate">
+      <div class="vs-lk" id="vsLkA"></div>
     </div>
     <div class="vs-mark">VS</div>
     <div class="vs-fighter b">
       <span class="vs-corner">B</span>
-      <input type="text" id="vsNameB" placeholder="Name" autocomplete="off">
+      <div class="vs-namewrap">
+        <input type="text" id="vsNameB" placeholder="Name" autocomplete="off">
+        <div class="player-suggestions" id="vsSugB"></div>
+      </div>
       <input type="date" id="vsDateB" aria-label="Side B birthdate">
+      <div class="vs-lk" id="vsLkB"></div>
     </div>
+  </div>
+
+  <div class="vs-savebar">
+    <button class="vs-save" id="vsSaveBtn" type="button" hidden>☆ Save matchup</button>
+    <button class="vs-save" id="vsClearBtn" type="button" hidden>✕ Clear</button>
   </div>
 
   <div id="vsResults" style="display:none;">
@@ -246,7 +301,7 @@
 <!-- sports-gate.js spins on "Checking access…" until loadFirebaseSdk
      exists - every gated page must load the Firebase loader. -->
 <script src="firebase-loader.js"></script>
-<script src="versus.js?v=3"></script>
+<script src="versus.js?v=4"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
