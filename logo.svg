@@ -1,33 +1,134 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Advanced Numerology">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Advanced Numerology">
   <title>Advanced Numerology</title>
-  <!-- Horse head bust. 2026 is the Year of the Horse; the palette is the app's
-       own gold (#f5c542) and orange (#ff8a3d) accents so the mark sits in the
-       same family as the rest of the UI. Colours are literal rather than CSS
-       variables because this file is also loaded standalone as the favicon,
-       where the app stylesheet is not present. -->
-  <path fill="#f5c542" d="M58 24
-    L44 33
-    L26 49
-    L16 61
-    C11 65, 11 70, 16 72
-    C20 74, 25 72, 29 70
-    L41 68
-    C50 67, 58 62, 63 53
-    C61 66, 61 75, 66 88
-    L70 100
-    L100 100
-    C100 73, 94 47, 82 33
-    C74 26, 65 23, 58 24 Z"/>
-  <!-- Ear bases run a few units into the skull so the join stays solid; drawn
-       flush they leave a visible notch at the crown. -->
-  <path fill="#f5c542" d="M45 34 C44 22, 47 14, 51 12 C56 16, 57 26, 56 34 Z
-                          M58 31 C60 19, 64 12, 68 11 C70 19, 68 26, 66 33 Z"/>
-  <path fill="#ff8a3d" d="M58 24
-    C71 22, 84 32, 91 46
-    C97 59, 100 79, 100 100
-    L84 100
-    C85 77, 81 55, 73 43
-    C67 33, 64 27, 58 24 Z"/>
-  <ellipse cx="45" cy="45" rx="3.2" ry="2.5" transform="rotate(-38 45 45)" fill="#15110b"/>
-  <ellipse cx="19" cy="66" rx="2.1" ry="1.5" transform="rotate(-38 19 66)" fill="#15110b"/>
+  <!-- Code13 mark (owner concept sheet 2026-08-22): black horse facing RIGHT
+       (movement forward, the path ahead) inside a gold ring carrying 1 (top),
+       3 (right), 13 (left) - 1 and 3 combine into 13, the core code. Mane in
+       purple (intuition, transformation) and orange (empowered action).
+       Palette from the sheet: gold #D4AF37/#F7D97A, purple #7A3CF0/#C469FF,
+       orange #FFBA3D/#FFB74D. Numerals are system serif on purpose: an SVG
+       loaded as an image/favicon cannot fetch external fonts, so Cinzel is
+       never available here - Georgia/Times keep the engraved look everywhere
+       this file renders. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F7D97A"/>
+      <stop offset="1" stop-color="#D4AF37"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground disc: keeps the black horse readable on light backgrounds -->
+  <circle cx="256" cy="256" r="228" fill="#070606"/>
+  <circle cx="256" cy="256" r="230" fill="none" stroke="url(#gold)" stroke-width="3.5"/>
+
+  <!-- ============== mane: one flowing mass with pointed locks ============ -->
+  <path fill="#7A3CF0" d="M298,118
+    C258,88 214,84 178,104
+    C150,120 136,140 130,160
+    C146,162 160,170 172,182
+    C140,196 118,224 114,258
+    C134,256 150,262 162,274
+    C136,300 124,336 132,372
+    C148,364 160,364 172,374
+    C158,404 160,432 178,452
+    C190,452 200,452 210,456
+    L214,470 L184,470
+    C192,416 204,352 222,296
+    C238,238 254,188 272,148
+    C280,132 288,122 298,118 Z"/>
+  <!-- light purple strands -->
+  <g fill="#C469FF">
+    <path d="M286,132 C238,96 192,94 158,120 C200,104 246,114 280,146 C282,141 284,136 286,132 Z"/>
+    <path d="M252,214 C196,196 148,218 120,258 C152,238 200,220 246,232 C248,226 250,220 252,214 Z"/>
+    <path d="M224,352 C192,352 168,372 152,404 C172,388 198,372 220,372 C221,365 222,358 224,352 Z"/>
+  </g>
+  <!-- orange ribbons woven through -->
+  <g fill="#FFBA3D">
+    <path d="M274,158 C216,128 160,150 122,196 C166,168 220,156 268,176 C270,170 272,164 274,158 Z"/>
+    <path d="M238,286 C192,278 158,296 134,330 C162,314 198,300 234,306 C235,299 236,292 238,286 Z"/>
+  </g>
+  <g fill="#FFB74D" opacity=".75">
+    <path d="M272,162 C224,140 176,156 144,190 C178,168 224,162 266,178 C268,172 270,167 272,162 Z"/>
+    <path d="M236,292 C198,286 170,300 150,326 C174,312 202,304 232,310 C233,304 234,298 236,292 Z"/>
+  </g>
+
+  <!-- ===================== the horse (one silhouette) ===================
+       The fill is unstroked; gold rim-light is a separate path along the
+       FRONT profile only, so the crest side meets the mane with no seam. -->
+  <path fill="#0D0B0E" stroke="none"
+    d="M298,118
+       C318,130 330,150 338,172
+       C346,200 356,236 372,272
+       C378,286 384,296 392,306
+       C402,314 404,328 396,338
+       C390,344 380,346 372,344
+       C366,352 358,356 348,354
+       C330,368 316,382 306,398
+       C298,420 294,444 292,470
+       L190,470
+       C196,420 206,360 222,300
+       C236,244 252,192 270,152
+       C278,136 288,124 298,118 Z"/>
+  <path fill="none" stroke="#D4AF37" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+    d="M298,118
+       C318,130 330,150 338,172
+       C346,200 356,236 372,272
+       C378,286 384,296 392,306
+       C402,314 404,328 396,338
+       C390,344 380,346 372,344
+       C366,352 358,356 348,354
+       C330,368 316,382 306,398
+       C298,420 294,444 292,470"/>
+
+  <!-- ears -->
+  <path fill="#0D0B0E" stroke="#D4AF37" stroke-width="2.2" stroke-linejoin="round"
+    d="M302,124 C310,96 320,78 332,72 C334,92 328,114 318,130 Z"/>
+  <path fill="#0D0B0E" stroke="#D4AF37" stroke-width="2.2" stroke-linejoin="round"
+    d="M282,128 C284,100 290,82 300,74 C304,92 300,112 294,128 Z"/>
+
+  <!-- front locks falling over the crest onto the neck -->
+  <path fill="#7A3CF0" d="M296,120 C272,150 254,200 244,258 C240,286 238,310 240,330 C230,306 232,258 240,212 C250,168 268,138 288,116 Z"/>
+  <path fill="#C469FF" d="M292,124 C270,156 256,204 250,258 C248,238 252,196 262,162 C270,142 280,130 292,124 Z"/>
+  <path fill="#7A3CF0" d="M236,296 C226,338 220,380 222,424 C214,390 214,344 224,300 Z"/>
+
+  <!-- forelock falling over the brow -->
+  <path fill="#7A3CF0" d="M302,114 C324,128 336,150 340,174 C328,152 314,134 290,118 Z"/>
+  <path fill="#FFBA3D" d="M302,118 C318,130 328,146 333,164 C324,148 312,134 296,122 Z" opacity=".85"/>
+
+  <!-- eye -->
+  <path fill="#1A1208" stroke="#D4AF37" stroke-width="2"
+    d="M316,196 C324,188 338,187 346,194 C339,203 324,204 316,196 Z"/>
+  <path fill="#FFB74D" d="M321,196 C327,191 337,190 342,195 C336,200 327,201 321,196 Z"/>
+
+  <!-- nostril + mouth -->
+  <path fill="none" stroke="#D4AF37" stroke-width="2.2" stroke-linecap="round"
+    d="M380,312 C384,316 385,322 382,326"/>
+  <path fill="none" stroke="#D4AF37" stroke-width="1.8" stroke-linecap="round" opacity=".7"
+    d="M388,338 C381,343 374,345 368,345"/>
+  <!-- cheek accent -->
+  <path fill="none" stroke="#D4AF37" stroke-width="1.8" stroke-linecap="round" opacity=".3"
+    d="M312,248 C322,282 334,310 350,330"/>
+
+  <!-- ======================== sparkles ================================= -->
+  <g fill="#F7D97A">
+    <path d="M398,116 l3,9 9,3 -9,3 -3,9 -3,-9 -9,-3 9,-3 Z"/>
+    <path d="M428,192 l2,6 6,2 -6,2 -2,6 -2,-6 -6,-2 6,-2 Z"/>
+    <path d="M376,84 l2,6 6,2 -6,2 -2,6 -2,-6 -6,-2 6,-2 Z"/>
+    <circle cx="416" cy="150" r="2.4"/>
+    <circle cx="390" cy="380" r="2.4"/>
+  </g>
+
+  <!-- ================= ring numerals: 1 top, 3 right, 13 left =========== -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="bold" fill="url(#gold)" text-anchor="middle">
+    <circle cx="256" cy="40" r="30" fill="#070606"/>
+    <ellipse cx="42" cy="256" rx="36" ry="30" fill="#070606"/>
+    <circle cx="472" cy="256" r="30" fill="#070606"/>
+    <text x="256" y="56" font-size="48">1</text>
+    <text x="42" y="272" font-size="48">13</text>
+    <text x="472" y="272" font-size="48">3</text>
+  </g>
+  <g stroke="url(#gold)" stroke-width="3" stroke-linecap="round" opacity=".8">
+    <line x1="196" y1="40" x2="218" y2="40"/>
+    <line x1="294" y1="40" x2="316" y2="40"/>
+  </g>
+  <circle cx="256" cy="474" r="5.5" fill="url(#gold)"/>
 </svg>
