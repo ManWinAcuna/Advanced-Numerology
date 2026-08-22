@@ -16,7 +16,32 @@
   const SCOUT_LIMIT_SHOWN = 15;
   const SCOUT_FETCH_LIMIT = 400;
   const SCOUT_WINDOW_DAYS = 7;
-  const SCOUT_BDAY_CACHE_KEY = 'numerology_scout_bday_cache';
+  // _v2: the v1 cache could hold ORG founding dates scored as birthdays
+  // (kind wasn't checked) - new key invalidates any poisoned entries.
+  const SCOUT_BDAY_CACHE_KEY = 'numerology_scout_bday_cache_v2';
+
+  // 1v1 means two PERSONS (owner's callout 2026-08-22: a LoL team series
+  // is two-sided but org vs org). Team-game and team-league markets are
+  // excluded by their question prefix, and org-styled outcome names are
+  // excluded by vocabulary. Chess, fighting games, StarCraft, tennis,
+  // UFC, boxing all pass - they name humans.
+  const TEAM_QUESTION_RX = /\b(LoL|League of Legends|Dota\s*2?|Counter-Strike|CS2|CS:GO|CSGO|Valorant|Overwatch|Rocket League|Call of Duty|CoD|Rainbow Six|R6|Mobile Legends|Honor of Kings|King of Glory|PUBG|Free Fire|Map Handicap|Map Winner|BO[357]|NBA|NFL|MLB|NHL|WNBA|MLS|EPL|Premier League|Champions League|Europa League|La Liga|Serie A|Bundesliga|Ligue 1|Copa|Liga MX)\b/i;
+  const ORG_NAME_RX = /\b(esports?|e-sports|team|gaming|club|guild|clan|fc|cf|sc|ac|united|city|athletic|rovers|wanderers|dynamo|real|inter)\b/i;
+  // Big-four team nicknames appear as bare outcome names with no league
+  // prefix ("Chiefs vs. Buccaneers") - exact-match set, so a human's full
+  // name can never collide.
+  const TEAM_NICKNAMES = new Set(('cardinals,falcons,ravens,bills,panthers,bears,bengals,browns,cowboys,broncos,lions,packers,texans,colts,'
+    + 'jaguars,chiefs,raiders,chargers,rams,dolphins,vikings,patriots,saints,giants,jets,eagles,steelers,49ers,seahawks,'
+    + 'buccaneers,titans,commanders,hawks,celtics,nets,hornets,bulls,cavaliers,mavericks,nuggets,pistons,warriors,rockets,'
+    + 'pacers,clippers,lakers,grizzlies,heat,bucks,timberwolves,pelicans,knicks,thunder,magic,76ers,suns,blazers,trail blazers,kings,'
+    + 'spurs,raptors,jazz,wizards,diamondbacks,braves,orioles,red sox,white sox,cubs,reds,guardians,rockies,tigers,astros,'
+    + 'royals,angels,dodgers,marlins,brewers,twins,mets,yankees,athletics,phillies,pirates,padres,mariners,nationals,'
+    + 'rangers,rays,blue jays,ducks,coyotes,bruins,sabres,flames,hurricanes,blackhawks,avalanche,blue jackets,stars,'
+    + 'red wings,oilers,wild,canadiens,predators,devils,islanders,senators,flyers,penguins,sharks,kraken,'
+    + 'lightning,maple leafs,canucks,golden knights,capitals').split(','));
+  function isTeamNickname(name) {
+    return TEAM_NICKNAMES.has(String(name).trim().toLowerCase());
+  }
 
   const scoutSection = document.getElementById('bettingScoutSection');
   if (!scoutSection) return;
@@ -37,7 +62,9 @@
     let date = null;
     try {
       const hit = await lookupKeyDateByName(name);
-      if (hit && hit.date && /^\d{4}-\d{2}-\d{2}$/.test(hit.date)) date = hit.date;
+      // kind 'born' only - a 'founded'/'opened' hit is an ORG's date, and
+      // scoring an org's founding day as a birthday would poison the read.
+      if (hit && hit.date && hit.kind === 'born' && /^\d{4}-\d{2}-\d{2}$/.test(hit.date)) date = hit.date;
     } catch (e) {}
     cache[name] = date;
     saveBdayCache(cache);
@@ -88,6 +115,10 @@
       // Up/Down, Over/Under all describe ONE thing's outcome, not a duel.
       const names = outcomes.map((o) => String(o).trim());
       if (names.some((n) => /^(yes|no|up|down|over|under)$/i.test(n))) return;
+      // Person vs person only: team games and team leagues are out.
+      const q = String(m.question || m.title || '');
+      if (TEAM_QUESTION_RX.test(q)) return;
+      if (names.some((n) => ORG_NAME_RX.test(n) || isTeamNickname(n))) return;
       const pA = Number(prices && prices[0]);
       const pB = Number(prices && prices[1]);
       // Near-resolved prices carry no real market anymore.
