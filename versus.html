@@ -68,14 +68,13 @@
     font-weight: 700; font-size: 52px; line-height: 1; pointer-events: none; opacity: .09; }
   .vs-fighter.a .vs-corner { color: var(--vsA); }
   .vs-fighter.b .vs-corner { color: var(--vsB); }
-  .vs-fighter input, .vs-fighter select { width: 100%; box-sizing: border-box; min-width: 0;
+  .vs-fighter input { width: 100%; box-sizing: border-box; min-width: 0;
     background: rgba(255, 255, 255, .045); border: 1px solid var(--border);
     border-radius: 9px; color: var(--text); padding: 7px 9px; font-size: 16px;
     font-family: var(--gk-ui); color-scheme: dark; outline: none; position: relative; }
   .vs-fighter input::placeholder { color: var(--muted); }
-  .vs-fighter.a :is(input, select):focus { border-color: color-mix(in srgb, var(--vsA) 55%, transparent); }
-  .vs-fighter.b :is(input, select):focus { border-color: color-mix(in srgb, var(--vsB) 55%, transparent); }
-  .vs-fighter select { font-size: 13px; color: var(--muted); }
+  .vs-fighter.a input:focus { border-color: color-mix(in srgb, var(--vsA) 55%, transparent); }
+  .vs-fighter.b input:focus { border-color: color-mix(in srgb, var(--vsB) 55%, transparent); }
   .vs-mark { display: flex; align-items: center; justify-content: center;
     font-family: var(--gk-display); font-weight: 600; font-size: 12px;
     letter-spacing: .2em; color: var(--muted); padding: 0 1px; }
@@ -212,14 +211,12 @@
       <span class="vs-corner">A</span>
       <input type="text" id="vsNameA" placeholder="Name" autocomplete="off">
       <input type="date" id="vsDateA" aria-label="Side A birthdate">
-      <select id="vsPickA"><option value="">From Database…</option></select>
     </div>
     <div class="vs-mark">VS</div>
     <div class="vs-fighter b">
       <span class="vs-corner">B</span>
       <input type="text" id="vsNameB" placeholder="Name" autocomplete="off">
       <input type="date" id="vsDateB" aria-label="Side B birthdate">
-      <select id="vsPickB"><option value="">From Database…</option></select>
     </div>
   </div>
 
@@ -249,7 +246,7 @@
 <!-- sports-gate.js spins on "Checking access…" until loadFirebaseSdk
      exists - every gated page must load the Firebase loader. -->
 <script src="firebase-loader.js"></script>
-<script src="versus.js?v=2"></script>
+<script src="versus.js?v=3"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>

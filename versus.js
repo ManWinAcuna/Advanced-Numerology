@@ -9,10 +9,10 @@
    tables, tints the stronger side, and the center spine shows the day's
    own value for that layer. One vs-day percentage per side (leader
    glows), the head-to-head shield between them, and a rows-won tally.
-   Sides arrive by manual date, Database pick, or the Scout tab's
-   tap-through params (?a=YYYY-MM-DD&an=Name&b=...&bn=..., optional
-   &d=YYYY-MM-DD to open on a specific day). No extra buttons - a reading
-   instrument, per the owner's call. */
+   Sides arrive by manual date or the Scout tab's tap-through params
+   (?a=YYYY-MM-DD&an=Name&b=...&bn=..., optional &d=YYYY-MM-DD to open
+   on a specific day). No extra buttons - a reading instrument, per the
+   owner's call (Database picker removed 2026-08-22, owner's call). */
 
 (function () {
   function dayStart(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
@@ -37,7 +37,6 @@
   const els = {
     nameA: document.getElementById('vsNameA'), nameB: document.getElementById('vsNameB'),
     dateA: document.getElementById('vsDateA'), dateB: document.getElementById('vsDateB'),
-    pickA: document.getElementById('vsPickA'), pickB: document.getElementById('vsPickB'),
     day: document.getElementById('vsDay'), dayPretty: document.getElementById('vsDayPretty'),
     dayPrev: document.getElementById('vsDayPrev'), dayNext: document.getElementById('vsDayNext'),
     dayReset: document.getElementById('vsDayReset'), dayTap: document.getElementById('vsDayTap'),
@@ -111,32 +110,6 @@
   });
 
   /* ---------------- side inputs ---------------- */
-  // Database picker: every dated entry across every category.
-  try {
-    const db = loadDB();
-    const opts = [];
-    (db.categories || []).forEach((cat) => {
-      (cat.entries || []).forEach((e) => {
-        if (e && e.name && e.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)) {
-          opts.push({ label: `${e.name} (${cat.name})`, name: e.name, date: e.date });
-        }
-      });
-    });
-    opts.sort((a, b) => a.label.localeCompare(b.label));
-    const optionsHtml = opts.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join('');
-    els.pickA.insertAdjacentHTML('beforeend', optionsHtml);
-    els.pickB.insertAdjacentHTML('beforeend', optionsHtml);
-    const applyPick = (sel, nameEl, dateEl) => {
-      const o = opts[Number(sel.value)];
-      if (!o) return;
-      nameEl.value = o.name;
-      dateEl.value = o.date;
-      render();
-    };
-    els.pickA.addEventListener('change', () => applyPick(els.pickA, els.nameA, els.dateA));
-    els.pickB.addEventListener('change', () => applyPick(els.pickB, els.nameB, els.dateB));
-  } catch (e) {}
-
   // Scout tap-through / shared links.
   const params = new URLSearchParams(location.search);
   if (params.get('a')) els.dateA.value = params.get('a');
