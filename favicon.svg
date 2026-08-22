@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- tab icon: the 13, gold on the brand tile (owner call 2026-08-22) -->
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#0B0A08" stroke="#D4AF37" stroke-width="1.5"/>
+  <text x="32" y="45" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+    font-weight="bold" font-size="38" fill="#E5C04C">13</text>
+</svg>
