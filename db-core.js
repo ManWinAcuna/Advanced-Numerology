@@ -1822,10 +1822,15 @@ function computeYearRoadmap(birthDate) {
 // "founding as an administrative unit" - the UAE's 1971 union IS that event
 // for it. So for places specifically (never for people - see
 // lookupKeyDateByName below, which people/birthday lookups keep using
-// unchanged), the most "concrete" record - a signing, a union, a
-// constitution - is tried first via this place's country (Wikidata P17),
-// and only falls back to the place's own recorded date if that's
-// unavailable (no country link, or the country itself has nothing usable).
+// unchanged): the place's OWN recorded date is tried first (a state's
+// statehood date, a city's founding date), and the country's date via
+// Wikidata P17 is only a FALLBACK for places with no usable date of their
+// own (a landmark, a small town with nothing recorded). 2026-08-26 fix -
+// this used to be the other way around (country first), which meant any
+// place whose country happens to have a well-documented date (nearly all
+// of them) silently overrode a perfectly good date the place had itself -
+// same fix as Code13 (user: typed "Utah", got the US founding date instead
+// of statehood - "that should be a fallback option").
 
 function fetchCountryQid(qid) {
   const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json&origin=*`;
@@ -1862,17 +1867,17 @@ function lookupPlaceFoundingDate(name) {
     .then((result) => result || lookupKeyDateFromWikipediaInfobox(name))
     .then((result) => (result ? { ...result, via: 'place' } : null));
 
-  return fetchWikidataId(name).then((qid) => {
-    if (!qid) return ownDateChain(null);
-
-    return fetchCountryQid(qid).then((countryQid) => {
-      if (!countryQid || countryQid === qid) return ownDateChain(qid);
-
-      return fetchKeyDate(countryQid)
-        .then((result) => result || fetchWikipediaTitleFromQid(countryQid).then((title) => (title ? lookupKeyDateFromWikipediaInfobox(title) : null)))
-        .then((countryResult) => (countryResult ? { ...countryResult, via: 'country' } : ownDateChain(qid)));
-    });
+  const countryDateChain = (qid) => fetchCountryQid(qid).then((countryQid) => {
+    if (!countryQid || countryQid === qid) return null;
+    return fetchKeyDate(countryQid)
+      .then((result) => result || fetchWikipediaTitleFromQid(countryQid).then((title) => (title ? lookupKeyDateFromWikipediaInfobox(title) : null)))
+      .then((result) => (result ? { ...result, via: 'country' } : null));
   });
+
+  return fetchWikidataId(name).then((qid) => ownDateChain(qid).then((ownResult) => {
+    if (ownResult) return ownResult;
+    return qid ? countryDateChain(qid) : null;
+  }));
 }
 
 // Looks up a single exact name (no search/disambiguation UI) and resolves
