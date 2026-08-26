@@ -704,7 +704,11 @@ button.gk-altar-num {
   line-height: 1.7; color: var(--text);
 }
 .reading-half-light { border-left-color: var(--gold); }
-.reading-half-shadow { border-left-color: var(--bad); margin-top: 3px; }
+/* Dark violet, not --bad's red - same fix as Code13, user: "instead of
+   it being red... make the red like a purple / violet dark." Scoped to
+   this one rule, not the shared --bad variable (still red everywhere it
+   means an actual error - form validation, failed lookups). */
+.reading-half-shadow { border-left-color: #6b4fa0; margin-top: 3px; }
 .reading-connector { color: var(--muted); font-size: 12.5px; }
 
 /* whole-page aura: warmth scales with alignment only — never a warning */
