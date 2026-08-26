@@ -824,9 +824,11 @@ function insertStoryLink(id, afterSelector, label) {
 // going to read that." Each cluster renders as a light half (gold left
 // border) flush against a shadow half (red left border) - together they
 // read as one paragraph block, but the border still shows where the light
-// sentence ends and the shadow sentence begins. The connector that opens a
-// paragraph ("There's also this...") gets its own muted, smaller styling
-// so the eye lands on the actual trait sentence, not the transition text.
+// sentence ends and the shadow sentence begins.
+// 2026-08-26: the gray connector line ("There's also this...") no longer
+// renders - user: "get rid of those gray introductions lines." pp.connector
+// still exists on the data (composer/text output untouched), just unused
+// here.
 function openStoryModal(title, story) {
   if (!story) return;
   const body = (story.paragraphs && story.paragraphs.length)
@@ -836,9 +838,8 @@ function openStoryModal(title, story) {
       // missing one printed a literal "null" in the shadow box (user:
       // "none of that null stuff"). The extra/detail lines are the cherry
       // on top of whichever half the paragraph actually has.
-      const connectorHtml = pp.connector ? `<span class="reading-connector">${pp.connector}</span> ` : '';
       const extras = [pp.extra, pp.detail].filter(Boolean).map((s) => ` ${s}`).join('');
-      const lightHtml = `<div class="reading-half reading-half-light">${connectorHtml}${pp.light || ''}${pp.shadow ? '' : extras}</div>`;
+      const lightHtml = `<div class="reading-half reading-half-light">${pp.light || ''}${pp.shadow ? '' : extras}</div>`;
       const shadowHtml = pp.shadow ? `<div class="reading-half reading-half-shadow">${pp.shadow}${extras}</div>` : '';
       return `<div class="reading-para">${lightHtml}${shadowHtml}</div>`;
     }).join('')

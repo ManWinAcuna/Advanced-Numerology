@@ -2636,6 +2636,7 @@ function composeGeneralReading(parts, opts) {
   const paragraphs = [];
   const seenDedupe = {};
   const seenPlanetSigns = {};
+  let planetParaIndex = null;
   let prevRegister = null;
   items.forEach((it) => {
     // A repeat folds its "doubled" line onto the ORIGINAL entity's own
@@ -2651,24 +2652,50 @@ function composeGeneralReading(parts, opts) {
     }
     seenDedupe[it.dedupeKey] = paragraphs.length;
 
+    // The four natal placements (Sun/Saturn/Jupiter/Venus) fold into ONE
+    // paragraph instead of four separate boxes - user, 2026-08-26:
+    // "consolidate them all into one." Only the first planet pays for a
+    // connector/dedupe slot; the rest append straight onto its light/shadow.
+    if (it.p.kind === 'planet') {
+      const roleLine = f_planetRoleLine(it.p);
+      const priorPlanet = seenPlanetSigns[it.p.key];
+      const depth = it.p.depth || 'planet-lean';
+      let pieceLight, pieceShadow;
+      if (priorPlanet) {
+        pieceLight = `${roleLine} The same ${it.p.key} current your ${priorPlanet} already carries.`;
+        pieceShadow = null;
+      } else if (depth === 'planet-full') {
+        pieceLight = `${roleLine} ${it.entry.light}`;
+        pieceShadow = it.entry.shadow;
+      } else {
+        pieceLight = `${roleLine} ${it.entry.light}`;
+        pieceShadow = null;
+      }
+      if (!priorPlanet) seenPlanetSigns[it.p.key] = it.p.planet;
+
+      if (planetParaIndex === null) {
+        const connector = paragraphs.length > 0
+          ? nextConnector(registerRelation(prevRegister, it.register))
+          : null;
+        planetParaIndex = paragraphs.length;
+        seenDedupe[it.dedupeKey] = planetParaIndex;
+        paragraphs.push({ connector, light: pieceLight, shadow: pieceShadow, extra: null, detail: null });
+      } else {
+        const para = paragraphs[planetParaIndex];
+        para.light = para.light ? `${para.light} ${pieceLight}` : pieceLight;
+        if (pieceShadow) para.shadow = para.shadow ? `${para.shadow} ${pieceShadow}` : pieceShadow;
+      }
+      prevRegister = it.register;
+      return;
+    }
+
     const connector = paragraphs.length > 0
       ? nextConnector(registerRelation(prevRegister, it.register))
       : null;
 
-    const depth = it.p.depth || (it.p.kind === 'planet' ? 'planet-lean' : 'std');
+    const depth = it.p.depth || 'std';
     let para = null;
-    if (it.p.kind === 'planet') {
-      const roleLine = f_planetRoleLine(it.p);
-      const priorPlanet = seenPlanetSigns[it.p.key];
-      if (priorPlanet) {
-        para = { connector, light: `${roleLine} The same ${it.p.key} current your ${priorPlanet} already carries.`, shadow: null, extra: null, detail: null };
-      } else if (depth === 'planet-full') {
-        para = { connector, light: `${roleLine} ${it.entry.light}`, shadow: it.entry.shadow, extra: null, detail: null };
-      } else {
-        para = { connector, light: `${roleLine} ${it.entry.light}`, shadow: null, extra: null, detail: null };
-      }
-      if (!priorPlanet) seenPlanetSigns[it.p.key] = it.p.planet;
-    } else if (depth === 'full') {
+    if (depth === 'full') {
       const [d1, d2] = f_twoDetails(it.p, it.entry);
       para = { connector, light: it.entry.light, shadow: it.entry.shadow, extra: null, detail: [d1, d2].filter(Boolean).join(' ') || null };
     } else if (depth === 'lean') {
