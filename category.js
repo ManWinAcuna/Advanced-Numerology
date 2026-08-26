@@ -230,7 +230,7 @@ function openEntryModal(entry) {
       </div>
       <div class="box stat-box">
         <div class="box-label">✨ 8 Day</div>
-        <div class="box-value">${r.twentyEightDay}</div>
+        <div class="box-value">${universalDayNumber(dateObj)}</div>
       </div>
       <div class="box stat-box">
         <div class="box-label">🔢 Missing</div>
