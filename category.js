@@ -229,7 +229,7 @@ function openEntryModal(entry) {
         <div class="box-value">${r.luckyNumber}</div>
       </div>
       <div class="box stat-box">
-        <div class="box-label">✨ 28 Day</div>
+        <div class="box-label">✨ 8 Day</div>
         <div class="box-value">${r.twentyEightDay}</div>
       </div>
       <div class="box stat-box">
