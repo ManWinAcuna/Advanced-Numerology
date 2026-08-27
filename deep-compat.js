@@ -26,8 +26,8 @@ function getEffectiveDeepCompatWeight() {
 // compat-render.js (db-core.js/compat-render.js sit in a different relative
 // order on the personal-use pages vs. the sports pages).
 function deepCompatTier(score) {
-  if (score >= 77) return 'good';
-  if (score < 49) return 'bad';
+  if (score >= 82) return 'good';
+  if (score < 58) return 'bad';
   return 'mid';
 }
 

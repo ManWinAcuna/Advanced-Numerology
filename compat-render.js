@@ -5,9 +5,15 @@
  * ZODIAC_SYMBOLS, VIETNAMESE_ZODIAC_EMOJI) to be loaded first.
  */
 
+// Thresholds are the user's own call (2026-08-27: "below 58% its red if
+// its above 82% its green") - display-only tiering, not the same 49/77/85
+// bands compat-engine.js's own flags (and the verdict copy built on them)
+// use internally. That gap is deliberate: compat-engine.js is sacrosanct
+// and never edited, so the headline verdict text still speaks in its own
+// terms even though the color now switches at different numbers.
 function scoreClass(score) {
-  if (score >= 77) return 'good';
-  if (score < 49) return 'bad';
+  if (score >= 82) return 'good';
+  if (score < 58) return 'bad';
   return 'mid';
 }
 

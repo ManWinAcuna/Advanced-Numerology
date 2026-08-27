@@ -32,7 +32,7 @@
   let focus = dayStart(new Date());
 
   const em = (a) => (typeof VIETNAMESE_ZODIAC_EMOJI !== 'undefined' && VIETNAMESE_ZODIAC_EMOJI[a]) || '';
-  function tierOf(s) { return s >= 77 ? 'good' : s < 49 ? 'bad' : 'mid'; }
+  function tierOf(s) { return s >= 82 ? 'good' : s < 58 ? 'bad' : 'mid'; }
 
   const els = {
     nameA: document.getElementById('vsNameA'), nameB: document.getElementById('vsNameB'),
