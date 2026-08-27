@@ -1858,11 +1858,64 @@ function fetchWikipediaTitleFromQid(qid) {
     .catch(() => null);
 }
 
-// Resolves to { date, kind, via: 'country' | 'place' } or null. `via` lets
-// the status message be honest about which record the date actually came
-// from, since "Abu Dhabi's founding date" and "the UAE's founding date" are
-// not the same claim even when this app uses the latter for the former.
+// Owner-verified reference (2026-08-26): all 50 US states + their 2 major
+// cities, sourced from National Archives / Census / NPS / Wikipedia and
+// hand-checked, not left to live Wikidata (which is what produced the
+// Utah -> US-founding bug this table exists to prevent). Checked BEFORE
+// any live lookup for a US place - a verified date always wins over a
+// fresh API call. States: Constitution ratification date (first 13) or
+// Union admission date (all day-exact). Cities: the SAME 46 cities that
+// actually have a day-precision founding/settlement/incorporation date on
+// record - the other 54 (~half) are deliberately left OUT of this table,
+// not filled with a guessed day, because their real sources only agree on
+// a year (e.g. "New Orleans, 1718") - per the app's standing rule to never
+// fabricate date precision that isn't there. Those unpinned cities keep
+// falling through to the normal live lookup / manual-entry flow below,
+// unchanged from before this table existed.
+const US_PLACE_DATES = {
+  alabama: '1819-12-14', alaska: '1959-01-03', arizona: '1912-02-14', arkansas: '1836-06-15',
+  california: '1850-09-09', colorado: '1876-08-01', connecticut: '1788-01-09', delaware: '1787-12-07',
+  florida: '1845-03-03', georgia: '1788-01-02', hawaii: '1959-08-21', idaho: '1890-07-03',
+  illinois: '1818-12-03', indiana: '1816-12-11', iowa: '1846-12-28', kansas: '1861-01-29',
+  kentucky: '1792-06-01', louisiana: '1812-04-30', maine: '1820-03-15', maryland: '1788-04-28',
+  massachusetts: '1788-02-06', michigan: '1837-01-26', minnesota: '1858-05-11', mississippi: '1817-12-10',
+  missouri: '1821-08-10', montana: '1889-11-08', nebraska: '1867-03-01', nevada: '1864-10-31',
+  'new hampshire': '1788-06-21', 'new jersey': '1787-12-18', 'new mexico': '1912-01-06', 'new york': '1788-07-26',
+  'north carolina': '1789-11-21', 'north dakota': '1889-11-02', ohio: '1803-03-01', oklahoma: '1907-11-16',
+  oregon: '1859-02-14', pennsylvania: '1787-12-12', 'rhode island': '1790-05-29', 'south carolina': '1788-05-23',
+  'south dakota': '1889-11-02', tennessee: '1796-06-01', texas: '1845-12-29', utah: '1896-01-04',
+  vermont: '1791-03-04', virginia: '1788-06-25', washington: '1889-11-11', 'west virginia': '1863-06-20',
+  wisconsin: '1848-05-29', wyoming: '1890-07-10',
+
+  birmingham: '1871-12-19', anchorage: '1915-11-20', tucson: '1775-08-20', 'los angeles': '1781-09-04',
+  'san diego': '1769-07-16', denver: '1858-11-22', 'colorado springs': '1871-07-31', jacksonville: '1822-06-15',
+  miami: '1896-07-28', honolulu: '1907-04-30', boise: '1863-07-07', chicago: '1833-08-12',
+  indianapolis: '1821-01-06', 'fort wayne': '1794-10-22', 'des moines': '1843-05-20', 'overland park': '1960-05-20',
+  baltimore: '1729-07-30', boston: '1630-09-17', worcester: '1722-06-14', detroit: '1701-07-24',
+  gulfport: '1898-07-28', 'kansas city': '1850-06-01', 'st. louis': '1764-02-15', 'st louis': '1764-02-15',
+  omaha: '1854-07-04', 'las vegas': '1905-05-15', 'jersey city': '1820-01-28', albuquerque: '1706-04-23',
+  columbus: '1812-02-14', cleveland: '1796-07-22', 'oklahoma city': '1889-04-22', pittsburgh: '1758-11-25',
+  columbia: '1786-03-22', memphis: '1819-05-22', houston: '1836-08-30', 'san antonio': '1718-05-01',
+  'salt lake city': '1847-07-24', 'west valley city': '1980-07-01', burlington: '1763-06-07',
+  'south burlington': '1865-11-22', 'virginia beach': '1963-01-01', chesapeake: '1963-01-01',
+  seattle: '1851-11-13', milwaukee: '1846-01-31', cheyenne: '1867-07-04',
+};
+
+function lookupPinnedPlaceDate(name) {
+  const key = String(name || '').trim().toLowerCase();
+  const date = US_PLACE_DATES[key];
+  return date ? { date, kind: 'founded', via: 'pinned' } : null;
+}
+
+// Resolves to { date, kind, via: 'country' | 'place' | 'pinned' } or null.
+// `via` lets the status message be honest about which record the date
+// actually came from, since "Abu Dhabi's founding date" and "the UAE's
+// founding date" are not the same claim even when this app uses the
+// latter for the former.
 function lookupPlaceFoundingDate(name) {
+  const pinned = lookupPinnedPlaceDate(name);
+  if (pinned) return Promise.resolve(pinned);
+
   const ownDateChain = (qid) => (qid ? fetchKeyDate(qid) : Promise.resolve(null))
     .then((result) => result || lookupKeyDateFromWikipediaInfobox(name))
     .then((result) => (result ? { ...result, via: 'place' } : null));
