@@ -27,6 +27,48 @@ function ordinalSuffix(n) {
 }
 
 /* ------------------------------------------ day-of-month -> first LP ---- */
+// The FIRST 8-DAY from birth (owner's final ruling 2026-08-29, worked
+// examples: born 4/15/1994 -> April 17 1994 -> 35 -> 8; born 1/3/2003 ->
+// Jan 8 2003 -> 14 -> 5). An "8 day" is any day-of-month whose NUMBER
+// reduces to 8 - the 8th, 17th, and 26th. NOT the 28th: runCustomReduction
+// keeps 28 as its own value, and 28 is its own tracked theme. Scans on-or-
+// after birth (born on the 8th/17th/26th counts that day itself), returns
+// that date's full universal LP via the same digit-pool method as
+// everything else here. Powers the "8 Day" box on Profile/Calculator/
+// Famous (render.js) and the Database entry popup (category.js), kept
+// identical in code13-app.
+function getFirstEightDayImprint(birthDate) {
+  const searchDate = new Date(birthDate.getTime());
+  for (let d = 0; d <= 31; d++) {
+    if (d > 0) searchDate.setDate(searchDate.getDate() + 1);
+    const dayNum = searchDate.getDate();
+    if (runCustomReduction(dayNum) !== 8) continue;
+
+    const mStr = String(searchDate.getMonth() + 1);
+    const dStr = String(dayNum);
+    const yStr = String(searchDate.getFullYear());
+    const fullSequence = mStr + dStr + yStr;
+
+    const pool = [];
+    let i = 0;
+    while (i < fullSequence.length) {
+      if (i + 1 < fullSequence.length) {
+        const twoDigits = fullSequence.substring(i, i + 2);
+        if (twoDigits === '11' || twoDigits === '22' || twoDigits === '33') {
+          pool.push(parseInt(twoDigits, 10));
+          i += 2;
+          continue;
+        }
+      }
+      pool.push(parseInt(fullSequence.charAt(i), 10));
+      i++;
+    }
+    const rawSum = pool.reduce((a, b) => a + b, 0);
+    return { date: new Date(searchDate.getTime()), lp: runCustomReduction(rawSum) };
+  }
+  return null; // unreachable: an 8/17/26 always occurs within 31 days
+}
+
 // Generalizes getFirst28thDayUniversalValue (numerology.js) to any day-of-
 // month, not just 28. Same semantic: the first calendar occurrence of that
 // day-of-month ON OR AFTER birth (so someone born ON the target day gets

@@ -74,14 +74,14 @@ function render() {
 
   setText('luckyNumber', r.luckyNumber);
   setText('missing', r.missing);
-  // "8 Day" now means the birthdate's own Universal Day Number (2026-08-26,
-  // same fix as Code13 - the "28 Day" rename left the number itself
-  // meaning something else, the first-28th-of-month imprint, than what the
-  // new label implied). r.twentyEightDay (numerology.js, untouched) is no
-  // longer read here; universalDayNumber (db-core.js) is the same function
-  // Today's own Universal Day display already uses, applied to the
-  // birthdate instead of today's date - reused, not reinvented.
-  setText('twentyEightDay', universalDayNumber(birthDate));
+  // "8 Day" = the LP of the FIRST 8-DAY from birth, where an "8 day" is
+  // any day-of-month reducing to 8 (the 8th/17th/26th - NOT the 28th,
+  // which is its own number). Owner's final ruling 2026-08-29, same fix
+  // as Code13, worked examples: born 4/15/1994 -> April 17 -> 8; born
+  // 1/3/2003 -> Jan 8 -> 5. See getFirstEightDayImprint
+  // (imprint-alignment.js).
+  const first8 = getFirstEightDayImprint(birthDate);
+  setText('twentyEightDay', first8 ? first8.lp : '-');
 
   setText('pinnacle1', r.pinnacles.values[0]);
   setText('pinnacle2', r.pinnacles.values[1]);
