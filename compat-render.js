@@ -5,15 +5,13 @@
  * ZODIAC_SYMBOLS, VIETNAMESE_ZODIAC_EMOJI) to be loaded first.
  */
 
-// Thresholds are the user's own call (2026-08-27: "below 58% its red if
-// its above 82% its green") - display-only tiering, not the same 49/77/85
-// bands compat-engine.js's own flags (and the verdict copy built on them)
-// use internally. That gap is deliberate: compat-engine.js is sacrosanct
-// and never edited, so the headline verdict text still speaks in its own
-// terms even though the color now switches at different numbers.
+// Original 77/49 bands. The stricter 82/58 coloring applies ONLY to the
+// Deep Compatibility headline number (deepCompatTier, deep-compat.js) -
+// owner's scoping 2026-08-29: "all the other colors should have stayed
+// the same" after a briefly-shipped app-wide 82/58 sweep.
 function scoreClass(score) {
-  if (score >= 82) return 'good';
-  if (score < 58) return 'bad';
+  if (score >= 77) return 'good';
+  if (score < 49) return 'bad';
   return 'mid';
 }
 

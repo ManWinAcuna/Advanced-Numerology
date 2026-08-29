@@ -25,6 +25,10 @@ function getEffectiveDeepCompatWeight() {
 // rather than imported so this file has no load-order dependency on
 // compat-render.js (db-core.js/compat-render.js sit in a different relative
 // order on the personal-use pages vs. the sports pages).
+// 82/58, deliberately STRICTER than scoreClass's 77/49 (compat-render.js).
+// Owner's scoping 2026-08-29: the new bands apply ONLY to this - the Deep
+// Compatibility headline number in the result popup. Every other score
+// color in the app (sub-cards, hours, calendar, tiles) keeps 77/49.
 function deepCompatTier(score) {
   if (score >= 82) return 'good';
   if (score < 58) return 'bad';

@@ -137,7 +137,7 @@
 
   /* ---------------- render ---------------- */
   function tierOfScore(s) {
-    return s == null ? '' : s >= 82 ? 'good' : s < 58 ? 'bad' : 'mid';
+    return s == null ? '' : s >= 77 ? 'good' : s < 49 ? 'bad' : 'mid';
   }
   function sideHtml(name, p, iso, score) {
     const chip = score == null

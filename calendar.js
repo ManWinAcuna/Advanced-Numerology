@@ -315,8 +315,8 @@ function closeDayModal() {
 }
 
 function tierClass(score) {
-  if (score >= 82) return 'good';
-  if (score < 58) return 'bad';
+  if (score >= 77) return 'good';
+  if (score < 49) return 'bad';
   return 'mid';
 }
 
