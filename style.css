@@ -612,83 +612,6 @@ body::after {
   gap: 6px;
 }
 
-.month-outlook-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: linear-gradient(160deg, #1c160d, #120e08);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px 8px 10px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
-}
-
-.month-outlook-row.good { border-left-color: var(--good); }
-.month-outlook-row.mid { border-left-color: var(--yellow); }
-.month-outlook-row.bad { border-left-color: var(--bad); }
-
-@media (hover: hover) and (pointer: fine) {
-  .month-outlook-row:hover {
-    border-color: var(--yellow);
-    box-shadow: var(--glow-cyan);
-    transform: translateX(3px);
-  }
-}
-
-.month-outlook-rank {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(245, 197, 66, 0.08);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.month-outlook-row:nth-child(1) .month-outlook-rank {
-  background: rgba(245, 197, 66, 0.25);
-  border-color: var(--yellow);
-  color: var(--yellow);
-  box-shadow: 0 0 8px rgba(245, 197, 66, 0.5);
-}
-
-.month-outlook-row:nth-child(2) .month-outlook-rank {
-  background: rgba(240, 230, 210, 0.15);
-  border-color: var(--text);
-  color: var(--text);
-}
-
-.month-outlook-row:nth-child(3) .month-outlook-rank {
-  background: rgba(255, 138, 61, 0.18);
-  border-color: var(--orange);
-  color: var(--orange);
-}
-
-.month-outlook-row .rank-day {
-  flex: 1;
-}
-
-.month-outlook-row .rank-score {
-  font-size: 15px;
-  padding: 3px 11px;
-}
-
-.month-outlook-pm {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  margin-left: 4px;
-}
-
 .year-roadmap-subhead {
   color: var(--muted);
   font-size: 13px;
@@ -699,62 +622,6 @@ body::after {
   margin-top: 16px;
   gap: 6px;
 }
-
-.year-roadmap-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: linear-gradient(160deg, #1c160d, #120e08);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .year-roadmap-row:hover {
-    border-color: var(--yellow);
-    box-shadow: var(--glow-cyan);
-    transform: translateX(3px);
-  }
-}
-
-.year-roadmap-year {
-  font-weight: 700;
-  font-size: 14px;
-  width: 42px;
-  flex-shrink: 0;
-}
-
-.year-roadmap-mid {
-  flex: 1;
-  color: var(--text);
-  font-size: 13px;
-}
-
-.year-roadmap-animal {
-  color: var(--muted);
-  font-size: 12px;
-  margin-left: 6px;
-}
-
-.year-roadmap-verdict {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 3px 8px;
-  border-radius: 10px;
-  color: var(--muted);
-  background: rgba(240, 230, 210, 0.08);
-}
-.year-roadmap-verdict.good { color: var(--good); background: rgba(139, 195, 74, 0.15); }
-.year-roadmap-verdict.bad { color: var(--bad); background: rgba(229, 57, 63, 0.15); }
-.year-roadmap-verdict.mid { color: var(--yellow); background: rgba(245, 197, 66, 0.12); }
-.year-roadmap-verdict.severe { box-shadow: 0 0 8px currentColor; }
 
 .year-roadmap-emax-callout {
   margin: 14px 20px 0;
@@ -893,28 +760,84 @@ body::after {
   transition: width 0.5s ease;
 }
 
-.pcycle-toggle {
-  margin-top: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-}
-
-.pcycle-toggle:hover { color: var(--text); }
-
-.pcycle-detail {
-  display: none;
-  font-size: 12px;
+/* Compound number now shows plainly (redesign 2026-08-31: the old
+   tap-to-reveal toggle was "a useless click" per the owner). */
+.pcycle-compound {
+  margin-top: 4px;
+  font-size: 11px;
   color: var(--muted);
   font-style: italic;
-  margin-top: 2px;
 }
 
-.pcycle-detail.open { display: block; }
+.pcycle-compound::before { content: '↳ '; opacity: 0.6; }
+
+/* Number-led rows for the Yearly Outlook / Personal Year Roadmap popups
+   (same redesign, same date): the PY/PM number is the primary signal,
+   colored by its own energy (--acc/--acc-dim/--acc-ghost set inline per
+   row by pcycleRowHtml, compat-render.js) - the compat score no longer
+   shows in the row at all, only in the tap-through detail. */
+.pcycle-row-wrap { cursor: pointer; }
+
+.pcycle-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(160deg, #1c160d, #120e08);
+  border: 1px solid var(--acc-dim, var(--border));
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pcycle-row-wrap:hover .pcycle-row {
+    box-shadow: 0 0 14px var(--acc-ghost, transparent);
+    transform: translateX(3px);
+  }
+}
+
+.pcycle-row-num {
+  width: 42px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--acc, var(--yellow));
+  text-shadow: 0 0 14px var(--acc-ghost, transparent);
+}
+
+.pcycle-row-body { flex: 1; min-width: 0; }
+
+.pcycle-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pcycle-row-period {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pcycle-row-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pcycle-row-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .pinnacles-collapsible {
   margin-top: 24px;

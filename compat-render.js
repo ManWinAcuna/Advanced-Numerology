@@ -15,6 +15,62 @@ function scoreClass(score) {
   return 'mid';
 }
 
+// Personal Cycles readability redesign (Boost13, locked 2026-08-31): per-
+// number energy colors + one-line meanings, shared by the Personal Cycles
+// cards (render.js) and the Roadmap/Outlook popup rows below - defined here
+// (compat-render.js loads before render.js on every page that uses either)
+// so both can reference the same globals regardless of file load order.
+// Same 14 hex triples as godlike.css's html[data-energy] rules, mirrored
+// because that CSS is scoped to the <html> root only. Meaning words are
+// kw[0] from today.html's own MEAN table - owner's call 2026-08-31: keep
+// as-is rather than re-picking or inventing new words.
+const PCYCLE_ENERGY = {
+  1:  { acc: '#e9edf4', dim: 'rgba(233,237,244,.55)', ghost: 'rgba(233,237,244,.09)' },
+  2:  { acc: '#a9bedd', dim: 'rgba(169,190,221,.55)', ghost: 'rgba(169,190,221,.09)' },
+  3:  { acc: '#ffb36b', dim: 'rgba(255,179,107,.55)', ghost: 'rgba(255,179,107,.09)' },
+  4:  { acc: '#79b0a6', dim: 'rgba(121,176,166,.55)', ghost: 'rgba(121,176,166,.09)' },
+  5:  { acc: '#ff8a3d', dim: 'rgba(255,138,61,.55)',  ghost: 'rgba(255,138,61,.09)' },
+  6:  { acc: '#e0a184', dim: 'rgba(224,161,132,.55)', ghost: 'rgba(224,161,132,.09)' },
+  7:  { acc: '#d24a5c', dim: 'rgba(210,74,92,.55)',   ghost: 'rgba(210,74,92,.09)' },
+  8:  { acc: '#f5c542', dim: 'rgba(245,197,66,.55)',  ghost: 'rgba(245,197,66,.10)' },
+  9:  { acc: '#9d84ff', dim: 'rgba(157,132,255,.55)', ghost: 'rgba(157,132,255,.09)' },
+  11: { acc: '#86e8ff', dim: 'rgba(134,232,255,.55)', ghost: 'rgba(134,232,255,.09)' },
+  13: { acc: '#ff6242', dim: 'rgba(255,98,66,.55)',   ghost: 'rgba(255,98,66,.09)' },
+  22: { acc: '#3fce9f', dim: 'rgba(63,206,159,.55)',  ghost: 'rgba(63,206,159,.09)' },
+  28: { acc: '#ffd75e', dim: 'rgba(255,215,94,.6)',   ghost: 'rgba(255,215,94,.11)' },
+  33: { acc: '#f0a8c8', dim: 'rgba(240,168,200,.55)', ghost: 'rgba(240,168,200,.09)' },
+};
+
+const PCYCLE_MEANING = {
+  1: 'Initiate', 2: 'Feeling', 3: 'Voice', 4: 'Structure', 5: 'Restless',
+  6: 'Duty', 7: 'Depth', 8: 'Power', 9: 'Closure', 11: 'Intuition',
+  13: 'Work', 22: 'Monument', 28: 'Radiant', 33: 'Teacher',
+};
+
+function pcycleEnergy(n) { return PCYCLE_ENERGY[n] || PCYCLE_ENERGY[1]; }
+
+// Number-led row for the Yearly Outlook / Personal Year Roadmap popups
+// (redesign locked 2026-08-31, Code212 round): the PY/PM number itself is
+// the primary signal, colored by its own energy - not by the compat score,
+// which the owner confirmed matters less than "what number it actually is"
+// and now lives only in the tap-through detail. tagText is optional (the
+// Roadmap's real verdict word, e.g. "GOOD"; Month Outlook rows pass '' since
+// they have no independent verdict beyond the score itself) and always
+// renders muted/neutral - the number's own energy is the one color signal
+// per row, not a second tier-colored system.
+function pcycleRowHtml(number, periodLabel, tagText, subLine) {
+  const c = pcycleEnergy(number);
+  const tagHtml = tagText ? `<span class="pcycle-row-tag">${tagText}</span>` : '';
+  return `
+    <div class="pcycle-row" style="--acc:${c.acc};--acc-dim:${c.dim};--acc-ghost:${c.ghost}">
+      <span class="pcycle-row-num">${number}</span>
+      <div class="pcycle-row-body">
+        <div class="pcycle-row-top"><span class="pcycle-row-period">${periodLabel}</span>${tagHtml}</div>
+        <div class="pcycle-row-sub">${subLine}</div>
+      </div>
+    </div>`;
+}
+
 // The shared .modal-box defaults to a width sized for the full compatibility
 // breakdown (meters + rows). Narrower popups (like Month Outlook) opt into a
 // tighter box instead of sitting mostly-empty inside the wide default.
@@ -623,29 +679,36 @@ function renderEnergyFlowResults(containerEl, r) {
   wireCompatReveal(containerEl);
 }
 
-// Renders a computeMonthOutlook() result - all 12 calendar months ranked
-// best to worst for this person.
+// Renders a computeMonthOutlook() result - all 12 calendar months, in
+// calendar order (redesign 2026-08-31: was best-to-worst score rank: the
+// owner's call was "what matters most is the actual data, like what
+// personal year/month it is", not the compat score, so rank badges are
+// gone and the row leads with the Personal Month number itself).
 function renderMonthOutlook(containerEl, rankedMonths) {
   containerEl.classList.add('active');
   setModalWidth(containerEl, true);
+  const months = rankedMonths.slice().sort((a, b) => a.index - b.index);
   containerEl.innerHTML = `
     <div class="score-hero month-outlook-hero">
       <div class="month-outlook-icon">📅</div>
       <div class="score-names">Yearly Outlook</div>
     </div>
     <div class="calendar-rank-list month-outlook-list">
-      ${rankedMonths.map((m, idx) => `
-        <div class="month-outlook-row ${scoreClass(m.finalScore)}" data-index="${m.index}" title="Personal Month ${m.personalMonth} &middot; Universal Month ${m.universalMonth} &middot; ${m.westernRepSign} - click for the breakdown">
-          <span class="month-outlook-rank">${idx + 1}</span>
-          <span class="rank-day">${VIETNAMESE_ZODIAC_EMOJI[m.animal] || ''} ${m.name}${m.isLuckyMonth ? ' 🍀' : ''}<span class="month-outlook-pm">PM ${m.personalMonth}</span></span>
-          <span class="rank-score ${scoreClass(m.finalScore)}">${m.finalScore}</span>
+      ${months.map((m) => `
+        <div class="pcycle-row-wrap" data-index="${m.index}" title="click for the breakdown">
+          ${pcycleRowHtml(
+            m.personalMonth,
+            `${m.name}${m.isLuckyMonth ? ' 🍀' : ''}`,
+            '',
+            `${PCYCLE_MEANING[m.personalMonth] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[m.animal] || ''} ${m.animal}`
+          )}
         </div>
       `).join('')}
     </div>
     <div id="monthOutlookCompareResults"></div>
   `;
 
-  containerEl.querySelectorAll('.month-outlook-row').forEach((rowEl) => {
+  containerEl.querySelectorAll('.pcycle-row-wrap').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
       const monthIndex = Number(rowEl.dataset.index);
       const m = rankedMonths.find((row) => row.index === monthIndex);
@@ -716,18 +779,20 @@ function renderYearRoadmap(containerEl, roadmap) {
     </div>
     <div class="calendar-rank-list year-roadmap-list">
       ${roadmap.years.map((y) => `
-        <div class="year-roadmap-row" data-year-key="${y.year}:${y.part}" title="Personal Year ${y.personalYear} &middot; ${y.animal} &middot; click for the breakdown">
-          <span class="year-roadmap-year">${emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate)}</span>
-          <span class="year-roadmap-mid">${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''} PY ${y.personalYear}<span class="year-roadmap-animal">${y.animal}</span></span>
-          <span class="year-roadmap-verdict ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">${y.verdict.toUpperCase()}</span>
-          <span class="rank-score ${scoreClass(y.finalScore)}">${y.finalScore}</span>
+        <div class="pcycle-row-wrap" data-year-key="${y.year}:${y.part}" title="click for the breakdown">
+          ${pcycleRowHtml(
+            y.personalYear,
+            emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
+            y.verdict.toUpperCase(),
+            `${PCYCLE_MEANING[y.personalYear] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''} ${y.animal}`
+          )}
         </div>
       `).join('')}
     </div>
     <div id="yearRoadmapCompareResults"></div>
   `;
 
-  containerEl.querySelectorAll('.year-roadmap-row').forEach((rowEl) => {
+  containerEl.querySelectorAll('.pcycle-row-wrap').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
       const key = rowEl.dataset.yearKey;
       const y = roadmap.years.find((row) => `${row.year}:${row.part}` === key);
@@ -778,16 +843,30 @@ function renderYearRoadmapDetail(containerEl, roadmap, y) {
     compatMeterRow(`Birth Animal (${roadmap.ownAnimal} ↔ ${y.animal})`, y.vietnameseScore);
 
   const verdict = MONTH_DETAIL_VERDICT[scoreClass(y.finalScore)];
+  // "add an option to go through the personal months of that year they
+  // selected" (owner, Code212 round 2026-08-31) - getMonthsTable only ever
+  // reads today.getFullYear() from its second arg, so a synthetic Jan 1 of
+  // the selected roadmap year produces that year's own 12-month table with
+  // no changes to numerology.js itself.
+  const monthsBtnHtml = `<button type="button" class="story-link" id="roadmapMonthsBtn">📅 See personal months for ${y.year}</button>`;
   containerEl.innerHTML = compatHeroShellHtml(
     y.finalScore,
     emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
     verdict.head.replace('Month', 'Year'),
     verdict.body,
     cardsHtml,
-    calloutHtml,
+    calloutHtml + monthsBtnHtml,
     meters
   );
   wireCompatReveal(containerEl);
+  const monthsBtn = containerEl.querySelector('#roadmapMonthsBtn');
+  if (monthsBtn) {
+    monthsBtn.addEventListener('click', () => {
+      const table = getMonthsTable(roadmap.birthDate, new Date(y.year, 0, 1));
+      const ranked = computeMonthOutlook(roadmap.birthDate, table);
+      renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
+    });
+  }
 }
 
 /* =========================== General Reading + identity popups ==========
