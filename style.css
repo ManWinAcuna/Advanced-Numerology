@@ -4966,6 +4966,39 @@ body {
   margin-top: 14px;
 }
 
+/* Lucky Number / 8 Day / Missing - replaces the old giant emoji stat-box
+   trio (owner 2026-08-31: "unhappy with the way [they] look in contrast
+   to the rest" - random per-box colors, too big/loud, inconsistent with
+   each other, didn't match the page's newer restrained voice). Compact
+   chips, colored by each number's own energy (same PCYCLE_ENERGY table
+   Personal Cycles uses - reused via --acc, not reinvented) via a left
+   accent edge rather than a filled box, so the color reads without
+   shouting. Missing stays a flat neutral --acc (no single number to
+   color by - it's a digit list) per the owner's own call: the other two
+   get real color, Missing stays quiet. */
+.core-chip-row {
+  display: flex; gap: 8px; margin-top: 14px;
+}
+.core-chip {
+  flex: 1; min-width: 0; background: rgba(255,255,255,.03);
+  border-left: 3px solid var(--acc, #4a4438); border-radius: 6px;
+  padding: 8px 10px;
+}
+.core-chip-label {
+  font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+}
+.core-chip-value {
+  font-size: 22px; font-weight: 700; color: var(--acc, var(--muted)); margin-top: 2px;
+}
+/* --acc is a page-wide custom property (godlike.css sets it at the html
+   root for the day's own energy) - CSS inheritance means an element that
+   never sets its own --acc picks up that global value instead of hitting
+   the var() fallback above, which only fires when --acc is unset
+   EVERYWHERE up the tree. Missing must override it explicitly to actually
+   stay neutral instead of silently matching whatever energy is active. */
+.core-chip-muted { --acc: #4a4438; }
+.core-chip-muted .core-chip-value { color: var(--muted); }
+
 /* ===================== Shared design language ===================== */
 /* Pull the plain pages toward the app's purple/yellow identity without
    the full cyberpunk treatment (grid background and corner brackets stay

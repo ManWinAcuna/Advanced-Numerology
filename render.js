@@ -173,6 +173,13 @@ function render() {
   // (imprint-alignment.js).
   const first8 = getFirstEightDayImprint(birthDate);
   setText('twentyEightDay', first8 ? first8.lp : '-');
+  // Lucky Number and 8 Day get colored by their own number's energy (same
+  // PCYCLE_ENERGY table Personal Cycles uses) - Missing stays uncolored,
+  // it's a digit list, not one number (owner's own distinction, 2026-08-31).
+  const luckyChip = document.getElementById('luckyNumberChip');
+  if (luckyChip) luckyChip.style.setProperty('--acc', pcycleEnergy(r.luckyNumber).acc);
+  const eightDayChip = document.getElementById('twentyEightDayChip');
+  if (eightDayChip && first8) eightDayChip.style.setProperty('--acc', pcycleEnergy(first8.lp).acc);
 
   setText('pinnacle1', r.pinnacles.values[0]);
   setText('pinnacle2', r.pinnacles.values[1]);
