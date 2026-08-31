@@ -132,7 +132,11 @@ function render() {
   const today = getToday();
 
   const r = computeAll(birthDate, today);
-  lastMonthsTable = r.monthsTable;
+  // getMonthsTableByBirthDay (db-core.js) replaces computeAll's own
+  // r.monthsTable (numerology.js, sacrosanct - never edited) - the
+  // sacrosanct version ignores the birth DAY and rolls months over on the
+  // 1st, wrong for anyone not born on the 1st (owner 2026-08-31).
+  lastMonthsTable = getMonthsTableByBirthDay(birthDate, today);
 
   setText('lifePath', lifePathDisplayText(r.lifePath));
   setText('dayBornReduced', r.dayBornReduced);
@@ -232,11 +236,18 @@ function render() {
   const monthsBody = document.querySelector('#monthsTable tbody');
   monthsBody.innerHTML = '';
   const currentMonthIndex = today.getMonth() + 1;
-  r.monthsTable.forEach((row) => {
+  const isEarlySide = today.getDate() < birthDate.getDate();
+  lastMonthsTable.forEach((row) => {
     const tr = document.createElement('tr');
-    if (row.index === currentMonthIndex) tr.className = 'current-month';
+    // A split month (birth-day falls inside it) has 2 rows sharing the same
+    // index - only the one matching where TODAY sits relative to the birth
+    // day gets the current-month highlight.
+    const [baseName, part] = row.name.split('|');
+    const isCurrent = row.index === currentMonthIndex && (!part || (part === 'early') === isEarlySide);
+    if (isCurrent) tr.className = 'current-month';
+    const partLabel = part === 'early' ? ' (early)' : part === 'late' ? ' (late)' : '';
     tr.innerHTML = `
-      <td class="month-name">${row.index} ${row.name} <span class="month-animal" title="${row.animal}">${VIETNAMESE_ZODIAC_EMOJI[row.animal] || ''}</span></td>
+      <td class="month-name">${row.index} ${baseName}${partLabel} <span class="month-animal" title="${row.animal}">${VIETNAMESE_ZODIAC_EMOJI[row.animal] || ''}</span></td>
       <td class="reduced">${row.reduced}</td>
       <td>${row.unreduced}</td>
     `;
@@ -489,7 +500,7 @@ if (pmCardEl) {
   pmCardEl.addEventListener('click', () => {
     if (!lastBirthDate || !lastMonthsTable) return;
     const ranked = computeMonthOutlook(lastBirthDate, lastMonthsTable);
-    renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
+    renderMonthOutlook(document.getElementById('compatModalBody'), ranked, lastBirthDate);
     openModal();
   });
 }

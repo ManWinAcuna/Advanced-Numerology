@@ -964,6 +964,53 @@ function emaxYearPersonalYearPeriods(birthDate, year) {
   ];
 }
 
+// getMonthsTable (numerology.js, sacrosanct) builds one row per CALENDAR
+// month via a simplified rawPY+i formula that ignores the birth DAY - wrong
+// for anyone not born on the 1st, since the real Personal Month cycle rolls
+// over ON the birth day, not on the 1st of the month (owner 2026-08-31:
+// "everyones personal months start at different dates" - the exact same
+// fix already applied to Personal Year via emaxYearPersonalYearPeriods
+// above). Drop-in birth-day-correct replacement, built entirely from
+// sacrosanct primitives (getPersonalMonthRaw, reduceNumber, getUniversalMonth,
+// CHINESE_MONTH_SIGNS) - numerology.js itself is never touched. A calendar
+// month whose birth-day boundary falls inside it produces 2 rows instead of
+// 1 (mirrors emaxYearPersonalYearPeriods exactly). computeMonthOutlook
+// (compat-engine.js, also sacrosanct) only ever passes `name` through
+// unchanged, so the split is encoded into it as "Jan|early"/"Jan|late" -
+// every renderer consuming this must split('|') before displaying `.name`.
+function getMonthsTableByBirthDay(birthDate, today) {
+  const birthMonth = birthDate.getMonth() + 1;
+  const bd = birthDate.getDate();
+  const displayYear = today.getFullYear();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const rows = [];
+  months.forEach((name, idx) => {
+    const i = idx + 1;
+    const cycleYear = i < birthMonth ? displayYear - 1 : displayYear;
+    const daysInMonth = new Date(displayYear, idx + 1, 0).getDate();
+    const lateDay = Math.min(bd, daysInMonth);
+    const lateDate = new Date(displayYear, idx, lateDay);
+    const lateRaw = getPersonalMonthRaw(birthDate, lateDate);
+    let lateReduced = reduceNumber(lateRaw);
+    if (lateReduced === 2) lateReduced = 11; // no standalone 2 - this is a Personal Month, not a day-of-month
+    const universalMonth = getUniversalMonth(lateDate);
+    const animal = CHINESE_MONTH_SIGNS[i];
+    const makeRow = (raw, reduced, rowName) => ({ name: rowName, index: i, unreduced: raw, reduced, universalMonth, animal, cycleYear });
+
+    if (bd <= 1) { rows.push(makeRow(lateRaw, lateReduced, name)); return; }
+
+    const earlyDate = new Date(displayYear, idx, lateDay - 1);
+    const earlyRaw = getPersonalMonthRaw(birthDate, earlyDate);
+    let earlyReduced = reduceNumber(earlyRaw);
+    if (earlyReduced === 2) earlyReduced = 11;
+    if (earlyReduced === lateReduced) { rows.push(makeRow(lateRaw, lateReduced, name)); return; }
+
+    rows.push(makeRow(earlyRaw, earlyReduced, `${name}|early`));
+    rows.push(makeRow(lateRaw, lateReduced, `${name}|late`));
+  });
+  return rows;
+}
+
 // Numerology supersedes the zodiac read when a single year matches both -
 // per the user's own call (2026-08-01): their own zodiac year doesn't save
 // a Personal Year 7 or 11, since 7/11 are already bearish in this app's own

@@ -49,28 +49,6 @@ const PCYCLE_MEANING = {
 
 function pcycleEnergy(n) { return PCYCLE_ENERGY[n] || PCYCLE_ENERGY[1]; }
 
-// Number-led row for the Yearly Outlook / Personal Year Roadmap popups
-// (redesign locked 2026-08-31, Code212 round): the PY/PM number itself is
-// the primary signal, colored by its own energy - not by the compat score,
-// which the owner confirmed matters less than "what number it actually is"
-// and now lives only in the tap-through detail. tagText is optional (the
-// Roadmap's real verdict word, e.g. "GOOD"; Month Outlook rows pass '' since
-// they have no independent verdict beyond the score itself) and always
-// renders muted/neutral - the number's own energy is the one color signal
-// per row, not a second tier-colored system.
-function pcycleRowHtml(number, periodLabel, tagText, subLine) {
-  const c = pcycleEnergy(number);
-  const tagHtml = tagText ? `<span class="pcycle-row-tag">${tagText}</span>` : '';
-  return `
-    <div class="pcycle-row" style="--acc:${c.acc};--acc-dim:${c.dim};--acc-ghost:${c.ghost}">
-      <span class="pcycle-row-num">${number}</span>
-      <div class="pcycle-row-body">
-        <div class="pcycle-row-top"><span class="pcycle-row-period">${periodLabel}</span>${tagHtml}</div>
-        <div class="pcycle-row-sub">${subLine}</div>
-      </div>
-    </div>`;
-}
-
 // Continuous red->gold->green fill color for a 0-100 compat score, in
 // place of the old 3-bucket COMPAT_TIER_COLOR - calibrated to the owner's
 // live feedback 2026-08-31 (widget-mockup round), NOT a naive 0/50/100
@@ -89,23 +67,29 @@ function pcycleScoreColor(score) {
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
-// One row per CALENDAR year, even when the birthday splits it into two
-// different Personal Years (owner's call 2026-08-31: "show 1 year not 2,
-// but still visually see when it starts and ends"). Went through several
+// One row per CALENDAR period (a year, or a month - see pcycleSingleRowHtml
+// for the single-period sibling used by both Month Outlook and non-split
+// Roadmap rows), even when the birthday splits it into two different
+// Personal cycles (owner's call 2026-08-31: "show 1 [period] not 2, but
+// still visually see when it starts and ends"). Went through several
 // widget-mockup rounds with the owner before landing here - see
 // project_personal_cycles_redesign.md for the full history. Final shape:
-// year is the prominent heading (animal tucked right next to it, not
-// pushed to the row's far edge), each period's number is small and
-// de-emphasized (the owner's root complaint was "the numbers were too
-// big"), and each period gets its own thin score-proportional bar colored
-// via pcycleScoreColor - the continuous gradient (not the old fixed 3
-// buckets) reads clearly across the whole 0-100 range.
-function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
-  const md = `${String(birthDate.getMonth() + 1).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
+// the period label is the prominent heading (animal tucked right next to
+// it, not pushed to the row's far edge), each sub-period's number is small
+// and de-emphasized (the owner's root complaint was "the numbers were too
+// big"), and each sub-period gets its own thin score-proportional bar
+// colored via pcycleScoreColor - the continuous gradient (not the old
+// fixed 3 buckets) reads clearly across the whole 0-100 range. Generalized
+// 2026-08-31 (was year-only, read `.personalYear` directly) to also cover
+// Month Outlook rows, which split on the same birth-day boundary within a
+// calendar month instead of within a calendar year - callers now pass a
+// pre-formatted boundary label and {number, finalScore} sub-period objects
+// instead of a bare birthDate.
+function pcycleSplitRowHtml(periodLabel, animal, earlyP, lateP, boundaryLabel) {
   const periodHtml = (p, when) => `
     <div class="pcycle-split-period">
       <div class="pcycle-split-period-top">
-        <span class="pcycle-split-num">${p.personalYear}</span>
+        <span class="pcycle-split-num">${p.number}</span>
         <span class="pcycle-split-when">${when} &middot; ${p.finalScore}%</span>
       </div>
       <div class="pcycle-split-bar"><div class="pcycle-split-bar-fill" style="width:${p.finalScore}%;background:${pcycleScoreColor(p.finalScore)}"></div></div>
@@ -113,11 +97,35 @@ function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
   return `
     <div class="pcycle-split-row">
       <div class="pcycle-split-top">
-        <span class="pcycle-row-period">${year}</span>
-        <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[earlyP.animal] || ''} ${earlyP.animal}</span>
+        <span class="pcycle-row-period">${periodLabel}</span>
+        <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[animal] || ''} ${animal}</span>
       </div>
-      ${periodHtml(earlyP, `until ${md}`)}
-      ${periodHtml(lateP, `from ${md}`)}
+      ${periodHtml(earlyP, `until ${boundaryLabel}`)}
+      ${periodHtml(lateP, `from ${boundaryLabel}`)}
+    </div>`;
+}
+
+// Single-period sibling of pcycleSplitRowHtml - same visual language (plain
+// number, score-gradient bar), just one sub-period block instead of two.
+// Replaces the old pcycleRowHtml (per-number rainbow energy coloring) for
+// every Personal Cycles row - Month Outlook rows and non-split Roadmap
+// years alike - per the owner's call 2026-08-31: "we need to rework
+// [Month Outlook] aswell, and it needs to be in the same way that the
+// personal year is structured."
+function pcycleSingleRowHtml(periodLabel, animal, p) {
+  return `
+    <div class="pcycle-split-row">
+      <div class="pcycle-split-top">
+        <span class="pcycle-row-period">${periodLabel}</span>
+        <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[animal] || ''} ${animal}</span>
+      </div>
+      <div class="pcycle-split-period">
+        <div class="pcycle-split-period-top">
+          <span class="pcycle-split-num">${p.number}</span>
+          <span class="pcycle-split-when">${p.finalScore}%</span>
+        </div>
+        <div class="pcycle-split-bar"><div class="pcycle-split-bar-fill" style="width:${p.finalScore}%;background:${pcycleScoreColor(p.finalScore)}"></div></div>
+      </div>
     </div>`;
 }
 
@@ -740,26 +748,56 @@ function renderEnergyFlowResults(containerEl, r) {
 // owner's call was "what matters most is the actual data, like what
 // personal year/month it is", not the compat score, so rank badges are
 // gone and the row leads with the Personal Month number itself).
-function renderMonthOutlook(containerEl, rankedMonths) {
+//
+// computeMonthOutlook (compat-engine.js, sacrosanct) runs one row per entry
+// in the monthsTable it's given - getMonthsTableByBirthDay (db-core.js) now
+// feeds it 2 rows for any calendar month the birth-day splits in two, with
+// the split encoded into `.name` as "Jan|early"/"Jan|late" (the only field
+// computeMonthOutlook passes through untouched). This groups the flat
+// ranked list back into one entry per calendar month before rendering, so
+// a split month renders as a single pcycleSplitRowHtml row - exactly like
+// renderYearRoadmap groups Personal-Year periods back into one row per
+// calendar year.
+function groupMonthOutlook(rankedMonths) {
+  const byKey = new Map();
+  rankedMonths.forEach((m) => {
+    const [base, part] = m.name.split('|');
+    m.name = base;
+    m.part = part || 'whole';
+    const key = `${m.cycleYear}-${m.index}`;
+    if (!byKey.has(key)) byKey.set(key, { index: m.index, cycleYear: m.cycleYear, name: base, animal: m.animal, periods: [] });
+    byKey.get(key).periods.push(m);
+  });
+  const months = Array.from(byKey.values()).sort((a, b) => a.index - b.index);
+  months.forEach((mo) => mo.periods.sort((a, b) => (a.part === 'early' ? -1 : 1)));
+  return months;
+}
+
+function renderMonthOutlook(containerEl, rankedMonths, birthDate) {
   containerEl.classList.add('active');
   setModalWidth(containerEl, true);
-  const months = rankedMonths.slice().sort((a, b) => a.index - b.index);
+  const months = groupMonthOutlook(rankedMonths.slice());
   containerEl.innerHTML = `
     <div class="score-hero month-outlook-hero">
       <div class="month-outlook-icon">📅</div>
       <div class="score-names">Yearly Outlook</div>
     </div>
     <div class="calendar-rank-list month-outlook-list">
-      ${months.map((m) => `
-        <div class="pcycle-row-wrap" data-index="${m.index}" title="click for the breakdown">
-          ${pcycleRowHtml(
-            m.personalMonth,
-            `${m.name}${m.isLuckyMonth ? ' 🍀' : ''}`,
-            '',
-            `${PCYCLE_MEANING[m.personalMonth] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[m.animal] || ''} ${m.animal}`
-          )}
-        </div>
-      `).join('')}
+      ${months.map((mo) => {
+        const lucky = mo.periods.some((p) => p.isLuckyMonth);
+        const label = `${mo.name}${lucky ? ' 🍀' : ''}`;
+        return `
+        <div class="pcycle-row-wrap" data-index="${mo.index}" title="click for the breakdown">
+          ${mo.periods.length === 1
+            ? pcycleSingleRowHtml(label, mo.animal, { number: mo.periods[0].personalMonth, finalScore: mo.periods[0].finalScore })
+            : pcycleSplitRowHtml(
+                label, mo.animal,
+                { number: mo.periods[0].personalMonth, finalScore: mo.periods[0].finalScore },
+                { number: mo.periods[1].personalMonth, finalScore: mo.periods[1].finalScore },
+                `${String(mo.index).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`
+              )}
+        </div>`;
+      }).join('')}
     </div>
   `;
 
@@ -771,9 +809,14 @@ function renderMonthOutlook(containerEl, rankedMonths) {
   containerEl.querySelectorAll('.pcycle-row-wrap').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
       const monthIndex = Number(rowEl.dataset.index);
-      const m = rankedMonths.find((row) => row.index === monthIndex);
-      if (!m) return;
-      renderMonthDetail(document.getElementById('storyModalBody'), m);
+      const mo = months.find((row) => row.index === monthIndex);
+      if (!mo) return;
+      const target = document.getElementById('storyModalBody');
+      if (mo.periods.length === 1) {
+        renderMonthDetail(target, mo.periods[0]);
+      } else {
+        renderSplitMonthDetail(target, mo.periods[0], mo.periods[1], birthDate, mo.index);
+      }
       document.getElementById('storyModalOverlay').classList.add('active');
     });
   });
@@ -789,10 +832,11 @@ const MONTH_DETAIL_VERDICT = {
   mid: { head: 'Workable Month', body: 'Neutral tape — what you bring matters more than what it gives.' },
   bad: { head: 'Challenging Month', body: 'The cycle leans against you — lighter commitments, more review.' },
 };
-function renderMonthDetail(containerEl, m) {
-  containerEl.classList.add('active');
-  setModalWidth(containerEl, false);
-
+// Pure hero-block builder, shared by the single-period detail (one hero)
+// and the split-month detail (two heroes stacked, "Until"/"From" labeled -
+// same pattern as buildYearRoadmapHeroHtml/renderSplitYearRoadmapDetail)
+// so the actual card/meter markup only exists in one place.
+function buildMonthDetailHeroHtml(m) {
   const verdict = MONTH_DETAIL_VERDICT[scoreClass(m.finalScore)];
   const cardsHtml = `
     <div class="compat-cards">
@@ -820,7 +864,28 @@ function renderMonthDetail(containerEl, m) {
     compatMeterRow(`Month Sign (${m.personMonthSign} ↔ ${m.animal})`, m.vietnameseScore) +
     compatMeterRow(`Sign (${m.personSunSign} ↔ ${m.westernRepSign})`, m.westernScore);
 
-  containerEl.innerHTML = compatHeroShellHtml(m.finalScore, `${m.name} ${m.cycleYear}`, verdict.head, verdict.body, cardsHtml, bonusChipsHtml(bonuses), meters);
+  return compatHeroShellHtml(m.finalScore, `${m.name} ${m.cycleYear}`, verdict.head, verdict.body, cardsHtml, bonusChipsHtml(bonuses), meters);
+}
+
+function renderMonthDetail(containerEl, m) {
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+  containerEl.innerHTML = buildMonthDetailHeroHtml(m);
+  wireCompatReveal(containerEl);
+}
+
+// Split-month companion to renderMonthDetail - stacks both periods' hero
+// blocks in the same popup, same pattern as renderSplitYearRoadmapDetail.
+function renderSplitMonthDetail(containerEl, earlyM, lateM, birthDate, monthIndex) {
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+  const md = `${String(monthIndex).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
+  containerEl.innerHTML = `
+    <div class="year-roadmap-split-label">Until ${md}</div>
+    ${buildMonthDetailHeroHtml(earlyM)}
+    <div class="year-roadmap-split-label">From ${md}</div>
+    ${buildMonthDetailHeroHtml(lateM)}
+  `;
   wireCompatReveal(containerEl);
 }
 
@@ -841,13 +906,18 @@ function renderYearRoadmap(containerEl, roadmap) {
       ${roadmap.years.map((y) => `
         <div class="pcycle-row-wrap" data-year-key="${y.year}" title="click for the breakdown">
           ${y.periods.length === 1
-            ? pcycleRowHtml(
-                y.periods[0].personalYear,
+            ? pcycleSingleRowHtml(
                 String(y.year),
-                y.periods[0].verdict.toUpperCase(),
-                `${PCYCLE_MEANING[y.periods[0].personalYear] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[y.periods[0].animal] || ''} ${y.periods[0].animal}`
+                y.periods[0].animal,
+                { number: y.periods[0].personalYear, finalScore: y.periods[0].finalScore }
               )
-            : pcycleSplitRowHtml(y.year, y.periods[0], y.periods[1], roadmap.birthDate)}
+            : pcycleSplitRowHtml(
+                String(y.year),
+                y.periods[0].animal,
+                { number: y.periods[0].personalYear, finalScore: y.periods[0].finalScore },
+                { number: y.periods[1].personalYear, finalScore: y.periods[1].finalScore },
+                `${String(roadmap.birthDate.getMonth() + 1).padStart(2, '0')}/${String(roadmap.birthDate.getDate()).padStart(2, '0')}`
+              )}
         </div>
       `).join('')}
     </div>
@@ -937,10 +1007,10 @@ function wireRoadmapMonthsBtn(containerEl, roadmap, year) {
   const monthsBtn = containerEl.querySelector('#roadmapMonthsBtn');
   if (!monthsBtn) return;
   monthsBtn.addEventListener('click', () => {
-    const table = getMonthsTable(roadmap.birthDate, new Date(year, 0, 1));
+    const table = getMonthsTableByBirthDay(roadmap.birthDate, new Date(year, 0, 1));
     const ranked = computeMonthOutlook(roadmap.birthDate, table);
     document.getElementById('storyModalOverlay').classList.remove('active');
-    renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
+    renderMonthOutlook(document.getElementById('compatModalBody'), ranked, roadmap.birthDate);
   });
 }
 
