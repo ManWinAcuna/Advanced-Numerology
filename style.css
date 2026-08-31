@@ -839,20 +839,21 @@ body::after {
   white-space: nowrap;
 }
 
-/* Split-year row, round 2 (2026-08-31): one row per calendar year even
-   when the birthday splits it into two Personal Years. Round 1's
-   proportional two-tone bar went nearly invisible for birthdays close to
-   Jan 1/Dec 31, and colored the numbers by their own energy on top of a
-   verdict-colored bar - two competing color systems on one small row.
-   Owner's fix: "numbers shouldn't keep their own color, make this fit the
-   rest of the app's feel" - plain-text numbers, no bar, verdict word is
-   the only color (small text, not a filled surface). See
-   pcycleSplitRowHtml, compat-render.js. */
+/* Split-year row, final (2026-08-31, after several widget-mockup rounds
+   with the owner - see project_personal_cycles_redesign.md for the full
+   history): one row per calendar year even when the birthday splits it
+   into two Personal Years. Year is the prominent heading (animal tucked
+   right beside it, not pushed to the row's far edge); each period's
+   number is small/de-emphasized (root complaint was "the numbers were too
+   big"); each period gets its own thin bar, width = that period's real
+   compat score, color from pcycleScoreColor's continuous red-gold-green
+   curve (compat-render.js) - calibrated live against the owner's own
+   reactions, not a naive 3-bucket split. */
 .pcycle-split-row {
   background: linear-gradient(160deg, #1c160d, #120e08);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
 }
 
@@ -867,46 +868,47 @@ body::after {
 .pcycle-split-top {
   display: flex;
   align-items: baseline;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.pcycle-split-row .pcycle-row-period {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.pcycle-split-period + .pcycle-split-period { margin-top: 8px; }
+
+.pcycle-split-period-top {
+  display: flex;
   justify-content: space-between;
-}
-
-.pcycle-split-periods {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.pcycle-split-period {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  align-items: baseline;
 }
 
 .pcycle-split-num {
-  font-size: 24px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(240, 230, 210, 0.75);
 }
 
 .pcycle-split-when {
   font-size: 10px;
   color: var(--muted);
-  text-align: center;
 }
 
-.pcycle-split-verdict {
-  font-weight: 700;
-  letter-spacing: 0.03em;
+.pcycle-split-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-top: 3px;
 }
 
-.pcycle-split-arrow {
-  color: var(--muted);
-  font-size: 14px;
-  flex-shrink: 0;
+.pcycle-split-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
 }
 
 .year-roadmap-split-label {

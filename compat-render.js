@@ -71,25 +71,44 @@ function pcycleRowHtml(number, periodLabel, tagText, subLine) {
     </div>`;
 }
 
+// Continuous red->gold->green fill color for a 0-100 compat score, in
+// place of the old 3-bucket COMPAT_TIER_COLOR - calibrated to the owner's
+// live feedback 2026-08-31 (widget-mockup round), NOT a naive 0/50/100
+// split: red should still read clearly through the mid-40s, and green
+// should already read clearly by ~70.
+const PCYCLE_SCORE_RED = [229, 57, 63];
+const PCYCLE_SCORE_GOLD = [245, 197, 66];
+const PCYCLE_SCORE_GREEN = [139, 195, 74];
+function pcycleScoreColor(score) {
+  const lerp = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  let rgb;
+  if (score <= 45) rgb = PCYCLE_SCORE_RED;
+  else if (score <= 65) rgb = lerp(PCYCLE_SCORE_RED, PCYCLE_SCORE_GOLD, (score - 45) / 20);
+  else if (score <= 73) rgb = lerp(PCYCLE_SCORE_GOLD, PCYCLE_SCORE_GREEN, (score - 65) / 8);
+  else rgb = PCYCLE_SCORE_GREEN;
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+
 // One row per CALENDAR year, even when the birthday splits it into two
 // different Personal Years (owner's call 2026-08-31: "show 1 year not 2,
-// but still visually see when it starts and ends"). Round 2 (same day) -
-// the first attempt used a bar proportional to real day-count, which went
-// nearly invisible for any birthday close to Jan 1/Dec 31 (the owner's own
-// test case: "it doesn't start on jan 1 it starts on birthday"), AND
-// colored the two numbers by their own energy on top of a verdict-colored
-// bar - two competing color systems on one small row ("too many colors").
-// Owner's fix: "numbers shouldn't keep their own color, make this fit the
-// rest of the app's feel." No bar, no proportional math, no per-number
-// energy color - just two plain-text numbers with an arrow between them,
-// each with a small "until/from MM/DD" caption, and the verdict word as
-// the ONLY color (small text, not a filled surface).
+// but still visually see when it starts and ends"). Went through several
+// widget-mockup rounds with the owner before landing here - see
+// project_personal_cycles_redesign.md for the full history. Final shape:
+// year is the prominent heading (animal tucked right next to it, not
+// pushed to the row's far edge), each period's number is small and
+// de-emphasized (the owner's root complaint was "the numbers were too
+// big"), and each period gets its own thin score-proportional bar colored
+// via pcycleScoreColor - the continuous gradient (not the old fixed 3
+// buckets) reads clearly across the whole 0-100 range.
 function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
   const md = `${String(birthDate.getMonth() + 1).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
   const periodHtml = (p, when) => `
     <div class="pcycle-split-period">
-      <span class="pcycle-split-num">${p.personalYear}</span>
-      <span class="pcycle-split-when">${when} &middot; <b class="pcycle-split-verdict" style="color:${COMPAT_TIER_COLOR[scoreClass(p.finalScore)]}">${p.verdict.toUpperCase()}</b></span>
+      <div class="pcycle-split-period-top">
+        <span class="pcycle-split-num">${p.personalYear}</span>
+        <span class="pcycle-split-when">${when} &middot; ${p.finalScore}%</span>
+      </div>
+      <div class="pcycle-split-bar"><div class="pcycle-split-bar-fill" style="width:${p.finalScore}%;background:${pcycleScoreColor(p.finalScore)}"></div></div>
     </div>`;
   return `
     <div class="pcycle-split-row">
@@ -97,11 +116,8 @@ function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
         <span class="pcycle-row-period">${year}</span>
         <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[earlyP.animal] || ''} ${earlyP.animal}</span>
       </div>
-      <div class="pcycle-split-periods">
-        ${periodHtml(earlyP, `until ${md}`)}
-        <span class="pcycle-split-arrow">&rarr;</span>
-        ${periodHtml(lateP, `from ${md}`)}
-      </div>
+      ${periodHtml(earlyP, `until ${md}`)}
+      ${periodHtml(lateP, `from ${md}`)}
     </div>`;
 }
 
