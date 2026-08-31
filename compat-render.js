@@ -1220,10 +1220,15 @@ function renderCompoundStories(r, birthDate) {
     { kind: 'planet', planet: 'Venus', key: r.venusSign, depth: 'planet-lean' },
   ];
   const generalReading = composeGeneralReading(generalParts, { thirdPerson: isFamous });
-  const generalLink = insertStoryLink('generalReadingStoryLink', '.grid4.subrow', '🧭 the general reading');
+  // Anchored to .topbar (owner 2026-09-01: "the 2 readings should be at
+  // the very top even above core numbers") instead of .grid4.subrow -
+  // .topbar is the one element common to all 3 pages that sits above
+  // every section, so this places the reading links first regardless of
+  // page layout (single-column profile.html vs 2-column calculator/famous).
+  const generalLink = insertStoryLink('generalReadingStoryLink', '.topbar', '🧭 the general reading');
   if (generalLink) {
     generalLink.style.display = generalReading ? '' : 'none';
-    generalLink.onclick = () => openStoryModal('The General Reading', generalReading);
+    generalLink.onclick = () => openStoryModal('Your Numerology Profile', generalReading);
   }
 
   if (!isFamous) {
