@@ -778,6 +778,9 @@ body::after {
 }
 
 .pcycle-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
   width: 0%;
   border-radius: 3px;
@@ -790,17 +793,20 @@ body::after {
    days left if we figure out a way to implement them into the bars") -
    only the Year/Month cards get this taller labeled variant; Today's bar
    (no "days left" concept - it's a live clock fraction) stays the plain
-   5px bar above. */
+   5px bar above. Both pills are position:absolute, pinned to the track's
+   own left/right edges - NOT flex-positioned next to the fill, which let
+   the "passed" pill visually chase the fill's growing right edge instead
+   of staying anchored to the left (owner's fix: "the days gone by pill is
+   supposed to stay on the left"). */
 .pcycle-bar-labeled {
   height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .pcycle-bar-pill {
-  position: relative;
-  margin: 0 4px;
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  transform: translateY(-50%);
   background: rgba(0, 0, 0, 0.5);
   border-radius: 8px;
   padding: 1px 6px;
@@ -810,7 +816,7 @@ body::after {
   white-space: nowrap;
 }
 
-.pcycle-bar-pill-right { margin-left: auto; }
+.pcycle-bar-pill-right { left: auto; right: 4px; }
 
 /* Number-led rows for the Yearly Outlook / Personal Year Roadmap popups
    (same redesign, same date): the PY/PM number is the primary signal,
