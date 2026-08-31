@@ -4994,8 +4994,14 @@ body {
    root for the day's own energy) - CSS inheritance means an element that
    never sets its own --acc picks up that global value instead of hitting
    the var() fallback above, which only fires when --acc is unset
-   EVERYWHERE up the tree. Missing must override it explicitly to actually
-   stay neutral instead of silently matching whatever energy is active. */
+   EVERYWHERE up the tree. Every chip below overrides it explicitly for
+   that reason, not just Missing.
+   Owner's call 2026-08-31: Lucky Number is ALWAYS clover green (not
+   per-number energy - luck reads as one consistent color), 8 Day is a
+   matching coin gold (a "money color" companion, not its own LP's energy),
+   Missing stays neutral. */
+.core-chip-lucky { --acc: #4caf50; }
+.core-chip-eightday { --acc: #e8b923; }
 .core-chip-muted { --acc: #4a4438; }
 .core-chip-muted .core-chip-value { color: var(--muted); }
 
