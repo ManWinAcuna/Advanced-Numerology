@@ -521,14 +521,28 @@ html.gk-stable .st-tabs { background: rgba(2,2,4,.85); backdrop-filter: blur(18p
 .gk-kw {
   position: absolute; font-family: var(--gk-ui); text-transform: uppercase;
   font-size: 9px; letter-spacing: .32em; color: var(--acc-text); opacity: 0;
-  animation: gkKwIn .9s ease 1.3s forwards;
+  animation: gkKwIn .9s ease 1.3s forwards; text-align: center;
   /* plaques: the alignment arc passes BEHIND the words, never through them */
   background: rgba(0,0,0,.85); padding: 4px 9px 4px 11px; border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
 }
-.gk-kw1 { top: 6px; left: 50%; transform: translateX(-50%); }
-.gk-kw2 { top: 50%; left: 2px; transform: translateY(-50%); }
-.gk-kw3 { top: 50%; right: 2px; transform: translateY(-50%); }
+/* Bank tags vary wildly in length ("WORK" vs "EMOTIONAL INTENSITY") - a
+   fixed-width pill anchored at the ring's left/right edge grows straight
+   toward the center number for any long word (owner-reported glitch,
+   "FOLLOW-THROUGH" colliding with the hero number). max-width + the base
+   .gk-kw's default wrapping (no white-space:nowrap set) lets a long tag
+   fold onto 2 lines and stay pinned near its own edge instead. */
+.gk-kw1 { top: 6px; left: 50%; transform: translateX(-50%); max-width: 58%; }
+/* left/right stations sit at the SAME vertical band as the giant hero
+   number (up to ~90px tall) - a wide-set word still reaches it even
+   wrapped onto 2 lines, so these also get tighter spacing/padding than
+   the top station to keep every possible bank tag clear of the glyph. */
+.gk-kw2, .gk-kw3 {
+  top: 50%; transform: translateY(-50%); max-width: 26%;
+  font-size: 8px; letter-spacing: .12em; padding: 3px 6px 3px 7px;
+}
+.gk-kw2 { left: 2px; }
+.gk-kw3 { right: 2px; }
 @keyframes gkKwIn { to { opacity: .85; } }
 
 /* the hero is a button now (the strike) — strip chrome, keep the glyph soul.
