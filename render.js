@@ -479,10 +479,14 @@ document.getElementById('energyFlowBox').addEventListener('click', () => {
   openModal();
 });
 
-const pmReducedEl = document.getElementById('pmReduced');
-if (pmReducedEl) {
-  pmReducedEl.title = 'Click for Yearly Outlook';
-  pmReducedEl.addEventListener('click', () => {
+// Click target is the WHOLE card (not just the number span) - owner's call
+// 2026-08-31: "you should be able to tap anywhere on the pill... for the
+// popup to show up." The bar/pills sit as siblings below the number, so a
+// listener on the number alone left them dead.
+const pmCardEl = document.getElementById('pmCard');
+if (pmCardEl) {
+  pmCardEl.title = 'Click for Yearly Outlook';
+  pmCardEl.addEventListener('click', () => {
     if (!lastBirthDate || !lastMonthsTable) return;
     const ranked = computeMonthOutlook(lastBirthDate, lastMonthsTable);
     renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
@@ -490,10 +494,10 @@ if (pmReducedEl) {
   });
 }
 
-const pyReducedEl = document.getElementById('pyReduced');
-if (pyReducedEl) {
-  pyReducedEl.title = 'Click for Personal Year Roadmap';
-  pyReducedEl.addEventListener('click', () => {
+const pyCardEl = document.getElementById('pyCard');
+if (pyCardEl) {
+  pyCardEl.title = 'Click for Personal Year Roadmap';
+  pyCardEl.addEventListener('click', () => {
     if (!lastBirthDate) return;
     const roadmap = computeYearRoadmap(lastBirthDate);
     renderYearRoadmap(document.getElementById('compatModalBody'), roadmap);

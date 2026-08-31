@@ -569,7 +569,10 @@ body::after {
   }
 }
 
-#pmReduced, #pyReduced {
+/* Click target moved from the number span to the whole card (2026-08-31:
+   "tap anywhere on the pill... for the popup to show up") - cursor moves
+   with it. */
+#pmCard, #pyCard {
   cursor: pointer;
 }
 
