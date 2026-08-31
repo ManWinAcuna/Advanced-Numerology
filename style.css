@@ -807,7 +807,7 @@ body::after {
   top: 50%;
   left: 4px;
   transform: translateY(-50%);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 8px;
   padding: 1px 6px;
   font-size: 9px;
