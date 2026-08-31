@@ -71,6 +71,48 @@ function pcycleRowHtml(number, periodLabel, tagText, subLine) {
     </div>`;
 }
 
+// One row per CALENDAR year, even when the birthday splits it into two
+// different Personal Years (owner's call 2026-08-31: "show 1 year not 2,
+// but still visually see when it starts and ends"). The bar's two segments
+// are proportional to actual day-count before/after the birthday - and,
+// per the owner's follow-up ("make sure compatibility is reworked for this
+// part so there's a visual on what time periods are what compatibility"),
+// colored by EACH PERIOD'S OWN verdict tier (COMPAT_TIER_COLOR), not by
+// number energy - the whole point of two segments is comparing whether one
+// half of the year reads better than the other, which a shared energy hue
+// can't show. The flanking numbers stay colored by their own energy (same
+// identity signal as every other pcycle number in the app).
+function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year + 1, 0, 1);
+  const boundary = new Date(year, birthDate.getMonth(), birthDate.getDate());
+  const totalDays = daysBetween(yearStart, yearEnd);
+  const earlyDays = daysBetween(yearStart, boundary);
+  const earlyPct = Math.max(2, Math.min(98, (earlyDays / totalDays) * 100));
+  const latePct = 100 - earlyPct;
+  const md = `${String(birthDate.getMonth() + 1).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
+  const earlyEnergy = pcycleEnergy(earlyP.personalYear);
+  const lateEnergy = pcycleEnergy(lateP.personalYear);
+  return `
+    <div class="pcycle-split-row">
+      <div class="pcycle-split-top">
+        <span class="pcycle-row-period">${year}</span>
+        <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[earlyP.animal] || ''} ${earlyP.animal}</span>
+      </div>
+      <div class="pcycle-split-nums">
+        <span class="pcycle-split-num" style="color:${earlyEnergy.acc};text-shadow:0 0 10px ${earlyEnergy.ghost}">${earlyP.personalYear}</span>
+        <div class="pcycle-split-bar">
+          <div class="pcycle-split-bar-seg" style="width:${earlyPct}%;background:${COMPAT_TIER_COLOR[scoreClass(earlyP.finalScore)]}"></div>
+          <div class="pcycle-split-bar-seg" style="width:${latePct}%;background:${COMPAT_TIER_COLOR[scoreClass(lateP.finalScore)]}"></div>
+        </div>
+        <span class="pcycle-split-num" style="color:${lateEnergy.acc};text-shadow:0 0 10px ${lateEnergy.ghost}">${lateP.personalYear}</span>
+      </div>
+      <div class="pcycle-split-dates">
+        <span>Jan 1</span><span>${md}</span><span>Dec 31</span>
+      </div>
+    </div>`;
+}
+
 // The shared .modal-box defaults to a width sized for the full compatibility
 // breakdown (meters + rows). Narrower popups (like Month Outlook) opt into a
 // tighter box instead of sitting mostly-empty inside the wide default.
@@ -631,13 +673,19 @@ function compatHeroShellHtml(finalScore, shieldTag, verdictHead, verdictBody, ca
     </div>
   `;
 }
+// querySelectorAll'd (not just the first match) so a container holding
+// TWO hero blocks - the split-year Roadmap detail, which stacks an
+// "Until"/"From" pair - wires each one's own reveal button to its own
+// body, not just the first.
 function wireCompatReveal(containerEl) {
-  const revealBtn = containerEl.querySelector('[data-compat-reveal]');
-  const revealBody = containerEl.querySelector('[data-compat-reveal-body]');
-  if (!revealBtn) return;
-  revealBtn.addEventListener('click', () => {
-    const open = revealBody.classList.toggle('open');
-    revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+  containerEl.querySelectorAll('.compat-hero').forEach((heroEl) => {
+    const revealBtn = heroEl.querySelector('[data-compat-reveal]');
+    const revealBody = heroEl.querySelector('[data-compat-reveal-body]');
+    if (!revealBtn) return;
+    revealBtn.addEventListener('click', () => {
+      const open = revealBody.classList.toggle('open');
+      revealBtn.textContent = open ? '▴ Hide full breakdown' : '▾ See full breakdown';
+    });
   });
 }
 
@@ -705,16 +753,20 @@ function renderMonthOutlook(containerEl, rankedMonths) {
         </div>
       `).join('')}
     </div>
-    <div id="monthOutlookCompareResults"></div>
   `;
 
+  // Tapping a row opens the breakdown as its own popup (storyModalOverlay,
+  // already wired for identity/compound popups elsewhere in this file) -
+  // NOT an in-place swap at the bottom of this same list, which used to
+  // force a scroll all the way down to see anything (owner's call
+  // 2026-08-31: "it shows a popup not scrolls all the way down").
   containerEl.querySelectorAll('.pcycle-row-wrap').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
       const monthIndex = Number(rowEl.dataset.index);
       const m = rankedMonths.find((row) => row.index === monthIndex);
       if (!m) return;
-      renderMonthDetail(document.getElementById('monthOutlookCompareResults'), m);
-      document.getElementById('monthOutlookCompareResults').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      renderMonthDetail(document.getElementById('storyModalBody'), m);
+      document.getElementById('storyModalOverlay').classList.add('active');
     });
   });
 }
@@ -779,26 +831,35 @@ function renderYearRoadmap(containerEl, roadmap) {
     </div>
     <div class="calendar-rank-list year-roadmap-list">
       ${roadmap.years.map((y) => `
-        <div class="pcycle-row-wrap" data-year-key="${y.year}:${y.part}" title="click for the breakdown">
-          ${pcycleRowHtml(
-            y.personalYear,
-            emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
-            y.verdict.toUpperCase(),
-            `${PCYCLE_MEANING[y.personalYear] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[y.animal] || ''} ${y.animal}`
-          )}
+        <div class="pcycle-row-wrap" data-year-key="${y.year}" title="click for the breakdown">
+          ${y.periods.length === 1
+            ? pcycleRowHtml(
+                y.periods[0].personalYear,
+                String(y.year),
+                y.periods[0].verdict.toUpperCase(),
+                `${PCYCLE_MEANING[y.periods[0].personalYear] || ''} &middot; ${VIETNAMESE_ZODIAC_EMOJI[y.periods[0].animal] || ''} ${y.periods[0].animal}`
+              )
+            : pcycleSplitRowHtml(y.year, y.periods[0], y.periods[1], roadmap.birthDate)}
         </div>
       `).join('')}
     </div>
-    <div id="yearRoadmapCompareResults"></div>
   `;
 
+  // Tapping a row opens the breakdown as its own popup (storyModalOverlay),
+  // not an in-place swap at the bottom of this same list - see the same fix
+  // on Month Outlook above (owner's call 2026-08-31: "it shows a popup not
+  // scrolls all the way down").
   containerEl.querySelectorAll('.pcycle-row-wrap').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
-      const key = rowEl.dataset.yearKey;
-      const y = roadmap.years.find((row) => `${row.year}:${row.part}` === key);
+      const y = roadmap.years.find((row) => String(row.year) === rowEl.dataset.yearKey);
       if (!y) return;
-      renderYearRoadmapDetail(document.getElementById('yearRoadmapCompareResults'), roadmap, y);
-      document.getElementById('yearRoadmapCompareResults').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const target = document.getElementById('storyModalBody');
+      if (y.periods.length === 1) {
+        renderYearRoadmapDetail(target, roadmap, y.periods[0]);
+      } else {
+        renderSplitYearRoadmapDetail(target, roadmap, y.periods[0], y.periods[1]);
+      }
+      document.getElementById('storyModalOverlay').classList.add('active');
     });
   });
 }
@@ -813,10 +874,12 @@ const YEAR_ROADMAP_VERDICT_NOTE = {
   bad: 'Either an Enemy zodiac year, or Personal Year 7/11 (which overrides even an otherwise-good zodiac year).',
   mid: 'Neither a matched zodiac year nor Personal Year 7/11 - a neutral year.',
 };
-function renderYearRoadmapDetail(containerEl, roadmap, y) {
-  containerEl.classList.add('active');
-  setModalWidth(containerEl, false);
 
+// Builds ONE period's hero block HTML without touching the DOM - shared by
+// the single-period detail (one hero) and the split-year detail (two heroes
+// stacked, "Until"/"From" labeled) so the actual card/meter/callout markup
+// only exists in one place.
+function buildYearRoadmapHeroHtml(roadmap, y, extraHtml, labelOverride) {
   const calloutHtml = `
     <div class="year-roadmap-emax-callout ${y.verdict}${Math.abs(y.magnitude) >= 2 ? ' severe' : ''}">
       <div class="year-roadmap-emax-verdict">${y.verdict.toUpperCase()} <span class="year-roadmap-emax-magnitude">(${y.magnitude > 0 ? '+' : ''}${y.magnitude})</span></div>
@@ -843,30 +906,63 @@ function renderYearRoadmapDetail(containerEl, roadmap, y) {
     compatMeterRow(`Birth Animal (${roadmap.ownAnimal} ↔ ${y.animal})`, y.vietnameseScore);
 
   const verdict = MONTH_DETAIL_VERDICT[scoreClass(y.finalScore)];
-  // "add an option to go through the personal months of that year they
-  // selected" (owner, Code212 round 2026-08-31) - getMonthsTable only ever
-  // reads today.getFullYear() from its second arg, so a synthetic Jan 1 of
-  // the selected roadmap year produces that year's own 12-month table with
-  // no changes to numerology.js itself.
-  const monthsBtnHtml = `<button type="button" class="story-link" id="roadmapMonthsBtn">📅 See personal months for ${y.year}</button>`;
-  containerEl.innerHTML = compatHeroShellHtml(
+  return compatHeroShellHtml(
     y.finalScore,
-    emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
+    labelOverride || emaxYearPeriodLabel(y.year, y.part, roadmap.birthDate),
     verdict.head.replace('Month', 'Year'),
     verdict.body,
     cardsHtml,
-    calloutHtml + monthsBtnHtml,
+    calloutHtml + (extraHtml || ''),
     meters
   );
-  wireCompatReveal(containerEl);
+}
+
+// "add an option to go through the personal months of that year they
+// selected" (owner, Code212 round 2026-08-31) - getMonthsTable only ever
+// reads today.getFullYear() from its second arg, so a synthetic Jan 1 of
+// the selected roadmap year produces that year's own 12-month table with
+// no changes to numerology.js itself. Wires whichever #roadmapMonthsBtn is
+// in containerEl - only one exists even on the split-year detail (both
+// periods share the same calendar year's months, so it only needs to live
+// once, on the later/"From" block).
+function wireRoadmapMonthsBtn(containerEl, roadmap, year) {
   const monthsBtn = containerEl.querySelector('#roadmapMonthsBtn');
-  if (monthsBtn) {
-    monthsBtn.addEventListener('click', () => {
-      const table = getMonthsTable(roadmap.birthDate, new Date(y.year, 0, 1));
-      const ranked = computeMonthOutlook(roadmap.birthDate, table);
-      renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
-    });
-  }
+  if (!monthsBtn) return;
+  monthsBtn.addEventListener('click', () => {
+    const table = getMonthsTable(roadmap.birthDate, new Date(year, 0, 1));
+    const ranked = computeMonthOutlook(roadmap.birthDate, table);
+    document.getElementById('storyModalOverlay').classList.remove('active');
+    renderMonthOutlook(document.getElementById('compatModalBody'), ranked);
+  });
+}
+
+function renderYearRoadmapDetail(containerEl, roadmap, y) {
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+  const monthsBtnHtml = `<button type="button" class="story-link" id="roadmapMonthsBtn">📅 See personal months for ${y.year}</button>`;
+  containerEl.innerHTML = buildYearRoadmapHeroHtml(roadmap, y, monthsBtnHtml);
+  wireCompatReveal(containerEl);
+  wireRoadmapMonthsBtn(containerEl, roadmap, y.year);
+}
+
+// Split-year companion to renderYearRoadmapDetail - stacks both periods'
+// hero blocks in the same popup, each labeled with the real boundary date,
+// instead of forcing a pick between the two (a birthday-split year is
+// genuinely two different Personal Years; showing only one would drop
+// real data the list row itself already shows via the two-tone bar).
+function renderSplitYearRoadmapDetail(containerEl, roadmap, earlyY, lateY) {
+  containerEl.classList.add('active');
+  setModalWidth(containerEl, false);
+  const md = `${String(roadmap.birthDate.getMonth() + 1).padStart(2, '0')}/${String(roadmap.birthDate.getDate()).padStart(2, '0')}`;
+  const monthsBtnHtml = `<button type="button" class="story-link" id="roadmapMonthsBtn">📅 See personal months for ${earlyY.year}</button>`;
+  containerEl.innerHTML = `
+    <div class="year-roadmap-split-label">Until ${md}</div>
+    ${buildYearRoadmapHeroHtml(roadmap, earlyY, null, String(earlyY.year))}
+    <div class="year-roadmap-split-label">From ${md}</div>
+    ${buildYearRoadmapHeroHtml(roadmap, lateY, monthsBtnHtml, String(lateY.year))}
+  `;
+  wireCompatReveal(containerEl);
+  wireRoadmapMonthsBtn(containerEl, roadmap, earlyY.year);
 }
 
 /* =========================== General Reading + identity popups ==========

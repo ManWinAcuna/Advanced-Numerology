@@ -839,6 +839,76 @@ body::after {
   white-space: nowrap;
 }
 
+/* Split-year row (2026-08-31 follow-up): one row per calendar year even
+   when the birthday splits it into two Personal Years - the two-tone bar
+   (colored per-segment by that period's own compat VERDICT, not number
+   energy - see pcycleSplitRowHtml, compat-render.js) is the "visually see
+   when it starts and ends" the owner asked for, replacing the old
+   "(u. 04/15)" text-only label. */
+.pcycle-split-row {
+  background: linear-gradient(160deg, #1c160d, #120e08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pcycle-row-wrap:hover .pcycle-split-row {
+    border-color: var(--yellow);
+    box-shadow: var(--glow-cyan);
+    transform: translateX(3px);
+  }
+}
+
+.pcycle-split-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pcycle-split-nums {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.pcycle-split-num {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pcycle-split-bar {
+  flex: 1;
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pcycle-split-bar-seg { height: 100%; }
+
+.pcycle-split-dates {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.year-roadmap-split-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin: 14px 4px 6px;
+}
+
+.year-roadmap-split-label:first-child { margin-top: 0; }
+
 .pinnacles-collapsible {
   margin-top: 24px;
 }

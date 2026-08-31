@@ -1799,17 +1799,21 @@ function computeYearRoadmap(birthDate) {
   const lifePathNum = getLifePathNumeric(birthDate);
   const { pinnacleIndex, startYear, endYear } = computeYearRoadmapRange(birthDate);
 
+  // One entry per CALENDAR year (redesign 2026-08-31: was one entry per
+  // Personal-Year period, so a birthday-split year produced two separate
+  // list rows - owner's call was "show 1 year not 2, but still visually
+  // see when it starts and ends"). A split year's `periods` array carries
+  // both halves so the renderer can draw the two-tone bar; a normal year's
+  // `periods` array has just the one 'whole' entry.
   const years = [];
   for (let year = startYear; year <= endYear; year++) {
-    const periods = emaxYearPersonalYearPeriods(birthDate, year);
-    periods.forEach(({ personalYear, part }) => {
-      years.push(computeYearRoadmapYear(year, part, personalYear, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals));
-    });
+    const periods = emaxYearPersonalYearPeriods(birthDate, year).map(({ personalYear, part }) =>
+      computeYearRoadmapYear(year, part, personalYear, lifePathNum, ownAnimal, enemyAnimal, trineAnimals, friendlyAnimals));
+    years.push({ year, periods });
   }
 
-  // birthDate rides along so the renderer can label a split year's periods
-  // with the real boundary date ("(u. 11/22)"/"(a. 11/22)") - see
-  // emaxYearPeriodLabel. In-memory only, never persisted.
+  // birthDate rides along so the renderer can compute the split bar's own
+  // proportion and boundary date for a year the birthday splits in two.
   return { pinnacleIndex, startYear, endYear, ownAnimal, years, birthDate };
 }
 
