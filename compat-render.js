@@ -73,42 +73,34 @@ function pcycleRowHtml(number, periodLabel, tagText, subLine) {
 
 // One row per CALENDAR year, even when the birthday splits it into two
 // different Personal Years (owner's call 2026-08-31: "show 1 year not 2,
-// but still visually see when it starts and ends"). The bar's two segments
-// are proportional to actual day-count before/after the birthday - and,
-// per the owner's follow-up ("make sure compatibility is reworked for this
-// part so there's a visual on what time periods are what compatibility"),
-// colored by EACH PERIOD'S OWN verdict tier (COMPAT_TIER_COLOR), not by
-// number energy - the whole point of two segments is comparing whether one
-// half of the year reads better than the other, which a shared energy hue
-// can't show. The flanking numbers stay colored by their own energy (same
-// identity signal as every other pcycle number in the app).
+// but still visually see when it starts and ends"). Round 2 (same day) -
+// the first attempt used a bar proportional to real day-count, which went
+// nearly invisible for any birthday close to Jan 1/Dec 31 (the owner's own
+// test case: "it doesn't start on jan 1 it starts on birthday"), AND
+// colored the two numbers by their own energy on top of a verdict-colored
+// bar - two competing color systems on one small row ("too many colors").
+// Owner's fix: "numbers shouldn't keep their own color, make this fit the
+// rest of the app's feel." No bar, no proportional math, no per-number
+// energy color - just two plain-text numbers with an arrow between them,
+// each with a small "until/from MM/DD" caption, and the verdict word as
+// the ONLY color (small text, not a filled surface).
 function pcycleSplitRowHtml(year, earlyP, lateP, birthDate) {
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year + 1, 0, 1);
-  const boundary = new Date(year, birthDate.getMonth(), birthDate.getDate());
-  const totalDays = daysBetween(yearStart, yearEnd);
-  const earlyDays = daysBetween(yearStart, boundary);
-  const earlyPct = Math.max(2, Math.min(98, (earlyDays / totalDays) * 100));
-  const latePct = 100 - earlyPct;
   const md = `${String(birthDate.getMonth() + 1).padStart(2, '0')}/${String(birthDate.getDate()).padStart(2, '0')}`;
-  const earlyEnergy = pcycleEnergy(earlyP.personalYear);
-  const lateEnergy = pcycleEnergy(lateP.personalYear);
+  const periodHtml = (p, when) => `
+    <div class="pcycle-split-period">
+      <span class="pcycle-split-num">${p.personalYear}</span>
+      <span class="pcycle-split-when">${when} &middot; <b class="pcycle-split-verdict" style="color:${COMPAT_TIER_COLOR[scoreClass(p.finalScore)]}">${p.verdict.toUpperCase()}</b></span>
+    </div>`;
   return `
     <div class="pcycle-split-row">
       <div class="pcycle-split-top">
         <span class="pcycle-row-period">${year}</span>
         <span class="pcycle-row-sub">${VIETNAMESE_ZODIAC_EMOJI[earlyP.animal] || ''} ${earlyP.animal}</span>
       </div>
-      <div class="pcycle-split-nums">
-        <span class="pcycle-split-num" style="color:${earlyEnergy.acc};text-shadow:0 0 10px ${earlyEnergy.ghost}">${earlyP.personalYear}</span>
-        <div class="pcycle-split-bar">
-          <div class="pcycle-split-bar-seg" style="width:${earlyPct}%;background:${COMPAT_TIER_COLOR[scoreClass(earlyP.finalScore)]}"></div>
-          <div class="pcycle-split-bar-seg" style="width:${latePct}%;background:${COMPAT_TIER_COLOR[scoreClass(lateP.finalScore)]}"></div>
-        </div>
-        <span class="pcycle-split-num" style="color:${lateEnergy.acc};text-shadow:0 0 10px ${lateEnergy.ghost}">${lateP.personalYear}</span>
-      </div>
-      <div class="pcycle-split-dates">
-        <span>Jan 1</span><span>${md}</span><span>Dec 31</span>
+      <div class="pcycle-split-periods">
+        ${periodHtml(earlyP, `until ${md}`)}
+        <span class="pcycle-split-arrow">&rarr;</span>
+        ${periodHtml(lateP, `from ${md}`)}
       </div>
     </div>`;
 }
