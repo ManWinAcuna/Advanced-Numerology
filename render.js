@@ -47,12 +47,20 @@ let lastPDReduced = null;
 // not just "days until next" like getDaysLeftBlock. Year pivots on the real
 // birthday, Month on the birth day-of-month - same pivots computeAll already
 // uses for PY/PM themselves, just read again here for the bar's own span.
+// Returns {progress, daysPassed, daysLeft} instead of a bare percentage -
+// the Days Left box (profile/calculator/famous.html) was folded into these
+// bars directly (owner's call 2026-08-31: "we can literally get rid of the
+// days left if we figure out a way to implement them into the bars"), so
+// the bar's own fill % and its printed day counts need to come from the
+// exact same start/end computation to guarantee they never disagree.
 function yearCycleProgress(birthDate, today) {
   const m = birthDate.getMonth() + 1, d = birthDate.getDate();
   const thisYearBday = new Date(today.getFullYear(), m - 1, d);
   const start = toUTCDays(thisYearBday) <= toUTCDays(today) ? thisYearBday : new Date(today.getFullYear() - 1, m - 1, d);
   const end = new Date(start.getFullYear() + 1, m - 1, d);
-  return daysBetween(start, today) / daysBetween(start, end);
+  const totalDays = daysBetween(start, end);
+  const daysPassed = daysBetween(start, today);
+  return { progress: daysPassed / totalDays, daysPassed, daysLeft: totalDays - daysPassed };
 }
 
 function monthCycleProgress(birthDate, today) {
@@ -60,7 +68,9 @@ function monthCycleProgress(birthDate, today) {
   const tDay = today.getDate();
   const start = d <= tDay ? new Date(today.getFullYear(), today.getMonth(), d) : new Date(today.getFullYear(), today.getMonth() - 1, d);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, d);
-  return daysBetween(start, today) / daysBetween(start, end);
+  const totalDays = daysBetween(start, end);
+  const daysPassed = daysBetween(start, today);
+  return { progress: daysPassed / totalDays, daysPassed, daysLeft: totalDays - daysPassed };
 }
 
 // Locked spec: "the day bar is birthtime to birthtime". Reuses the same
@@ -79,7 +89,12 @@ function dayCycleProgress(btimeStr) {
   return ((nowSec - boundarySec + 86400) % 86400) / 86400;
 }
 
-function applyPCycleCard(prefix, number, progress) {
+// progressData is either a bare 0-1 number (Today's card - a live clock
+// fraction, no "days passed/left" concept applies) or the
+// {progress, daysPassed, daysLeft} shape from yearCycleProgress/
+// monthCycleProgress. Only Year/Month cards have the passed/left pill
+// elements in their HTML, so the pill-fill is a no-op on Today's card.
+function applyPCycleCard(prefix, number, progressData) {
   const colors = PCYCLE_ENERGY[number] || PCYCLE_ENERGY[1];
   const card = document.getElementById(prefix + 'Card');
   if (card) {
@@ -88,8 +103,13 @@ function applyPCycleCard(prefix, number, progress) {
     card.style.setProperty('--acc-ghost', colors.ghost);
   }
   setText(prefix + 'Meaning', PCYCLE_MEANING[number] || '');
+  const progress = typeof progressData === 'number' ? progressData : progressData.progress;
   const fill = document.getElementById(prefix + 'BarFill');
   if (fill) fill.style.width = `${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%`;
+  if (progressData && typeof progressData === 'object') {
+    setText(prefix + 'BarPassed', `${progressData.daysPassed}d`);
+    setText(prefix + 'BarLeft', `${progressData.daysLeft}d left`);
+  }
 }
 
 // Split out from render() so the #btime 'input' listener (below) can
@@ -175,9 +195,6 @@ function render() {
   applyPCycleCard('py', r.py.reduced, yearCycleProgress(birthDate, today));
   applyPCycleCard('pm', r.pm.reduced, monthCycleProgress(birthDate, today));
   refreshDayCard();
-
-  setText('daysUntilBirthday', r.daysLeft.daysUntilBirthday);
-  setText('daysUntilMonthlyDay', r.daysLeft.daysUntilMonthlyDay);
 
   const todayCompat = computeCompatibility(birthDate, today);
   const compatEl = document.getElementById('compatTodayScore');

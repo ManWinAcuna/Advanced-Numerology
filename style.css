@@ -728,12 +728,36 @@ body::after {
   letter-spacing: 0.06em;
 }
 
+/* Number + compound sit together in one centered row (2026-08-31 follow-up:
+   the compound used to sit alone at the card's bottom - owner wanted it
+   "right next to the Number instead of all the way down"). The row is a
+   centered flex box so the BIG number's own centerpoint never shifts
+   regardless of the compound's width; the compound is absolutely
+   positioned just to its right rather than participating in the flex
+   layout, which is what keeps the number "still centered to the title". */
+.pcycle-num-row {
+  position: relative;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .pcycle-num {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1.05;
   color: var(--acc, var(--yellow));
   text-shadow: 0 0 16px var(--acc-ghost, transparent);
+}
+
+.pcycle-compound {
+  position: absolute;
+  left: calc(50% + 16px);
+  top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .pcycle-meaning {
@@ -744,6 +768,7 @@ body::after {
 }
 
 .pcycle-bar {
+  position: relative;
   width: 100%;
   height: 5px;
   border-radius: 3px;
@@ -760,16 +785,32 @@ body::after {
   transition: width 0.5s ease;
 }
 
-/* Compound number now shows plainly (redesign 2026-08-31: the old
-   tap-to-reveal toggle was "a useless click" per the owner). */
-.pcycle-compound {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--muted);
-  font-style: italic;
+/* Days Left box (profile/calculator/famous.html) was folded directly into
+   these bars (owner's call 2026-08-31: "we can literally get rid of the
+   days left if we figure out a way to implement them into the bars") -
+   only the Year/Month cards get this taller labeled variant; Today's bar
+   (no "days left" concept - it's a live clock fraction) stays the plain
+   5px bar above. */
+.pcycle-bar-labeled {
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.pcycle-compound::before { content: '↳ '; opacity: 0.6; }
+.pcycle-bar-pill {
+  position: relative;
+  margin: 0 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pcycle-bar-pill-right { margin-left: auto; }
 
 /* Number-led rows for the Yearly Outlook / Personal Year Roadmap popups
    (same redesign, same date): the PY/PM number is the primary signal,
