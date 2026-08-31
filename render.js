@@ -34,6 +34,97 @@ function setSignText(id, sign, retro) {
 
 let lastBirthDate = null;
 let lastMonthsTable = null;
+let lastPDReduced = null;
+
+// Personal Cycles readability redesign (Boost13, locked 2026-08-31): energy
+// colors + one-line meanings for the Year/Month/Day cards. Same 14 hex
+// triples as godlike.css's html[data-energy] rules, mirrored here because
+// that CSS is scoped to the <html> root only - these cards each need their
+// own color, set inline via the same --acc/--acc-dim/--acc-ghost vars.
+// Meaning phrases are kw[0] from today.html's own MEAN table, trimmed to a
+// single word per the terse-UI-copy house rule - not a new voice.
+const PCYCLE_ENERGY = {
+  1:  { acc: '#e9edf4', dim: 'rgba(233,237,244,.55)', ghost: 'rgba(233,237,244,.09)' },
+  2:  { acc: '#a9bedd', dim: 'rgba(169,190,221,.55)', ghost: 'rgba(169,190,221,.09)' },
+  3:  { acc: '#ffb36b', dim: 'rgba(255,179,107,.55)', ghost: 'rgba(255,179,107,.09)' },
+  4:  { acc: '#79b0a6', dim: 'rgba(121,176,166,.55)', ghost: 'rgba(121,176,166,.09)' },
+  5:  { acc: '#ff8a3d', dim: 'rgba(255,138,61,.55)',  ghost: 'rgba(255,138,61,.09)' },
+  6:  { acc: '#e0a184', dim: 'rgba(224,161,132,.55)', ghost: 'rgba(224,161,132,.09)' },
+  7:  { acc: '#d24a5c', dim: 'rgba(210,74,92,.55)',   ghost: 'rgba(210,74,92,.09)' },
+  8:  { acc: '#f5c542', dim: 'rgba(245,197,66,.55)',  ghost: 'rgba(245,197,66,.10)' },
+  9:  { acc: '#9d84ff', dim: 'rgba(157,132,255,.55)', ghost: 'rgba(157,132,255,.09)' },
+  11: { acc: '#86e8ff', dim: 'rgba(134,232,255,.55)', ghost: 'rgba(134,232,255,.09)' },
+  13: { acc: '#ff6242', dim: 'rgba(255,98,66,.55)',   ghost: 'rgba(255,98,66,.09)' },
+  22: { acc: '#3fce9f', dim: 'rgba(63,206,159,.55)',  ghost: 'rgba(63,206,159,.09)' },
+  28: { acc: '#ffd75e', dim: 'rgba(255,215,94,.6)',   ghost: 'rgba(255,215,94,.11)' },
+  33: { acc: '#f0a8c8', dim: 'rgba(240,168,200,.55)', ghost: 'rgba(240,168,200,.09)' },
+};
+
+const PCYCLE_MEANING = {
+  1: 'Initiate', 2: 'Feeling', 3: 'Voice', 4: 'Structure', 5: 'Restless',
+  6: 'Duty', 7: 'Depth', 8: 'Power', 9: 'Closure', 11: 'Intuition',
+  13: 'Work', 22: 'Monument', 28: 'Radiant', 33: 'Teacher',
+};
+
+// Pure display math, kept out of numerology.js (never edited) - calls its
+// exported toUTCDays/daysBetween but computes BOTH cycle bounds (last+next),
+// not just "days until next" like getDaysLeftBlock. Year pivots on the real
+// birthday, Month on the birth day-of-month - same pivots computeAll already
+// uses for PY/PM themselves, just read again here for the bar's own span.
+function yearCycleProgress(birthDate, today) {
+  const m = birthDate.getMonth() + 1, d = birthDate.getDate();
+  const thisYearBday = new Date(today.getFullYear(), m - 1, d);
+  const start = toUTCDays(thisYearBday) <= toUTCDays(today) ? thisYearBday : new Date(today.getFullYear() - 1, m - 1, d);
+  const end = new Date(start.getFullYear() + 1, m - 1, d);
+  return daysBetween(start, today) / daysBetween(start, end);
+}
+
+function monthCycleProgress(birthDate, today) {
+  const d = birthDate.getDate();
+  const tDay = today.getDate();
+  const start = d <= tDay ? new Date(today.getFullYear(), today.getMonth(), d) : new Date(today.getFullYear(), today.getMonth() - 1, d);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, d);
+  return daysBetween(start, today) / daysBetween(start, end);
+}
+
+// Locked spec: "the day bar is birthtime to birthtime". Reuses the same
+// #btime input Personal Hours already reads (renderPersonalHours below) -
+// when it's set, the bar's own boundary is that clock time, wrapping across
+// midnight; when it's empty, falls back to midnight-to-midnight. This is
+// purely the BAR's own span - the underlying Personal Day NUMBER still flips
+// at real midnight regardless (getPersonalDayRaw, numerology.js - never
+// touched here).
+function dayCycleProgress(btimeStr) {
+  const now = new Date();
+  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  if (!btimeStr) return nowSec / 86400;
+  const [bh, bm] = btimeStr.split(':').map(Number);
+  const boundarySec = bh * 3600 + bm * 60;
+  return ((nowSec - boundarySec + 86400) % 86400) / 86400;
+}
+
+function applyPCycleCard(prefix, number, progress) {
+  const colors = PCYCLE_ENERGY[number] || PCYCLE_ENERGY[1];
+  const card = document.getElementById(prefix + 'Card');
+  if (card) {
+    card.style.setProperty('--acc', colors.acc);
+    card.style.setProperty('--acc-dim', colors.dim);
+    card.style.setProperty('--acc-ghost', colors.ghost);
+  }
+  setText(prefix + 'Meaning', PCYCLE_MEANING[number] || '');
+  const fill = document.getElementById(prefix + 'BarFill');
+  if (fill) fill.style.width = `${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%`;
+}
+
+// Split out from render() so the #btime 'input' listener (below) can
+// refresh just the day bar's boundary without re-running the full compute -
+// the Personal Day NUMBER itself never depends on birth time, only where
+// this bar's own 24h window starts.
+function refreshDayCard() {
+  if (lastPDReduced == null) return;
+  const btimeVal = document.getElementById('btime');
+  applyPCycleCard('pd', lastPDReduced, dayCycleProgress(btimeVal && btimeVal.value ? btimeVal.value : null));
+}
 
 function render() {
   const input = document.getElementById('bday');
@@ -104,6 +195,10 @@ function render() {
   setText('pyRaw', r.py.raw);
   setText('pmRaw', r.pm.raw);
   setText('pdRaw', r.pd.raw);
+  lastPDReduced = r.pd.reduced;
+  applyPCycleCard('py', r.py.reduced, yearCycleProgress(birthDate, today));
+  applyPCycleCard('pm', r.pm.reduced, monthCycleProgress(birthDate, today));
+  refreshDayCard();
 
   setText('daysUntilBirthday', r.daysLeft.daysUntilBirthday);
   setText('daysUntilMonthlyDay', r.daysLeft.daysUntilMonthlyDay);
@@ -336,8 +431,21 @@ document.querySelectorAll('.hours-toggle-btn').forEach((btn) => {
 });
 
 const btimeInput = document.getElementById('btime');
-if (btimeInput) btimeInput.addEventListener('input', renderPersonalHours);
+if (btimeInput) btimeInput.addEventListener('input', () => { renderPersonalHours(); refreshDayCard(); });
 renderPersonalHours();
+
+// Personal Cycles cards: raw/compound numbers are demoted behind a
+// tap-to-reveal toggle (locked spec: "bigger number, less clutter").
+// Static elements, wired once - no need to re-bind inside render().
+['py', 'pm', 'pd'].forEach((prefix) => {
+  const toggle = document.getElementById(prefix + 'Toggle');
+  const detail = document.getElementById(prefix + 'Detail');
+  if (!toggle || !detail) return;
+  toggle.addEventListener('click', () => {
+    const open = detail.classList.toggle('open');
+    toggle.textContent = open ? 'raw ▴' : 'raw ▾';
+  });
+});
 
 (function applyBdayFromQuery() {
   const params = new URLSearchParams(window.location.search);
@@ -350,6 +458,7 @@ renderPersonalHours();
   if (btimeField && btime && /^\d{2}:\d{2}$/.test(btime)) {
     btimeField.value = btime;
     renderPersonalHours();
+    refreshDayCard();
   }
 })();
 
