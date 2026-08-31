@@ -718,6 +718,44 @@ button.gk-altar-num {
 }
 .story-link-text { flex: 1; min-width: 0; }
 .story-link-chevron { color: var(--muted); font-size: 14px; flex: 0 0 auto; }
+
+/* Birthday/Birth Time on Profile - reworked into the same row-card
+   language as the reading link right below (Boost13 UI round, 2026-09-01
+   - owner: "we need to rework this whole feel" re: the top of Profile
+   clashing with everything already polished below it). Scoped to
+   .topbar-stacked/.bday-row (profile.html only) - calculator.html and
+   famous.html keep .topbar's original side-by-side flex.
+   !important beats the shared ".box, .stat-box, ..." glass-panel rule
+   (line 237) - it ALSO carries !important on background/border/radius,
+   and .bday-box elements keep the plain ".box" class alongside
+   ".bday-row" for the rest of their existing behavior, so only
+   !important actually wins here regardless of source order. */
+.topbar-stacked {
+  display: flex; flex-direction: column; width: 100%; max-width: 460px;
+  gap: 8px; margin-bottom: 4px;
+}
+.bday-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: linear-gradient(160deg, rgba(255,255,255,.035), rgba(255,255,255,.01)) !important;
+  border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 10px 14px;
+  margin: 0;
+}
+.bday-row-icon {
+  width: 26px; height: 26px; border-radius: 8px; flex: 0 0 auto;
+  background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.bday-row-body { flex: 1; min-width: 0; }
+.bday-row label {
+  display: block; font-size: 9px; letter-spacing: .08em; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 2px;
+}
+.bday-row input {
+  background: transparent !important; border: none !important; box-shadow: none !important;
+  padding: 0; color: var(--text); font-size: 14px; font-family: inherit; width: 100%;
+}
+.bday-row input:focus { outline: none; }
+
 .story-modal-title {
   font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .14em;
   font-size: 13px; color: var(--acc-text); margin-bottom: 14px;

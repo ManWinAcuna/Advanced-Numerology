@@ -24,7 +24,7 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>My Profile</title>
 <link rel="stylesheet" href="style.css?v=14">
-<link rel="stylesheet" href="godlike.css?v=46">
+<link rel="stylesheet" href="godlike.css?v=47">
 </head>
 <body>
 <div class="page">
@@ -46,14 +46,20 @@ if (navigator.standalone === true && !sessionStorage.getItem('gk_sess')) {
   <script src="bottombar.js?v=8"></script>
   <script src="update-check.js?v=4"></script>
 
-  <div class="topbar">
-    <div class="box bday-box">
-      <label for="bday">BDay</label>
-      <input type="text" id="bday" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
+  <div class="topbar topbar-stacked">
+    <div class="box bday-box bday-row">
+      <span class="bday-row-icon">🎂</span>
+      <div class="bday-row-body">
+        <label for="bday">BDay</label>
+        <input type="text" id="bday" inputmode="numeric" placeholder="MM/DD/YYYY" maxlength="10" autocomplete="off">
+      </div>
     </div>
-    <div class="box bday-box">
-      <label for="btime">Birth Time <span class="optional-tag">optional</span> <span class="profile-note" id="profileSavedNote"></span></label>
-      <input type="time" id="btime">
+    <div class="box bday-box bday-row">
+      <span class="bday-row-icon">🕐</span>
+      <div class="bday-row-body">
+        <label for="btime">Birth Time <span class="optional-tag">optional</span> <span class="profile-note" id="profileSavedNote"></span></label>
+        <input type="time" id="btime">
+      </div>
     </div>
   </div>
 
