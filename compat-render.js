@@ -1062,9 +1062,25 @@ function renderSplitYearRoadmapDetail(containerEl, roadmap, earlyY, lateY) {
 // (that's Today page's job alone). Idempotent: inserts each tap target
 // once, then just re-wires its click handler on every render() call so a
 // changed birthdate always reopens with fresh content.
+// Restyles a plain-text .story-link button ("🧭 the general reading") into
+// the icon-badge + label + chevron row (Boost13 UI round, 2026-09-01 -
+// owner: "the readings buttons... looks ugly disgusting and everything
+// has to fit together nice"). Splits on the first space so any emoji-led
+// label works without each call site building the markup itself.
+function styleStoryLink(el) {
+  if (!el || el.dataset.storyLinkStyled) return el;
+  el.dataset.storyLinkStyled = '1';
+  const text = el.textContent.trim();
+  const spaceIdx = text.indexOf(' ');
+  const icon = spaceIdx === -1 ? '' : text.slice(0, spaceIdx);
+  const label = spaceIdx === -1 ? text : text.slice(spaceIdx + 1);
+  el.innerHTML = `<span class="story-link-icon">${icon}</span><span class="story-link-text">${label}</span><span class="story-link-chevron">›</span>`;
+  return el;
+}
+
 function insertStoryLink(id, afterSelector, label) {
   let el = document.getElementById(id);
-  if (el) return el;
+  if (el) return styleStoryLink(el);
   const anchor = document.querySelector(afterSelector);
   if (!anchor) return null;
   el = document.createElement('button');
@@ -1073,7 +1089,7 @@ function insertStoryLink(id, afterSelector, label) {
   el.className = 'story-link';
   el.textContent = label;
   anchor.insertAdjacentElement('afterend', el);
-  return el;
+  return styleStoryLink(el);
 }
 
 // Boost13 OVERDRIVE (2026-08-08): one visual paragraph per trait cluster

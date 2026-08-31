@@ -693,13 +693,31 @@ button.gk-altar-num {
   font-style: italic; color: var(--muted); font-size: 12px;
 }
 
-/* Core Numbers / Personal Cycles / big-picture story links (render.js,
-   Boost13 2026-08-06) - inserted right after each grid's subrow. */
+/* Core Numbers / Personal Cycles / big-picture / general reading story
+   links (render.js, Boost13 2026-08-06; reworked 2026-09-01 - owner: "the
+   readings buttons... looks ugly disgusting and everything has to fit
+   together nice." Was a flat plain-bordered bar with the raw emoji typed
+   inline; now an icon-badge + label + chevron row, restructured by
+   styleStoryLink() (compat-render.js) so every consumer gets the same
+   shape. Consecutive rows sit tight (small gap, not individually spaced)
+   so a group of reading links reads as one list, not scattered floating
+   pills. */
 .story-link {
-  display: block; width: 100%; margin: 6px 0 14px; background: none; border: 1px solid var(--border);
-  border-radius: 8px; padding: 7px 0; color: var(--acc-text); font-family: var(--gk-ui);
-  font-size: 11px; letter-spacing: .04em; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin: 0 0 8px; background: linear-gradient(160deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+  border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px;
+  color: var(--acc-text); font-family: var(--gk-ui); font-size: 12.5px; letter-spacing: .04em;
+  cursor: pointer; text-align: left;
 }
+.story-link:first-of-type { margin-top: 6px; }
+.story-link:last-of-type { margin-bottom: 14px; }
+.story-link-icon {
+  width: 26px; height: 26px; border-radius: 8px; flex: 0 0 auto;
+  background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.story-link-text { flex: 1; min-width: 0; }
+.story-link-chevron { color: var(--muted); font-size: 14px; flex: 0 0 auto; }
 .story-modal-title {
   font-family: var(--gk-display); text-transform: uppercase; letter-spacing: .14em;
   font-size: 13px; color: var(--acc-text); margin-bottom: 14px;
