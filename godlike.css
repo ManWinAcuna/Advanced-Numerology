@@ -256,6 +256,14 @@ h1, h2, h3,
   padding: 16px 14px;
   margin-bottom: 18px;
 }
+/* .section-label's own 18px margin-top (style.css) is redundant on the
+   FIRST heading inside a card - stacked on top of this card's own 16px
+   padding-top + the 18px gap above it, that read as ~70px of dead space
+   between Core Numbers and Vietnamese Zodiac (owner 2026-09-01: "too much
+   spacing between core numbers and vietnamese sign"). Only the first
+   heading in a card loses it; later headings (Western Signs) keep their
+   normal breathing room. */
+.profile-section .section-label:first-child { margin-top: 0; }
 .box::before, .stat-box::before { display: none; } /* old gradient strips die */
 .modal-box { backdrop-filter: blur(18px) saturate(1.25); }
 .bb-sheet, .bb-bar { backdrop-filter: blur(18px) saturate(1.2); }
