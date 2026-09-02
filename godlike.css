@@ -1410,30 +1410,107 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   border: 1px solid var(--border, #223048); background: rgba(255,255,255,.03); color: var(--acc-text, #e8b04b);
   font-family: inherit; font-size: 11px; text-align: left; cursor: pointer; }
 
-/* Letterology (Boost13, 2026-09-01) - word/name numerology calculator.
+/* Letterology (Boost13, 2026-09-01; mobile UX rework 2026-09-02).
    Plain/neutral by design (owner's explicit call) - no per-value energy
    coloring, unlike Personal Cycles/Core Numbers elsewhere in the app. */
 .ltr-wrap { max-width: 460px; }
-.ltr-input-box input { text-transform: uppercase; letter-spacing: .05em; font-size: 18px !important; }
-.ltr-mode-row { display: flex; gap: 6px; margin: 14px 0; }
+
+.ltr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.ltr-header-text { flex: 1; min-width: 0; }
+.ltr-title { font-family: var(--gk-display); font-size: 17px; letter-spacing: .06em; color: var(--text); }
+.ltr-subtitle { margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.ltr-settings-btn {
+  flex: 0 0 auto; background: rgba(255,255,255,.03); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 11px;
+  font-family: var(--gk-ui); cursor: pointer; white-space: nowrap;
+}
+
+/* Mobile only needed the width fix - .ltr-input-box input already sits
+   inside the same <=480px media query as the .bday-box input rule it
+   overrides (style.css), so this wins on source order without needing
+   its own media query duplicated here. */
+.ltr-input-box { position: relative; }
+.ltr-input-box input {
+  text-transform: uppercase; letter-spacing: .04em; font-size: 17px !important;
+  width: 100% !important; padding-right: 34px !important; box-sizing: border-box;
+}
+.ltr-clear-btn {
+  position: absolute; right: 8px; bottom: 9px; width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(255,255,255,.08); border: none; color: var(--muted); font-size: 15px;
+  line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+
+.ltr-notice {
+  margin-top: 10px; font-size: 11.5px; color: var(--muted); background: rgba(255,255,255,.03);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+}
+
+.ltr-mode-row { display: flex; gap: 6px; margin: 14px 0 8px; }
 .ltr-mode-btn {
-  flex: 1; background: rgba(255,255,255,.03); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 4px; color: var(--muted); font-size: 11px;
+  flex: 1; min-height: 44px; background: rgba(255,255,255,.03); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 4px; color: var(--muted); font-size: 12.5px;
   font-weight: 700; font-family: var(--gk-ui); cursor: pointer;
 }
-.ltr-mode-btn.active { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.24); color: var(--text); }
-.ltr-letters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
-.ltr-letter-chip { flex: 1 0 32px; text-align: center; background: #161009; border-radius: 6px; padding: 6px 2px; }
-.ltr-letter-chip-char { font-size: 15px; font-weight: 700; color: var(--text); }
-.ltr-letter-chip-val { font-size: 10px; color: var(--muted); }
-.ltr-results { display: flex; flex-direction: column; gap: 8px; }
+.ltr-mode-btn.active {
+  background: rgba(245,197,66,.14); border-color: rgba(245,197,66,.55); color: var(--gold, #f5c542);
+}
+.ltr-mode-explain { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin-bottom: 18px; min-height: 15px; }
+
+/* the centerpiece - deliberately NOT the same shape as .ltr-result-row
+   below it (owner: "do not make Word Total look identical to every
+   smaller result"). */
+.ltr-main-card {
+  text-align: center; background: linear-gradient(160deg, rgba(245,197,66,.09), rgba(255,255,255,.02));
+  border: 1px solid rgba(245,197,66,.3); border-radius: 16px; padding: 18px 14px; margin-bottom: 14px;
+}
+.ltr-main-word {
+  font-size: 13px; letter-spacing: .12em; color: var(--muted); word-break: break-word; margin-bottom: 8px;
+}
+.ltr-main-chain { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+.ltr-main-unreduced { font-size: 18px; color: #8a7a63; }
+.ltr-main-arrow { font-size: 16px; color: #8a7a63; }
+.ltr-main-value { font-size: 46px; font-weight: 800; color: var(--gold, #f5c542); line-height: 1; }
+
+.ltr-word-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ltr-word-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+}
+.ltr-word-row-label { font-size: 12px; letter-spacing: .04em; color: var(--text); word-break: break-word; }
+.ltr-word-row-chain { flex: 0 0 auto; display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.ltr-word-row-unreduced { color: #8a7a63; }
+.ltr-word-row-arrow { color: #8a7a63; }
+.ltr-word-row-value { font-weight: 700; color: var(--text); }
+
+.ltr-results { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
 .ltr-result-row {
   display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.03);
   border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
 }
-.ltr-result-label { flex: 1; font-size: 12px; color: var(--muted); }
-.ltr-result-unreduced { font-size: 12px; color: #6b6050; }
+.ltr-result-label-wrap { flex: 1; min-width: 0; }
+.ltr-result-label { font-size: 12.5px; color: var(--text); }
+.ltr-result-sublabel { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.ltr-result-chain { flex: 0 0 auto; display: flex; align-items: baseline; gap: 6px; }
+.ltr-result-unreduced { font-size: 12px; color: #8a7a63; }
+.ltr-result-arrow { font-size: 12px; color: #8a7a63; }
 .ltr-result-value { font-size: 20px; font-weight: 700; color: var(--text); }
+
+.ltr-empty { text-align: center; padding: 22px 10px; }
+.ltr-empty-text { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.ltr-empty-examples { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.ltr-example-chip {
+  background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 14px; color: var(--text); font-size: 12.5px; font-family: var(--gk-ui); cursor: pointer;
+}
+
+.ltr-lettermath { margin-top: 4px; }
+.ltr-lettermath-body { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.ltr-letter-word-group-label { font-size: 10px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+.ltr-letters { display: flex; flex-wrap: wrap; gap: 4px; }
+.ltr-letter-chip { flex: 0 0 32px; text-align: center; background: #161009; border-radius: 6px; padding: 6px 2px; }
+.ltr-letter-chip-char { font-size: 15px; font-weight: 700; color: var(--text); }
+.ltr-letter-chip-val { font-size: 10px; color: var(--muted); }
+
 .ltr-settings { margin-top: 18px; }
 .ltr-settings-hint { font-size: 10px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
 .ltr-conserved-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
@@ -1443,5 +1520,5 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 }
 .ltr-conserved-chip button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 13px; line-height: 1; }
 .ltr-conserved-chip.ltr-conserved-default button { display: none; }
-.ltr-add-row { display: flex; gap: 8px; }
+.ltr-add-row { display: flex; gap: 8px; margin-top: 4px; }
 .ltr-add-row input { flex: 1; }

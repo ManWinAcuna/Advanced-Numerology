@@ -1,4 +1,4 @@
-// Letterology (Boost13, 2026-09-01) - word/name numerology calculator.
+// Letterology (Boost13, 2026-09-01; mobile UX rework 2026-09-02).
 // Entirely new, standalone math: no existing letter-to-number system in
 // this codebase to reuse (checked numerology.js/compat-engine.js/db-core.js
 // first - none exists). Deliberately does NOT reuse numerology.js's
@@ -6,25 +6,25 @@
 // (28 stays 28, 20 jumps to 11) that would misfire on letter positions
 // (S=19, T=20 both fall inside that special table) - this ships its own
 // reduceLetterTotal() with a purpose-built conserved-number set instead.
+//
+// 2026-09-02: mobile UX rework only (owner's explicit call - do not touch
+// the math). All 7 functions from "the core" comment down through
+// reduceLetterTotal() are byte-identical to the original 2026-09-01
+// version; everything below that is new rendering/UX around the same
+// engine, plus a new per-word breakdown that reuses letterValue()/
+// reduceLetterTotal() rather than duplicating their logic.
 (function () {
   'use strict';
 
+  /* ------------------------------------------------------- the core -- */
   var ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   var VOWELS = { A: 1, E: 1, I: 1, O: 1, U: 1 };
 
-  // Pythagorean cycle 1-9 repeating (A=1...I=9, J=1...R=9, S=1...Z=8).
   function pythagoreanValue(letter) {
     var pos = ALPHA.indexOf(letter) + 1;
     return ((pos - 1) % 9) + 1;
   }
 
-  // Owner's 3 modes (2026-09-01 Boost13 round):
-  // - reduced: plain Pythagorean cycle, no exceptions.
-  // - master: same cycle, EXCEPT K and V keep their raw alphabet position
-  //   (11, 22) instead of cycling down to 2/4 - the two positions in A-Z
-  //   that land exactly on a master number.
-  // - positional: raw A-Z position for every letter (A=1...Z=26), no
-  //   cycling at all.
   function letterValue(letter, mode) {
     var pos = ALPHA.indexOf(letter) + 1;
     if (pos <= 0) return 0;
@@ -33,10 +33,6 @@
     return pythagoreanValue(letter);
   }
 
-  // Base conserved set locked in with the owner (2026-09-01) - never
-  // reduced past, same two-tier check reduceNumber() uses (raw total,
-  // then one-pass digit sum) but with this tool's own set instead of
-  // reduceNumber()'s birthdate-specific one.
   var BASE_CONSERVED = [11, 22, 33, 13, 28, 19, 31, 82, 91];
   var CONSERVED_KEY = 'ltr_conserved_extra_v1';
 
@@ -73,25 +69,59 @@
 
   /* ------------------------------------------------------------- state -- */
   var mode = 'master';
+  var MODE_EXPLAIN = {
+    reduced: 'Letters repeat from 1 through 9.',
+    master: 'The same system, but K stays 11 and V stays 22.',
+    positional: "Uses each letter's alphabet position, A = 1 through Z = 26.",
+  };
 
-  function compute(word, m) {
-    var letters = word.toUpperCase().split('').filter(function (ch) { return ALPHA.indexOf(ch) !== -1; });
-    if (!letters.length) return null;
+  function perLetterFor(chars, m) {
+    return chars.map(function (ch) { return { ch: ch, val: letterValue(ch, m) }; });
+  }
+
+  function totalOf(perLetter) {
+    return perLetter.reduce(function (s, l) { return s + l.val; }, 0);
+  }
+
+  // Splits the raw input into words (for the per-word subtotal breakdown)
+  // and also flattens them back into one continuous letter sequence for
+  // the whole-phrase totals - identical letters, identical order, as the
+  // original single-pass "strip everything but A-Z" approach, so the
+  // full-phrase numbers this produces are unchanged from before.
+  function compute(raw, m) {
+    var rawStr = raw || '';
+    var hasIgnored = /[^A-Za-z\s]/.test(rawStr);
+
+    var wordChunks = rawStr.toUpperCase().split(/\s+/)
+      .map(function (w) { return w.split('').filter(function (ch) { return ALPHA.indexOf(ch) !== -1; }); })
+      .filter(function (letters) { return letters.length > 0; });
+
+    var allLetters = [].concat.apply([], wordChunks);
+    if (!allLetters.length) return { hasIgnored: hasIgnored, empty: true };
 
     var conserved = conservedSet();
-    var perLetter = letters.map(function (ch) { return { ch: ch, val: letterValue(ch, m) }; });
-
-    var wordUnreduced = perLetter.reduce(function (s, l) { return s + l.val; }, 0);
+    var perLetter = perLetterFor(allLetters, m);
+    var wordUnreduced = totalOf(perLetter);
     var first = perLetter[0];
     var firstVowelEntry = perLetter.find(function (l) { return VOWELS[l.ch]; }) || null;
     var first2 = perLetter.slice(0, 2);
-    var first2Unreduced = first2.reduce(function (s, l) { return s + l.val; }, 0);
+    var first2Unreduced = totalOf(first2);
     var vowelLetters = perLetter.filter(function (l) { return VOWELS[l.ch]; });
     var consonantLetters = perLetter.filter(function (l) { return !VOWELS[l.ch]; });
-    var vowelsUnreduced = vowelLetters.reduce(function (s, l) { return s + l.val; }, 0);
-    var consonantsUnreduced = consonantLetters.reduce(function (s, l) { return s + l.val; }, 0);
+    var vowelsUnreduced = totalOf(vowelLetters);
+    var consonantsUnreduced = totalOf(consonantLetters);
+
+    var words = wordChunks.map(function (letters) {
+      var pl = perLetterFor(letters, m);
+      var u = totalOf(pl);
+      return { chars: letters.join(''), perLetter: pl, unreduced: u, reduced: reduceLetterTotal(u, conserved) };
+    });
 
     return {
+      hasIgnored: hasIgnored,
+      empty: false,
+      words: words,
+      displayWord: words.map(function (w) { return w.chars; }).join(' '),
       perLetter: perLetter,
       wordUnreduced: wordUnreduced,
       wordReduced: reduceLetterTotal(wordUnreduced, conserved),
@@ -107,46 +137,108 @@
     };
   }
 
-  function resultRow(label, unreduced, value) {
-    var unreducedHtml = unreduced == null ? '' : '<span class="ltr-result-unreduced">' + unreduced + ' unreduced</span>';
+  /* ------------------------------------------------------------ render -- */
+  var EXAMPLES = ['CODE', 'BITCOIN', 'MICHAEL JACKSON'];
+
+  function chainRow(label, sublabel, unreduced, value) {
+    var subHtml = sublabel ? '<div class="ltr-result-sublabel">' + sublabel + '</div>' : '';
+    var chainHtml = unreduced == null
+      ? '<span class="ltr-result-value">' + (value == null ? '–' : value) + '</span>'
+      : '<span class="ltr-result-chain">' +
+          '<span class="ltr-result-unreduced">' + unreduced + '</span>' +
+          '<span class="ltr-result-arrow">→</span>' +
+          '<span class="ltr-result-value">' + value + '</span>' +
+        '</span>';
     return '<div class="ltr-result-row">' +
-      '<span class="ltr-result-label">' + label + '</span>' +
-      unreducedHtml +
-      '<span class="ltr-result-value">' + (value == null ? '–' : value) + '</span>' +
+      '<div class="ltr-result-label-wrap"><div class="ltr-result-label">' + label + '</div>' + subHtml + '</div>' +
+      chainHtml +
       '</div>';
+  }
+
+  function letterTiles(perLetter) {
+    return perLetter.map(function (l) {
+      return '<div class="ltr-letter-chip"><div class="ltr-letter-chip-char">' + l.ch + '</div>' +
+        '<div class="ltr-letter-chip-val">' + l.val + '</div></div>';
+    }).join('');
   }
 
   function render() {
     var wordEl = document.getElementById('ltrWord');
-    var word = wordEl.value || '';
-    var r = compute(word, mode);
+    var raw = wordEl.value || '';
+    var r = compute(raw, mode);
 
-    var lettersEl = document.getElementById('ltrLetters');
+    var noticeEl = document.getElementById('ltrNotice');
+    noticeEl.style.display = r.hasIgnored ? '' : 'none';
+
+    var clearBtn = document.getElementById('ltrClearBtn');
+    clearBtn.style.display = raw ? '' : 'none';
+
+    var emptyEl = document.getElementById('ltrEmpty');
+    var mainEl = document.getElementById('ltrMain');
+    var wordRowsEl = document.getElementById('ltrWordRows');
     var resultsEl = document.getElementById('ltrResults');
+    var lettersGroupsEl = document.getElementById('ltrLettersGroups');
+    var letterMathPanel = document.getElementById('ltrLetterMathPanel');
 
-    if (!r) {
-      lettersEl.innerHTML = '';
-      resultsEl.innerHTML = resultRow('Word Total', null, null) +
-        resultRow('First Letter', null, null) +
-        resultRow('First Vowel', null, null) +
-        resultRow('First 2 Letters', null, null) +
-        resultRow('Vowels Only (Soul Urge)', null, null) +
-        resultRow('Consonants Only (Personality)', null, null);
+    if (r.empty) {
+      emptyEl.innerHTML = '<div class="ltr-empty">' +
+        '<div class="ltr-empty-text">Enter a word, name, or phrase to decode it.</div>' +
+        '<div class="ltr-empty-examples">' +
+        EXAMPLES.map(function (ex) { return '<button type="button" class="ltr-example-chip" data-example="' + ex + '">' + ex + '</button>'; }).join('') +
+        '</div></div>';
+      mainEl.innerHTML = '';
+      wordRowsEl.innerHTML = '';
+      resultsEl.innerHTML = '';
+      lettersGroupsEl.innerHTML = '';
+      letterMathPanel.style.display = 'none';
+      wireExamples();
       return;
     }
 
-    lettersEl.innerHTML = r.perLetter.map(function (l) {
-      return '<div class="ltr-letter-chip"><div class="ltr-letter-chip-char">' + l.ch + '</div>' +
-        '<div class="ltr-letter-chip-val">' + l.val + '</div></div>';
-    }).join('');
+    emptyEl.innerHTML = '';
+    letterMathPanel.style.display = '';
+
+    mainEl.innerHTML = '<div class="ltr-main-card">' +
+      '<div class="ltr-main-word">' + r.displayWord + '</div>' +
+      '<div class="ltr-main-chain">' +
+        '<span class="ltr-main-unreduced">' + r.wordUnreduced + '</span>' +
+        '<span class="ltr-main-arrow">→</span>' +
+        '<span class="ltr-main-value">' + r.wordReduced + '</span>' +
+      '</div></div>';
+
+    wordRowsEl.innerHTML = r.words.length > 1 ? r.words.map(function (w) {
+      return '<div class="ltr-word-row">' +
+        '<span class="ltr-word-row-label">' + w.chars + '</span>' +
+        '<span class="ltr-word-row-chain">' +
+          '<span class="ltr-word-row-unreduced">' + w.unreduced + '</span>' +
+          '<span class="ltr-word-row-arrow">→</span>' +
+          '<span class="ltr-word-row-value">' + w.reduced + '</span>' +
+        '</span></div>';
+    }).join('') : '';
 
     resultsEl.innerHTML =
-      resultRow('Word Total', r.wordUnreduced, r.wordReduced) +
-      resultRow('First Letter (' + r.first.ch + ')', null, r.first.val) +
-      resultRow(r.firstVowel ? 'First Vowel (' + r.firstVowel.ch + ')' : 'First Vowel', null, r.firstVowel ? r.firstVowel.val : null) +
-      resultRow(r.first2Chars ? 'First 2 Letters (' + r.first2Chars + ')' : 'First 2 Letters', r.first2Unreduced, r.first2Reduced) +
-      resultRow('Vowels Only (Soul Urge)', r.vowelsUnreduced, r.vowelsReduced) +
-      resultRow('Consonants Only (Personality)', r.consonantsUnreduced, r.consonantsReduced);
+      chainRow('First Letter (' + r.first.ch + ')', null, null, r.first.val) +
+      chainRow(r.firstVowel ? 'First Vowel (' + r.firstVowel.ch + ')' : 'First Vowel', null, null, r.firstVowel ? r.firstVowel.val : null) +
+      chainRow(r.first2Chars ? 'First Two Letters (' + r.first2Chars + ')' : 'First Two Letters', null, r.first2Unreduced, r.first2Reduced) +
+      chainRow('Inner Drive', 'Vowels, also called Soul Urge', r.vowelsUnreduced, r.vowelsReduced) +
+      chainRow('Outer Expression', 'Consonants, also called Personality', r.consonantsUnreduced, r.consonantsReduced);
+
+    lettersGroupsEl.innerHTML = r.words.map(function (w) {
+      return '<div class="ltr-letter-word-group">' +
+        '<div class="ltr-letter-word-group-label">' + w.chars + '</div>' +
+        '<div class="ltr-letters">' + letterTiles(w.perLetter) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function wireExamples() {
+    document.querySelectorAll('.ltr-example-chip').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var wordEl = document.getElementById('ltrWord');
+        wordEl.value = btn.dataset.example;
+        render();
+      });
+    });
   }
 
   /* --------------------------------------------------------- settings -- */
@@ -190,12 +282,26 @@
   /* -------------------------------------------------------------- wire -- */
   document.getElementById('ltrWord').addEventListener('input', render);
 
+  document.getElementById('ltrClearBtn').addEventListener('click', function () {
+    var wordEl = document.getElementById('ltrWord');
+    wordEl.value = '';
+    wordEl.focus();
+    render();
+  });
+
   document.getElementById('ltrModeRow').addEventListener('click', function (e) {
     var btn = e.target.closest('.ltr-mode-btn');
     if (!btn) return;
     mode = btn.dataset.mode;
     document.querySelectorAll('.ltr-mode-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+    document.getElementById('ltrModeExplain').textContent = MODE_EXPLAIN[mode];
     render();
+  });
+
+  document.getElementById('ltrSettingsBtn').addEventListener('click', function () {
+    var panel = document.getElementById('ltrSettingsPanel');
+    panel.open = !panel.open;
+    if (panel.open) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   document.getElementById('ltrAddConservedBtn').addEventListener('click', addConserved);
@@ -203,6 +309,7 @@
     if (e.key === 'Enter') addConserved();
   });
 
+  document.getElementById('ltrModeExplain').textContent = MODE_EXPLAIN[mode];
   renderConserved();
   render();
 })();

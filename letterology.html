@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Letterology</title>
 <link rel="stylesheet" href="style.css?v=14">
-<link rel="stylesheet" href="godlike.css?v=49">
+<link rel="stylesheet" href="godlike.css?v=50">
 </head>
 <body>
 <div class="page">
@@ -39,25 +39,47 @@
 
   <div class="ltr-wrap">
 
+    <div class="ltr-header">
+      <div class="ltr-header-text">
+        <div class="ltr-title">🔤 Letterology</div>
+        <div class="ltr-subtitle">Decode the numerical structure of any word, name, or phrase.</div>
+      </div>
+      <button type="button" class="ltr-settings-btn" id="ltrSettingsBtn">⚙️ Reduction Settings</button>
+    </div>
+
     <div class="topbar">
       <div class="box bday-box ltr-input-box">
         <label for="ltrWord">Word</label>
-        <input type="text" id="ltrWord" placeholder="Type a word or name" autocomplete="off" autocapitalize="characters">
+        <input type="text" id="ltrWord" placeholder="Type a word, name, or phrase" autocomplete="off" autocapitalize="characters">
+        <button type="button" class="ltr-clear-btn" id="ltrClearBtn" aria-label="Clear" style="display:none">×</button>
       </div>
     </div>
 
+    <div class="ltr-notice" id="ltrNotice" style="display:none">Numbers and symbols are not included in the calculation.</div>
+
     <div class="ltr-mode-row" id="ltrModeRow">
       <button type="button" class="ltr-mode-btn" data-mode="reduced">Reduced</button>
-      <button type="button" class="ltr-mode-btn active" data-mode="master">Master (K/V)</button>
+      <button type="button" class="ltr-mode-btn active" data-mode="master">Master</button>
       <button type="button" class="ltr-mode-btn" data-mode="positional">Positional</button>
     </div>
+    <div class="ltr-mode-explain" id="ltrModeExplain"></div>
 
-    <div class="ltr-letters" id="ltrLetters"></div>
+    <div id="ltrEmpty"></div>
+
+    <div id="ltrMain"></div>
+
+    <div class="ltr-word-rows" id="ltrWordRows"></div>
 
     <div class="ltr-results" id="ltrResults"></div>
 
-    <details class="collapsible ltr-settings">
-      <summary>Conserved Numbers <span class="ltr-settings-hint">(never reduced further)</span></summary>
+    <details class="collapsible ltr-lettermath" id="ltrLetterMathPanel">
+      <summary>Show Letter Math</summary>
+      <div class="ltr-lettermath-body" id="ltrLettersGroups"></div>
+    </details>
+
+    <details class="collapsible ltr-settings" id="ltrSettingsPanel">
+      <summary>Advanced Reduction Settings</summary>
+      <div class="ltr-settings-hint">Conserved numbers are never reduced further.</div>
       <div class="ltr-conserved-list" id="ltrConservedList"></div>
       <div class="ltr-add-row">
         <input type="text" id="ltrAddConserved" inputmode="numeric" placeholder="Add a number">
@@ -70,7 +92,7 @@
 </div>
 
 <script src="scroll-viewport.js"></script>
-<script src="letterology.js?v=1"></script>
+<script src="letterology.js?v=2"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
