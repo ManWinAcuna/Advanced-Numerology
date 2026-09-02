@@ -1410,26 +1410,45 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
   border: 1px solid var(--border, #223048); background: rgba(255,255,255,.03); color: var(--acc-text, #e8b04b);
   font-family: inherit; font-size: 11px; text-align: left; cursor: pointer; }
 
-/* Letterology (Boost13, 2026-09-01; mobile UX rework 2026-09-02).
+/* Letterology (Boost13, 2026-09-01; mobile UX reworks 2026-09-02/03).
    Plain/neutral by design (owner's explicit call) - no per-value energy
    coloring, unlike Personal Cycles/Core Numbers elsewhere in the app. */
 .ltr-wrap { max-width: 460px; }
+
+/* The app-wide update-check.js pill is position:fixed at
+   top: env(safe-area-inset-top)+12px, left:10px, on EVERY page - never
+   touch that shared file (it deliberately avoids the top-RIGHT sign-in
+   pill already). Letterology's own header used to start right under it
+   at .page's plain 20px padding, so an undismissed update pill covered
+   the title. This margin is unconditional (not gated on the pill
+   actually showing) so there's never a frame where it COULD collide. */
+.ltr-wrap { margin-top: 34px; }
 
 .ltr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .ltr-header-text { flex: 1; min-width: 0; }
 .ltr-title { font-family: var(--gk-display); font-size: 17px; letter-spacing: .06em; color: var(--text); }
 .ltr-subtitle { margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+/* Icon-only on phones (owner: the full-text pill squeezed the title) -
+   text reappears above the mobile breakpoint. Fixed 44x44 tap target
+   either way. */
 .ltr-settings-btn {
-  flex: 0 0 auto; background: rgba(255,255,255,.03); border: 1px solid var(--border);
-  border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 11px;
+  flex: 0 0 auto; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.03); border: 1px solid var(--border);
+  border-radius: 999px; color: var(--muted); font-size: 16px;
   font-family: var(--gk-ui); cursor: pointer; white-space: nowrap;
 }
+.ltr-settings-btn-text { display: none; }
+@media (min-width: 481px) {
+  .ltr-settings-btn { width: auto; height: auto; padding: 8px 12px; gap: 6px; font-size: 12px; }
+  .ltr-settings-btn-text { display: inline; }
+}
 
-/* Mobile only needed the width fix - .ltr-input-box input already sits
-   inside the same <=480px media query as the .bday-box input rule it
-   overrides (style.css), so this wins on source order without needing
-   its own media query duplicated here. */
-.ltr-input-box { position: relative; }
+/* Full width, top to bottom: .topbar's base rule (style.css) is
+   width:fit-content, and .bday-box's own <=480px override caps its
+   INPUT at a fixed 120px - both scoped here so the fix can't leak onto
+   any other .topbar/.bday-box user on the site. */
+.ltr-wrap .topbar { width: 100% !important; }
+.ltr-input-box { position: relative; width: 100% !important; flex: 1 1 100% !important; }
 .ltr-input-box input {
   text-transform: uppercase; letter-spacing: .04em; font-size: 17px !important;
   width: 100% !important; padding-right: 34px !important; box-sizing: border-box;
@@ -1454,7 +1473,14 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .ltr-mode-btn.active {
   background: rgba(245,197,66,.14); border-color: rgba(245,197,66,.55); color: var(--gold, #f5c542);
 }
-.ltr-mode-explain { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin-bottom: 18px; min-height: 15px; }
+.ltr-mode-explain { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin-bottom: 14px; min-height: 15px; }
+
+.ltr-copy-btn {
+  display: block; width: 100%; margin-bottom: 14px; background: rgba(255,255,255,.03);
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px; color: var(--text);
+  font-size: 12.5px; font-family: var(--gk-ui); cursor: pointer;
+}
+.ltr-copy-btn.copied { border-color: rgba(245,197,66,.55); color: var(--gold, #f5c542); }
 
 /* the centerpiece - deliberately NOT the same shape as .ltr-result-row
    below it (owner: "do not make Word Total look identical to every
@@ -1494,6 +1520,7 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .ltr-result-unreduced { font-size: 12px; color: #8a7a63; }
 .ltr-result-arrow { font-size: 12px; color: #8a7a63; }
 .ltr-result-value { font-size: 20px; font-weight: 700; color: var(--text); }
+.ltr-result-novowel { font-size: 12.5px; color: var(--muted); font-style: italic; }
 
 .ltr-empty { text-align: center; padding: 22px 10px; }
 .ltr-empty-text { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
@@ -1511,8 +1538,13 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .ltr-letter-chip-char { font-size: 15px; font-weight: 700; color: var(--text); }
 .ltr-letter-chip-val { font-size: 10px; color: var(--muted); }
 
-.ltr-settings { margin-top: 18px; }
-.ltr-settings-hint { font-size: 10px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
+/* Settings: a single gear-button-triggered panel now (owner: "use only
+   one clear entrance") - plain hide/show div, not a second native
+   <details>/<summary> disclosure competing with the header gear. */
+.ltr-settings-panel { margin-top: 18px; }
+.ltr-settings-panel[hidden] { display: none; }
+.ltr-settings-title { font-size: 12px; letter-spacing: .06em; color: var(--text); text-transform: uppercase; margin-bottom: 4px; }
+.ltr-settings-hint { font-size: 10px; color: var(--muted); font-weight: 400; }
 .ltr-conserved-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .ltr-conserved-chip {
   display: flex; align-items: center; gap: 6px; background: #161009; border: 1px solid var(--border);

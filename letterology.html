@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Letterology</title>
 <link rel="stylesheet" href="style.css?v=14">
-<link rel="stylesheet" href="godlike.css?v=50">
+<link rel="stylesheet" href="godlike.css?v=51">
 </head>
 <body>
 <div class="page">
@@ -44,7 +44,7 @@
         <div class="ltr-title">🔤 Letterology</div>
         <div class="ltr-subtitle">Decode the numerical structure of any word, name, or phrase.</div>
       </div>
-      <button type="button" class="ltr-settings-btn" id="ltrSettingsBtn">⚙️ Reduction Settings</button>
+      <button type="button" class="ltr-settings-btn" id="ltrSettingsBtn" aria-label="Reduction Settings"><span aria-hidden="true">⚙️</span><span class="ltr-settings-btn-text">Reduction Settings</span></button>
     </div>
 
     <div class="topbar">
@@ -68,6 +68,8 @@
 
     <div id="ltrMain"></div>
 
+    <button type="button" class="ltr-copy-btn" id="ltrCopyBtn" style="display:none">Copy Results</button>
+
     <div class="ltr-word-rows" id="ltrWordRows"></div>
 
     <div class="ltr-results" id="ltrResults"></div>
@@ -77,22 +79,22 @@
       <div class="ltr-lettermath-body" id="ltrLettersGroups"></div>
     </details>
 
-    <details class="collapsible ltr-settings" id="ltrSettingsPanel">
-      <summary>Advanced Reduction Settings</summary>
+    <div class="ltr-settings-panel" id="ltrSettingsPanel" hidden>
+      <div class="ltr-settings-title">Reduction Settings</div>
       <div class="ltr-settings-hint">Conserved numbers are never reduced further.</div>
       <div class="ltr-conserved-list" id="ltrConservedList"></div>
       <div class="ltr-add-row">
         <input type="text" id="ltrAddConserved" inputmode="numeric" placeholder="Add a number">
         <button type="button" class="btn" id="ltrAddConservedBtn">Add</button>
       </div>
-    </details>
+    </div>
 
   </div>
 
 </div>
 
 <script src="scroll-viewport.js"></script>
-<script src="letterology.js?v=2"></script>
+<script src="letterology.js?v=3"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>
