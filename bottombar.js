@@ -21,8 +21,9 @@
       { href: 'famous.html', icon: '⭐', label: 'Famous Lookup' },
       { href: 'database.html', icon: '🗂', label: 'Database' },
       { href: 'emax.html', icon: '⚡', label: 'EMAX' },
+      { href: 'letterology.html', icon: '🔤', label: 'Letterology' },
       { href: 'restore.html', icon: '☁', label: 'Cloud Restore' },
-    ], match: ['calculator', 'compatibility', 'famous', 'database', 'category', 'emax', 'restore'] },
+    ], match: ['calculator', 'compatibility', 'famous', 'database', 'category', 'emax', 'letterology', 'restore'] },
     { id: 'profile', icon: '👤', label: 'Profile', href: 'profile.html', match: ['profile'] },
   ];
 
