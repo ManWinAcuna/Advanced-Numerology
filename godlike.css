@@ -1415,13 +1415,21 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
    coloring, unlike Personal Cycles/Core Numbers elsewhere in the app. */
 .ltr-wrap { max-width: 460px; }
 
-/* The app-wide update-check.js pill is position:fixed at
-   top: env(safe-area-inset-top)+12px, left:10px, on EVERY page - never
-   touch that shared file (it deliberately avoids the top-RIGHT sign-in
-   pill already). Letterology's own header used to start right under it
-   at .page's plain 20px padding, so an undismissed update pill covered
-   the title. This margin is unconditional (not gated on the pill
-   actually showing) so there's never a frame where it COULD collide. */
+/* This clears the ALWAYS-PRESENT top-right sign-in/cloud pill
+   (bottombar.js's .auth-widget override: safe-area-inset-top + 12px to
+   +50px, 38x38 circle) from the settings gear button in the header's
+   own top-right corner - not just the occasional update-check.js pill.
+   Both .scroll-viewport (this content's ancestor) and .auth-widget
+   independently add env(safe-area-inset-top), so the required margin is
+   safe-area-independent: only 30px (50 - .page's own 20px padding) is
+   the true minimum before the gear button touches the cloud icon on any
+   device - the exact-minimum 30px was verified live to leave a literal
+   0px gap (cloud icon bottom and gear button top share the same pixel),
+   too tight to risk on real-device subpixel rounding, so this keeps a
+   small buffer. 2026-09-04: previously missing firebase-loader.js meant
+   this icon never rendered at all here, making the reserved clearance
+   look like dead empty space - fixed by loading it like every other
+   page, which is most of what made the top of the page look empty. */
 .ltr-wrap { margin-top: 34px; }
 
 .ltr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
