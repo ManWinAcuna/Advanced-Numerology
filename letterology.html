@@ -12,7 +12,7 @@
 <link rel="icon" href="favicon.svg?v=3" type="image/svg+xml">
 <link rel="icon" href="favicon-64.png?v=3" sizes="64x64">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Birthday Database</title>
+<title>Letterology</title>
 <link rel="stylesheet" href="style.css?v=14">
 <link rel="stylesheet" href="godlike.css?v=49">
 </head>
@@ -29,35 +29,48 @@
     <a href="famous.html" class="nav-link">Famous Lookup</a>
     <a href="calendar.html" class="nav-link">Calendar</a>
     <a href="astrology.html" class="nav-link">Astrology</a>
-    <a href="letterology.html" class="nav-link">Letterology</a>
-    <a href="database.html" class="nav-link active">Database</a>
+    <a href="letterology.html" class="nav-link active">Letterology</a>
+    <a href="database.html" class="nav-link">Database</a>
     <a href="compatibility.html" class="nav-link">Compatibility Calculator</a>
   </nav>
   <script src="nav-scroll.js"></script>
   <script src="bottombar.js?v=8"></script>
   <script src="update-check.js?v=4"></script>
 
+  <div class="ltr-wrap">
 
-  <div class="db-page">
-
-    <div class="box add-category-box">
-      <div class="box-label">New Category</div>
-      <div class="inline-form">
-        <input type="text" id="newCategoryName" placeholder="e.g. Family, Friends, Clients">
-        <button id="addCategoryBtn" class="btn">Add Category</button>
+    <div class="topbar">
+      <div class="box bday-box ltr-input-box">
+        <label for="ltrWord">Word</label>
+        <input type="text" id="ltrWord" placeholder="Type a word or name" autocomplete="off" autocapitalize="characters">
       </div>
     </div>
 
-    <div id="categoriesContainer"></div>
+    <div class="ltr-mode-row" id="ltrModeRow">
+      <button type="button" class="ltr-mode-btn" data-mode="reduced">Reduced</button>
+      <button type="button" class="ltr-mode-btn active" data-mode="master">Master (K/V)</button>
+      <button type="button" class="ltr-mode-btn" data-mode="positional">Positional</button>
+    </div>
+
+    <div class="ltr-letters" id="ltrLetters"></div>
+
+    <div class="ltr-results" id="ltrResults"></div>
+
+    <details class="collapsible ltr-settings">
+      <summary>Conserved Numbers <span class="ltr-settings-hint">(never reduced further)</span></summary>
+      <div class="ltr-conserved-list" id="ltrConservedList"></div>
+      <div class="ltr-add-row">
+        <input type="text" id="ltrAddConserved" inputmode="numeric" placeholder="Add a number">
+        <button type="button" class="btn" id="ltrAddConservedBtn">Add</button>
+      </div>
+    </details>
 
   </div>
+
 </div>
 
 <script src="scroll-viewport.js"></script>
-<script src="big-store.js"></script>
-<script src="db-core.js?v=9"></script>
-<script src="firebase-loader.js"></script>
-<script src="database.js"></script>
+<script src="letterology.js?v=1"></script>
 <script src="godlike.js?v=2"></script>
 </body>
 </html>

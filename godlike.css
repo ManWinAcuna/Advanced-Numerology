@@ -1409,3 +1409,39 @@ html.gk-hour-cold .gk-aura { opacity: .05 !important; }
 .astro-tooltip-guide { display: block; width: 100%; margin-top: 8px; padding: 7px 9px; border-radius: 8px;
   border: 1px solid var(--border, #223048); background: rgba(255,255,255,.03); color: var(--acc-text, #e8b04b);
   font-family: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+
+/* Letterology (Boost13, 2026-09-01) - word/name numerology calculator.
+   Plain/neutral by design (owner's explicit call) - no per-value energy
+   coloring, unlike Personal Cycles/Core Numbers elsewhere in the app. */
+.ltr-wrap { max-width: 460px; }
+.ltr-input-box input { text-transform: uppercase; letter-spacing: .05em; font-size: 18px !important; }
+.ltr-mode-row { display: flex; gap: 6px; margin: 14px 0; }
+.ltr-mode-btn {
+  flex: 1; background: rgba(255,255,255,.03); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 4px; color: var(--muted); font-size: 11px;
+  font-weight: 700; font-family: var(--gk-ui); cursor: pointer;
+}
+.ltr-mode-btn.active { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.24); color: var(--text); }
+.ltr-letters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+.ltr-letter-chip { flex: 1 0 32px; text-align: center; background: #161009; border-radius: 6px; padding: 6px 2px; }
+.ltr-letter-chip-char { font-size: 15px; font-weight: 700; color: var(--text); }
+.ltr-letter-chip-val { font-size: 10px; color: var(--muted); }
+.ltr-results { display: flex; flex-direction: column; gap: 8px; }
+.ltr-result-row {
+  display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.03);
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+}
+.ltr-result-label { flex: 1; font-size: 12px; color: var(--muted); }
+.ltr-result-unreduced { font-size: 12px; color: #6b6050; }
+.ltr-result-value { font-size: 20px; font-weight: 700; color: var(--text); }
+.ltr-settings { margin-top: 18px; }
+.ltr-settings-hint { font-size: 10px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
+.ltr-conserved-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.ltr-conserved-chip {
+  display: flex; align-items: center; gap: 6px; background: #161009; border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--text);
+}
+.ltr-conserved-chip button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 13px; line-height: 1; }
+.ltr-conserved-chip.ltr-conserved-default button { display: none; }
+.ltr-add-row { display: flex; gap: 8px; }
+.ltr-add-row input { flex: 1; }
